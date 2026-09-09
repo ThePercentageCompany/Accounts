@@ -79,11 +79,11 @@ class TpcApp extends StatelessWidget {
                   return const Workspace(key: ValueKey('demo'));
                 }
 
-                if (!session.authorized) {
+                if (!session.authorized && session.workspace == null) {
                   return const GoogleLogin();
                 }
 
-                if (session.isCheckingWorkspace) {
+                if (session.isCheckingWorkspace && session.workspace == null) {
                   return const WorkspaceLoadingView();
                 }
 

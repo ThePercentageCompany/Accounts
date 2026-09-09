@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../auth/google_session.dart';
+import '../sync/sync_manager.dart';
 import 'brand_logo.dart';
 
 class NavDestinationItem {
@@ -438,26 +439,58 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: widget.isDemo ? AppTheme.pastelOrange : AppTheme.pastelMint,
-                              shape: BoxShape.circle,
+                      ListenableBuilder(
+                        listenable: widget.session.syncManager,
+                        builder: (context, _) {
+                          Color dotColor;
+                          String statusText;
+                          if (widget.isDemo) {
+                            dotColor = AppTheme.pastelOrange;
+                            statusText = 'Local Demo Mode';
+                          } else if (widget.session.syncManager.status == SyncStatus.syncing) {
+                            dotColor = AppTheme.pastelBlue;
+                            statusText = 'Syncing with Google...';
+                          } else if (widget.session.syncManager.pendingCount > 0) {
+                            dotColor = AppTheme.pastelOrange;
+                            statusText = '${widget.session.syncManager.pendingCount} Offline Changes';
+                          } else if (widget.session.isOffline) {
+                            dotColor = AppTheme.pastelOrange;
+                            statusText = 'Offline Mode (Cached)';
+                          } else {
+                            dotColor = AppTheme.pastelMint;
+                            statusText = 'Synced with Cloud';
+                          }
+
+                          return InkWell(
+                            onTap: widget.onRefresh,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: dotColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    statusText,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            widget.isDemo ? 'Local Mode' : 'Connected Mode',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -520,9 +553,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   onPressed: widget.onRefresh,
                 ),
                 const Spacer(),
-                if (!widget.isDemo && widget.session.user != null)
+                if (!widget.isDemo && (widget.session.user != null || widget.session.cachedEmail != null))
                   Tooltip(
-                    message: 'Sign out (${widget.session.user!.email})',
+                    message: 'Sign out (${widget.session.effectiveEmail})',
                     child: InkWell(
                       onTap: () => widget.session.signOut(),
                       borderRadius: BorderRadius.circular(20),
@@ -534,7 +567,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                               radius: 13,
                               backgroundColor: AppTheme.pastelBlue.withValues(alpha: 0.2),
                               child: Text(
-                                (widget.session.user!.email.isNotEmpty ? widget.session.user!.email[0] : 'U').toUpperCase(),
+                                (widget.session.effectiveEmail.isNotEmpty ? widget.session.effectiveEmail[0] : 'U').toUpperCase(),
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.pastelBlue),
                               ),
                             ),
@@ -726,7 +759,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon),
                   label: Text(isDark ? 'Light' : 'Dark'),
                 ),
-                if (!widget.isDemo && widget.session.user != null)
+                if (!widget.isDemo && (widget.session.user != null || widget.session.cachedEmail != null))
                   TextButton.icon(
                     onPressed: () => widget.session.signOut(),
                     icon: const Icon(CupertinoIcons.square_arrow_right, color: AppTheme.pastelRose),

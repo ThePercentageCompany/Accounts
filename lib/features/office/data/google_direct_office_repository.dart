@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
+import '../../../core/sync/sync_manager.dart';
 import '../../billing/domain/models.dart';
 import '../../billing/domain/totals.dart';
 import '../domain/office_repository.dart';
@@ -9,6 +10,7 @@ import '../domain/office_rules.dart';
 class GoogleDirectOfficeRepository implements OfficeRepository {
   final GoogleSession session;
   final GoogleWorkspaceService _service = GoogleWorkspaceService();
+  final SyncManager _sync = SyncManager.instance;
 
   GoogleDirectOfficeRepository(this.session);
 
@@ -27,15 +29,48 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
 
   @override
   Future<Map<String, dynamic>> command(String action, [Map<String, dynamic>? payload]) async {
-    final token = await session.token();
     final spreadsheetId = _spreadsheetId;
     final d = Map<String, dynamic>.from(payload ?? {});
+    final token = await session.tryGetToken();
 
     if (action == 'officeLoad') {
-      final employees = await _service.readTabRecords(token, spreadsheetId, 'Employees');
-      final attendance = await _service.readTabRecords(token, spreadsheetId, 'Attendance');
-      final payroll = await _service.readTabRecords(token, spreadsheetId, 'Payroll');
-      final entries = await _service.readTabRecords(token, spreadsheetId, 'Finance');
+      var employees = await _sync.loadCachedRecords(spreadsheetId, 'Employees');
+      var attendance = await _sync.loadCachedRecords(spreadsheetId, 'Attendance');
+      var payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
+      var entries = await _sync.loadCachedRecords(spreadsheetId, 'Finance');
+
+      if (token != null) {
+        try {
+          final remoteEmployees = await _service.readTabRecords(token, spreadsheetId, 'Employees');
+          final remoteAttendance = await _service.readTabRecords(token, spreadsheetId, 'Attendance');
+          final remotePayroll = await _service.readTabRecords(token, spreadsheetId, 'Payroll');
+          final remoteEntries = await _service.readTabRecords(token, spreadsheetId, 'Finance');
+
+          if (remoteEmployees.isNotEmpty || employees.isEmpty) {
+            employees = remoteEmployees;
+            await _sync.saveCachedRecords(spreadsheetId, 'Employees', remoteEmployees);
+          }
+          if (remoteAttendance.isNotEmpty || attendance.isEmpty) {
+            attendance = remoteAttendance;
+            await _sync.saveCachedRecords(spreadsheetId, 'Attendance', remoteAttendance);
+          }
+          if (remotePayroll.isNotEmpty || payroll.isEmpty) {
+            payroll = remotePayroll;
+            await _sync.saveCachedRecords(spreadsheetId, 'Payroll', remotePayroll);
+          }
+          if (remoteEntries.isNotEmpty || entries.isEmpty) {
+            entries = remoteEntries;
+            await _sync.saveCachedRecords(spreadsheetId, 'Finance', remoteEntries);
+          }
+
+          await _sync.syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
+          _sync.markSynced();
+        } catch (_) {
+          _sync.markOffline();
+        }
+      } else {
+        _sync.markOffline();
+      }
 
       return {
         'employees': employees,
@@ -46,7 +81,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
     }
 
     if (action == 'employeeSave') {
-      final employees = await _service.readTabRecords(token, spreadsheetId, 'Employees');
+      final employees = await _sync.loadCachedRecords(spreadsheetId, 'Employees');
       final id = d['id'] as String;
       final old = employees.where((x) => x['id'] == id).firstOrNull;
       if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) {
@@ -63,7 +98,23 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'documents': old?['documents'] ?? [],
         'version': ((d['version'] as int?) ?? 0) + 1,
       };
-      await _service.upsertTabRecord(token, spreadsheetId, 'Employees', id, record);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Employees', id, record);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Employees', id, record);
+          _sync.markSynced();
+          return record;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Employees',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
       return record;
     }
 
@@ -72,7 +123,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       final date = d['date'].toString();
       final id = '${employeeId}_$date';
 
-      final employees = await _service.readTabRecords(token, spreadsheetId, 'Employees');
+      final employees = await _sync.loadCachedRecords(spreadsheetId, 'Employees');
       final employee = employees.where((x) => x['id'] == employeeId).firstOrNull;
       if (employee == null) throw StateError('Employee not found.');
 
@@ -84,7 +135,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         throw StateError('Overtime exceeds 24 hours.');
       }
 
-      final payroll = await _service.readTabRecords(token, spreadsheetId, 'Payroll');
+      final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
       if (payroll.any((p) =>
           p['employee']?['id'] == employeeId &&
           p['month'] == date.substring(0, 7) &&
@@ -92,7 +143,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         throw StateError('Attendance is locked by approved payroll.');
       }
 
-      final attendance = await _service.readTabRecords(token, spreadsheetId, 'Attendance');
+      final attendance = await _sync.loadCachedRecords(spreadsheetId, 'Attendance');
       final old = attendance.where((x) => x['id'] == id).firstOrNull;
       if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) {
         throw StateError('Record changed. Refresh and reopen.');
@@ -103,7 +154,23 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'id': id,
         'version': ((d['version'] as int?) ?? 0) + 1,
       };
-      await _service.upsertTabRecord(token, spreadsheetId, 'Attendance', id, record);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Attendance', id, record);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Attendance', id, record);
+          _sync.markSynced();
+          return record;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Attendance',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
       return record;
     }
 
@@ -112,17 +179,17 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       final month = d['month'] as String;
       final id = '${employeeId}_$month';
 
-      final employees = await _service.readTabRecords(token, spreadsheetId, 'Employees');
+      final employees = await _sync.loadCachedRecords(spreadsheetId, 'Employees');
       final employee = employees.where((x) => x['id'] == employeeId).firstOrNull;
       if (employee == null) throw StateError('Employee not found.');
 
-      final attendance = await _service.readTabRecords(token, spreadsheetId, 'Attendance');
+      final attendance = await _sync.loadCachedRecords(spreadsheetId, 'Attendance');
       final rows = attendance
           .where((a) => a['employeeId'] == employeeId && a['date'].toString().startsWith(month))
           .toList()
         ..sort((a, b) => a['date'].toString().compareTo(b['date']));
 
-      final settings = await _service.readTabRecords(token, spreadsheetId, 'Settings');
+      final settings = await _sync.loadCachedRecords(spreadsheetId, 'Settings');
       Company company = const Company();
       for (final s in settings) {
         if (s['id'] == 'company') {
@@ -131,7 +198,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         }
       }
 
-      final payroll = await _service.readTabRecords(token, spreadsheetId, 'Payroll');
+      final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
       final old = payroll.where((x) => x['id'] == id).firstOrNull;
       if (old != null && old['status'] != 'draft') {
         throw StateError('Payroll already approved.');
@@ -152,13 +219,29 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'archivedVersion': 0,
         'reference': '',
       };
-      await _service.upsertTabRecord(token, spreadsheetId, 'Payroll', id, record);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Payroll', id, record);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Payroll', id, record);
+          _sync.markSynced();
+          return record;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Payroll',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
       return record;
     }
 
     if (action == 'payrollApprove' || action == 'payrollPay') {
       final id = d['id'] as String;
-      final payroll = await _service.readTabRecords(token, spreadsheetId, 'Payroll');
+      final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
       final record = payroll.where((x) => x['id'] == id).firstOrNull;
       if (record == null) throw StateError('Payroll record not found.');
 
@@ -184,13 +267,29 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       }
       updated['version'] = ((record['version'] as int?) ?? 0) + 1;
 
-      await _service.upsertTabRecord(token, spreadsheetId, 'Payroll', id, updated);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Payroll', id, updated);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Payroll', id, updated);
+          _sync.markSynced();
+          return updated;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Payroll',
+        recordId: id,
+        action: 'upsert',
+        data: updated,
+      );
       return updated;
     }
 
     if (action == 'financeSave') {
       final id = d['id'] as String;
-      final entries = await _service.readTabRecords(token, spreadsheetId, 'Finance');
+      final entries = await _sync.loadCachedRecords(spreadsheetId, 'Finance');
       final old = entries.where((x) => x['id'] == id).firstOrNull;
       if (old != null && old['status'] != 'unpaid') {
         throw StateError('Posted entries are locked.');
@@ -205,13 +304,29 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'documents': old?['documents'] ?? [],
         'version': ((d['version'] as int?) ?? 0) + 1,
       };
-      await _service.upsertTabRecord(token, spreadsheetId, 'Finance', id, record);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Finance', id, record);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Finance', id, record);
+          _sync.markSynced();
+          return record;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Finance',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
       return record;
     }
 
     if (action == 'financePay' || action == 'financeVoid') {
       final id = d['id'] as String;
-      final entries = await _service.readTabRecords(token, spreadsheetId, 'Finance');
+      final entries = await _sync.loadCachedRecords(spreadsheetId, 'Finance');
       final record = entries.where((x) => x['id'] == id).firstOrNull;
       if (record == null) throw StateError('Finance record not found.');
 
@@ -231,11 +346,30 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
           'version': ((record['version'] as int?) ?? 0) + 1,
         });
 
-      await _service.upsertTabRecord(token, spreadsheetId, 'Finance', id, updated);
+      await _sync.upsertCachedRecord(spreadsheetId, 'Finance', id, updated);
+
+      if (token != null) {
+        try {
+          await _service.upsertTabRecord(token, spreadsheetId, 'Finance', id, updated);
+          _sync.markSynced();
+          return updated;
+        } catch (_) {}
+      }
+
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Finance',
+        recordId: id,
+        action: 'upsert',
+        data: updated,
+      );
       return updated;
     }
 
     if (action == 'officeUploadDocument') {
+      if (token == null) {
+        throw StateError('Document upload to Google Drive requires an active internet connection.');
+      }
       final bytes = base64Decode(d['base64'] as String);
       final fileName = d['name'] as String;
       final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes);
