@@ -29,10 +29,15 @@ class GoogleSession extends ChangeNotifier {
     GoogleSignIn.instance.authenticationEvents.listen((event) async {
       if (event is GoogleSignInAuthenticationEventSignIn) {
         user = event.user;
-        final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
-        authorized = auth != null;
-        if (authorized) {
-          await _loadOrDiscoverWorkspace();
+        error = null;
+        try {
+          final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
+          authorized = auth != null;
+          if (authorized) {
+            await _loadOrDiscoverWorkspace();
+          }
+        } catch (_) {
+          authorized = false;
         }
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
@@ -42,11 +47,16 @@ class GoogleSession extends ChangeNotifier {
       }
       notifyListeners();
     }, onError: (Object e) {
-      error = e.toString();
+      final msg = e.toString();
+      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
+        error = msg;
+      }
       notifyListeners();
     });
 
-    await GoogleSignIn.instance.attemptLightweightAuthentication();
+    try {
+      await GoogleSignIn.instance.attemptLightweightAuthentication();
+    } catch (_) {}
   }
 
   Future<void> _loadOrDiscoverWorkspace() async {
