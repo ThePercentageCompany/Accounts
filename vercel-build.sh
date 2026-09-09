@@ -19,6 +19,9 @@ flutter config --enable-web
 echo "Fetching project dependencies..."
 flutter pub get
 
+echo "Generating Freezed & JSON serialization files..."
+dart run build_runner build --delete-conflicting-outputs || true
+
 echo "Building Flutter Web release..."
 CLIENT_ID="${GOOGLE_CLIENT_ID:-110697421185-klclvve50ibedrqjc830doqrenp44hif.apps.googleusercontent.com}"
 ADMIN_EMAIL="${MASTER_ADMIN_EMAIL:-thepercentagecompany1@gmail.com}"

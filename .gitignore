@@ -1,7 +1,5 @@
 .dart_tool/
 build/
-*.freezed.dart
-*.g.dart
 node_modules/
 .env*
 config/google*.json
