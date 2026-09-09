@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../auth/google_session.dart';
+import 'brand_logo.dart';
 
 class NavDestinationItem {
   final String title;
@@ -421,27 +422,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.pastelBlue, AppTheme.pastelPurple],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.pastelBlue.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(CupertinoIcons.briefcase_fill, color: Colors.white, size: 20),
-                  ),
+                const TpcBrandLogo(
+                  size: 38,
+                  borderRadius: 10,
+                  showBackground: true,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -697,16 +681,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             padding: const EdgeInsets.all(18),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppTheme.pastelBlue,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Center(
-                    child: Icon(CupertinoIcons.briefcase_fill, color: Colors.white, size: 18),
-                  ),
+                const TpcBrandLogo(
+                  size: 36,
+                  borderRadius: 10,
+                  showBackground: true,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

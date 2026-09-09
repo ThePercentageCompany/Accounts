@@ -6,6 +6,7 @@ import 'core/auth/company_onboarding_view.dart';
 import 'core/auth/google_session.dart';
 import 'core/auth/sign_in_button.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/brand_logo.dart';
 import 'core/widgets/responsive_shell.dart';
 import 'features/billing/data/google_direct_repository.dart';
 import 'features/billing/data/local_repository.dart';
@@ -299,41 +300,24 @@ class GoogleLogin extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppTheme.pastelMint, AppTheme.pastelTeal],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.pastelMint.withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(CupertinoIcons.briefcase_fill, color: Colors.white, size: 34),
-                        ),
+                    const Center(
+                      child: TpcBrandLogo(
+                        size: 76,
+                        borderRadius: 20,
+                        showBackground: true,
                       ),
                     ),
                     const SizedBox(height: 22),
                     const Text(
-                      'TPC Business',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.8),
+                      'The Percentage Company',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.6),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      'Executive Invoicing, HR, Payroll and Corporate Finance Suite.',
+                      'Executive Invoicing, Quotations, HR, Payroll and Corporate Finance Suite.',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13.5,
                         color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                         height: 1.4,
                       ),
@@ -341,7 +325,19 @@ class GoogleLogin extends StatelessWidget {
                     ),
                     const SizedBox(height: 32),
                     if (session.user == null)
-                      Center(child: googleButton(() => session.signIn()))
+                      Column(
+                        children: [
+                          Center(child: googleButton(() => session.signIn())),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Sign in securely with your Google account',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      )
                     else ...[
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -402,16 +398,25 @@ class GoogleLogin extends StatelessWidget {
                                 height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Icon(CupertinoIcons.arrow_2_circlepath_circle_fill, size: 18),
-                        label: Text(session.isAuthorizing ? 'Connecting Sheets & Drive...' : 'Connect Google Sheets & Drive'),
+                            : const Icon(CupertinoIcons.checkmark_shield_fill, size: 18),
+                        label: Text(session.isAuthorizing ? 'Authorizing Sheets & Drive...' : 'Authorize Sheets & Drive Access'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.pastelMint,
+                          backgroundColor: Colors.black,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Allows TPC to store your company data in your private Google Drive.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 14),
                       TextButton(
                         onPressed: () => session.signOut(),
                         style: TextButton.styleFrom(
@@ -453,3 +458,4 @@ class GoogleLogin extends StatelessWidget {
     );
   }
 }
+

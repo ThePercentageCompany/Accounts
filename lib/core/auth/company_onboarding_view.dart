@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/brand_logo.dart';
 import '../../features/billing/domain/models.dart';
 import 'google_session.dart';
 import 'google_workspace_service.dart';
@@ -142,27 +143,10 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                         // Header
                         Row(
                           children: [
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [AppTheme.pastelMint, AppTheme.pastelTeal],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppTheme.pastelMint.withValues(alpha: 0.25),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Icon(CupertinoIcons.sparkles, color: Colors.white, size: 28),
-                              ),
+                            const TpcBrandLogo(
+                              size: 52,
+                              borderRadius: 16,
+                              showBackground: true,
                             ),
                             const SizedBox(width: 18),
                             Expanded(

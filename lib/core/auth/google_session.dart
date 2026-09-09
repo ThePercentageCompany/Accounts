@@ -36,21 +36,19 @@ class GoogleSession extends ChangeNotifier {
           authorized = auth != null;
           if (authorized) {
             await _loadOrDiscoverWorkspace();
-          } else {
-            // Automatically prompt for the Google Sheets & Drive scopes on web/mobile
-            await authorize();
           }
         } catch (_) {
           authorized = false;
         }
+        notifyListeners();
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
         user = null;
         authorized = false;
         isAuthorizing = false;
         workspace = null;
+        notifyListeners();
       }
-      notifyListeners();
     }, onError: (Object e) {
       final msg = e.toString();
       if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
@@ -119,9 +117,22 @@ class GoogleSession extends ChangeNotifier {
   Future<void> signIn() async {
     try {
       error = null;
-      await GoogleSignIn.instance.authenticate();
+      isAuthorizing = true;
+      notifyListeners();
+      final account = await GoogleSignIn.instance.authenticate();
+      user = account;
+      final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
+      if (auth != null) {
+        authorized = true;
+        await _loadOrDiscoverWorkspace();
+      }
     } catch (e) {
-      error = e.toString();
+      final msg = e.toString();
+      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
+        error = msg;
+      }
+    } finally {
+      isAuthorizing = false;
       notifyListeners();
     }
   }
@@ -137,7 +148,10 @@ class GoogleSession extends ChangeNotifier {
       authorized = true;
       await _loadOrDiscoverWorkspace();
     } catch (e) {
-      error = e.toString();
+      final msg = e.toString();
+      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
+        error = msg;
+      }
       authorized = false;
     } finally {
       isAuthorizing = false;
