@@ -26,11 +26,22 @@ class GoogleDirectBillingRepository implements BillingRepository {
 
   String get _driveFolderId => session.workspace?.driveFolderId ?? '';
 
+  void _scheduleBackgroundSync() {
+    Future.microtask(() async {
+      try {
+        final token = await session.tryGetToken();
+        if (token != null) {
+          await _sync.triggerBackgroundSync(token: token, spreadsheetId: _spreadsheetId);
+        }
+      } catch (_) {}
+    });
+  }
+
   @override
   Future<BillingData> load() async {
     final spreadsheetId = _spreadsheetId;
 
-    // 1. Read cached data first for instant UI response
+    // 1. Read cached data first for INSTANT (0ms) UI response
     final cachedCustomers = await _sync.loadCachedRecords(spreadsheetId, 'Customers');
     final cachedInvoices = await _sync.loadCachedRecords(spreadsheetId, 'Invoices');
     final cachedSettings = await _sync.loadCachedRecords(spreadsheetId, 'Settings');
@@ -45,51 +56,14 @@ class GoogleDirectBillingRepository implements BillingRepository {
       }
     }
 
-    BillingData localData = BillingData(
+    final localData = BillingData(
       customers: cachedCustomers.map((x) => Customer.fromJson(x)).toList(),
       invoices: cachedInvoices.map((x) => Invoice.fromJson(x)).toList(),
       company: company,
     );
 
-    // 2. If online, fetch latest from Sheets and update cache
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        final rawCustomers = await _service.readTabRecords(token, spreadsheetId, 'Customers');
-        final rawInvoices = await _service.readTabRecords(token, spreadsheetId, 'Invoices');
-        final rawSettings = await _service.readTabRecords(token, spreadsheetId, 'Settings');
-
-        if (rawCustomers.isNotEmpty || rawInvoices.isNotEmpty || rawSettings.isNotEmpty) {
-          await _sync.saveCachedRecords(spreadsheetId, 'Customers', rawCustomers);
-          await _sync.saveCachedRecords(spreadsheetId, 'Invoices', rawInvoices);
-          await _sync.saveCachedRecords(spreadsheetId, 'Settings', rawSettings);
-
-          Company remoteCompany = company;
-          for (final s in rawSettings) {
-            if (s['id'] == 'company') {
-              final val = s['value'] ?? s;
-              if (val is Map) {
-                remoteCompany = Company.fromJson(Map<String, dynamic>.from(val));
-              }
-            }
-          }
-
-          localData = BillingData(
-            customers: rawCustomers.map((x) => Customer.fromJson(x)).toList(),
-            invoices: rawInvoices.map((x) => Invoice.fromJson(x)).toList(),
-            company: remoteCompany,
-          );
-        }
-
-        // Flush any offline pending changes
-        await _sync.syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
-        _sync.markSynced();
-      } catch (_) {
-        _sync.markOffline();
-      }
-    } else {
-      _sync.markOffline();
-    }
+    // 2. Schedule non-blocking background sync
+    _scheduleBackgroundSync();
 
     return localData;
   }
@@ -98,17 +72,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
   Future<void> saveCustomer(Customer customer) async {
     final updated = customer.copyWith(version: customer.version + 1);
     await _sync.upsertCachedRecord(_spreadsheetId, 'Customers', updated.id, updated.toJson());
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Customers', updated.id, updated.toJson());
-        _sync.markSynced();
-        return;
-      } catch (_) {}
-    }
-
-    // Fallback: enqueue for background sync
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Customers',
@@ -116,6 +79,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: updated.toJson(),
     );
+    _scheduleBackgroundSync();
   }
 
   @override
@@ -123,16 +87,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
     final updated = company.copyWith(version: company.version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
     await _sync.upsertCachedRecord(_spreadsheetId, 'Settings', 'company', payload);
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Settings', 'company', payload);
-        _sync.markSynced();
-        return;
-      } catch (_) {}
-    }
-
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Settings',
@@ -140,6 +94,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: payload,
     );
+    _scheduleBackgroundSync();
   }
 
   @override
@@ -148,16 +103,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
     Totals.of(invoice);
     final updated = invoice.copyWith(version: invoice.version + 1);
     await _sync.upsertCachedRecord(_spreadsheetId, 'Invoices', updated.id, updated.toJson());
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Invoices', updated.id, updated.toJson());
-        _sync.markSynced();
-        return updated;
-      } catch (_) {}
-    }
-
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Invoices',
@@ -165,6 +110,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: updated.toJson(),
     );
+    _scheduleBackgroundSync();
     return updated;
   }
 
@@ -191,16 +137,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
 
     Totals.of(issued);
     await _sync.upsertCachedRecord(_spreadsheetId, 'Invoices', issued.id, issued.toJson());
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Invoices', issued.id, issued.toJson());
-        _sync.markSynced();
-        return issued;
-      } catch (_) {}
-    }
-
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Invoices',
@@ -208,6 +144,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: issued.toJson(),
     );
+    _scheduleBackgroundSync();
     return issued;
   }
 
@@ -224,16 +161,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
     Totals.of(changed);
 
     await _sync.upsertCachedRecord(_spreadsheetId, 'Invoices', changed.id, changed.toJson());
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Invoices', changed.id, changed.toJson());
-        _sync.markSynced();
-        return changed;
-      } catch (_) {}
-    }
-
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Invoices',
@@ -241,6 +168,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: changed.toJson(),
     );
+    _scheduleBackgroundSync();
     return changed;
   }
 
@@ -254,16 +182,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
       version: current.version + 1,
     );
     await _sync.upsertCachedRecord(_spreadsheetId, 'Invoices', changed.id, changed.toJson());
-
-    final token = await session.tryGetToken();
-    if (token != null) {
-      try {
-        await _service.upsertTabRecord(token, _spreadsheetId, 'Invoices', changed.id, changed.toJson());
-        _sync.markSynced();
-        return changed;
-      } catch (_) {}
-    }
-
     await _sync.enqueueOperation(
       spreadsheetId: _spreadsheetId,
       tabName: 'Invoices',
@@ -271,6 +189,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: changed.toJson(),
     );
+    _scheduleBackgroundSync();
     return changed;
   }
 

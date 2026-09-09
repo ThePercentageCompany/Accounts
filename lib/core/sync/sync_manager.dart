@@ -163,7 +163,62 @@ class SyncManager extends ChangeNotifier {
     await _savePendingQueue();
   }
 
+  bool _isBackgroundSyncing = false;
+  bool get isBackgroundSyncing => _isBackgroundSyncing;
+
   // --- SYNC ENGINE ---
+
+  /// Triggers a non-blocking background sync of both pending queue and remote changes.
+  Future<void> triggerBackgroundSync({
+    required String token,
+    required String spreadsheetId,
+    void Function()? onDataRefreshed,
+  }) async {
+    if (_isBackgroundSyncing) return;
+    _isBackgroundSyncing = true;
+    _status = SyncStatus.syncing;
+    notifyListeners();
+
+    try {
+      // 1. Push all offline pending mutations
+      await syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
+
+      // 2. Fetch all latest remote tabs in a single batch request
+      const tabs = [
+        'Customers',
+        'Invoices',
+        'Settings',
+        'Quotations',
+        'Employees',
+        'Attendance',
+        'Payroll',
+        'Finance',
+      ];
+      final batchData = await _service.readAllTabsBatch(token, spreadsheetId, tabs);
+
+      bool hasData = false;
+      for (final entry in batchData.entries) {
+        if (entry.value.isNotEmpty) {
+          await saveCachedRecords(spreadsheetId, entry.key, entry.value);
+          hasData = true;
+        }
+      }
+
+      _status = SyncStatus.synced;
+      _lastSyncedTime = DateTime.now();
+      _lastError = null;
+
+      if (hasData && onDataRefreshed != null) {
+        onDataRefreshed();
+      }
+    } catch (e) {
+      _lastError = e.toString();
+      markOffline();
+    } finally {
+      _isBackgroundSyncing = false;
+      notifyListeners();
+    }
+  }
 
   /// Attempts to push all offline changes and sync with Google Sheets.
   Future<bool> syncPendingChanges({

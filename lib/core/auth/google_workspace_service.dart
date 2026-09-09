@@ -284,7 +284,48 @@ class GoogleWorkspaceService {
     );
   }
 
-  // --- CRUD HELPERS FOR SPREADSHEETS ---
+  /// Reads all JSON records from multiple sheet tabs in a SINGLE batch API request.
+  Future<Map<String, List<Map<String, dynamic>>>> readAllTabsBatch(
+    String accessToken,
+    String spreadsheetId,
+    List<String> tabNames,
+  ) async {
+    try {
+      final queryRanges = tabNames.map((t) => 'ranges=${Uri.encodeComponent('$t!A2:B')}').join('&');
+      final url = Uri.parse(
+        'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$queryRanges',
+      );
+
+      final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return {};
+
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final valueRanges = (body['valueRanges'] as List?) ?? [];
+
+      final resultMap = <String, List<Map<String, dynamic>>>{};
+      for (int i = 0; i < tabNames.length && i < valueRanges.length; i++) {
+        final tabName = tabNames[i];
+        final vr = valueRanges[i] as Map<String, dynamic>;
+        final values = (vr['values'] as List?) ?? [];
+        final list = <Map<String, dynamic>>[];
+        for (final row in values) {
+          if (row is List && row.length >= 2) {
+            try {
+              final jsonStr = row[1].toString();
+              final parsed = jsonDecode(jsonStr);
+              if (parsed is Map) {
+                list.add(Map<String, dynamic>.from(parsed));
+              }
+            } catch (_) {}
+          }
+        }
+        resultMap[tabName] = list;
+      }
+      return resultMap;
+    } catch (_) {
+      return {};
+    }
+  }
 
   /// Reads all JSON records from a sheet tab.
   Future<List<Map<String, dynamic>>> readTabRecords(String accessToken, String spreadsheetId, String sheetName) async {
