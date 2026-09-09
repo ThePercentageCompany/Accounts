@@ -79,19 +79,19 @@ class TpcApp extends StatelessWidget {
                   return const Workspace(key: ValueKey('demo'));
                 }
 
-                if (!session.authorized && session.workspace == null) {
-                  return const GoogleLogin();
+                if (session.workspace != null) {
+                  return Workspace(key: ValueKey(session.workspace!.spreadsheetId));
                 }
 
-                if (session.isCheckingWorkspace && session.workspace == null) {
+                if (session.isCheckingWorkspace) {
                   return const WorkspaceLoadingView();
                 }
 
-                if (session.workspace == null) {
+                if (session.authorized) {
                   return CompanyOnboardingView(session: session);
                 }
 
-                return Workspace(key: ValueKey(session.workspace!.spreadsheetId));
+                return const GoogleLogin();
               },
             ),
           ),
@@ -352,8 +352,8 @@ class GoogleLogin extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              width: 40,
-                              height: 40,
+                              width: 44,
+                              height: 44,
                               decoration: BoxDecoration(
                                 color: AppTheme.pastelIndigoBg,
                                 borderRadius: BorderRadius.circular(12),
@@ -361,7 +361,7 @@ class GoogleLogin extends StatelessWidget {
                               child: const Icon(
                                 CupertinoIcons.person_crop_circle_fill,
                                 color: AppTheme.pastelIndigo,
-                                size: 24,
+                                size: 26,
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -370,9 +370,9 @@ class GoogleLogin extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Signed In Account',
+                                    'Signed in as',
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w500,
                                       color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                                     ),
@@ -380,7 +380,7 @@ class GoogleLogin extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                     session.user!.email,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
@@ -389,7 +389,7 @@ class GoogleLogin extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
                       FilledButton.icon(
                         onPressed: session.isAuthorizing ? null : () => session.authorize(),
                         icon: session.isAuthorizing
@@ -398,31 +398,35 @@ class GoogleLogin extends StatelessWidget {
                                 height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Icon(CupertinoIcons.checkmark_shield_fill, size: 18),
-                        label: Text(session.isAuthorizing ? 'Authorizing Sheets & Drive...' : 'Authorize Sheets & Drive Access'),
+                            : const Icon(CupertinoIcons.arrow_right_circle_fill, size: 20),
+                        label: Text(
+                          session.isAuthorizing ? 'Connecting Google Workspace...' : 'Continue to Workspace ➔',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.black,
+                          backgroundColor: AppTheme.pastelMint,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
-                        'Allows TPC to store your company data in your private Google Drive.',
+                        'Connects your Google Sheets & Drive to store company data.',
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 12,
                           color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 14),
-                      TextButton(
+                      const SizedBox(height: 16),
+                      TextButton.icon(
                         onPressed: () => session.signOut(),
+                        icon: const Icon(CupertinoIcons.arrow_left, size: 14),
+                        label: const Text('Use a different Google account', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                         style: TextButton.styleFrom(
                           foregroundColor: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                         ),
-                        child: const Text('Use a different Google account', style: TextStyle(fontWeight: FontWeight.w500)),
                       ),
                     ],
                     if (session.error != null) ...[

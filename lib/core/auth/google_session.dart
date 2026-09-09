@@ -16,6 +16,7 @@ class GoogleSession extends ChangeNotifier {
   GoogleSignInAccount? user;
   String? cachedEmail;
   String? cachedDisplayName;
+  String? _inMemoryAccessToken;
   bool authorized = false;
   bool isAuthorizing = false;
   bool isCheckingWorkspace = false;
@@ -52,9 +53,22 @@ class GoogleSession extends ChangeNotifier {
         await _saveUserToCache(user!.email, user!.displayName ?? '');
         try {
           final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
-          authorized = auth != null;
-          if (authorized) {
+          if (auth != null && auth.accessToken.isNotEmpty) {
+            _inMemoryAccessToken = auth.accessToken;
+            authorized = true;
             await _loadOrDiscoverWorkspace();
+          } else {
+            // Attempt auto authorization of scopes
+            try {
+              final authNew = await user!.authorizationClient.authorizeScopes(googleScopes);
+              if (authNew.accessToken.isNotEmpty) {
+                _inMemoryAccessToken = authNew.accessToken;
+                authorized = true;
+                await _loadOrDiscoverWorkspace();
+              }
+            } catch (_) {
+              // Browser popup policy may require a direct user tap; UI will show 1-click proceed button
+            }
           }
         } catch (_) {
           authorized = false;
@@ -63,6 +77,7 @@ class GoogleSession extends ChangeNotifier {
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
         user = null;
+        _inMemoryAccessToken = null;
         authorized = false;
         isAuthorizing = false;
         workspace = null;
@@ -82,6 +97,12 @@ class GoogleSession extends ChangeNotifier {
       await GoogleSignIn.instance.attemptLightweightAuthentication();
       if (user != null) {
         isOffline = false;
+        final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
+        if (auth != null && auth.accessToken.isNotEmpty) {
+          _inMemoryAccessToken = auth.accessToken;
+          authorized = true;
+          await _loadOrDiscoverWorkspace();
+        }
       }
     } catch (_) {
       // If network fails during initial lightweight auth, use cached session
@@ -201,11 +222,25 @@ class GoogleSession extends ChangeNotifier {
       user = account;
       isOffline = false;
       await _saveUserToCache(user!.email, user!.displayName ?? '');
-      final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
-      if (auth != null) {
-        authorized = true;
-        await _loadOrDiscoverWorkspace();
+      
+      try {
+        final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
+        if (auth.accessToken.isNotEmpty) {
+          _inMemoryAccessToken = auth.accessToken;
+          authorized = true;
+          await _loadOrDiscoverWorkspace();
+          return;
+        }
+      } catch (_) {
+        final check = await user!.authorizationClient.authorizationForScopes(googleScopes);
+        if (check != null && check.accessToken.isNotEmpty) {
+          _inMemoryAccessToken = check.accessToken;
+          authorized = true;
+          await _loadOrDiscoverWorkspace();
+          return;
+        }
       }
+      authorized = false;
     } catch (e) {
       final msg = e.toString();
       if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
@@ -227,10 +262,13 @@ class GoogleSession extends ChangeNotifier {
       isAuthorizing = true;
       notifyListeners();
 
-      await user!.authorizationClient.authorizeScopes(googleScopes);
-      authorized = true;
-      isOffline = false;
-      await _loadOrDiscoverWorkspace();
+      final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
+      if (auth.accessToken.isNotEmpty) {
+        _inMemoryAccessToken = auth.accessToken;
+        authorized = true;
+        isOffline = false;
+        await _loadOrDiscoverWorkspace();
+      }
     } catch (e) {
       final msg = e.toString();
       if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
@@ -246,23 +284,46 @@ class GoogleSession extends ChangeNotifier {
   Future<String?> tryGetToken() async {
     try {
       final auth = await user?.authorizationClient.authorizationForScopes(googleScopes);
-      return auth?.accessToken;
+      if (auth?.accessToken != null && auth!.accessToken.isNotEmpty) {
+        _inMemoryAccessToken = auth.accessToken;
+        return auth.accessToken;
+      }
+      return _inMemoryAccessToken;
     } catch (_) {
-      return null;
+      return _inMemoryAccessToken;
     }
   }
 
   Future<String> token() async {
-    final auth = await user?.authorizationClient.authorizationForScopes(googleScopes);
-    if (auth == null) {
-      if (isOffline && workspace != null) {
-        throw StateError('Currently working in offline mode.');
+    try {
+      final auth = await user?.authorizationClient.authorizationForScopes(googleScopes);
+      if (auth?.accessToken != null && auth!.accessToken.isNotEmpty) {
+        _inMemoryAccessToken = auth.accessToken;
+        return auth.accessToken;
       }
-      authorized = false;
-      notifyListeners();
-      throw StateError('Reconnect your Google account.');
+    } catch (_) {}
+
+    if (_inMemoryAccessToken != null && _inMemoryAccessToken!.isNotEmpty) {
+      return _inMemoryAccessToken!;
     }
-    return auth.accessToken;
+
+    if (user != null) {
+      try {
+        final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
+        if (auth.accessToken.isNotEmpty) {
+          _inMemoryAccessToken = auth.accessToken;
+          authorized = true;
+          return auth.accessToken;
+        }
+      } catch (_) {}
+    }
+
+    if (isOffline && workspace != null) {
+      throw StateError('Currently working in offline mode.');
+    }
+    authorized = false;
+    notifyListeners();
+    throw StateError('Reconnect your Google account.');
   }
 
   void expire() {
@@ -288,6 +349,7 @@ class GoogleSession extends ChangeNotifier {
       await GoogleSignIn.instance.signOut();
     } catch (_) {}
     user = null;
+    _inMemoryAccessToken = null;
     authorized = false;
     isAuthorizing = false;
     workspace = null;
