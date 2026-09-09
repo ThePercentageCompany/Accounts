@@ -12,6 +12,7 @@ const googleScopes = [
 class GoogleSession extends ChangeNotifier {
   GoogleSignInAccount? user;
   bool authorized = false;
+  bool isAuthorizing = false;
   bool isCheckingWorkspace = false;
   WorkspaceConfig? workspace;
   String? error;
@@ -35,6 +36,9 @@ class GoogleSession extends ChangeNotifier {
           authorized = auth != null;
           if (authorized) {
             await _loadOrDiscoverWorkspace();
+          } else {
+            // Automatically prompt for the Google Sheets & Drive scopes on web/mobile
+            await authorize();
           }
         } catch (_) {
           authorized = false;
@@ -43,6 +47,7 @@ class GoogleSession extends ChangeNotifier {
       if (event is GoogleSignInAuthenticationEventSignOut) {
         user = null;
         authorized = false;
+        isAuthorizing = false;
         workspace = null;
       }
       notifyListeners();
@@ -70,8 +75,6 @@ class GoogleSession extends ChangeNotifier {
       var saved = await GoogleWorkspaceService.loadSavedWorkspace(email);
       if (saved != null) {
         workspace = saved;
-        isCheckingWorkspace = false;
-        notifyListeners();
         return;
       }
 
@@ -124,15 +127,22 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<void> authorize() async {
+    if (user == null) return;
     try {
       error = null;
+      isAuthorizing = true;
+      notifyListeners();
+
       await user!.authorizationClient.authorizeScopes(googleScopes);
       authorized = true;
       await _loadOrDiscoverWorkspace();
     } catch (e) {
       error = e.toString();
+      authorized = false;
+    } finally {
+      isAuthorizing = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<String> token() async {
@@ -154,6 +164,7 @@ class GoogleSession extends ChangeNotifier {
     await GoogleSignIn.instance.signOut();
     user = null;
     authorized = false;
+    isAuthorizing = false;
     workspace = null;
     notifyListeners();
   }

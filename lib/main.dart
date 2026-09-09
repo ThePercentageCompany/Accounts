@@ -395,9 +395,15 @@ class GoogleLogin extends StatelessWidget {
                       ),
                       const SizedBox(height: 18),
                       FilledButton.icon(
-                        onPressed: () => session.authorize(),
-                        icon: const Icon(CupertinoIcons.arrow_2_circlepath_circle_fill, size: 18),
-                        label: const Text('Connect Google Sheets & Drive'),
+                        onPressed: session.isAuthorizing ? null : () => session.authorize(),
+                        icon: session.isAuthorizing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(CupertinoIcons.arrow_2_circlepath_circle_fill, size: 18),
+                        label: Text(session.isAuthorizing ? 'Connecting Sheets & Drive...' : 'Connect Google Sheets & Drive'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppTheme.pastelMint,
                           foregroundColor: Colors.white,
