@@ -39,7 +39,9 @@ flutter run -d chrome --web-port=7357 --dart-define-from-file=config/google.web.
      - `https://www.googleapis.com/auth/userinfo.email`
    - Add test users (if in Testing mode).
 4. Create **OAuth Client IDs**:
-   - **Web**: Authorised JavaScript origin `http://localhost:7357` and your production hosting URL.
+   - **Web**: Authorised JavaScript origins & redirect URIs:
+     - `https://accounts.thepercentagecompany.com`
+     - `http://localhost:7357` (for local development)
    - **Android**: Package name and SHA-1 fingerprint.
    - **iOS**: Bundle ID and reversed client ID URL scheme.
 
@@ -50,7 +52,7 @@ flutter run -d chrome --web-port=7357 --dart-define-from-file=config/google.web.
 ```json
 {
   "CONNECTED": "true",
-  "GOOGLE_CLIENT_ID": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+  "GOOGLE_CLIENT_ID": "110697421185-klclvve50ibedrqjc830doqrenp44hif.apps.googleusercontent.com",
   "GOOGLE_SERVER_CLIENT_ID": "",
   "MASTER_ADMIN_EMAIL": "thepercentagecompany1@gmail.com"
 }
