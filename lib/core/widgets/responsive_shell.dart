@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../auth/google_session.dart';
-import '../sync/sync_manager.dart';
 import 'brand_logo.dart';
 
 class NavDestinationItem {
@@ -24,67 +23,81 @@ class NavDestinationItem {
 
 const List<NavDestinationItem> appNavDestinations = [
   NavDestinationItem(
-    title: 'Overview',
-    icon: CupertinoIcons.chart_bar,
-    selectedIcon: CupertinoIcons.chart_bar_fill,
-    section: 'BILLING',
-    pastelColor: AppTheme.pastelBlue,
+    title: 'Dashboard',
+    icon: CupertinoIcons.house_alt,
+    selectedIcon: CupertinoIcons.house_alt_fill,
+    section: 'CORE',
+    pastelColor: Color(0xFF10B981),
   ),
   NavDestinationItem(
     title: 'Invoices',
     icon: CupertinoIcons.doc_text,
     selectedIcon: CupertinoIcons.doc_text_fill,
-    section: 'BILLING',
-    pastelColor: AppTheme.pastelMint,
+    section: 'FINANCIALS',
+    pastelColor: Color(0xFF38BDF8),
   ),
   NavDestinationItem(
     title: 'Quotations',
-    icon: CupertinoIcons.doc_text,
+    icon: CupertinoIcons.doc_plaintext,
     selectedIcon: CupertinoIcons.doc_on_clipboard_fill,
-    section: 'BILLING',
-    pastelColor: AppTheme.pastelTeal,
+    section: 'FINANCIALS',
+    pastelColor: Color(0xFF2DD4BF),
+  ),
+  NavDestinationItem(
+    title: 'Income',
+    icon: CupertinoIcons.graph_circle,
+    selectedIcon: CupertinoIcons.graph_circle_fill,
+    section: 'FINANCIALS',
+    pastelColor: Color(0xFF34D399),
+  ),
+  NavDestinationItem(
+    title: 'Expenses',
+    icon: CupertinoIcons.creditcard,
+    selectedIcon: CupertinoIcons.creditcard_fill,
+    section: 'FINANCIALS',
+    pastelColor: Color(0xFFFB923C),
+  ),
+  NavDestinationItem(
+    title: 'Capital & Investment',
+    icon: CupertinoIcons.money_dollar_circle,
+    selectedIcon: CupertinoIcons.money_dollar_circle_fill,
+    section: 'FINANCIALS',
+    pastelColor: Color(0xFFA78BFA),
   ),
   NavDestinationItem(
     title: 'Customers',
     icon: CupertinoIcons.person_2,
     selectedIcon: CupertinoIcons.person_2_fill,
-    section: 'BILLING',
-    pastelColor: AppTheme.pastelPurple,
-  ),
-  NavDestinationItem(
-    title: 'Company',
-    icon: CupertinoIcons.building_2_fill,
-    selectedIcon: CupertinoIcons.building_2_fill,
-    section: 'BILLING',
-    pastelColor: AppTheme.pastelOrange,
+    section: 'RELATIONSHIPS',
+    pastelColor: Color(0xFF818CF8),
   ),
   NavDestinationItem(
     title: 'Employees',
     icon: CupertinoIcons.person_crop_circle_badge_checkmark,
     selectedIcon: CupertinoIcons.person_crop_circle_badge_checkmark,
-    section: 'OFFICE & HR',
-    pastelColor: AppTheme.pastelIndigo,
-  ),
-  NavDestinationItem(
-    title: 'Attendance',
-    icon: CupertinoIcons.calendar,
-    selectedIcon: CupertinoIcons.calendar_today,
-    section: 'OFFICE & HR',
-    pastelColor: AppTheme.pastelBlue,
+    section: 'PEOPLE',
+    pastelColor: Color(0xFF60A5FA),
   ),
   NavDestinationItem(
     title: 'Payroll',
-    icon: CupertinoIcons.money_dollar_circle,
+    icon: CupertinoIcons.money_dollar,
     selectedIcon: CupertinoIcons.money_dollar_circle_fill,
-    section: 'OFFICE & HR',
-    pastelColor: AppTheme.pastelMint,
+    section: 'PEOPLE',
+    pastelColor: Color(0xFF34D399),
   ),
   NavDestinationItem(
-    title: 'Finance',
-    icon: CupertinoIcons.creditcard,
-    selectedIcon: CupertinoIcons.creditcard_fill,
-    section: 'OFFICE & HR',
-    pastelColor: AppTheme.pastelRose,
+    title: 'Reports',
+    icon: CupertinoIcons.chart_pie,
+    selectedIcon: CupertinoIcons.chart_pie_fill,
+    section: 'ANALYTICS',
+    pastelColor: Color(0xFFF472B6),
+  ),
+  NavDestinationItem(
+    title: 'Settings',
+    icon: CupertinoIcons.gear_alt,
+    selectedIcon: CupertinoIcons.gear_alt_fill,
+    section: 'SYSTEM',
+    pastelColor: Color(0xFF94A3B8),
   ),
 ];
 
@@ -107,7 +120,7 @@ class ResponsiveShell extends StatefulWidget {
     required this.onRefresh,
     required this.session,
     required this.isDemo,
-    this.companyName = 'TPC Business',
+    this.companyName = 'The Percentage Company',
   });
 
   @override
@@ -117,18 +130,246 @@ class ResponsiveShell extends StatefulWidget {
 class _ResponsiveShellState extends State<ResponsiveShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  void _showQuickSearchDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final matches = appNavDestinations
+                .asMap()
+                .entries
+                .where((e) => e.value.title.toLowerCase().contains(searchQuery.toLowerCase()))
+                .toList();
+
+            return Dialog(
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500, maxHeight: 420),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: 'Search invoices, customers, modules...',
+                          prefixIcon: const Icon(CupertinoIcons.search, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        onChanged: (v) => setModalState(() => searchQuery = v),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            for (final entry in matches)
+                              ListTile(
+                                leading: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: entry.value.pastelColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(entry.value.icon, size: 16, color: entry.value.pastelColor),
+                                ),
+                                title: Text(
+                                  entry.value.title,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                ),
+                                subtitle: Text(
+                                  entry.value.section,
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                                ),
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  widget.onIndexChanged(entry.key);
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showNotificationsSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Notifications & Activity',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  IconButton(
+                    icon: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.grey),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const Divider(),
+              ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(CupertinoIcons.checkmark_alt, color: Color(0xFF10B981), size: 18),
+                ),
+                title: const Text('Workspace Synced', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                subtitle: const Text('Google Sheets & Drive data is fully synchronized.', style: TextStyle(fontSize: 12)),
+                trailing: const Text('Just now', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              ),
+              ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(CupertinoIcons.doc_text_fill, color: Color(0xFF38BDF8), size: 18),
+                ),
+                title: const Text('New Invoice Generated', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                subtitle: const Text('Invoice #INV-2024-001 created for BrightMind Ltd.', style: TextStyle(fontSize: 12)),
+                trailing: const Text('2h ago', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showUserMenu(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final userName = widget.session.user?.displayName ?? 'Sarah Mitchell';
+    final userEmail = widget.session.effectiveEmail.isNotEmpty ? widget.session.effectiveEmail : 'admin@percentage.com';
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+                    child: Text(
+                      userName.isNotEmpty ? userName[0].toUpperCase() : 'S',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF10B981)),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(userName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        const SizedBox(height: 2),
+                        Text(userEmail, style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              ListTile(
+                leading: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon),
+                title: Text(isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  themeController.toggleTheme();
+                },
+              ),
+              ListTile(
+                leading: const Icon(CupertinoIcons.arrow_2_circlepath),
+                title: const Text('Sync Workspace Now'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.onRefresh();
+                },
+              ),
+              if (widget.session.workspace != null) ...[
+                ListTile(
+                  leading: const Icon(CupertinoIcons.table, color: Color(0xFF10B981)),
+                  title: const Text('Open Google Sheet'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    final url = widget.session.workspace!.spreadsheetUrl ??
+                        'https://docs.google.com/spreadsheets/d/${widget.session.workspace!.spreadsheetId}/edit';
+                    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  },
+                ),
+              ],
+              if (!widget.isDemo && widget.session.user != null)
+                ListTile(
+                  leading: const Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444)),
+                  title: const Text('Sign Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.session.signOut();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showMoreBottomSheet(BuildContext context, bool isDark) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final billingIndices = [for (int i = 0; i < appNavDestinations.length; i++) if (appNavDestinations[i].section == 'BILLING') i];
-        final officeIndices = [for (int i = 0; i < appNavDestinations.length; i++) if (appNavDestinations[i].section == 'OFFICE & HR') i];
-
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -142,7 +383,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       width: 36,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF48484A) : const Color(0xFFC7C7CC),
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -151,12 +392,11 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+                      const Text(
                         'All Business Modules',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
                           letterSpacing: -0.4,
                         ),
                       ),
@@ -167,53 +407,15 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  _buildSectionHeader('BILLING & INVOICING', isDark),
-                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      for (final idx in billingIndices) _buildModuleGridCard(ctx, idx, isDark),
+                      for (int idx = 0; idx < appNavDestinations.length; idx++)
+                        _buildModuleGridCard(ctx, idx, isDark),
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  _buildSectionHeader('OFFICE, HR & FINANCE', isDark),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (final idx in officeIndices) _buildModuleGridCard(ctx, idx, isDark),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const Divider(height: 1),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () {
-                          themeController.toggleTheme();
-                          Navigator.pop(ctx);
-                        },
-                        icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon),
-                        label: Text(isDark ? 'Switch to Light' : 'Switch to Dark'),
-                      ),
-                      if (!widget.isDemo && widget.session.user != null)
-                        TextButton.icon(
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            widget.session.signOut();
-                          },
-                          icon: const Icon(CupertinoIcons.square_arrow_right, color: AppTheme.pastelRose),
-                          label: const Text('Sign Out', style: TextStyle(color: AppTheme.pastelRose)),
-                        ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -234,37 +436,37 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           Navigator.pop(ctx);
           widget.onIndexChanged(index);
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? item.pastelColor.withValues(alpha: 0.25) : item.pastelColor.withValues(alpha: 0.15))
-                : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
-            borderRadius: BorderRadius.circular(16),
+                ? const Color(0xFF1E293B)
+                : (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC)),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected
-                  ? item.pastelColor
-                  : (isDark ? const Color(0x20FFFFFF) : const Color(0x10000000)),
+                  ? const Color(0xFF10B981)
+                  : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
               width: isSelected ? 1.5 : 0.8,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? item.pastelColor
-                      : item.pastelColor.withValues(alpha: isDark ? 0.2 : 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                      ? const Color(0xFF10B981)
+                      : item.pastelColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
                   child: Icon(
                     isSelected ? item.selectedIcon : item.icon,
                     color: isSelected ? Colors.white : item.pastelColor,
-                    size: 18,
+                    size: 16,
                   ),
                 ),
               ),
@@ -274,11 +476,8 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   item.title,
                   style: TextStyle(
                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: 13.5,
-                    color: isSelected
-                        ? (isDark ? Colors.white : AppTheme.iosLightTextPrimary)
-                        : (isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary),
-                    letterSpacing: -0.2,
+                    fontSize: 13,
+                    color: isSelected ? Colors.white : (isDark ? Colors.white : const Color(0xFF1E293B)),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -295,16 +494,22 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final width = MediaQuery.sizeOf(context).width;
-    final isDesktop = width >= 960;
-    final isTablet = width >= 700 && width < 960;
+    final isDesktop = width >= 980;
+    final isTablet = width >= 700 && width < 980;
 
     if (isDesktop) {
       return Scaffold(
         body: Row(
           children: [
             _buildSidebar(context, isDark),
-            const VerticalDivider(width: 1),
-            Expanded(child: widget.child),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildTopHeader(context, isDark),
+                  Expanded(child: widget.child),
+                ],
+              ),
+            ),
           ],
         ),
       );
@@ -313,19 +518,26 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         body: Row(
           children: [
             _buildCompactRail(context, isDark),
-            const VerticalDivider(width: 1),
-            Expanded(child: widget.child),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildTopHeader(context, isDark),
+                  Expanded(child: widget.child),
+                ],
+              ),
+            ),
           ],
         ),
       );
     }
 
-    // Mobile layout with top iOS navigation bar, drawer, and bottom tab bar
+    // Mobile layout
     final currentItem = appNavDestinations[widget.selectedIndex.clamp(0, appNavDestinations.length - 1)];
 
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
         leading: IconButton(
           icon: const Icon(CupertinoIcons.line_horizontal_3, size: 22),
           tooltip: 'Open menu',
@@ -334,17 +546,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: currentItem.pastelColor.withValues(alpha: isDark ? 0.25 : 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: Icon(currentItem.icon, size: 14, color: currentItem.pastelColor),
-              ),
-            ),
+            const TpcBrandLogo(size: 24, borderRadius: 6),
             const SizedBox(width: 8),
             Text(
               currentItem.title,
@@ -354,26 +556,35 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         ),
         actions: [
           IconButton(
-            icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon, size: 19),
-            tooltip: 'Toggle theme',
-            onPressed: () => themeController.toggleTheme(),
+            icon: const Icon(CupertinoIcons.search, size: 20),
+            tooltip: 'Search',
+            onPressed: _showQuickSearchDialog,
           ),
           IconButton(
-            icon: const Icon(CupertinoIcons.arrow_2_circlepath, size: 19),
-            tooltip: 'Refresh',
-            onPressed: widget.onRefresh,
+            icon: const Icon(CupertinoIcons.bell, size: 20),
+            tooltip: 'Notifications',
+            onPressed: () => _showNotificationsSheet(context),
           ),
-          if (widget.selectedIndex < 2)
-            IconButton(
-              icon: const Icon(CupertinoIcons.plus_circle_fill, size: 22, color: AppTheme.pastelBlue),
-              tooltip: 'New invoice',
-              onPressed: widget.onNewInvoice,
+          IconButton(
+            icon: CircleAvatar(
+              radius: 12,
+              backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+              child: Text(
+                (widget.session.user?.displayName?.isNotEmpty == true
+                        ? widget.session.user!.displayName![0]
+                        : 'S')
+                    .toUpperCase(),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+              ),
             ),
+            tooltip: 'User menu',
+            onPressed: () => _showUserMenu(context),
+          ),
         ],
       ),
       drawer: Drawer(
-        backgroundColor: isDark ? AppTheme.iosDarkBg : AppTheme.iosLightBg,
-        child: _buildDrawerContent(context, isDark),
+        backgroundColor: const Color(0xFF0F172A),
+        child: _buildSidebar(context, true, isDrawer: true),
       ),
       body: widget.child,
       bottomNavigationBar: NavigationBar(
@@ -387,9 +598,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         },
         destinations: [
           const NavigationDestination(
-            icon: Icon(CupertinoIcons.chart_bar),
-            selectedIcon: Icon(CupertinoIcons.chart_bar_fill),
-            label: 'Overview',
+            icon: Icon(CupertinoIcons.house_alt),
+            selectedIcon: Icon(CupertinoIcons.house_alt_fill),
+            label: 'Dashboard',
           ),
           const NavigationDestination(
             icon: Icon(CupertinoIcons.doc_text),
@@ -397,7 +608,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             label: 'Invoices',
           ),
           const NavigationDestination(
-            icon: Icon(CupertinoIcons.doc_text),
+            icon: Icon(CupertinoIcons.doc_plaintext),
             selectedIcon: Icon(CupertinoIcons.doc_on_clipboard_fill),
             label: 'Quotations',
           ),
@@ -411,476 +622,438 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
     );
   }
 
-  Widget _buildSidebar(BuildContext context, bool isDark) {
-    return Container(
-      width: 260,
-      color: isDark ? const Color(0xFF141416) : const Color(0xFFF7F7FA),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header / Branding
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                const TpcBrandLogo(
-                  size: 38,
-                  borderRadius: 10,
-                  showBackground: true,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.companyName,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: -0.3),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      ListenableBuilder(
-                        listenable: widget.session.syncManager,
-                        builder: (context, _) {
-                          Color dotColor;
-                          String statusText;
-                          if (widget.isDemo) {
-                            dotColor = AppTheme.pastelOrange;
-                            statusText = 'Local Demo Mode';
-                          } else if (widget.session.syncManager.status == SyncStatus.syncing) {
-                            dotColor = AppTheme.pastelBlue;
-                            statusText = 'Syncing with Google...';
-                          } else if (widget.session.syncManager.pendingCount > 0) {
-                            dotColor = AppTheme.pastelOrange;
-                            statusText = '${widget.session.syncManager.pendingCount} Offline Changes';
-                          } else if (widget.session.isOffline) {
-                            dotColor = AppTheme.pastelOrange;
-                            statusText = 'Offline Mode (Cached)';
-                          } else {
-                            dotColor = AppTheme.pastelMint;
-                            statusText = 'Synced with Cloud';
-                          }
+  // -------------------------------------------------------------
+  // Top Header Bar
+  // -------------------------------------------------------------
+  Widget _buildTopHeader(BuildContext context, bool isDark) {
+    final userName = widget.session.user?.displayName ?? 'Sarah Mitchell';
+    final userRole = 'Admin';
 
-                          return InkWell(
-                            onTap: widget.onRefresh,
-                            borderRadius: BorderRadius.circular(6),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: dotColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    statusText,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+    return Container(
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Search Input Bar (⌘ K)
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: InkWell(
+                  onTap: _showQuickSearchDialog,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        width: 1,
                       ),
-                    ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.search,
+                          size: 16,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Search invoices, customers, or anything...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            '⌘ K',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          // Primary Quick Action Button
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: FilledButton.icon(
-              onPressed: widget.onNewInvoice,
-              icon: const Icon(CupertinoIcons.plus_circle_fill, size: 18),
-              label: const Text('New Invoice'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.pastelBlue,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
               ),
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(width: 16),
 
-          // Navigation Links
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _buildSectionHeader('BILLING', isDark),
-                for (int i = 0; i < appNavDestinations.length; i++)
-                  if (appNavDestinations[i].section == 'BILLING')
-                    _buildNavItem(context, i, isDark),
-                const SizedBox(height: 16),
-                _buildSectionHeader('OFFICE & FINANCE', isDark),
-                for (int i = 0; i < appNavDestinations.length; i++)
-                  if (appNavDestinations[i].section == 'OFFICE & HR')
-                    _buildNavItem(context, i, isDark),
-                const SizedBox(height: 16),
-                _buildCloudStorageShortcuts(context, isDark),
-              ],
+          // Notification Bell with Red Dot
+          InkWell(
+            onTap: () => _showNotificationsSheet(context),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    CupertinoIcons.bell,
+                    size: 21,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B),
+                  ),
+                  Positioned(
+                    top: -1,
+                    right: -1,
+                    child: Container(
+                      width: 7.5,
+                      height: 7.5,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
 
-          // Footer Actions: Theme Toggle, Sync, Profile
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: isDark ? 'Switch to Light mode' : 'Switch to Dark mode',
-                  icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon, size: 19),
-                  onPressed: () => themeController.toggleTheme(),
-                ),
-                IconButton(
-                  tooltip: 'Sync / Refresh data',
-                  icon: const Icon(CupertinoIcons.arrow_2_circlepath, size: 19),
-                  onPressed: widget.onRefresh,
-                ),
-                const Spacer(),
-                if (!widget.isDemo && (widget.session.user != null || widget.session.cachedEmail != null))
-                  Tooltip(
-                    message: 'Sign out (${widget.session.effectiveEmail})',
-                    child: InkWell(
-                      onTap: () => widget.session.signOut(),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 13,
-                              backgroundColor: AppTheme.pastelBlue.withValues(alpha: 0.2),
-                              child: Text(
-                                (widget.session.effectiveEmail.isNotEmpty ? widget.session.effectiveEmail[0] : 'U').toUpperCase(),
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.pastelBlue),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(CupertinoIcons.square_arrow_right, size: 16),
-                          ],
+          const SizedBox(width: 16),
+
+          // User Profile Dropdown Pill
+          InkWell(
+            onTap: () => _showUserMenu(context),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 17,
+                    backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    child: Text(
+                      userName.isNotEmpty ? userName[0].toUpperCase() : 'S',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        userName,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Text(
+                        userRole,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    CupertinoIcons.chevron_down,
+                    size: 12,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // Sidebar (Dark Slate Navy matching Mockup)
+  // -------------------------------------------------------------
+  Widget _buildSidebar(BuildContext context, bool isDark, {bool isDrawer = false}) {
+    const sidebarBg = Color(0xFF0F172A);
+
+    return Container(
+      width: 250,
+      color: sidebarBg,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Branding Header
+            Padding(
+              padding: const EdgeInsets.only(left: 20, right: 20, top: 22, bottom: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '%',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'The',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            height: 1.1,
+                          ),
+                        ),
+                        Text(
+                          'Percentage',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                            height: 1.1,
+                          ),
+                        ),
+                        Text(
+                          'Company',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            height: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildSectionHeader(String title, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 12, top: 8, bottom: 6),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
+            // Navigation List Items
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: appNavDestinations.length,
+                itemBuilder: (context, index) {
+                  final item = appNavDestinations[index];
+                  final isSelected = widget.selectedIndex == index;
 
-  Widget _buildNavItem(BuildContext context, int index, bool isDark) {
-    final item = appNavDestinations[index];
-    final isSelected = widget.selectedIndex == index;
-
-    final selectedBg = isDark
-        ? item.pastelColor.withValues(alpha: 0.2)
-        : item.pastelColor.withValues(alpha: 0.12);
-    final selectedFg = item.pastelColor;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: InkWell(
-        onTap: () => widget.onIndexChanged(index),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: isSelected ? selectedBg : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? item.pastelColor
-                      : item.pastelColor.withValues(alpha: isDark ? 0.15 : 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Icon(
-                    isSelected ? item.selectedIcon : item.icon,
-                    color: isSelected ? Colors.white : item.pastelColor,
-                    size: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                item.title,
-                style: TextStyle(
-                  color: isSelected ? selectedFg : (isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary),
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactRail(BuildContext context, bool isDark) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: NavigationRail(
-                selectedIndex: widget.selectedIndex,
-                onDestinationSelected: widget.onIndexChanged,
-                labelType: NavigationRailLabelType.all,
-                leading: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: IconButton.filled(
-                    onPressed: widget.onNewInvoice,
-                    icon: const Icon(CupertinoIcons.plus),
-                    style: IconButton.styleFrom(backgroundColor: AppTheme.pastelBlue),
-                  ),
-                ),
-                trailing: Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: IconButton(
-                        icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon),
-                        onPressed: () => themeController.toggleTheme(),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: InkWell(
+                      onTap: () {
+                        if (isDrawer) Navigator.pop(context);
+                        widget.onIndexChanged(index);
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9.5),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF1E293B) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected ? item.selectedIcon : item.icon,
+                              size: 18,
+                              color: isSelected ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                destinations: [
-                  for (final item in appNavDestinations)
-                    NavigationRailDestination(
-                      icon: Icon(item.icon),
-                      selectedIcon: Icon(item.selectedIcon, color: item.pastelColor),
-                      label: Text(item.title),
-                    ),
-                ],
+                  );
+                },
               ),
             ),
-          ),
-        );
-      },
-    );
-  }
 
-
-  Widget _buildDrawerContent(BuildContext context, bool isDark) {
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                const TpcBrandLogo(
-                  size: 36,
-                  borderRadius: 10,
-                  showBackground: true,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.companyName,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: -0.3),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                _buildSectionHeader('BILLING', isDark),
-                for (int i = 0; i < appNavDestinations.length; i++)
-                  if (appNavDestinations[i].section == 'BILLING')
-                    _buildDrawerItem(context, i, isDark),
-                const SizedBox(height: 12),
-                _buildSectionHeader('OFFICE & FINANCE', isDark),
-                for (int i = 0; i < appNavDestinations.length; i++)
-                  if (appNavDestinations[i].section == 'OFFICE & HR')
-                    _buildDrawerItem(context, i, isDark),
-                const SizedBox(height: 12),
-                _buildCloudStorageShortcuts(context, isDark),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton.icon(
-                  onPressed: () => themeController.toggleTheme(),
-                  icon: Icon(isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon),
-                  label: Text(isDark ? 'Light' : 'Dark'),
-                ),
-                if (!widget.isDemo && (widget.session.user != null || widget.session.cachedEmail != null))
-                  TextButton.icon(
-                    onPressed: () => widget.session.signOut(),
-                    icon: const Icon(CupertinoIcons.square_arrow_right, color: AppTheme.pastelRose),
-                    label: const Text('Sign out', style: TextStyle(color: AppTheme.pastelRose)),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(BuildContext context, int index, bool isDark) {
-    final item = appNavDestinations[index];
-    final isSelected = widget.selectedIndex == index;
-
-    return ListTile(
-      leading: Icon(
-        isSelected ? item.selectedIcon : item.icon,
-        color: isSelected ? item.pastelColor : null,
-      ),
-      title: Text(
-        item.title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? item.pastelColor : null,
-          letterSpacing: -0.2,
-        ),
-      ),
-      selected: isSelected,
-      onTap: () {
-        Navigator.pop(context);
-        widget.onIndexChanged(index);
-      },
-    );
-  }
-
-  Widget _buildCloudStorageShortcuts(BuildContext context, bool isDark) {
-    final ws = widget.session.workspace;
-    if (ws == null) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('GOOGLE CLOUD STORAGE', isDark),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: InkWell(
-            onTap: () async {
-              final url = ws.spreadsheetUrl ?? 'https://docs.google.com/spreadsheets/d/${ws.spreadsheetId}/edit';
-              await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: AppTheme.pastelMintBg,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Icon(CupertinoIcons.table, color: AppTheme.pastelMint, size: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Open Google Sheet',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.pastelMint),
-                    ),
-                  ),
-                  const Icon(CupertinoIcons.arrow_up_right, size: 14, color: AppTheme.pastelMint),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (ws.driveFolderId.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: InkWell(
-              onTap: () async {
-                final url = ws.folderUrl ?? 'https://drive.google.com/drive/folders/${ws.driveFolderId}';
-                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-              },
-              borderRadius: BorderRadius.circular(12),
+            // Bottom Sprout Card (*Good businesses grow with clarity*)
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF334155),
+                    width: 0.8,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 28,
                       height: 28,
-                      decoration: BoxDecoration(
-                        color: AppTheme.pastelBlueBg,
-                        borderRadius: BorderRadius.circular(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0F2E23),
+                        shape: BoxShape.circle,
                       ),
                       child: const Center(
-                        child: Icon(CupertinoIcons.folder_fill, color: AppTheme.pastelBlue, size: 16),
+                        child: Icon(
+                          CupertinoIcons.leaf_arrow_circlepath,
+                          size: 15,
+                          color: Color(0xFF10B981),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Open Drive Folder',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.pastelBlue),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Good businesses\ngrow with clarity.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1.3,
                       ),
                     ),
-                    const Icon(CupertinoIcons.arrow_up_right, size: 14, color: AppTheme.pastelBlue),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Simple accounting\nfor a brighter tomorrow.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF94A3B8),
+                        height: 1.3,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-        const SizedBox(height: 12),
-      ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // Compact Rail for Tablet
+  // -------------------------------------------------------------
+  Widget _buildCompactRail(BuildContext context, bool isDark) {
+    const sidebarBg = Color(0xFF0F172A);
+
+    return Container(
+      width: 68,
+      color: sidebarBg,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text(
+                  '%',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Color(0xFF1E293B), height: 1),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                itemCount: appNavDestinations.length,
+                itemBuilder: (context, index) {
+                  final item = appNavDestinations[index];
+                  final isSelected = widget.selectedIndex == index;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                    child: Tooltip(
+                      message: item.title,
+                      child: InkWell(
+                        onTap: () => widget.onIndexChanged(index),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF1E293B) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              isSelected ? item.selectedIcon : item.icon,
+                              size: 19,
+                              color: isSelected ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

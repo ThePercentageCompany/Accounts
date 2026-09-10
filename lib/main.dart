@@ -15,6 +15,7 @@ import 'features/billing/domain/billing_repository.dart';
 import 'features/billing/domain/invoice_document_service.dart';
 import 'features/billing/domain/models.dart';
 import 'features/billing/presentation/billing_cubit.dart';
+import 'features/billing/presentation/dashboard_view.dart';
 import 'features/billing/presentation/screens.dart';
 import 'features/billing/presentation/editors.dart';
 import 'features/office/data/google_direct_office_repository.dart';
@@ -221,7 +222,10 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
         Widget body;
         switch (navIndex) {
           case 0:
-            body = InvoicesView(onNewInvoice: () => openEditor(), isOverview: true);
+            body = DashboardView(
+              onNewInvoice: () => openEditor(),
+              onNavigate: (idx) => setState(() => navIndex = idx),
+            );
             break;
           case 1:
             body = InvoicesView(onNewInvoice: () => openEditor(), isOverview: false);
@@ -230,25 +234,34 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
             body = const QuotationsView();
             break;
           case 3:
-            body = const CustomersView();
+            body = const OfficeScreen(key: ValueKey('office-inc'), initialPage: 3, filterKind: 'income');
             break;
           case 4:
-            body = CompanyEditor(company: billingState.data.company);
+            body = const OfficeScreen(key: ValueKey('office-exp'), initialPage: 3, filterKind: 'expense');
             break;
           case 5:
-            body = const OfficeScreen(key: ValueKey('office-emp'), initialPage: 0);
+            body = const OfficeScreen(key: ValueKey('office-cap'), initialPage: 3, filterKind: 'capital');
             break;
           case 6:
-            body = const OfficeScreen(key: ValueKey('office-att'), initialPage: 1);
+            body = const CustomersView();
             break;
           case 7:
-            body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
+            body = const OfficeScreen(key: ValueKey('office-emp'), initialPage: 0);
             break;
           case 8:
-            body = const OfficeScreen(key: ValueKey('office-fin'), initialPage: 3);
+            body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
+            break;
+          case 9:
+            body = const OfficeScreen(key: ValueKey('office-rep'), initialPage: 3, showReports: true);
+            break;
+          case 10:
+            body = CompanyEditor(company: billingState.data.company);
             break;
           default:
-            body = InvoicesView(onNewInvoice: () => openEditor(), isOverview: true);
+            body = DashboardView(
+              onNewInvoice: () => openEditor(),
+              onNavigate: (idx) => setState(() => navIndex = idx),
+            );
         }
 
         return ResponsiveShell(

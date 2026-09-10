@@ -106,7 +106,15 @@ Future<Map<String, dynamic>?> officeForm(
 
 class OfficeScreen extends StatefulWidget {
   final int initialPage;
-  const OfficeScreen({super.key, this.initialPage = 0});
+  final String? filterKind;
+  final bool showReports;
+
+  const OfficeScreen({
+    super.key,
+    this.initialPage = 0,
+    this.filterKind,
+    this.showReports = false,
+  });
 
   @override
   State<OfficeScreen> createState() => _OfficeScreenState();
@@ -117,11 +125,13 @@ class _OfficeScreenState extends State<OfficeScreen> {
   String day = today();
   String month = today().substring(0, 7);
   String search = '';
+  String? activeFilterKind;
 
   @override
   void initState() {
     super.initState();
     page = widget.initialPage;
+    activeFilterKind = widget.filterKind;
   }
 
   Future<bool> run(String action, Map<String, dynamic> d) async => context.read<OfficeCubit>().run(action, d);
@@ -1041,9 +1051,12 @@ class _OfficeScreenState extends State<OfficeScreen> {
     final billing = context.watch<BillingCubit>().state.data;
     final summary = financialSummary(billing.invoices, state.data, month);
 
-    final entries = state.data.entries
+    var entries = state.data.entries
         .where((e) => e['date'].toString().startsWith(month) || e['status'] == 'unpaid')
         .toList();
+    if (activeFilterKind != null) {
+      entries = entries.where((e) => e['kind'] == activeFilterKind).toList();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
