@@ -57,13 +57,19 @@ class StatCard extends StatelessWidget {
                     child: Icon(icon, color: primaryAccent, size: 20),
                   ),
                 ),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.end,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
               ],

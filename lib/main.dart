@@ -184,7 +184,7 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
   Future<void> openEditor([Invoice? invoice]) async {
     final cubit = context.read<BillingCubit>();
     if (cubit.state.data.customers.isEmpty) {
-      setState(() => navIndex = 3);
+      setState(() => navIndex = 4);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add a customer before creating an invoice.')),
       );
@@ -234,27 +234,21 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
             body = const QuotationsView();
             break;
           case 3:
-            body = const OfficeScreen(key: ValueKey('office-inc'), initialPage: 3, filterKind: 'income');
+            body = const OfficeScreen(key: ValueKey('office-fin'), initialPage: 3);
             break;
           case 4:
-            body = const OfficeScreen(key: ValueKey('office-exp'), initialPage: 3, filterKind: 'expense');
-            break;
-          case 5:
-            body = const OfficeScreen(key: ValueKey('office-cap'), initialPage: 3, filterKind: 'capital');
-            break;
-          case 6:
             body = const CustomersView();
             break;
-          case 7:
+          case 5:
             body = const OfficeScreen(key: ValueKey('office-emp'), initialPage: 0);
             break;
-          case 8:
+          case 6:
             body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
             break;
-          case 9:
+          case 7:
             body = const OfficeScreen(key: ValueKey('office-rep'), initialPage: 3, showReports: true);
             break;
-          case 10:
+          case 8:
             body = CompanyEditor(company: billingState.data.company);
             break;
           default:

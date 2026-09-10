@@ -25,7 +25,7 @@ Map<String,int> financialSummary(List<Invoice> invoices,OfficeData office,String
   final amount=(e['amountCents'] as num).toInt();
   if(e['status']=='unpaid')payable+=amount;
   if(e['status']!='paid'||!(e['paidDate'] as String).startsWith(month))continue;
-  if(e['kind']=='income'){otherIncome+=amount;flow(e['account'],amount);}else{expenses+=amount;flow(e['account'],-amount);}
+  if(e['kind']=='income'||e['kind']=='capital'){otherIncome+=amount;flow(e['account'],amount);}else{expenses+=amount;flow(e['account'],-amount);}
  }
  for(final p in office.payroll){
   final amount=(p['netCents'] as num).toInt();

@@ -12,8 +12,15 @@ void main(){
   const office=OfficeData(entries:[{'id':'e','kind':'expense','status':'paid','amountCents':2000,'paidDate':'2026-09-09','account':'Cash'}],payroll:[{'id':'salary','status':'paid','netCents':3000,'paidDate':'2026-09-09','account':'Bank'}]);
   final s=financialSummary([invoice],office,'2026-09');expect(s['Net cash movement'],5000);expect(s['Bank movement'],7000);expect(s['Cash movement'],-2000);expect(s['Customer outstanding (all dates)'],0);
  });
- test('Financial report separates transaction date from payment month',(){
-  const data=OfficeData(entries:[{'kind':'expense','status':'unpaid','amountCents':5000,'paidDate':'','account':'Bank'},{'kind':'income','status':'paid','amountCents':10000,'paidDate':'2026-08-31','account':'Bank'}]);
-  final result=financialSummary([],data,'2026-09');expect(result['Other income'],0);expect(result['Supplier bills due (all dates)'],5000);
- });
+  test('Financial report separates transaction date from payment month',(){
+   const data=OfficeData(entries:[{'kind':'expense','status':'unpaid','amountCents':5000,'paidDate':'','account':'Bank'},{'kind':'income','status':'paid','amountCents':10000,'paidDate':'2026-08-31','account':'Bank'}]);
+   final result=financialSummary([],data,'2026-09');expect(result['Other income'],0);expect(result['Supplier bills due (all dates)'],5000);
+  });
+  test('Capital investment correctly contributes to financial summary',(){
+   const data=OfficeData(entries:[{'kind':'capital','status':'paid','amountCents':250000,'paidDate':'2026-09-10','account':'Bank'},{'kind':'expense','status':'paid','amountCents':50000,'paidDate':'2026-09-10','account':'Bank'}]);
+   final result=financialSummary([],data,'2026-09');
+   expect(result['Other income'],250000);
+   expect(result['Expenses paid'],50000);
+   expect(result['Net cash movement'],200000);
+  });
 }

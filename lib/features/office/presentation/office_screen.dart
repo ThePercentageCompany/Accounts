@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -107,6 +108,576 @@ Future<Map<String, dynamic>?> officeForm(
   );
 }
 
+/// A dedicated, beautiful Zoho-styled transaction dialog for adding/editing Income & Expenses
+class TransactionDialog extends StatefulWidget {
+  final Map<String, dynamic>? initial;
+  final String defaultKind;
+
+  const TransactionDialog({
+    super.key,
+    this.initial,
+    this.defaultKind = 'expense',
+  });
+
+  @override
+  State<TransactionDialog> createState() => _TransactionDialogState();
+}
+
+class _TransactionDialogState extends State<TransactionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late String _kind;
+  late TextEditingController _partyCtrl;
+  late TextEditingController _referenceCtrl;
+  late TextEditingController _amountCtrl;
+  late TextEditingController _dateCtrl;
+  late TextEditingController _dueDateCtrl;
+  late TextEditingController _paidDateCtrl;
+  late TextEditingController _notesCtrl;
+  late String _category;
+  late String _status;
+  late String _account;
+
+  static const List<String> _incomeCategories = [
+    'Client Payment / Retainer',
+    'Project Milestone',
+    'Consulting / Professional Services',
+    'Product / Service Sales',
+    'Interest & Investment Return',
+    'Refund / Reimbursement',
+    'Other Income',
+  ];
+
+  static const List<String> _expenseCategories = [
+    'Office Rent & Workspace',
+    'Cloud & Server Infrastructure',
+    'Software & SaaS Subscriptions',
+    'Marketing & Advertising',
+    'Hardware & Equipment',
+    'Salaries & Contractor Fees',
+    'Travel, Fuel & Logistics',
+    'Utilities, Internet & Telecom',
+    'Legal & Professional Services',
+    'Office Supplies & Maintenance',
+    'Bank Fees & Charges',
+    'Taxes & Government Fees',
+    'Miscellaneous Expense',
+  ];
+
+  static const List<String> _capitalCategories = [
+    'Owner / Founder Capital',
+    'Investor Equity Injection',
+    'Shareholder / Director Loan',
+    'Retained Earnings Transfer',
+    'Other Capital',
+  ];
+
+  List<String> get _currentCategories {
+    if (_kind == 'income') return _incomeCategories;
+    if (_kind == 'capital') return _capitalCategories;
+    return _expenseCategories;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final init = widget.initial;
+    _kind = init?['kind']?.toString() ?? widget.defaultKind;
+    _partyCtrl = TextEditingController(text: init?['party']?.toString() ?? '');
+    _referenceCtrl = TextEditingController(text: init?['reference']?.toString() ?? '');
+
+    if (init != null && init['amountCents'] != null) {
+      final cents = (init['amountCents'] as num).toInt();
+      _amountCtrl = TextEditingController(text: (cents / 100).toStringAsFixed(2));
+    } else if (init != null && init['amount'] != null) {
+      _amountCtrl = TextEditingController(text: init['amount'].toString());
+    } else {
+      _amountCtrl = TextEditingController(text: '');
+    }
+
+    _dateCtrl = TextEditingController(text: init?['date']?.toString() ?? today());
+    _dueDateCtrl = TextEditingController(text: init?['dueDate']?.toString() ?? '');
+    _paidDateCtrl = TextEditingController(text: init?['paidDate']?.toString() ?? today());
+    _notesCtrl = TextEditingController(text: init?['notes']?.toString() ?? '');
+
+    _status = init?['status']?.toString() ?? (_kind == 'expense' ? 'paid' : 'paid');
+    _account = init?['account']?.toString() ?? 'Bank';
+
+    final initialCat = init?['category']?.toString();
+    if (initialCat != null && initialCat.isNotEmpty) {
+      _category = initialCat;
+    } else {
+      _category = _currentCategories.first;
+    }
+  }
+
+  @override
+  void dispose() {
+    _partyCtrl.dispose();
+    _referenceCtrl.dispose();
+    _amountCtrl.dispose();
+    _dateCtrl.dispose();
+    _dueDateCtrl.dispose();
+    _paidDateCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onKindChanged(String newKind) {
+    if (_kind == newKind) return;
+    setState(() {
+      _kind = newKind;
+      if (!_currentCategories.contains(_category)) {
+        _category = _currentCategories.first;
+      }
+      if (_kind == 'income' || _kind == 'capital') {
+        _status = 'paid';
+      }
+    });
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final parsed = DateTime.tryParse(controller.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: parsed,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      controller.text = DateFormat('yyyy-MM-dd').format(picked);
+    }
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    try {
+      final cents = scaled(_amountCtrl.text.trim(), 2);
+      if (cents <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Amount must be greater than zero.')),
+        );
+        return;
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid numeric amount.')),
+      );
+      return;
+    }
+
+    final isPaid = _kind == 'income' || _kind == 'capital' || _status == 'paid';
+
+    final result = {
+      'id': widget.initial?['id'] ?? const Uuid().v4(),
+      'version': widget.initial?['version'] ?? 0,
+      'kind': _kind,
+      'party': _partyCtrl.text.trim(),
+      'reference': _referenceCtrl.text.trim(),
+      'category': _category.trim().isNotEmpty ? _category.trim() : _currentCategories.first,
+      'date': _dateCtrl.text.trim(),
+      'dueDate': _dueDateCtrl.text.trim(),
+      'amount': _amountCtrl.text.trim(),
+      'status': isPaid ? 'paid' : 'unpaid',
+      'paidDate': isPaid ? (_paidDateCtrl.text.trim().isNotEmpty ? _paidDateCtrl.text.trim() : _dateCtrl.text.trim()) : '',
+      'account': _account,
+      'notes': _notesCtrl.text.trim(),
+    };
+
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isEdit = widget.initial != null;
+
+    final themeColor = _kind == 'income'
+        ? AppTheme.zohoGreen
+        : (_kind == 'capital' ? const Color(0xFF8B5CF6) : AppTheme.zohoRed);
+
+    final partyLabel = _kind == 'income'
+        ? 'Customer / Client / Payer'
+        : (_kind == 'capital' ? 'Investor / Partner / Shareholder' : 'Supplier / Vendor / Payee');
+
+    final partyHint = _kind == 'income'
+        ? 'e.g. Acme Corp, John Doe'
+        : (_kind == 'capital' ? 'e.g. Founder Capital, Angel Partner' : 'e.g. Amazon Web Services, Office Landlord');
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: themeColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _kind == 'income'
+                                ? CupertinoIcons.arrow_down_left_circle_fill
+                                : (_kind == 'capital'
+                                    ? CupertinoIcons.money_dollar_circle_fill
+                                    : CupertinoIcons.arrow_up_right_circle_fill),
+                            color: themeColor,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          isEdit ? 'Edit Transaction' : 'Record Transaction',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(CupertinoIcons.xmark_circle_fill, size: 20, color: Colors.grey),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Kind Switcher Segmented Tabs
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildKindTab('income', 'Income', CupertinoIcons.arrow_down_left, AppTheme.zohoGreen, isDark),
+                      const SizedBox(width: 4),
+                      _buildKindTab('expense', 'Expense', CupertinoIcons.arrow_up_right, AppTheme.zohoRed, isDark),
+                      const SizedBox(width: 4),
+                      _buildKindTab('capital', 'Capital', CupertinoIcons.money_dollar, const Color(0xFF8B5CF6), isDark),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Amount & Date Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: TextFormField(
+                        controller: _amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        decoration: InputDecoration(
+                          labelText: 'Amount (AED) *',
+                          prefixText: 'AED  ',
+                          prefixStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: themeColor,
+                            fontSize: 15,
+                          ),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          try {
+                            final c = scaled(v.trim(), 2);
+                            if (c <= 0) return 'Must exceed 0';
+                          } catch (_) {
+                            return 'Enter valid amount';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 5,
+                      child: TextFormField(
+                        controller: _dateCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Date *',
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          suffixIcon: IconButton(
+                            icon: const Icon(CupertinoIcons.calendar, size: 18),
+                            onPressed: () => _pickDate(_dateCtrl),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          return validateDate(v.trim());
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Category & Party Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _currentCategories.contains(_category) ? _category : _currentCategories.first,
+                        decoration: InputDecoration(
+                          labelText: 'Category *',
+                          prefixIcon: const Icon(CupertinoIcons.folder, size: 18),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        ),
+                        isExpanded: true,
+                        items: [
+                          for (final cat in _currentCategories)
+                            DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _category = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Party / Supplier / Customer Field
+                TextFormField(
+                  controller: _partyCtrl,
+                  decoration: InputDecoration(
+                    labelText: partyLabel,
+                    hintText: partyHint,
+                    prefixIcon: const Icon(CupertinoIcons.person, size: 18),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Reference & Due Date Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: TextFormField(
+                        controller: _referenceCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Reference / Invoice / Bill #',
+                          hintText: 'e.g. INV-2024-001 or BILL-99',
+                          prefixIcon: const Icon(CupertinoIcons.tag, size: 18),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 5,
+                      child: TextFormField(
+                        controller: _dueDateCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Due Date (optional)',
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          suffixIcon: IconButton(
+                            icon: const Icon(CupertinoIcons.clock, size: 18),
+                            onPressed: () => _pickDate(_dueDateCtrl),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v != null && v.trim().isNotEmpty) {
+                            return validateDate(v.trim());
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Payment Status & Account Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_kind == 'expense') ...[
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _status,
+                          decoration: InputDecoration(
+                            labelText: 'Payment Status',
+                            prefixIcon: const Icon(CupertinoIcons.checkmark_alt_circle, size: 18),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'paid', child: Text('Paid Immediately')),
+                            DropdownMenuItem(value: 'unpaid', child: Text('Unpaid (Supplier Bill)')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setState(() => _status = v);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _account,
+                        decoration: InputDecoration(
+                          labelText: _status == 'unpaid' ? 'Payable Account' : 'Account / Method',
+                          prefixIcon: const Icon(CupertinoIcons.creditcard, size: 18),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'Bank', child: Text('Bank Account')),
+                          DropdownMenuItem(value: 'Cash', child: Text('Cash in Hand / Petty Cash')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _account = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                if (_status == 'paid' || _kind == 'income' || _kind == 'capital') ...[
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _paidDateCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Payment / Settlement Date',
+                      prefixIcon: const Icon(CupertinoIcons.calendar_today, size: 18),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      suffixIcon: IconButton(
+                        icon: const Icon(CupertinoIcons.calendar, size: 18),
+                        onPressed: () => _pickDate(_paidDateCtrl),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v != null && v.trim().isNotEmpty) {
+                        return validateDate(v.trim());
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+                const SizedBox(height: 14),
+
+                // Notes / Particulars
+                TextFormField(
+                  controller: _notesCtrl,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Notes & Memo',
+                    hintText: 'Additional particulars, contract notes, or descriptions...',
+                    prefixIcon: const Icon(CupertinoIcons.text_quote, size: 18),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(CupertinoIcons.checkmark_alt, size: 16),
+                      label: Text(isEdit ? 'Update Transaction' : 'Save Transaction'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: themeColor,
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKindTab(String kindKey, String label, IconData icon, Color color, bool isDark) {
+    final isSelected = _kind == kindKey;
+    return Expanded(
+      child: InkWell(
+        onTap: () => _onKindChanged(kindKey),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isSelected ? (isDark ? const Color(0xFF1E293B) : Colors.white) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+            border: isSelected ? Border.all(color: color, width: 1.5) : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected ? color : (isDark ? Colors.grey[400] : Colors.grey[600]),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? (isDark ? Colors.white : const Color(0xFF0F172A)) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class OfficeScreen extends StatefulWidget {
   final int initialPage;
   final String? filterKind;
@@ -129,12 +700,19 @@ class _OfficeScreenState extends State<OfficeScreen> {
   String month = today().substring(0, 7);
   String search = '';
   String? activeFilterKind;
+  String financeTab = 'all'; // 'all', 'income', 'expense', 'capital', 'unpaid'
+  String financeSearch = '';
+  String? financeCategoryFilter;
+  String? financeAccountFilter;
 
   @override
   void initState() {
     super.initState();
     page = widget.initialPage;
     activeFilterKind = widget.filterKind;
+    if (widget.filterKind != null) {
+      financeTab = widget.filterKind!;
+    }
   }
 
   Future<bool> run(String action, Map<String, dynamic> d) async => context.read<OfficeCubit>().run(action, d);
@@ -291,38 +869,13 @@ class _OfficeScreenState extends State<OfficeScreen> {
         await run('payrollArchive', {'id': p['id'], 'version': p['version'], 'pdf': base64Encode(bytes)});
       });
 
-  Future<void> finance([Map<String, dynamic>? old]) async {
-    final d = await officeForm(
-      context,
-      old == null ? 'Record Transaction / Bill' : 'Edit Bill / Entry',
-      old ?? {
-        'id': const Uuid().v4(),
-        'version': 0,
-        'kind': 'expense',
-        'date': today(),
-        'dueDate': '',
-        'paidDate': today(),
-        'status': 'unpaid',
-        'account': 'Bank',
-        'amount': '0',
-        'category': 'Office',
-        'party': '',
-        'reference': '',
-        'notes': '',
-      },
-      const [
-        InputSpec('kind', 'Transaction Type', options: ['expense', 'income'], icon: CupertinoIcons.arrow_right_arrow_left),
-        InputSpec('party', 'Supplier / Client / Payee', icon: CupertinoIcons.person),
-        InputSpec('reference', 'Bill / Invoice / Reference #', icon: CupertinoIcons.tag),
-        InputSpec('category', 'Category', required: true, icon: CupertinoIcons.folder),
-        InputSpec('date', 'Date', required: true, icon: CupertinoIcons.calendar),
-        InputSpec('dueDate', 'Due Date (optional)', icon: CupertinoIcons.clock),
-        InputSpec('amount', 'Amount (AED)', required: true, icon: CupertinoIcons.money_dollar),
-        InputSpec('status', 'Payment Status', options: ['unpaid', 'paid'], icon: CupertinoIcons.checkmark_alt_circle),
-        InputSpec('paidDate', 'Payment Date (if paid)', icon: CupertinoIcons.calendar_today),
-        InputSpec('account', 'Account', options: ['Bank', 'Cash'], icon: CupertinoIcons.creditcard),
-        InputSpec('notes', 'Notes', icon: CupertinoIcons.text_quote),
-      ],
+  Future<void> finance([Map<String, dynamic>? old, String defaultKind = 'expense']) async {
+    final d = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => TransactionDialog(
+        initial: old,
+        defaultKind: old?['kind'] ?? defaultKind,
+      ),
     );
     if (d != null) await run('financeSave', d);
   }
@@ -398,12 +951,12 @@ class _OfficeScreenState extends State<OfficeScreen> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final isCompact = constraints.maxWidth < 560;
-                final titleText = ['Employees', 'Attendance', 'Payroll', 'Company Finance'][page];
+                final titleText = ['Employees', 'Attendance', 'Payroll', 'Income & Expenses'][page];
                 final subtitleText = [
                   'Staff directory, contracts, visa tracking and salaries.',
                   'Daily attendance, clocking and approved overtime hours.',
                   'Monthly payroll calculation, salary slips and approvals.',
-                  'Cash flow, supplier bills, expenses and income summary.',
+                  'Manage company cash flow, client receipts, supplier bills, expenses, and capital.',
                 ][page];
 
                 Widget? actionButton;
@@ -413,21 +966,37 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     icon: const Icon(CupertinoIcons.person_add_solid, size: 16),
                     label: const Text('Add Employee'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.pastelBlue,
+                      backgroundColor: AppTheme.zohoBlue,
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                     ),
                   );
                 } else if (page == 3) {
-                  actionButton = FilledButton.icon(
-                    onPressed: () => finance(),
-                    icon: const Icon(CupertinoIcons.plus_circle_fill, size: 16),
-                    label: const Text('Add Entry'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.pastelBlue,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                    ),
+                  actionButton = Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => finance(null, 'income'),
+                        icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 16),
+                        label: const Text('Add Income'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.zohoGreen,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () => finance(null, 'expense'),
+                        icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 16),
+                        label: const Text('Add Expense'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.zohoRed,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                        ),
+                      ),
+                    ],
                   );
                 }
 
@@ -770,127 +1339,94 @@ class _OfficeScreenState extends State<OfficeScreen> {
   }
 
   Widget attendanceView(OfficeState state, bool isDark) {
-    final eligible = state.data.employees
-        .where((e) => e['joinDate'].toString().compareTo(day) <= 0 && (e['endDate'] == '' || e['endDate'].toString().compareTo(day) >= 0))
-        .toList();
+    final employees = state.data.employees;
+    final records = state.data.attendance.where((a) => a['date'] == day).toList();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (eligible.isEmpty)
+        if (employees.isEmpty)
           const EmptyState(
-            icon: CupertinoIcons.calendar,
-            title: 'No eligible employees',
-            message: 'Add active employee records with joining dates on or before this day.',
+            icon: CupertinoIcons.person_2,
+            title: 'No employees found',
+            message: 'Add employees first to mark and track their attendance.',
           )
         else
-          for (final e in eligible) ...[
+          for (final e in employees) ...[
             Builder(
               builder: (context) {
-                Map<String, dynamic>? record;
-                for (final row in state.data.attendance) {
-                  if (row['employeeId'] == e['id'] && row['date'] == day) {
-                    record = row;
-                  }
-                }
-                final status = record?['status']?.toString() ?? 'not marked';
+                final a = records.where((r) => r['employeeId'] == e['id']).firstOrNull;
+                final status = a?['status'] ?? 'notMarked';
 
                 return Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppTheme.pastelIndigoBgDark : AppTheme.pastelIndigoBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          e['name'].toString().isNotEmpty ? e['name'].toString().substring(0, 1).toUpperCase() : '?',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.pastelIndigo, fontSize: 16),
-                        ),
-                      ),
-                    ),
-                    title: Text(e['name'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5, letterSpacing: -0.2)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const SizedBox(height: 4),
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            AppBadge.status(status == 'not marked' ? 'Unmarked' : status, isSmall: true),
-                            if (record != null && record['checkIn'].toString().isNotEmpty)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(e['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
+                              const SizedBox(height: 2),
                               Text(
-                                '${record['checkIn']} – ${record['checkOut']}',
-                                style: const TextStyle(fontSize: 12),
+                                '${e['code']} • ${e['department']}',
+                                style: TextStyle(fontSize: 12.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
                               ),
-                            if (record != null && (record['overtimeHours']?.toString() != '0' && record['overtimeHours']?.toString() != '0.00'))
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.pastelOrangeBg,
-                                  borderRadius: BorderRadius.circular(6),
+                              if (a != null && (a['checkIn'].toString().isNotEmpty || a['checkOut'].toString().isNotEmpty)) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'In: ${a['checkIn'].toString().isNotEmpty ? a['checkIn'] : '--:--'} • Out: ${a['checkOut'].toString().isNotEmpty ? a['checkOut'] : '--:--'}${a['overtimeHours'] != '0' ? ' • OT: ${a['overtimeHours']}h' : ''}',
+                                  style: TextStyle(fontSize: 12, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
                                 ),
-                                child: Text(
-                                  '+${record['overtimeHours']}h OT',
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.pastelOrange),
-                                ),
-                              ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            AppBadge.attendance(status),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Mark / Edit Attendance',
+                              icon: const Icon(CupertinoIcons.pencil_circle_fill, size: 22),
+                              onPressed: () => attendance(e, a),
+                            ),
                           ],
                         ),
                       ],
                     ),
-                    trailing: FilledButton.tonalIcon(
-                      onPressed: () => attendance(e, record),
-                      icon: const Icon(CupertinoIcons.calendar_badge_plus, size: 15),
-                      label: const Text('Mark'),
-                      style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
-                    ),
-                    onTap: () => attendance(e, record),
                   ),
                 );
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
           ],
       ],
     );
   }
 
   Widget payrollView(OfficeState state, bool demo, bool isDark) {
-    final eligible = state.data.employees
-        .where((e) => e['joinDate'].toString().substring(0, 7).compareTo(month) <= 0 && (e['endDate'] == '' || e['endDate'].toString().substring(0, 7).compareTo(month) >= 0))
-        .toList();
+    final employees = state.data.employees;
+    final monthPayroll = state.data.payroll.where((p) => p['month'] == month).toList();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (eligible.isEmpty)
+        if (employees.isEmpty)
           const EmptyState(
-            icon: CupertinoIcons.money_dollar_circle,
-            title: 'No eligible payroll records',
-            message: 'Add active employees with joining dates in or before this month.',
+            icon: CupertinoIcons.money_dollar,
+            title: 'No employees available',
+            message: 'Add staff directory members before running payroll.',
           )
         else
-          for (final e in eligible) ...[
+          for (final e in employees) ...[
             Builder(
               builder: (context) {
-                Map<String, dynamic>? record;
-                for (final p in state.data.payroll) {
-                  if (p['employee']['id'] == e['id'] && p['month'] == month) {
-                    record = p;
-                  }
-                }
-                final p = record;
-                final status = p?['status']?.toString() ?? 'not generated';
+                final p = monthPayroll.where((x) => x['employeeId'] == e['id']).firstOrNull;
 
                 return Card(
                   shape: RoundedRectangleBorder(
@@ -909,43 +1445,40 @@ class _OfficeScreenState extends State<OfficeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    e['name'],
-                                    style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w800, letterSpacing: -0.2),
-                                  ),
-                                  Text(
-                                    'Code: ${e['code']} • Month: $month',
-                                    style: TextStyle(fontSize: 12.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
-                                  ),
+                                  Text(e['name'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5, letterSpacing: -0.2)),
+                                  Text('${e['code']} • ${e['department']}', style: TextStyle(fontSize: 12.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary)),
                                 ],
                               ),
                             ),
-                            AppBadge.status(status == 'not generated' ? 'Draft' : status),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  p != null ? money((p['netCents'] as num).toInt()) : 'AED 0.00',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5, letterSpacing: -0.3),
+                                ),
+                                const SizedBox(height: 4),
+                                AppBadge.status(p?['status'] ?? 'uncalculated', isSmall: true),
+                              ],
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 14),
                         if (p != null) ...[
+                          const SizedBox(height: 12),
                           Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                              borderRadius: BorderRadius.circular(12),
+                              color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('Net Salary Payout', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                                    Text(
-                                      money((p['netCents'] as num).toInt()),
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppTheme.pastelMint,
-                                        letterSpacing: -0.4,
-                                      ),
-                                    ),
+                                    const Text('Net Salary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text(money((p['netCents'] as num).toInt()), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   ],
                                 ),
                                 const Divider(height: 16),
@@ -960,16 +1493,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
                                     Text('Deductions: -${money((p['deductionCents'] as num).toInt())}', style: const TextStyle(fontSize: 12, color: AppTheme.pastelRose)),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Marked ${p['markedDays']} / ${p['scheduledDays']} scheduled days • Unpaid: ${p['absentDays']}d',
-                                  style: TextStyle(fontSize: 11.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
-                                ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 14),
                         ],
+                        const SizedBox(height: 14),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -1054,179 +1582,685 @@ class _OfficeScreenState extends State<OfficeScreen> {
     final billing = context.watch<BillingCubit>().state.data;
     final summary = financialSummary(billing.invoices, state.data, month);
 
-    var entries = state.data.entries
+    final allMonthEntries = state.data.entries
         .where((e) => e['date'].toString().startsWith(month) || e['status'] == 'unpaid')
         .toList();
-    if (activeFilterKind != null) {
-      entries = entries.where((e) => e['kind'] == activeFilterKind).toList();
+
+    final allCount = allMonthEntries.length;
+    final incomeCount = allMonthEntries.where((e) => e['kind'] == 'income').length;
+    final expenseCount = allMonthEntries.where((e) => e['kind'] == 'expense').length;
+    final capitalCount = allMonthEntries.where((e) => e['kind'] == 'capital').length;
+    final unpaidCount = allMonthEntries.where((e) => e['status'] == 'unpaid').length;
+
+    final availableCategories = allMonthEntries
+        .map((e) => e['category']?.toString() ?? '')
+        .where((c) => c.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    var entries = List<Map<String, dynamic>>.from(allMonthEntries);
+
+    // Apply Filter Tab
+    if (financeTab == 'income') {
+      entries = entries.where((e) => e['kind'] == 'income').toList();
+    } else if (financeTab == 'expense') {
+      entries = entries.where((e) => e['kind'] == 'expense').toList();
+    } else if (financeTab == 'capital') {
+      entries = entries.where((e) => e['kind'] == 'capital').toList();
+    } else if (financeTab == 'unpaid') {
+      entries = entries.where((e) => e['status'] == 'unpaid').toList();
     }
+
+    // Category filter
+    if (financeCategoryFilter != null && financeCategoryFilter!.isNotEmpty) {
+      entries = entries.where((e) => e['category'] == financeCategoryFilter).toList();
+    }
+
+    // Account filter
+    if (financeAccountFilter != null && financeAccountFilter!.isNotEmpty) {
+      entries = entries.where((e) => e['account'] == financeAccountFilter).toList();
+    }
+
+    // Search query filter
+    if (financeSearch.trim().isNotEmpty) {
+      final q = financeSearch.toLowerCase().trim();
+      entries = entries.where((e) {
+        final p = (e['party'] ?? '').toString().toLowerCase();
+        final c = (e['category'] ?? '').toString().toLowerCase();
+        final r = (e['reference'] ?? '').toString().toLowerCase();
+        final n = (e['notes'] ?? '').toString().toLowerCase();
+        final a = (e['amount'] ?? '').toString().toLowerCase();
+        final cents = (e['amountCents'] ?? '').toString();
+        return p.contains(q) || c.contains(q) || r.contains(q) || n.contains(q) || a.contains(q) || cents.contains(q);
+      }).toList();
+    }
+
+    // Sort: Unpaid on top, then descending by date
+    entries.sort((a, b) {
+      final aUnpaid = a['status'] == 'unpaid' ? 1 : 0;
+      final bUnpaid = b['status'] == 'unpaid' ? 1 : 0;
+      if (aUnpaid != bUnpaid) return bUnpaid.compareTo(aUnpaid);
+      final aDate = (a['date'] ?? '').toString();
+      final bDate = (b['date'] ?? '').toString();
+      return bDate.compareTo(aDate);
+    });
+
+    final totalIncome = (summary['Invoice collections'] ?? 0) + (summary['Other income'] ?? 0);
+    final totalExpenses = (summary['Expenses paid'] ?? 0) + (summary['Payroll paid'] ?? 0);
+    final netCash = summary['Net cash movement'] ?? 0;
+    final unpaidBills = summary['Supplier bills due (all dates)'] ?? 0;
+    final bankMovement = summary['Bank movement'] ?? 0;
+    final cashMovement = summary['Cash movement'] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Financial Metrics Grid
+        // Action Buttons Toolbar
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton.icon(
+              onPressed: () => finance(null, 'income'),
+              icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 16),
+              label: const Text('Add Income'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.zohoGreen,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () => finance(null, 'expense'),
+              icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 16),
+              label: const Text('Add Expense'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.zohoRed,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => finance(null, 'capital'),
+              icon: const Icon(CupertinoIcons.money_dollar_circle_fill, size: 16, color: Color(0xFF8B5CF6)),
+              label: const Text('Capital & Equity', style: TextStyle(color: Color(0xFF8B5CF6))),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF8B5CF6)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => guarded(() async {
+                await preview(
+                  await context.read<OfficeDocuments>().financialReport(
+                        billing.company.name,
+                        month,
+                        summary,
+                        state.data.entries,
+                      ),
+                  'Finance-$month.pdf',
+                );
+              }),
+              icon: const Icon(CupertinoIcons.doc_plaintext, size: 16),
+              label: const Text('Export PDF Report'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+            ),
+            if (!demo)
+              OutlinedButton.icon(
+                onPressed: () => guarded(() async {
+                  final bytes = await context.read<OfficeDocuments>().financialReport(
+                        billing.company.name,
+                        month,
+                        summary,
+                        state.data.entries,
+                      );
+                  await run('reportArchive', {
+                    'month': month,
+                    'requestId': const Uuid().v4(),
+                    'pdf': base64Encode(bytes),
+                  });
+                }),
+                icon: const Icon(CupertinoIcons.cloud_upload, size: 16),
+                label: const Text('Save to Drive'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Financial Metrics Grid (Zoho Style)
         LayoutBuilder(
           builder: (context, constraints) {
             final cardWidth = constraints.maxWidth > 900
-                ? (constraints.maxWidth - 36) / 3
-                : constraints.maxWidth > 600
-                    ? (constraints.maxWidth - 16) / 2
+                ? (constraints.maxWidth - 42) / 4
+                : constraints.maxWidth > 560
+                    ? (constraints.maxWidth - 14) / 2
                     : constraints.maxWidth;
 
             return Wrap(
               spacing: 14,
               runSpacing: 14,
               children: [
-                for (final e in summary.entries)
-                  SizedBox(
-                    width: cardWidth,
-                    child: StatCard(
-                      title: e.key.toUpperCase(),
-                      value: money(e.value),
-                      icon: e.key.contains('income') || e.key.contains('collection')
-                          ? CupertinoIcons.arrow_down_left_circle_fill
-                          : e.key.contains('Expense') || e.key.contains('Payroll')
-                              ? CupertinoIcons.arrow_up_right_circle_fill
-                              : CupertinoIcons.creditcard_fill,
-                      accentColor: e.key.contains('income') || e.key.contains('collection')
-                          ? AppTheme.pastelMint
-                          : e.key.contains('Expense') || e.key.contains('Payroll')
-                              ? AppTheme.pastelRose
-                              : AppTheme.pastelBlue,
-                    ),
+                SizedBox(
+                  width: cardWidth,
+                  child: StatCard(
+                    title: 'TOTAL INCOME & RECEIPTS',
+                    value: money(totalIncome),
+                    icon: CupertinoIcons.arrow_down_left_circle_fill,
+                    accentColor: AppTheme.zohoGreen,
                   ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: StatCard(
+                    title: 'TOTAL EXPENSES & OUTFLOWS',
+                    value: money(totalExpenses),
+                    icon: CupertinoIcons.arrow_up_right_circle_fill,
+                    accentColor: AppTheme.zohoRed,
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: StatCard(
+                    title: 'NET CASH MOVEMENT',
+                    value: '${netCash >= 0 ? '+' : ''}${money(netCash)}',
+                    icon: CupertinoIcons.chart_bar_alt_fill,
+                    accentColor: netCash >= 0 ? AppTheme.zohoBlue : AppTheme.zohoRed,
+                  ),
+                ),
+                SizedBox(
+                  width: cardWidth,
+                  child: StatCard(
+                    title: 'PENDING BILLS DUE',
+                    value: money(unpaidBills),
+                    icon: CupertinoIcons.clock_fill,
+                    accentColor: const Color(0xFFF59E0B),
+                  ),
+                ),
               ],
             );
           },
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
-        // Action Buttons Row
-        Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          children: [
-            FilledButton.icon(
-              onPressed: () => finance(),
-              icon: const Icon(CupertinoIcons.plus_circle_fill, size: 16),
-              label: const Text('Add Transaction / Bill'),
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
+        // Bank vs Cash Movement mini pill
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
             ),
-            OutlinedButton.icon(
-              onPressed: () => guarded(() async {
-                await preview(await context.read<OfficeDocuments>().financialReport(billing.company.name, month, summary, state.data.entries), 'Finance-$month.pdf');
-              }),
-              icon: const Icon(CupertinoIcons.doc_plaintext, size: 16),
-              label: const Text('Print / Export Report'),
-              style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
-            ),
-            if (!demo)
-              OutlinedButton.icon(
-                onPressed: () => guarded(() async {
-                  final bytes = await context.read<OfficeDocuments>().financialReport(billing.company.name, month, summary, state.data.entries);
-                  await run('reportArchive', {'month': month, 'requestId': const Uuid().v4(), 'pdf': base64Encode(bytes)});
-                }),
-                icon: const Icon(CupertinoIcons.cloud_upload, size: 16),
-                label: const Text('Save Report to Drive'),
-                style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
+          ),
+          child: Wrap(
+            spacing: 20,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.building_2_fill, size: 14, color: AppTheme.zohoBlue),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Bank Movement: ${bankMovement >= 0 ? '+' : ''}${money(bankMovement)}',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: bankMovement >= 0 ? AppTheme.zohoGreen : AppTheme.zohoRed,
+                    ),
+                  ),
+                ],
               ),
-          ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.money_dollar, size: 14, color: Color(0xFF10B981)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Cash Movement: ${cashMovement >= 0 ? '+' : ''}${money(cashMovement)}',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: cashMovement >= 0 ? AppTheme.zohoGreen : AppTheme.zohoRed,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.doc_text, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Invoices: ${money(summary['Invoice collections'] ?? 0)} • Salaries: ${money(summary['Payroll paid'] ?? 0)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 24),
 
-        const Text('Transactions & Bills', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-        const SizedBox(height: 10),
+        // Filter Tabs & Controls
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFinanceFilterTab('all', 'All Transactions ($allCount)', isDark),
+                const SizedBox(width: 4),
+                _buildFinanceFilterTab('income', 'Income ($incomeCount)', isDark),
+                const SizedBox(width: 4),
+                _buildFinanceFilterTab('expense', 'Expenses ($expenseCount)', isDark),
+                const SizedBox(width: 4),
+                _buildFinanceFilterTab('capital', 'Capital ($capitalCount)', isDark),
+                const SizedBox(width: 4),
+                _buildFinanceFilterTab('unpaid', 'Unpaid Bills ($unpaidCount)', isDark),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
 
+        // Search & Category Dropdown Bar
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 650;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: isNarrow ? constraints.maxWidth : 300,
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search by payee, ref, notes, amount...',
+                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      prefixIcon: const Icon(CupertinoIcons.search, size: 16, color: Colors.grey),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                      suffixIcon: financeSearch.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(CupertinoIcons.clear_circled_solid, size: 15, color: Colors.grey),
+                              onPressed: () => setState(() => financeSearch = ''),
+                            )
+                          : null,
+                    ),
+                    onChanged: (v) => setState(() => financeSearch = v),
+                  ),
+                ),
+                if (availableCategories.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: financeCategoryFilter,
+                        hint: const Text('All Categories', style: TextStyle(fontSize: 13)),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All Categories', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ),
+                          for (final cat in availableCategories)
+                            DropdownMenuItem<String?>(
+                              value: cat,
+                              child: Text(cat, style: const TextStyle(fontSize: 13)),
+                            ),
+                        ],
+                        onChanged: (v) => setState(() => financeCategoryFilter = v),
+                      ),
+                    ),
+                  ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: financeAccountFilter,
+                      hint: const Text('All Accounts', style: TextStyle(fontSize: 13)),
+                      items: const [
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All Accounts', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        ),
+                        DropdownMenuItem<String?>(
+                          value: 'Bank',
+                          child: Text('Bank Account', style: TextStyle(fontSize: 13)),
+                        ),
+                        DropdownMenuItem<String?>(
+                          value: 'Cash',
+                          child: Text('Cash in Hand', style: TextStyle(fontSize: 13)),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => financeAccountFilter = v),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+
+        // Transactions List
         if (entries.isEmpty)
-          const EmptyState(
-            icon: CupertinoIcons.creditcard,
-            title: 'No transactions for this month',
-            message: 'Add supplier bills, office expenses or other income records.',
+          EmptyState(
+            icon: CupertinoIcons.arrow_right_arrow_left_circle,
+            title: financeSearch.isNotEmpty || financeCategoryFilter != null || financeAccountFilter != null
+                ? 'No matching transactions'
+                : 'No transactions found for $month',
+            message: financeSearch.isNotEmpty
+                ? 'Try clearing your search or filter criteria.'
+                : 'Add income receipts, supplier bills, or office expenses to manage your cash flow.',
+            actionLabel: 'Add Income',
+            onAction: () => finance(null, 'income'),
           )
         else
           for (final e in entries) ...[
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${e['party'].isNotEmpty ? e['party'] : 'General'} / ${e['category']}',
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: -0.2),
-                              ),
-                              Text(
-                                '${e['date']}${e['dueDate'].isNotEmpty ? ' • Due ${e['dueDate']}' : ''}',
-                                style: TextStyle(fontSize: 12.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${e['kind'] == 'expense' ? '-' : '+'}${money((e['amountCents'] as num).toInt())}',
-                              style: TextStyle(
+            _buildTransactionCard(e, demo, isDark),
+            const SizedBox(height: 10),
+          ],
+      ],
+    );
+  }
+
+  Widget _buildFinanceFilterTab(String key, String label, bool isDark) {
+    final isSelected = financeTab == key;
+    return InkWell(
+      onTap: () => setState(() => financeTab = key),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? (isDark ? const Color(0xFF0F172A) : Colors.white) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+          border: isSelected
+              ? Border.all(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? (isDark ? Colors.white : const Color(0xFF0F172A)) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionCard(Map<String, dynamic> e, bool demo, bool isDark) {
+    final kind = e['kind']?.toString() ?? 'expense';
+    final isIncome = kind == 'income';
+    final isCapital = kind == 'capital';
+    final isUnpaid = e['status'] == 'unpaid';
+
+    final color = isIncome
+        ? AppTheme.zohoGreen
+        : (isCapital ? const Color(0xFF8B5CF6) : AppTheme.zohoRed);
+
+    final icon = isIncome
+        ? CupertinoIcons.arrow_down_left_circle_fill
+        : (isCapital ? CupertinoIcons.money_dollar_circle_fill : CupertinoIcons.arrow_up_right_circle_fill);
+
+    final amountCents = (e['amountCents'] as num?)?.toInt() ?? 0;
+    final partyName = (e['party']?.toString() ?? '').trim();
+    final category = (e['category']?.toString() ?? 'General').trim();
+    final reference = (e['reference']?.toString() ?? '').trim();
+    final date = (e['date']?.toString() ?? '').trim();
+    final dueDate = (e['dueDate']?.toString() ?? '').trim();
+    final notes = (e['notes']?.toString() ?? '').trim();
+    final account = (e['account']?.toString() ?? 'Bank').trim();
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+        side: BorderSide(
+          color: isUnpaid
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
+              : (isDark ? const Color(0x20FFFFFF) : const Color(0x10000000)),
+          width: isUnpaid ? 1.2 : 0.8,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              partyName.isNotEmpty ? partyName : category,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 16,
-                                letterSpacing: -0.3,
-                                color: e['kind'] == 'expense' ? AppTheme.pastelRose : AppTheme.pastelMint,
+                                letterSpacing: -0.2,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
-                            AppBadge.status(e['status'], isSmall: true),
-                          ],
-                        ),
-                      ],
-                    ),
-                    documents(e),
-                    if (e['status'] == 'unpaid') ...[
-                      const Divider(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(onPressed: () => finance(e), child: const Text('Edit')),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: () => billPayment(e),
-                            style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelMint, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
-                            child: const Text('Mark Paid'),
                           ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: () => voidBill(e),
-                            child: const Text('Void', style: TextStyle(color: AppTheme.pastelRose)),
-                          ),
-                          if (!demo) ...[
+                          if (reference.isNotEmpty) ...[
                             const SizedBox(width: 8),
-                            IconButton(
-                              tooltip: 'Attach file',
-                              icon: const Icon(CupertinoIcons.paperclip),
-                              onPressed: () => upload('Finance', e),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                reference,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ],
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: color.withValues(alpha: 0.2)),
+                            ),
+                            child: Text(
+                              category,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  account == 'Cash' ? CupertinoIcons.money_dollar : CupertinoIcons.building_2_fill,
+                                  size: 11,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(account, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            date,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                            ),
+                          ),
+                          if (dueDate.isNotEmpty)
+                            Text(
+                              '• Due $dueDate',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isUnpaid ? FontWeight.bold : FontWeight.normal,
+                                color: isUnpaid ? const Color(0xFFF59E0B) : Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (notes.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          notes,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${isIncome ? '+' : (isCapital ? '+' : '-')}${money(amountCents)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16.5,
+                        letterSpacing: -0.3,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AppBadge.status(e['status'], isSmall: true),
                   ],
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
+            documents(e),
+            if (isUnpaid || true) ...[
+              const Divider(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => finance(e),
+                    icon: const Icon(CupertinoIcons.pencil, size: 14),
+                    label: const Text('Edit'),
+                  ),
+                  if (isUnpaid) ...[
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      onPressed: () => billPayment(e),
+                      icon: const Icon(CupertinoIcons.checkmark_alt, size: 14),
+                      label: const Text('Mark Paid'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.zohoGreen,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    TextButton.icon(
+                      onPressed: () => voidBill(e),
+                      icon: const Icon(CupertinoIcons.xmark_circle, size: 14, color: AppTheme.zohoRed),
+                      label: const Text('Void', style: TextStyle(color: AppTheme.zohoRed)),
+                    ),
+                  ],
+                  if (!demo) ...[
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: 'Attach receipt / invoice file',
+                      icon: const Icon(CupertinoIcons.paperclip, size: 16),
+                      onPressed: () => upload('Finance', e),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ],
-      ],
+        ),
+      ),
     );
   }
 

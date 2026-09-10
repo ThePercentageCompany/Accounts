@@ -62,6 +62,9 @@ class AppBadge extends StatelessWidget {
     );
   }
 
+  factory AppBadge.attendance(String status, {bool isSmall = false}) =>
+      AppBadge.status(status, isSmall: isSmall);
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
