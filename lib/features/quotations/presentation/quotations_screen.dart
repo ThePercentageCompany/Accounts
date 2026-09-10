@@ -583,17 +583,17 @@ class _QuotationsViewState extends State<QuotationsView> {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
         side: BorderSide(
-          color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder,
-          width: 0.6,
+          color: isDark ? AppTheme.zohoDarkBorder : AppTheme.zohoLightBorder,
+          width: 1.0,
         ),
       ),
       child: InkWell(
         onTap: () => _openEditor(q),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               // Icon Squircle

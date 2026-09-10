@@ -75,9 +75,9 @@ class EmptyState extends StatelessWidget {
                   icon: const Icon(CupertinoIcons.plus, size: 15),
                   label: Text(actionLabel!),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.pastelBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                    backgroundColor: AppTheme.zohoBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                   ),
                 ),
               ],

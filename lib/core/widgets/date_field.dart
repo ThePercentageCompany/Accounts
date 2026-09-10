@@ -111,19 +111,23 @@ class DatePickerField extends StatelessWidget {
       padding: const EdgeInsets.only(right: 6),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
-            borderRadius: BorderRadius.circular(100),
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              width: 0.8,
+            ),
           ),
           child: Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
-              color: isDark ? AppTheme.pastelBlue : AppTheme.pastelBlue,
+              color: AppTheme.zohoBlue,
               letterSpacing: -0.1,
             ),
           ),

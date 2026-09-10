@@ -265,17 +265,17 @@ class _InvoicesViewState extends State<InvoicesView> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
-                  ? [const Color(0xFF1E2A4A), const Color(0xFF121A2D)]
-                  : [const Color(0xFF007AFF), const Color(0xFF5856D6)],
+                  ? [const Color(0xFF0F264A), const Color(0xFF111827)]
+                  : [AppTheme.zohoBlue, AppTheme.zohoBlueDark],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
             boxShadow: [
               BoxShadow(
-                color: (isDark ? Colors.black : AppTheme.pastelBlue).withValues(alpha: 0.25),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
+                color: (isDark ? Colors.black : AppTheme.zohoBlue).withValues(alpha: 0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -287,7 +287,7 @@ class _InvoicesViewState extends State<InvoicesView> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(100),
+                        borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -319,12 +319,12 @@ class _InvoicesViewState extends State<InvoicesView> {
                     const SizedBox(height: 14),
                     FilledButton.icon(
                       onPressed: widget.onNewInvoice,
-                      icon: const Icon(CupertinoIcons.plus, size: 16, color: Colors.black),
-                      label: const Text('New Invoice', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
+                      icon: const Icon(CupertinoIcons.plus, size: 16, color: AppTheme.zohoBlue),
+                      label: const Text('New Invoice', style: TextStyle(color: AppTheme.zohoBlue, fontWeight: FontWeight.w700)),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                       ),
                     ),
                   ],
@@ -339,7 +339,7 @@ class _InvoicesViewState extends State<InvoicesView> {
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(100),
+                              borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -374,12 +374,12 @@ class _InvoicesViewState extends State<InvoicesView> {
                     const SizedBox(width: 14),
                     FilledButton.icon(
                       onPressed: widget.onNewInvoice,
-                      icon: const Icon(CupertinoIcons.plus, size: 16, color: Colors.black),
-                      label: const Text('Invoice', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
+                      icon: const Icon(CupertinoIcons.plus, size: 16, color: AppTheme.zohoBlue),
+                      label: const Text('Invoice', style: TextStyle(color: AppTheme.zohoBlue, fontWeight: FontWeight.w700)),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                       ),
                     ),
                   ],
@@ -395,14 +395,14 @@ class _InvoicesViewState extends State<InvoicesView> {
       padding: const EdgeInsets.only(right: 8),
       child: InkWell(
         onTap: () => setState(() => filterStatus = key),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6.5),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark ? AppTheme.pastelBlue : AppTheme.pastelBlue)
-                : (isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE5E5EA)),
-            borderRadius: BorderRadius.circular(100),
+                ? AppTheme.zohoBlue
+                : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+            borderRadius: BorderRadius.circular(AppTheme.badgeRadiusVal),
           ),
           child: Text(
             label,
@@ -439,8 +439,8 @@ class _InvoicesViewState extends State<InvoicesView> {
 
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
+        borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+        side: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 1.0),
       ),
       child: InkWell(
         onTap: () {

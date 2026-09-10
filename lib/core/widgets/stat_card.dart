@@ -35,24 +35,10 @@ class StatCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
       child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark ? AppTheme.iosDarkBorder : const Color(0x10000000),
-            width: 0.8,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isDark ? Colors.black.withValues(alpha: 0.35) : const Color(0x06000000),
-              blurRadius: 14,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.all(16),
+        decoration: AppTheme.zohoCardDecoration(isDark),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -1,303 +1,413 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // iOS Pastel Color Palette
-  static const Color pastelMint = Color(0xFF34C759); // Apple Green
-  static const Color pastelMintBg = Color(0xFFE8F8F0);
-  static const Color pastelMintBgDark = Color(0xFF0F2E23);
+  // -------------------------------------------------------------
+  // Zoho Books / Zoho Finance Color Palette
+  // -------------------------------------------------------------
+  // Primary Zoho Colors
+  static const Color zohoBlue = Color(0xFF1B68D0); // Zoho Books Action Blue
+  static const Color zohoBlueDark = Color(0xFF1351A8);
+  static const Color zohoBlueBg = Color(0xFFEBF3FC);
+  static const Color zohoBlueBgDark = Color(0xFF0F264A);
 
-  static const Color pastelBlue = Color(0xFF007AFF); // Apple Blue
-  static const Color pastelBlueBg = Color(0xFFEBF5FF);
-  static const Color pastelBlueBgDark = Color(0xFF0D2A4A);
+  static const Color zohoRed = Color(0xFFE42528); // Zoho Corporate Red
+  static const Color zohoRedDark = Color(0xFFC61B1E);
+  static const Color zohoRedBg = Color(0xFFFDE8E8);
+  static const Color zohoRedBgDark = Color(0xFF450A0A);
 
-  static const Color pastelPurple = Color(0xFFAF52DE); // Apple Purple
-  static const Color pastelPurpleBg = Color(0xFFF3E8FF);
-  static const Color pastelPurpleBgDark = Color(0xFF28133E);
+  static const Color zohoGreen = Color(0xFF10B981); // Zoho Emerald / Paid
+  static const Color zohoGreenDark = Color(0xFF059669);
+  static const Color zohoGreenBg = Color(0xFFECFDF5);
+  static const Color zohoGreenBgDark = Color(0xFF064E3B);
 
-  static const Color pastelOrange = Color(0xFFFF9500); // Apple Orange
-  static const Color pastelOrangeBg = Color(0xFFFFF3E6);
-  static const Color pastelOrangeBgDark = Color(0xFF3B220C);
+  static const Color zohoAmber = Color(0xFFF59E0B); // Zoho Warning / Pending
+  static const Color zohoAmberDark = Color(0xFFD97706);
+  static const Color zohoAmberBg = Color(0xFFFFFBEB);
+  static const Color zohoAmberBgDark = Color(0xFF78350F);
 
-  static const Color pastelRose = Color(0xFFFF2D55); // Apple Pink/Red
-  static const Color pastelRoseBg = Color(0xFFFFEAEF);
-  static const Color pastelRoseBgDark = Color(0xFF38101A);
+  static const Color zohoPurple = Color(0xFF7C3AED); // Zoho Purple / Capital
+  static const Color zohoPurpleBg = Color(0xFFF5F3FF);
+  static const Color zohoPurpleBgDark = Color(0xFF2E1065);
 
-  static const Color pastelIndigo = Color(0xFF5856D6); // Apple Indigo
-  static const Color pastelIndigoBg = Color(0xFFEEF0FF);
-  static const Color pastelIndigoBgDark = Color(0xFF1B1B3D);
+  static const Color zohoCyan = Color(0xFF0284C7); // Zoho Cyan / Info
+  static const Color zohoCyanBg = Color(0xFFE0F2FE);
+  static const Color zohoCyanBgDark = Color(0xFF0C4A6E);
 
-  static const Color pastelTeal = Color(0xFF30B0C7); // Apple Teal
-  static const Color pastelTealBg = Color(0xFFE6F7FA);
-  static const Color pastelTealBgDark = Color(0xFF0D2D35);
+  // Backwards compatible aliases
+  static const Color pastelMint = zohoGreen;
+  static const Color pastelMintBg = zohoGreenBg;
+  static const Color pastelMintBgDark = zohoGreenBgDark;
 
-  // iOS System Backgrounds & Grouped Surfaces
-  // Light Mode (Apple iOS 17/18 HIG)
-  static const Color iosLightBg = Color(0xFFF2F2F7); // System Grouped Background
-  static const Color iosLightSurface = Color(0xFFFFFFFF); // Secondary Grouped Background
-  static const Color iosLightSurfaceElevated = Color(0xFFE5E5EA); // Tertiary Grouped Background
-  static const Color iosLightBorder = Color(0xFFE5E5EA);
-  static const Color iosLightSeparator = Color(0xFFD1D1D6);
-  static const Color iosLightTextPrimary = Color(0xFF000000);
-  static const Color iosLightTextSecondary = Color(0xFF8E8E93);
+  static const Color pastelBlue = zohoBlue;
+  static const Color pastelBlueBg = zohoBlueBg;
+  static const Color pastelBlueBgDark = zohoBlueBgDark;
 
-  // Dark Mode (Apple OLED Dark HIG)
-  static const Color iosDarkBg = Color(0xFF000000); // System Grouped Background
-  static const Color iosDarkSurface = Color(0xFF1C1C1E); // Secondary Grouped Background
-  static const Color iosDarkSurfaceElevated = Color(0xFF2C2C2E); // Tertiary Grouped Background
-  static const Color iosDarkBorder = Color(0xFF38383A);
-  static const Color iosDarkSeparator = Color(0xFF38383A);
-  static const Color iosDarkTextPrimary = Color(0xFFFFFFFF);
-  static const Color iosDarkTextSecondary = Color(0xFF8E8E93);
+  static const Color pastelPurple = zohoPurple;
+  static const Color pastelPurpleBg = zohoPurpleBg;
+  static const Color pastelPurpleBgDark = zohoPurpleBgDark;
 
+  static const Color pastelOrange = zohoAmber;
+  static const Color pastelOrangeBg = zohoAmberBg;
+  static const Color pastelOrangeBgDark = zohoAmberBgDark;
+
+  static const Color pastelRose = zohoRed;
+  static const Color pastelRoseBg = zohoRedBg;
+  static const Color pastelRoseBgDark = zohoRedBgDark;
+
+  static const Color pastelIndigo = Color(0xFF4F46E5);
+  static const Color pastelIndigoBg = Color(0xFFEEF2FF);
+  static const Color pastelIndigoBgDark = Color(0xFF1E1B4B);
+
+  static const Color pastelTeal = zohoCyan;
+  static const Color pastelTealBg = zohoCyanBg;
+  static const Color pastelTealBgDark = zohoCyanBgDark;
+
+  // -------------------------------------------------------------
+  // Zoho Backgrounds & Surfaces
+  // -------------------------------------------------------------
+  // Light Mode (Zoho Books Signature Canvas)
+  static const Color zohoLightBg = Color(0xFFF4F6F9); // Clean SaaS Light Slate Canvas
+  static const Color zohoLightSurface = Color(0xFFFFFFFF); // Pure White Card Surface
+  static const Color zohoLightSurfaceElevated = Color(0xFFF8FAFC); // Table Header / Subtle surface
+  static const Color zohoLightBorder = Color(0xFFE2E8F0); // Crisp 1px card border
+  static const Color zohoLightSeparator = Color(0xFFEAECF0);
+  static const Color zohoLightTextPrimary = Color(0xFF0F172A); // High-contrast Charcoal Slate
+  static const Color zohoLightTextSecondary = Color(0xFF475569); // Clean Secondary Slate
+  static const Color zohoLightTextMuted = Color(0xFF94A3B8);
+
+  // Backward compatible aliases
+  static const Color iosLightBg = zohoLightBg;
+  static const Color iosLightSurface = zohoLightSurface;
+  static const Color iosLightSurfaceElevated = zohoLightSurfaceElevated;
+  static const Color iosLightBorder = zohoLightBorder;
+  static const Color iosLightSeparator = zohoLightSeparator;
+  static const Color iosLightTextPrimary = zohoLightTextPrimary;
+  static const Color iosLightTextSecondary = zohoLightTextSecondary;
+
+  // Dark Mode (Zoho Books Dark Navy)
+  static const Color zohoDarkBg = Color(0xFF0B1120); // Deep Dark Slate Canvas
+  static const Color zohoDarkSurface = Color(0xFF1E293B); // Dark Slate Card Surface
+  static const Color zohoDarkSurfaceElevated = Color(0xFF162032);
+  static const Color zohoDarkBorder = Color(0xFF334155);
+  static const Color zohoDarkSeparator = Color(0xFF243044);
+  static const Color zohoDarkTextPrimary = Color(0xFFF8FAFC);
+  static const Color zohoDarkTextSecondary = Color(0xFF94A3B8);
+  static const Color zohoDarkTextMuted = Color(0xFF64748B);
+
+  // Backward compatible aliases
+  static const Color iosDarkBg = zohoDarkBg;
+  static const Color iosDarkSurface = zohoDarkSurface;
+  static const Color iosDarkSurfaceElevated = zohoDarkSurfaceElevated;
+  static const Color iosDarkBorder = zohoDarkBorder;
+  static const Color iosDarkSeparator = zohoDarkSeparator;
+  static const Color iosDarkTextPrimary = zohoDarkTextPrimary;
+  static const Color iosDarkTextSecondary = zohoDarkTextSecondary;
+
+  // -------------------------------------------------------------
+  // Zoho Card Curves & Geometry Tokens
+  // -------------------------------------------------------------
+  static const double cardRadiusVal = 10.0;
+  static const double buttonRadiusVal = 8.0;
+  static const double inputRadiusVal = 8.0;
+  static const double badgeRadiusVal = 6.0;
+
+  static final BorderRadius cardRadius = BorderRadius.circular(cardRadiusVal);
+  static final BorderRadius buttonRadius = BorderRadius.circular(buttonRadiusVal);
+  static final BorderRadius inputRadius = BorderRadius.circular(inputRadiusVal);
+  static final BorderRadius badgeRadius = BorderRadius.circular(badgeRadiusVal);
+
+  /// Signature Zoho Card BoxDecoration with 10px curve, 1px crisp border, and subtle elevation
+  static BoxDecoration zohoCardDecoration(
+    bool isDark, {
+    Color? customBg,
+    Color? customBorder,
+    double radius = cardRadiusVal,
+    bool showShadow = true,
+  }) {
+    return BoxDecoration(
+      color: customBg ?? (isDark ? zohoDarkSurface : zohoLightSurface),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: customBorder ?? (isDark ? zohoDarkBorder : zohoLightBorder),
+        width: 1.0,
+      ),
+      boxShadow: showShadow
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ]
+          : null,
+    );
+  }
+
+  // -------------------------------------------------------------
+  // Theme Builder: Light
+  // -------------------------------------------------------------
   static ThemeData light() {
     final colorScheme = const ColorScheme.light(
-      primary: pastelBlue,
+      primary: zohoBlue,
       onPrimary: Colors.white,
-      primaryContainer: pastelBlueBg,
-      onPrimaryContainer: pastelBlue,
-      secondary: pastelMint,
+      primaryContainer: zohoBlueBg,
+      onPrimaryContainer: zohoBlueDark,
+      secondary: zohoRed,
       onSecondary: Colors.white,
-      surface: iosLightSurface,
-      onSurface: iosLightTextPrimary,
-      error: pastelRose,
+      secondaryContainer: zohoRedBg,
+      onSecondaryContainer: zohoRedDark,
+      surface: zohoLightSurface,
+      onSurface: zohoLightTextPrimary,
+      error: zohoRed,
       onError: Colors.white,
-      outline: iosLightBorder,
-      outlineVariant: iosLightSeparator,
+      outline: zohoLightBorder,
+      outlineVariant: zohoLightSeparator,
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: iosLightBg,
-      fontFamily: '-apple-system',
+      scaffoldBackgroundColor: zohoLightBg,
+      fontFamily: 'Inter',
+      fontFamilyFallback: const ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xDDF2F2F7),
-        foregroundColor: iosLightTextPrimary,
+        backgroundColor: zohoLightSurface,
+        foregroundColor: zohoLightTextPrimary,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: TextStyle(
-          color: iosLightTextPrimary,
-          fontSize: 17,
+          color: zohoLightTextPrimary,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          letterSpacing: -0.3,
+          fontFamily: 'Inter',
         ),
       ),
       cardTheme: CardThemeData(
-        color: iosLightSurface,
+        color: zohoLightSurface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0x15000000), width: 0.6),
+          borderRadius: BorderRadius.circular(cardRadiusVal),
+          side: const BorderSide(color: zohoLightBorder, width: 1.0),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFE3E3E8),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoLightBorder, width: 1.0),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoLightBorder, width: 1.0),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: pastelBlue, width: 1.5),
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoBlue, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: pastelRose, width: 1.2),
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoRed, width: 1.2),
         ),
-        labelStyle: const TextStyle(color: iosLightTextSecondary, fontSize: 14),
-        hintStyle: const TextStyle(color: Color(0xFFAAAAAF), fontSize: 14),
+        labelStyle: const TextStyle(color: zohoLightTextSecondary, fontSize: 13.5, fontWeight: FontWeight.w500),
+        hintStyle: const TextStyle(color: zohoLightTextMuted, fontSize: 13.5),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: pastelBlue,
+          backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: pastelBlue,
+          backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: pastelBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          side: const BorderSide(color: Color(0x30007AFF), width: 1.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          foregroundColor: zohoLightTextPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          side: const BorderSide(color: zohoLightBorder, width: 1.0),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: pastelBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          foregroundColor: zohoBlue,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xE6FFFFFF),
+        backgroundColor: zohoLightSurface,
         elevation: 0,
-        indicatorColor: pastelBlueBg,
+        indicatorColor: zohoBlueBg,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: pastelBlue, size: 24);
+            return const IconThemeData(color: zohoBlue, size: 22);
           }
-          return const IconThemeData(color: iosLightTextSecondary, size: 24);
+          return const IconThemeData(color: zohoLightTextSecondary, size: 22);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const TextStyle(color: pastelBlue, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: -0.1);
+            return const TextStyle(color: zohoBlue, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
           }
-          return const TextStyle(color: iosLightTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1);
+          return const TextStyle(color: zohoLightTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
         }),
       ),
-      dividerTheme: const DividerThemeData(color: iosLightSeparator, thickness: 0.5, space: 16),
+      dividerTheme: const DividerThemeData(color: zohoLightSeparator, thickness: 1.0, space: 16),
     );
   }
 
+  // -------------------------------------------------------------
+  // Theme Builder: Dark
+  // -------------------------------------------------------------
   static ThemeData dark() {
     final colorScheme = const ColorScheme.dark(
-      primary: pastelBlue,
+      primary: zohoBlue,
       onPrimary: Colors.white,
-      primaryContainer: pastelBlueBgDark,
+      primaryContainer: zohoBlueBgDark,
       onPrimaryContainer: Colors.white,
-      secondary: pastelMint,
-      onSecondary: Colors.black,
-      surface: iosDarkSurface,
-      onSurface: iosDarkTextPrimary,
-      error: pastelRose,
+      secondary: zohoRed,
+      onSecondary: Colors.white,
+      secondaryContainer: zohoRedBgDark,
+      onSecondaryContainer: Colors.white,
+      surface: zohoDarkSurface,
+      onSurface: zohoDarkTextPrimary,
+      error: zohoRed,
       onError: Colors.white,
-      outline: iosDarkBorder,
-      outlineVariant: iosDarkSeparator,
+      outline: zohoDarkBorder,
+      outlineVariant: zohoDarkSeparator,
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: iosDarkBg,
-      fontFamily: '-apple-system',
+      scaffoldBackgroundColor: zohoDarkBg,
+      fontFamily: 'Inter',
+      fontFamilyFallback: const ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xDD1C1C1E),
-        foregroundColor: iosDarkTextPrimary,
+        backgroundColor: zohoDarkSurface,
+        foregroundColor: zohoDarkTextPrimary,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: TextStyle(
-          color: iosDarkTextPrimary,
-          fontSize: 17,
+          color: zohoDarkTextPrimary,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          letterSpacing: -0.3,
+          fontFamily: 'Inter',
         ),
       ),
       cardTheme: CardThemeData(
-        color: iosDarkSurface,
+        color: zohoDarkSurface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0x25FFFFFF), width: 0.6),
+          borderRadius: BorderRadius.circular(cardRadiusVal),
+          side: const BorderSide(color: zohoDarkBorder, width: 1.0),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2C2C2E),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        fillColor: zohoDarkSurfaceElevated,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoDarkBorder, width: 1.0),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoDarkBorder, width: 1.0),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: pastelBlue, width: 1.5),
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoBlue, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: pastelRose, width: 1.2),
+          borderRadius: BorderRadius.circular(inputRadiusVal),
+          borderSide: const BorderSide(color: zohoRed, width: 1.2),
         ),
-        labelStyle: const TextStyle(color: iosDarkTextSecondary, fontSize: 14),
-        hintStyle: const TextStyle(color: Color(0xFF636366), fontSize: 14),
+        labelStyle: const TextStyle(color: zohoDarkTextSecondary, fontSize: 13.5, fontWeight: FontWeight.w500),
+        hintStyle: const TextStyle(color: zohoDarkTextMuted, fontSize: 13.5),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: pastelBlue,
+          backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: pastelBlue,
+          backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: pastelBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          side: const BorderSide(color: Color(0x50007AFF), width: 1.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          foregroundColor: zohoDarkTextPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          side: const BorderSide(color: zohoDarkBorder, width: 1.0),
+          backgroundColor: zohoDarkSurfaceElevated,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: pastelBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, letterSpacing: -0.2),
+          foregroundColor: const Color(0xFF60A5FA),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadiusVal)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, letterSpacing: -0.1, fontFamily: 'Inter'),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xE61C1C1E),
+        backgroundColor: zohoDarkSurface,
         elevation: 0,
-        indicatorColor: pastelBlueBgDark,
+        indicatorColor: zohoBlueBgDark,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: pastelBlue, size: 24);
+            return const IconThemeData(color: zohoBlue, size: 22);
           }
-          return const IconThemeData(color: iosDarkTextSecondary, size: 24);
+          return const IconThemeData(color: zohoDarkTextSecondary, size: 22);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const TextStyle(color: pastelBlue, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: -0.1);
+            return const TextStyle(color: Color(0xFF60A5FA), fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
           }
-          return const TextStyle(color: iosDarkTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1);
+          return const TextStyle(color: zohoDarkTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
         }),
       ),
-      dividerTheme: const DividerThemeData(color: iosDarkSeparator, thickness: 0.5, space: 16),
+      dividerTheme: const DividerThemeData(color: zohoDarkSeparator, thickness: 1.0, space: 16),
     );
   }
 }
