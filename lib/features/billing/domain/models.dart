@@ -27,6 +27,7 @@ abstract class Company with _$Company {
     @Default('Thanks for your business.') String notes,
     @Default('Due on Receipt') String terms,
     @Default('') String logo,
+    @Default([]) List<Map<String, dynamic>> shareholders,
     @Default(0) int version,
   }) = _Company;
   factory Company.fromJson(Map<String,dynamic> json) => _$CompanyFromJson(json);

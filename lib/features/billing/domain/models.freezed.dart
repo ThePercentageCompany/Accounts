@@ -296,7 +296,7 @@ as int,
 /// @nodoc
 mixin _$Company {
 
- String get name; String get address; String get phone; String get email; String get trn; String get prefix; String get accountHolder; String get bank; String get accountNumber; String get iban; String get notes; String get terms; String get logo; int get version;
+ String get name; String get address; String get phone; String get email; String get trn; String get prefix; String get accountHolder; String get bank; String get accountNumber; String get iban; String get notes; String get terms; String get logo; List<Map<String, dynamic>> get shareholders; int get version;
 /// Create a copy of Company
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -309,16 +309,16 @@ $CompanyCopyWith<Company> get copyWith => _$CompanyCopyWithImpl<Company>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Company&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&(identical(other.trn, trn) || other.trn == trn)&&(identical(other.prefix, prefix) || other.prefix == prefix)&&(identical(other.accountHolder, accountHolder) || other.accountHolder == accountHolder)&&(identical(other.bank, bank) || other.bank == bank)&&(identical(other.accountNumber, accountNumber) || other.accountNumber == accountNumber)&&(identical(other.iban, iban) || other.iban == iban)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&(identical(other.logo, logo) || other.logo == logo)&&(identical(other.version, version) || other.version == version));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Company&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&(identical(other.trn, trn) || other.trn == trn)&&(identical(other.prefix, prefix) || other.prefix == prefix)&&(identical(other.accountHolder, accountHolder) || other.accountHolder == accountHolder)&&(identical(other.bank, bank) || other.bank == bank)&&(identical(other.accountNumber, accountNumber) || other.accountNumber == accountNumber)&&(identical(other.iban, iban) || other.iban == iban)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&(identical(other.logo, logo) || other.logo == logo)&&const DeepCollectionEquality().equals(other.shareholders, shareholders)&&(identical(other.version, version) || other.version == version));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,name,address,phone,email,trn,prefix,accountHolder,bank,accountNumber,iban,notes,terms,logo,version);
+int get hashCode => Object.hash(runtimeType,name,address,phone,email,trn,prefix,accountHolder,bank,accountNumber,iban,notes,terms,logo,const DeepCollectionEquality().hash(shareholders),version);
 
 @override
 String toString() {
-  return 'Company(name: $name, address: $address, phone: $phone, email: $email, trn: $trn, prefix: $prefix, accountHolder: $accountHolder, bank: $bank, accountNumber: $accountNumber, iban: $iban, notes: $notes, terms: $terms, logo: $logo, version: $version)';
+  return 'Company(name: $name, address: $address, phone: $phone, email: $email, trn: $trn, prefix: $prefix, accountHolder: $accountHolder, bank: $bank, accountNumber: $accountNumber, iban: $iban, notes: $notes, terms: $terms, logo: $logo, shareholders: $shareholders, version: $version)';
 }
 
 
@@ -329,7 +329,7 @@ abstract mixin class $CompanyCopyWith<$Res>  {
   factory $CompanyCopyWith(Company value, $Res Function(Company) _then) = _$CompanyCopyWithImpl;
 @useResult
 $Res call({
- String name, String address, String phone, String email, String trn, String prefix, String accountHolder, String bank, String accountNumber, String iban, String notes, String terms, String logo, int version
+ String name, String address, String phone, String email, String trn, String prefix, String accountHolder, String bank, String accountNumber, String iban, String notes, String terms, String logo, List<Map<String, dynamic>> shareholders, int version
 });
 
 
@@ -346,7 +346,7 @@ class _$CompanyCopyWithImpl<$Res>
 
 /// Create a copy of Company
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? address = null,Object? phone = null,Object? email = null,Object? trn = null,Object? prefix = null,Object? accountHolder = null,Object? bank = null,Object? accountNumber = null,Object? iban = null,Object? notes = null,Object? terms = null,Object? logo = null,Object? version = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? address = null,Object? phone = null,Object? email = null,Object? trn = null,Object? prefix = null,Object? accountHolder = null,Object? bank = null,Object? accountNumber = null,Object? iban = null,Object? notes = null,Object? terms = null,Object? logo = null,Object? shareholders = null,Object? version = null,}) {
   return _then(_self.copyWith(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
@@ -361,7 +361,8 @@ as String,iban: null == iban ? _self.iban : iban // ignore: cast_nullable_to_non
 as String,notes: null == notes ? _self.notes : notes // ignore: cast_nullable_to_non_nullable
 as String,terms: null == terms ? _self.terms : terms // ignore: cast_nullable_to_non_nullable
 as String,logo: null == logo ? _self.logo : logo // ignore: cast_nullable_to_non_nullable
-as String,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
+as String,shareholders: null == shareholders ? _self.shareholders : shareholders // ignore: cast_nullable_to_non_nullable
+as List<Map<String, dynamic>>,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
 as int,
   ));
 }
@@ -447,10 +448,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  int version)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  List<Map<String, dynamic>> shareholders,  int version)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Company() when $default != null:
-return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.version);case _:
+return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.shareholders,_that.version);case _:
   return orElse();
 
 }
@@ -468,10 +469,10 @@ return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  int version)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  List<Map<String, dynamic>> shareholders,  int version)  $default,) {final _that = this;
 switch (_that) {
 case _Company():
-return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.version);case _:
+return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.shareholders,_that.version);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -488,10 +489,10 @@ return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  int version)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String address,  String phone,  String email,  String trn,  String prefix,  String accountHolder,  String bank,  String accountNumber,  String iban,  String notes,  String terms,  String logo,  List<Map<String, dynamic>> shareholders,  int version)?  $default,) {final _that = this;
 switch (_that) {
 case _Company() when $default != null:
-return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.version);case _:
+return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that.prefix,_that.accountHolder,_that.bank,_that.accountNumber,_that.iban,_that.notes,_that.terms,_that.logo,_that.shareholders,_that.version);case _:
   return null;
 
 }
@@ -503,7 +504,7 @@ return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that
 @JsonSerializable()
 
 class _Company implements Company {
-  const _Company({this.name = 'The Percentage FZ LLC', this.address = 'Dubai U.A.E', this.phone = '+971 56 331 9030', this.email = 'thepercentagecompany1@gmail.com', this.trn = '', this.prefix = 'TPC', this.accountHolder = 'The Percentage FZ LLC', this.bank = 'Mashreq Bank', this.accountNumber = '019102062841', this.iban = '', this.notes = 'Thanks for your business.', this.terms = 'Due on Receipt', this.logo = '', this.version = 0});
+  const _Company({this.name = 'The Percentage FZ LLC', this.address = 'Dubai U.A.E', this.phone = '+971 56 331 9030', this.email = 'thepercentagecompany1@gmail.com', this.trn = '', this.prefix = 'TPC', this.accountHolder = 'The Percentage FZ LLC', this.bank = 'Mashreq Bank', this.accountNumber = '019102062841', this.iban = '', this.notes = 'Thanks for your business.', this.terms = 'Due on Receipt', this.logo = '', final  List<Map<String, dynamic>> shareholders = const [], this.version = 0}): _shareholders = shareholders;
   factory _Company.fromJson(Map<String, dynamic> json) => _$CompanyFromJson(json);
 
 @override@JsonKey() final  String name;
@@ -519,6 +520,13 @@ class _Company implements Company {
 @override@JsonKey() final  String notes;
 @override@JsonKey() final  String terms;
 @override@JsonKey() final  String logo;
+ final  List<Map<String, dynamic>> _shareholders;
+@override@JsonKey() List<Map<String, dynamic>> get shareholders {
+  if (_shareholders is EqualUnmodifiableListView) return _shareholders;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_shareholders);
+}
+
 @override@JsonKey() final  int version;
 
 /// Create a copy of Company
@@ -534,16 +542,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Company&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&(identical(other.trn, trn) || other.trn == trn)&&(identical(other.prefix, prefix) || other.prefix == prefix)&&(identical(other.accountHolder, accountHolder) || other.accountHolder == accountHolder)&&(identical(other.bank, bank) || other.bank == bank)&&(identical(other.accountNumber, accountNumber) || other.accountNumber == accountNumber)&&(identical(other.iban, iban) || other.iban == iban)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&(identical(other.logo, logo) || other.logo == logo)&&(identical(other.version, version) || other.version == version));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Company&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&(identical(other.trn, trn) || other.trn == trn)&&(identical(other.prefix, prefix) || other.prefix == prefix)&&(identical(other.accountHolder, accountHolder) || other.accountHolder == accountHolder)&&(identical(other.bank, bank) || other.bank == bank)&&(identical(other.accountNumber, accountNumber) || other.accountNumber == accountNumber)&&(identical(other.iban, iban) || other.iban == iban)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&(identical(other.logo, logo) || other.logo == logo)&&const DeepCollectionEquality().equals(other._shareholders, _shareholders)&&(identical(other.version, version) || other.version == version));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,name,address,phone,email,trn,prefix,accountHolder,bank,accountNumber,iban,notes,terms,logo,version);
+int get hashCode => Object.hash(runtimeType,name,address,phone,email,trn,prefix,accountHolder,bank,accountNumber,iban,notes,terms,logo,const DeepCollectionEquality().hash(_shareholders),version);
 
 @override
 String toString() {
-  return 'Company(name: $name, address: $address, phone: $phone, email: $email, trn: $trn, prefix: $prefix, accountHolder: $accountHolder, bank: $bank, accountNumber: $accountNumber, iban: $iban, notes: $notes, terms: $terms, logo: $logo, version: $version)';
+  return 'Company(name: $name, address: $address, phone: $phone, email: $email, trn: $trn, prefix: $prefix, accountHolder: $accountHolder, bank: $bank, accountNumber: $accountNumber, iban: $iban, notes: $notes, terms: $terms, logo: $logo, shareholders: $shareholders, version: $version)';
 }
 
 
@@ -554,7 +562,7 @@ abstract mixin class _$CompanyCopyWith<$Res> implements $CompanyCopyWith<$Res> {
   factory _$CompanyCopyWith(_Company value, $Res Function(_Company) _then) = __$CompanyCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String address, String phone, String email, String trn, String prefix, String accountHolder, String bank, String accountNumber, String iban, String notes, String terms, String logo, int version
+ String name, String address, String phone, String email, String trn, String prefix, String accountHolder, String bank, String accountNumber, String iban, String notes, String terms, String logo, List<Map<String, dynamic>> shareholders, int version
 });
 
 
@@ -571,7 +579,7 @@ class __$CompanyCopyWithImpl<$Res>
 
 /// Create a copy of Company
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? address = null,Object? phone = null,Object? email = null,Object? trn = null,Object? prefix = null,Object? accountHolder = null,Object? bank = null,Object? accountNumber = null,Object? iban = null,Object? notes = null,Object? terms = null,Object? logo = null,Object? version = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? address = null,Object? phone = null,Object? email = null,Object? trn = null,Object? prefix = null,Object? accountHolder = null,Object? bank = null,Object? accountNumber = null,Object? iban = null,Object? notes = null,Object? terms = null,Object? logo = null,Object? shareholders = null,Object? version = null,}) {
   return _then(_Company(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
@@ -586,7 +594,8 @@ as String,iban: null == iban ? _self.iban : iban // ignore: cast_nullable_to_non
 as String,notes: null == notes ? _self.notes : notes // ignore: cast_nullable_to_non_nullable
 as String,terms: null == terms ? _self.terms : terms // ignore: cast_nullable_to_non_nullable
 as String,logo: null == logo ? _self.logo : logo // ignore: cast_nullable_to_non_nullable
-as String,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
+as String,shareholders: null == shareholders ? _self._shareholders : shareholders // ignore: cast_nullable_to_non_nullable
+as List<Map<String, dynamic>>,version: null == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
 as int,
   ));
 }

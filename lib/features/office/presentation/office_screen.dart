@@ -291,17 +291,15 @@ class _TransactionDialogState extends State<TransactionDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isEdit = widget.initial != null;
 
-    final themeColor = _kind == 'income'
-        ? AppTheme.zohoGreen
-        : (_kind == 'capital' ? const Color(0xFF8B5CF6) : AppTheme.zohoRed);
+    final themeColor = _kind == 'income' ? AppTheme.zohoGreen : AppTheme.zohoRed;
 
     final partyLabel = _kind == 'income'
         ? 'Customer / Client / Payer'
-        : (_kind == 'capital' ? 'Investor / Partner / Shareholder' : 'Supplier / Vendor / Payee');
+        : 'Supplier / Vendor / Payee';
 
     final partyHint = _kind == 'income'
         ? 'e.g. Acme Corp, John Doe'
-        : (_kind == 'capital' ? 'e.g. Founder Capital, Angel Partner' : 'e.g. Amazon Web Services, Office Landlord');
+        : 'e.g. Amazon Web Services, Office Landlord, Etisalat';
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
@@ -331,9 +329,7 @@ class _TransactionDialogState extends State<TransactionDialog> {
                           child: Icon(
                             _kind == 'income'
                                 ? CupertinoIcons.arrow_down_left_circle_fill
-                                : (_kind == 'capital'
-                                    ? CupertinoIcons.money_dollar_circle_fill
-                                    : CupertinoIcons.arrow_up_right_circle_fill),
+                                : CupertinoIcons.arrow_up_right_circle_fill,
                             color: themeColor,
                             size: 20,
                           ),
@@ -368,8 +364,6 @@ class _TransactionDialogState extends State<TransactionDialog> {
                       _buildKindTab('income', 'Income', CupertinoIcons.arrow_down_left, AppTheme.zohoGreen, isDark),
                       const SizedBox(width: 4),
                       _buildKindTab('expense', 'Expense', CupertinoIcons.arrow_up_right, AppTheme.zohoRed, isDark),
-                      const SizedBox(width: 4),
-                      _buildKindTab('capital', 'Capital', CupertinoIcons.money_dollar, const Color(0xFF8B5CF6), isDark),
                     ],
                   ),
                 ),
@@ -1682,16 +1676,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
               ),
             ),
             OutlinedButton.icon(
-              onPressed: () => finance(null, 'capital'),
-              icon: const Icon(CupertinoIcons.money_dollar_circle_fill, size: 16, color: Color(0xFF8B5CF6)),
-              label: const Text('Capital & Equity', style: TextStyle(color: Color(0xFF8B5CF6))),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF8B5CF6)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-              ),
-            ),
-            OutlinedButton.icon(
               onPressed: () => guarded(() async {
                 await preview(
                   await context.read<OfficeDocuments>().financialReport(
@@ -1872,9 +1856,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 const SizedBox(width: 4),
                 _buildFinanceFilterTab('expense', 'Expenses ($expenseCount)', isDark),
                 const SizedBox(width: 4),
-                _buildFinanceFilterTab('capital', 'Capital ($capitalCount)', isDark),
-                const SizedBox(width: 4),
                 _buildFinanceFilterTab('unpaid', 'Unpaid Bills ($unpaidCount)', isDark),
+                if (capitalCount > 0) ...[
+                  const SizedBox(width: 4),
+                  _buildFinanceFilterTab('capital', 'Capital ($capitalCount)', isDark),
+                ],
               ],
             ),
           ),

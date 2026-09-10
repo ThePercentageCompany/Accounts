@@ -40,6 +40,11 @@ _Company _$CompanyFromJson(Map<String, dynamic> json) => _Company(
   notes: json['notes'] as String? ?? 'Thanks for your business.',
   terms: json['terms'] as String? ?? 'Due on Receipt',
   logo: json['logo'] as String? ?? '',
+  shareholders:
+      (json['shareholders'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
   version: (json['version'] as num?)?.toInt() ?? 0,
 );
 
@@ -57,6 +62,7 @@ Map<String, dynamic> _$CompanyToJson(_Company instance) => <String, dynamic>{
   'notes': instance.notes,
   'terms': instance.terms,
   'logo': instance.logo,
+  'shareholders': instance.shareholders,
   'version': instance.version,
 };
 
