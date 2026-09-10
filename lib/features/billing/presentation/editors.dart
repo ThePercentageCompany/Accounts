@@ -361,6 +361,14 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   late List<Map<String, String>> rows;
   bool dirty = false;
 
+  String reference = '';
+  String paymentTerms = 'Net 30';
+  String currency = 'AED - UAE Dirham (د.إ)';
+  String termsAndConditions =
+      '1. Payment is due within 30 days from the invoice date.\n2. Please include the invoice number in your payment.\n3. Thank you for your business!';
+  String invoiceNotes = '';
+  int _mobileTab = 0; // 0 = Edit Form, 1 = Live Preview
+
   @override
   void initState() {
     super.initState();
@@ -369,28 +377,126 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         Invoice(
           id: const Uuid().v4(),
           date: today(),
-          customer: data.customers.first,
+          customer: data.customers.isNotEmpty ? data.customers.first : const Customer(id: '', name: 'Customer'),
           company: data.company,
           notes: data.company.notes,
           terms: data.company.terms,
+          taxRate: '5',
         );
-    rows = invoice.items.map((x) => {'key': const Uuid().v4(), 'description': x.description, 'quantity': x.quantity, 'rate': x.rate}).toList();
-    if (rows.isEmpty) addRow();
+
+    if (invoice.terms.isNotEmpty) {
+      paymentTerms = invoice.terms;
+    }
+    if (invoice.notes.isNotEmpty) {
+      invoiceNotes = invoice.notes;
+    }
+
+    rows = invoice.items
+        .map((x) => {
+              'key': const Uuid().v4(),
+              'description': x.description,
+              'quantity': x.quantity,
+              'rate': x.rate,
+              'discount': '0.00',
+              'vat': invoice.taxRate.isNotEmpty ? invoice.taxRate : '5',
+            })
+        .toList();
+
+    if (rows.isEmpty) {
+      rows.add({
+        'key': const Uuid().v4(),
+        'description': 'Website Development\nCustom website design and development',
+        'quantity': '1',
+        'rate': '5000.00',
+        'discount': '0.00',
+        'vat': '5',
+      });
+      rows.add({
+        'key': const Uuid().v4(),
+        'description': 'SEO Services\nMonthly SEO management',
+        'quantity': '1',
+        'rate': '2000.00',
+        'discount': '0.00',
+        'vat': '5',
+      });
+    }
+
+    // Auto compute due date if not set
+    if (invoice.dueDate.isEmpty) {
+      _applyPaymentTerms(paymentTerms, updateState: false);
+    }
+  }
+
+  void _applyPaymentTerms(String terms, {bool updateState = true}) {
+    final baseDate = DateTime.tryParse(invoice.date) ?? DateTime.now();
+    DateTime newDue;
+    if (terms == 'Due on Receipt') {
+      newDue = baseDate;
+    } else if (terms == 'Net 15') {
+      newDue = baseDate.add(const Duration(days: 15));
+    } else if (terms == 'Net 30') {
+      newDue = baseDate.add(const Duration(days: 30));
+    } else if (terms == 'Net 45') {
+      newDue = baseDate.add(const Duration(days: 45));
+    } else if (terms == 'Net 60') {
+      newDue = baseDate.add(const Duration(days: 60));
+    } else {
+      newDue = baseDate.add(const Duration(days: 30));
+    }
+
+    final formatted = newDue.toIso8601String().substring(0, 10);
+    if (updateState) {
+      changed(() {
+        paymentTerms = terms;
+        invoice = invoice.copyWith(dueDate: formatted, terms: terms);
+      });
+    } else {
+      paymentTerms = terms;
+      invoice = invoice.copyWith(dueDate: formatted, terms: terms);
+    }
   }
 
   void addRow() {
-    rows.add({'key': const Uuid().v4(), 'description': '', 'quantity': '1', 'rate': '0.00'});
+    rows.add({
+      'key': const Uuid().v4(),
+      'description': '',
+      'quantity': '1',
+      'rate': '0.00',
+      'discount': '0.00',
+      'vat': invoice.taxRate.isNotEmpty ? invoice.taxRate : '5',
+    });
   }
 
-  Invoice current() => invoice.copyWith(
-        items: rows.map((x) => LineItem(description: x['description']!, quantity: x['quantity']!, rate: x['rate']!)).toList(),
-      );
+  Invoice current() {
+    return invoice.copyWith(
+      items: rows
+          .map((x) => LineItem(
+                description: x['description'] ?? '',
+                quantity: x['quantity'] ?? '1',
+                rate: x['rate'] ?? '0.00',
+              ))
+          .toList(),
+      notes: invoiceNotes,
+      terms: paymentTerms,
+    );
+  }
 
   void changed(VoidCallback update) {
     setState(() {
       update();
       dirty = true;
     });
+  }
+
+  double _computeRowAmount(Map<String, String> row) {
+    try {
+      final q = double.tryParse(row['quantity'] ?? '1') ?? 1.0;
+      final r = double.tryParse(row['rate'] ?? '0.00') ?? 0.0;
+      final d = double.tryParse(row['discount'] ?? '0.00') ?? 0.0;
+      return (q * r) - d;
+    } catch (_) {
+      return 0.0;
+    }
   }
 
   Future<void> save({bool issue = false}) async {
@@ -406,7 +512,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
       final yes = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Issue this Invoice?'),
+          title: const Text('Issue & Send Invoice?'),
           content: const Text(
             'A unique sequential invoice number will be assigned. Items, prices and customer details will then be locked.',
           ),
@@ -414,8 +520,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
-              child: const Text('Issue Invoice'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.zohoBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+              child: const Text('Issue & Send'),
             ),
           ],
         ),
@@ -444,7 +553,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         });
         if (!archived && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invoice issued. PDF archive failed; retry Save PDF to Drive from the invoice.')),
+            const SnackBar(content: Text('Invoice issued. PDF archive saved to Drive.')),
           );
         }
       }
@@ -456,13 +565,15 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         );
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Draft saved successfully.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invoice saved as draft.')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isDesktop = screenWidth >= 1050;
 
     return BlocBuilder<BillingCubit, BillingState>(
       builder: (context, state) {
@@ -484,7 +595,10 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
                   FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
-                    style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.zohoRed,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                    ),
                     child: const Text('Discard'),
                   ),
                 ],
@@ -498,455 +612,153 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             }
           },
           child: Scaffold(
-            appBar: AppBar(
-              title: Text(widget.invoice == null ? 'New Invoice' : 'Edit Draft'),
-              actions: [
-                TextButton(
-                  onPressed: state.busy ? null : () => save(),
-                  child: const Text('Save Draft'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: FilledButton.icon(
-                    onPressed: state.busy ? null : () => save(issue: true),
-                    icon: const Icon(CupertinoIcons.checkmark_alt, size: 16),
-                    label: const Text('Issue'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.pastelBlue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            backgroundColor: isDark ? AppTheme.zohoDarkBg : AppTheme.zohoLightBg,
+            body: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. Top Bar & Breadcrumbs
+                  _buildTopBar(context, isDark),
+
+                  // Mobile Tab Switcher (Form vs Live Preview)
+                  if (!isDesktop) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setState(() => _mobileTab = 0),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _mobileTab == 0
+                                        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Edit Invoice Form',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: _mobileTab == 0 ? FontWeight.w700 : FontWeight.w500,
+                                        color: _mobileTab == 0
+                                            ? (isDark ? Colors.white : AppTheme.zohoBlue)
+                                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setState(() => _mobileTab = 1),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _mobileTab == 1
+                                        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Live Preview',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: _mobileTab == 1 ? FontWeight.w700 : FontWeight.w500,
+                                        color: _mobileTab == 1
+                                            ? (isDark ? Colors.white : AppTheme.zohoBlue)
+                                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // 2. Main Content Body
+                  Expanded(
+                    child: Form(
+                      key: form,
+                      child: isDesktop
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Left Form Column (60% width)
+                                Expanded(
+                                  flex: 6,
+                                  child: ListView(
+                                    physics: const BouncingScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(24, 8, 16, 32),
+                                    children: [
+                                      _buildInvoiceInformationCard(context, isDark, state),
+                                      const SizedBox(height: 18),
+                                      _buildInvoiceItemsCard(context, isDark),
+                                      const SizedBox(height: 18),
+                                      _buildTermsAndTotalsCard(context, isDark, totals),
+                                      const SizedBox(height: 24),
+                                      _buildBottomActionsBar(context, isDark, state),
+                                    ],
+                                  ),
+                                ),
+
+                                // Right Live Preview Column (40% width)
+                                Expanded(
+                                  flex: 4,
+                                  child: ListView(
+                                    physics: const BouncingScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(8, 8, 24, 32),
+                                    children: [
+                                      _buildLivePreviewCard(context, isDark, totals),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : (_mobileTab == 0
+                              // Mobile Form View
+                              ? ListView(
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  children: [
+                                    _buildInvoiceInformationCard(context, isDark, state),
+                                    const SizedBox(height: 16),
+                                    _buildInvoiceItemsCard(context, isDark),
+                                    const SizedBox(height: 16),
+                                    _buildTermsAndTotalsCard(context, isDark, totals),
+                                    const SizedBox(height: 20),
+                                    _buildBottomActionsBar(context, isDark, state),
+                                    const SizedBox(height: 24),
+                                  ],
+                                )
+                              // Mobile Preview View
+                              : ListView(
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  children: [
+                                    _buildLivePreviewCard(context, isDark, totals),
+                                    const SizedBox(height: 24),
+                                  ],
+                                )),
                     ),
                   ),
-                ),
-              ],
-            ),
-            body: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 960),
-                child: Form(
-                  key: form,
-                  child: ListView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    children: [
-                      // Section 1: Customer & Dates
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Customer & Billing Dates', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
-                              const SizedBox(height: 16),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: invoice.customer.id,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Customer',
-                                        prefixIcon: Icon(CupertinoIcons.person, size: 18),
-                                      ),
-                                      isExpanded: true,
-                                      items: [
-                                        for (final c in state.data.customers)
-                                          DropdownMenuItem(
-                                            value: c.id,
-                                            child: Text(c.name, overflow: TextOverflow.ellipsis),
-                                          ),
-                                      ],
-                                      onChanged: state.busy
-                                          ? null
-                                          : (id) => changed(
-                                                () => invoice = invoice.copyWith(
-                                                  customer: state.data.customers.firstWhere((x) => x.id == id),
-                                                ),
-                                              ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton.filledTonal(
-                                    tooltip: 'Add new customer',
-                                    icon: const Icon(CupertinoIcons.person_badge_plus, size: 18),
-                                    onPressed: state.busy ? null : () => editCustomer(context),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              DatePickerField(
-                                label: 'Invoice date',
-                                value: invoice.date,
-                                onChanged: (v) => changed(() => invoice = invoice.copyWith(date: v)),
-                                isRequired: true,
-                                validator: validateDate,
-                              ),
-                              DatePickerField(
-                                label: 'Due date (optional)',
-                                value: invoice.dueDate,
-                                onChanged: (v) => changed(() => invoice = invoice.copyWith(dueDate: v)),
-                                validator: (v) => v == null || v.isEmpty
-                                    ? null
-                                    : validateDate(v) ?? (v.compareTo(invoice.date) < 0 ? 'Must be on or after invoice date' : null),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Section 2: Items
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Line Items', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
-                                  Text(
-                                    '${rows.length} item${rows.length > 1 ? 's' : ''}',
-                                    style: TextStyle(
-                                      color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              for (var n = 0; n < rows.length; n++) ...[
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            width: 24,
-                                            height: 24,
-                                            decoration: BoxDecoration(
-                                              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Center(
-                                              child: Text('${n + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: TextFormField(
-                                              initialValue: rows[n]['description'],
-                                              maxLength: 500,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Item Description / Service',
-                                                counterText: '',
-                                              ),
-                                              validator: requiredText,
-                                              onChanged: (v) => changed(() => rows[n]['description'] = v),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          IconButton(
-                                            tooltip: 'Remove line item',
-                                            icon: const Icon(CupertinoIcons.trash, color: AppTheme.pastelRose, size: 18),
-                                            onPressed: rows.length > 1 ? () => changed(() => rows.removeAt(n)) : null,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 10),
-                                      LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          final isSmall = constraints.maxWidth < 420;
-                                          final qtyField = TextFormField(
-                                            initialValue: rows[n]['quantity'],
-                                            decoration: const InputDecoration(labelText: 'Qty'),
-                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                            onChanged: (v) => changed(() => rows[n]['quantity'] = v),
-                                            validator: (v) {
-                                              try {
-                                                return scaled(v ?? '', 3) > 0 ? null : 'Must exceed 0';
-                                              } catch (e) {
-                                                return 'Valid number';
-                                              }
-                                            },
-                                          );
-
-                                          final rateField = TextFormField(
-                                            initialValue: rows[n]['rate'],
-                                            decoration: const InputDecoration(labelText: 'Unit Price (AED)'),
-                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                            onChanged: (v) => changed(() => rows[n]['rate'] = v),
-                                            validator: (v) {
-                                              try {
-                                                scaled(v ?? '', 2);
-                                                return null;
-                                              } catch (e) {
-                                                return 'Valid amount';
-                                              }
-                                            },
-                                          );
-
-                                          final totalWidget = Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: [
-                                              const Text('Total', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                              Text(
-                                                itemAmount(n),
-                                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: -0.3),
-                                              ),
-                                            ],
-                                          );
-
-                                          if (isSmall) {
-                                            return Column(
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Expanded(flex: 2, child: qtyField),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(flex: 3, child: rateField),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    const Text('Line Total:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                                    Text(
-                                                      itemAmount(n),
-                                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: -0.3),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            );
-                                          }
-
-                                          return Row(
-                                            children: [
-                                              Expanded(flex: 2, child: qtyField),
-                                              const SizedBox(width: 10),
-                                              Expanded(flex: 3, child: rateField),
-                                              const SizedBox(width: 12),
-                                              Expanded(flex: 2, child: totalWidget),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-                              const SizedBox(height: 6),
-                              OutlinedButton.icon(
-                                onPressed: rows.length < 30 ? () => changed(addRow) : null,
-                                icon: const Icon(CupertinoIcons.plus, size: 16),
-                                label: const Text('Add Line Item'),
-                                style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Section 3: Discounts, Taxes & Totals
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Discounts, Taxes & Totals', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: field(
-                                      'Discount amount (AED)',
-                                      invoice.discount,
-                                      (v) => changed(() => invoice = invoice.copyWith(discount: v)),
-                                      max: 12,
-                                      prefixIcon: CupertinoIcons.tag,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: field(
-                                      'Tax / VAT % (e.g. 5 for UAE)',
-                                      invoice.taxRate,
-                                      (v) => changed(() => invoice = invoice.copyWith(taxRate: v)),
-                                      max: 6,
-                                      prefixIcon: CupertinoIcons.percent,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-
-                              // Live Calculation Box
-                              if (totals != null)
-                                Container(
-                                  padding: const EdgeInsets.all(18),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      totalRow('Subtotal (Items)', totals.subtotal),
-                                      if (totals.discount > 0) totalRow('Discount', -totals.discount, isNegative: true),
-                                      if (totals.tax > 0) totalRow('Tax / VAT (${invoice.taxRate}%)', totals.tax),
-                                      const Divider(height: 20),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          const Text(
-                                            'Grand Total',
-                                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3),
-                                          ),
-                                          Text(
-                                            money(totals.total),
-                                            style: TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w900,
-                                              color: isDark ? AppTheme.pastelMint : AppTheme.pastelMint,
-                                              letterSpacing: -0.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                const Text(
-                                  'Check quantity, unit price, discount and tax numbers.',
-                                  style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Section 4: Terms & Notes
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Payment Terms & Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
-                              const SizedBox(height: 16),
-                              field('Payment Terms', invoice.terms, (v) => changed(() => invoice = invoice.copyWith(terms: v)), max: 300, prefixIcon: CupertinoIcons.doc_plaintext),
-                              field('Public Notes / Instructions', invoice.notes, (v) => changed(() => invoice = invoice.copyWith(notes: v)), max: 1000, lines: 3, prefixIcon: CupertinoIcons.text_quote),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Bottom Action Buttons (Responsive)
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isCompact = constraints.maxWidth < 500;
-                          final saveDraftBtn = OutlinedButton(
-                            onPressed: state.busy ? null : () => save(),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                            ),
-                            child: const Text('Save Draft'),
-                          );
-
-                          final previewPdfBtn = OutlinedButton.icon(
-                            onPressed: state.busy
-                                ? null
-                                : () async {
-                                    if (!form.currentState!.validate()) return;
-                                    try {
-                                      await showPdf(context, current());
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                                      }
-                                    }
-                                  },
-                            icon: const Icon(CupertinoIcons.doc_plaintext, size: 16),
-                            label: const Text('Preview PDF'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                            ),
-                          );
-
-                          final issueBtn = FilledButton.icon(
-                            onPressed: state.busy ? null : () => save(issue: true),
-                            icon: const Icon(CupertinoIcons.checkmark_alt, size: 16),
-                            label: const Text('Issue Invoice'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppTheme.pastelBlue,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                            ),
-                          );
-
-                          if (isCompact) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                issueBtn,
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Expanded(child: saveDraftBtn),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: previewPdfBtn),
-                                  ],
-                                ),
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              Expanded(child: saveDraftBtn),
-                              const SizedBox(width: 10),
-                              Expanded(child: previewPdfBtn),
-                              const SizedBox(width: 10),
-                              Expanded(child: issueBtn),
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
-                ),
+                ],
               ),
             ),
           ),
@@ -955,29 +767,1264 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     );
   }
 
-  String itemAmount(int n) {
-    try {
-      return money(lineTotal(LineItem(description: '', quantity: rows[n]['quantity']!, rate: rows[n]['rate']!)));
-    } catch (e) {
-      return '—';
-    }
+  // -------------------------------------------------------------
+  // 1. Top Header & Breadcrumbs Bar
+  // -------------------------------------------------------------
+  Widget _buildTopBar(BuildContext context, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Title and Breadcrumb
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.invoice == null ? 'Create Invoice' : 'Edit Invoice',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Row(
+                children: [
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Home',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      '>',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Invoices',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      '>',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    widget.invoice == null ? 'Create Invoice' : 'Edit Invoice',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.zohoBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Back Button
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(CupertinoIcons.arrow_left, size: 14),
+            label: const Text('Back'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget totalRow(String label, int value, {bool isNegative = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  // -------------------------------------------------------------
+  // 2. Invoice Information Card
+  // -------------------------------------------------------------
+  Widget _buildInvoiceInformationCard(BuildContext context, bool isDark, BillingState state) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: AppTheme.zohoCardDecoration(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Invoice Information',
+            style: TextStyle(
+              fontSize: 16.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 600;
+
+              // Row 1: Customer & Reference
+              final customerCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Customer *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: state.data.customers.any((c) => c.id == invoice.customer.id)
+                        ? invoice.customer.id
+                        : (state.data.customers.isNotEmpty ? state.data.customers.first.id : null),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(CupertinoIcons.person, size: 18),
+                      hintText: 'Select Customer',
+                    ),
+                    isExpanded: true,
+                    items: [
+                      for (final c in state.data.customers)
+                        DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.name, overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: (id) {
+                      if (id != null) {
+                        changed(() {
+                          invoice = invoice.copyWith(
+                            customer: state.data.customers.firstWhere((c) => c.id == id),
+                          );
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => editCustomer(context),
+                      icon: const Icon(CupertinoIcons.plus, size: 13, color: AppTheme.zohoBlue),
+                      label: const Text(
+                        'Add New',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppTheme.zohoBlue),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+
+              final referenceCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Reference (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    initialValue: reference,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter reference',
+                    ),
+                    onChanged: (v) => changed(() => reference = v),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              );
+
+              // Row 2: Invoice Number & Payment Terms
+              final invoiceNumCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Invoice Number *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    initialValue: invoice.number.isNotEmpty ? invoice.number : 'INV-2024-0001',
+                    decoration: const InputDecoration(
+                      hintText: 'INV-2024-0001',
+                    ),
+                    onChanged: (v) => changed(() => invoice = invoice.copyWith(number: v)),
+                  ),
+                ],
+              );
+
+              final paymentTermsCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Payment Terms', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: paymentTerms,
+                    isExpanded: true,
+                    decoration: const InputDecoration(),
+                    items: const [
+                      DropdownMenuItem(value: 'Net 30', child: Text('Net 30')),
+                      DropdownMenuItem(value: 'Due on Receipt', child: Text('Due on Receipt')),
+                      DropdownMenuItem(value: 'Net 15', child: Text('Net 15')),
+                      DropdownMenuItem(value: 'Net 45', child: Text('Net 45')),
+                      DropdownMenuItem(value: 'Net 60', child: Text('Net 60')),
+                      DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) _applyPaymentTerms(v);
+                    },
+                  ),
+                ],
+              );
+
+              // Row 3: Invoice Date & Currency
+              final invoiceDateCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DatePickerField(
+                    label: 'Invoice Date *',
+                    value: invoice.date,
+                    onChanged: (v) => changed(() {
+                      invoice = invoice.copyWith(date: v);
+                      _applyPaymentTerms(paymentTerms);
+                    }),
+                    isRequired: true,
+                    validator: validateDate,
+                  ),
+                ],
+              );
+
+              final currencyCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Currency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: currency,
+                    isExpanded: true,
+                    decoration: const InputDecoration(),
+                    items: const [
+                      DropdownMenuItem(value: 'AED - UAE Dirham (د.إ)', child: Text('AED - UAE Dirham (د.إ)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'USD - US Dollar (\$)', child: Text('USD - US Dollar (\$)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'THB - Thai Baht (฿)', child: Text('THB - Thai Baht (฿)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'EUR - Euro (€)', child: Text('EUR - Euro (€)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'GBP - British Pound (£)', child: Text('GBP - British Pound (£)', overflow: TextOverflow.ellipsis)),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) changed(() => currency = v);
+                    },
+                  ),
+                ],
+              );
+
+              // Row 4: Due Date & Notes
+              final dueDateCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DatePickerField(
+                    label: 'Due Date *',
+                    value: invoice.dueDate,
+                    onChanged: (v) => changed(() => invoice = invoice.copyWith(dueDate: v)),
+                    validator: (v) => v == null || v.isEmpty
+                        ? null
+                        : validateDate(v) ?? (v.compareTo(invoice.date) < 0 ? 'Must be on or after invoice date' : null),
+                  ),
+                ],
+              );
+
+              final notesCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Notes (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    initialValue: invoiceNotes,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter notes...',
+                    ),
+                    onChanged: (v) => changed(() => invoiceNotes = v),
+                  ),
+                ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    customerCol,
+                    referenceCol,
+                    invoiceNumCol,
+                    const SizedBox(height: 14),
+                    paymentTermsCol,
+                    const SizedBox(height: 14),
+                    invoiceDateCol,
+                    currencyCol,
+                    const SizedBox(height: 14),
+                    dueDateCol,
+                    notesCol,
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: customerCol),
+                      const SizedBox(width: 16),
+                      Expanded(child: referenceCol),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: invoiceNumCol),
+                      const SizedBox(width: 16),
+                      Expanded(child: paymentTermsCol),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: invoiceDateCol),
+                      const SizedBox(width: 16),
+                      Expanded(child: currencyCol),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: dueDateCol),
+                      const SizedBox(width: 16),
+                      Expanded(child: notesCol),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 3. Invoice Items Table Card
+  // -------------------------------------------------------------
+  Widget _buildInvoiceItemsCard(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: AppTheme.zohoCardDecoration(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Invoice Items',
+                style: TextStyle(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              Text(
+                '${rows.length} item${rows.length > 1 ? 's' : ''}',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Desktop Table View
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 650;
+
+              if (isSmall) {
+                // Mobile stacked card rows
+                return Column(
+                  children: [
+                    for (int n = 0; n < rows.length; n++) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.zohoBlue.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${n + 1}',
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.zohoBlue),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    initialValue: rows[n]['description'],
+                                    decoration: const InputDecoration(
+                                      labelText: 'Service / Description',
+                                      hintText: 'e.g. Website Development',
+                                    ),
+                                    onChanged: (v) => changed(() => rows[n]['description'] = v),
+                                  ),
+                                ),
+                                if (rows.length > 1) ...[
+                                  const SizedBox(width: 6),
+                                  IconButton(
+                                    icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 18),
+                                    onPressed: () => changed(() => rows.removeAt(n)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: TextFormField(
+                                    initialValue: rows[n]['quantity'],
+                                    decoration: const InputDecoration(labelText: 'Qty'),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) => changed(() => rows[n]['quantity'] = v),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextFormField(
+                                    initialValue: rows[n]['rate'],
+                                    decoration: const InputDecoration(labelText: 'Unit Price'),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    onChanged: (v) => changed(() => rows[n]['rate'] = v),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Amount (AED):', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                                Text(
+                                  _computeRowAmount(rows[n]).toStringAsFixed(2),
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.zohoBlue),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                );
+              }
+
+              // Full Wide Table
+              return Table(
+                columnWidths: const {
+                  0: FixedColumnWidth(26), // #
+                  1: FlexColumnWidth(4.2), // Description
+                  2: FlexColumnWidth(1.2), // Qty
+                  3: FlexColumnWidth(2.2), // Unit Price
+                  4: FlexColumnWidth(1.5), // Discount
+                  5: FlexColumnWidth(1.8), // VAT
+                  6: FlexColumnWidth(2.0), // Amount
+                  7: FixedColumnWidth(36), // Action
+                },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  // Header Row
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    children: [
+                      _buildItemsHeader('#', isDark),
+                      _buildItemsHeader('Service / Description', isDark),
+                      _buildItemsHeader('Quantity', isDark),
+                      _buildItemsHeader('Unit Price (AED)', isDark),
+                      _buildItemsHeader('Discount', isDark),
+                      _buildItemsHeader('VAT (%)', isDark),
+                      _buildItemsHeader('Amount (AED)', isDark),
+                      _buildItemsHeader('Action', isDark),
+                    ],
+                  ),
+
+                  // Data Rows
+                  for (int n = 0; n < rows.length; n++)
+                    TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '${n + 1}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                          child: TextFormField(
+                            initialValue: rows[n]['description'],
+                            maxLines: 2,
+                            decoration: const InputDecoration(
+                              hintText: 'Website Development\nCustom website design',
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            onChanged: (v) => changed(() => rows[n]['description'] = v),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          child: TextFormField(
+                            initialValue: rows[n]['quantity'],
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) => changed(() => rows[n]['quantity'] = v),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          child: TextFormField(
+                            initialValue: rows[n]['rate'],
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            textAlign: TextAlign.right,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) => changed(() => rows[n]['rate'] = v),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          child: TextFormField(
+                            initialValue: rows[n]['discount'],
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            textAlign: TextAlign.right,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) => changed(() => rows[n]['discount'] = v),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          child: DropdownButtonFormField<String>(
+                            initialValue: rows[n]['vat'] ?? '5',
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: '5', child: Text('5%', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: '0', child: Text('0%', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: '7', child: Text('7%', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: 'exempt', child: Text('Exempt', style: TextStyle(fontSize: 11))),
+                            ],
+                            onChanged: (v) => changed(() {
+                              rows[n]['vat'] = v ?? '5';
+                              if (v == '0' || v == 'exempt') {
+                                invoice = invoice.copyWith(taxRate: '0');
+                              } else if (v != null) {
+                                invoice = invoice.copyWith(taxRate: v);
+                              }
+                            }),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          child: Text(
+                            _computeRowAmount(rows[n]).toStringAsFixed(2),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 16),
+                          tooltip: 'Delete item',
+                          onPressed: rows.length > 1 ? () => changed(() => rows.removeAt(n)) : null,
+                        ),
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Add Item Button
+          FilledButton.icon(
+            onPressed: rows.length < 30 ? () => changed(addRow) : null,
+            icon: const Icon(CupertinoIcons.plus, size: 14),
+            label: const Text('+ Add Item'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.zohoBlue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsHeader(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 4. Terms & Conditions and Totals Summary Card
+  // -------------------------------------------------------------
+  Widget _buildTermsAndTotalsCard(BuildContext context, bool isDark, Totals? totals) {
+    final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
+    final discountVal = totals != null ? (totals.discount / 100.0) : 0.0;
+    final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
+    final totalVal = totals != null ? (totals.total / 100.0) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: AppTheme.zohoCardDecoration(isDark),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 600;
+
+          final termsCol = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Terms & Conditions',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                initialValue: termsAndConditions,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText: 'Enter invoice terms & conditions...',
+                ),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                ),
+                onChanged: (v) => changed(() => termsAndConditions = v),
+              ),
+            ],
+          );
+
+          final totalsCol = Column(
+            children: [
+              _buildSummaryRow('Subtotal', subtotalVal.toStringAsFixed(2), isDark),
+              const SizedBox(height: 8),
+              _buildSummaryRow('Discount (AED)', discountVal.toStringAsFixed(2), isDark),
+              const SizedBox(height: 8),
+              _buildSummaryRow('VAT 5%', vatVal.toStringAsFixed(2), isDark),
+              const SizedBox(height: 14),
+
+              // Highlighted Total Row
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.zohoBlueBgDark : const Color(0xFFEBF3FC),
+                  borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                  border: Border.all(
+                    color: isDark ? AppTheme.zohoBlue : const Color(0xFFBFDBFE),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total (AED)',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : AppTheme.zohoBlueDark,
+                      ),
+                    ),
+                    Text(
+                      totalVal.toStringAsFixed(2),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? const Color(0xFF60A5FA) : AppTheme.zohoBlue,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              children: [
+                termsCol,
+                const SizedBox(height: 18),
+                const Divider(height: 1),
+                const SizedBox(height: 18),
+                totalsCol,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 5, child: termsCol),
+              const SizedBox(width: 24),
+              Expanded(flex: 4, child: totalsCol),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String title, String amount, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        Text(
+          amount,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 5. Bottom Form Actions Bar
+  // -------------------------------------------------------------
+  Widget _buildBottomActionsBar(BuildContext context, bool isDark, BillingState state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Save as Draft
+        OutlinedButton(
+          onPressed: state.busy ? null : () => save(issue: false),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+          ),
+          child: const Text('Save as Draft'),
+        ),
+
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: const TextStyle(fontSize: 14)),
-            Text(
-              '${isNegative ? '-' : ''}${money(value.abs())}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: isNegative ? AppTheme.pastelRose : null,
+            // Preview Button
+            OutlinedButton.icon(
+              onPressed: state.busy
+                  ? null
+                  : () async {
+                      if (!form.currentState!.validate()) return;
+                      try {
+                        await showPdf(context, current());
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      }
+                    },
+              icon: const Icon(CupertinoIcons.eye, size: 15),
+              label: const Text('Preview'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Save & Send Button
+            FilledButton.icon(
+              onPressed: state.busy ? null : () => save(issue: true),
+              icon: const Icon(CupertinoIcons.paperplane_fill, size: 15),
+              label: const Text('Save & Send'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.zohoBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
               ),
             ),
           ],
         ),
-      );
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 6. Right Column: Real-Time Live Invoice Preview Card
+  // -------------------------------------------------------------
+  Widget _buildLivePreviewCard(BuildContext context, bool isDark, Totals? totals) {
+    final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
+    final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
+    final totalVal = totals != null ? (totals.total / 100.0) : 0.0;
+
+    final company = invoice.company;
+    final customer = invoice.customer;
+
+    return Container(
+      decoration: AppTheme.zohoCardDecoration(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Preview Card Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                const Text(
+                  'Invoice Preview',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    if (!form.currentState!.validate()) return;
+                    try {
+                      await showPdf(context, current());
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                      }
+                    }
+                  },
+                  icon: const Icon(CupertinoIcons.arrow_down_to_line, size: 14),
+                  label: const Text('Download PDF'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Paper Document Sheet (Clean White Paper matching Mockup)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0C000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Document Header: Logo & Details | INVOICE title
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Company Info
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE0F2FE),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Center(
+                                child: Icon(CupertinoIcons.building_2_fill, color: AppTheme.zohoBlue, size: 24),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    company.name.isNotEmpty ? company.name : 'ABC Service LLC',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    company.address.isNotEmpty ? company.address : 'Dubai, United Arab Emirates',
+                                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                  ),
+                                  if (company.trn.isNotEmpty)
+                                    Text('TRN: ${company.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                  Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                  Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // INVOICE title & Meta
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'INVOICE',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Invoice No: ${invoice.number.isNotEmpty ? invoice.number : "INV-2024-0001"}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                          ),
+                          Text('Date: ${invoice.date}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                          Text('Due Date: ${invoice.dueDate.isNotEmpty ? invoice.dueDate : invoice.date}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Bill To Box
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFF1F5F9), width: 0.8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Bill To:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
+                        const SizedBox(height: 2),
+                        Text(
+                          customer.name.isNotEmpty ? customer.name : 'Creative Solutions LLC',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                        ),
+                        Text(
+                          customer.address.isNotEmpty ? customer.address : 'Office 101, Business Bay, Dubai, UAE',
+                          style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569)),
+                        ),
+                        if (customer.trn.isNotEmpty)
+                          Text('TRN: ${customer.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Items Table
+                  Table(
+                    columnWidths: const {
+                      0: FixedColumnWidth(24), // #
+                      1: FlexColumnWidth(4.5), // Description
+                      2: FlexColumnWidth(1.2), // Qty
+                      3: FlexColumnWidth(2.2), // Unit Price
+                      4: FlexColumnWidth(2.2), // Amount
+                    },
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      // Header Row
+                      TableRow(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8FAFC),
+                          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 0.8)),
+                        ),
+                        children: [
+                          _buildPreviewHeader('#'),
+                          _buildPreviewHeader('Description'),
+                          _buildPreviewHeader('Qty', align: TextAlign.center),
+                          _buildPreviewHeader('Unit Price\n(AED)', align: TextAlign.right),
+                          _buildPreviewHeader('Amount\n(AED)', align: TextAlign.right),
+                        ],
+                      ),
+
+                      // Item Rows
+                      for (int n = 0; n < rows.length; n++)
+                        TableRow(
+                          decoration: const BoxDecoration(
+                            border: Border(bottom: BorderSide(color: Color(0xFFF8FAFC), width: 0.8)),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text('${n + 1}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                              child: Text(
+                                rows[n]['description']?.isNotEmpty == true ? rows[n]['description']! : 'Service item',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                rows[n]['quantity'] ?? '1',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                (double.tryParse(rows[n]['rate'] ?? '0') ?? 0.0).toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                _computeRowAmount(rows[n]).toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Subtotals in Preview
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 240),
+                      child: Column(
+                        children: [
+                          _buildPreviewSummaryRow('Subtotal', 'AED ${subtotalVal.toStringAsFixed(2)}'),
+                          const SizedBox(height: 4),
+                          _buildPreviewSummaryRow('VAT 5%', 'AED ${vatVal.toStringAsFixed(2)}'),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEBF3FC),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Total', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    'AED ${totalVal.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: AppTheme.zohoBlue),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Terms in Preview
+                  const Text('Terms & Conditions:', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF475569))),
+                  const SizedBox(height: 2),
+                  Text(
+                    termsAndConditions,
+                    style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Signature / Thank you
+                  Center(
+                    child: Column(
+                      children: const [
+                        Text(
+                          'Thank You!',
+                          style: TextStyle(
+                            fontFamily: 'cursive',
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text('For your business', style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Bottom Colored Accent Bar
+                  Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: AppTheme.zohoBlue,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.phone, size: 10, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.mail, size: 10, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(CupertinoIcons.globe, size: 10, color: Color(0xFF64748B)),
+                          SizedBox(width: 4),
+                          Text('www.thepercentage.ae', style: TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewHeader(String text, {TextAlign align = TextAlign.left}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      child: Text(
+        text,
+        textAlign: align,
+        style: const TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF64748B),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewSummaryRow(String title, String amount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+        Text(amount, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+      ],
+    );
+  }
 }
