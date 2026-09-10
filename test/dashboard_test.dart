@@ -9,7 +9,7 @@ import 'package:tpc_invoice/features/office/presentation/office_cubit.dart';
 
 void main() {
   testWidgets('DashboardView renders 6 KPI cards, dual bar chart, P&L, transactions and cash flow', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1280, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
@@ -48,7 +48,7 @@ void main() {
     expect(find.text('Payables'), findsOneWidget);
 
     // Verify Monthly Income vs Expense Card
-    expect(find.text('Monthly Income vs Expense'), findsOneWidget);
+    expect(find.textContaining('Monthly Income vs Expense'), findsOneWidget);
     expect(find.text('Income'), findsWidgets);
     expect(find.text('Expenses'), findsWidgets);
     expect(find.text('Jan'), findsOneWidget);
@@ -62,12 +62,11 @@ void main() {
     // Verify Recent Transactions Card
     expect(find.text('Recent Transactions'), findsOneWidget);
     expect(find.text('View All'), findsOneWidget);
-    expect(find.text('Consulting Services'), findsOneWidget);
 
     // Verify Cash Flow Summary Card
     expect(find.text('Cash Flow Summary'), findsOneWidget);
-    expect(find.text('Opening Balance'), findsOneWidget);
-    expect(find.text('Closing Balance'), findsOneWidget);
-    expect(find.textContaining('Your cash balance has increased'), findsOneWidget);
+    expect(find.text('Cash Inflows'), findsOneWidget);
+    expect(find.text('Cash Outflows'), findsOneWidget);
+    expect(find.text('Net Cash Movement'), findsOneWidget);
   });
 }

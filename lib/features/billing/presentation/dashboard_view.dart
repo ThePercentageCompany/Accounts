@@ -1,9 +1,9 @@
+import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../office/presentation/office_cubit.dart';
-import '../domain/models.dart';
 import '../domain/totals.dart';
 import 'billing_cubit.dart';
 
@@ -22,76 +22,25 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-  String _selectedPeriod = '1 Jan 2024 - 31 Dec 2024';
-  String _cashFlowPeriod = 'This Month';
+  late String _selectedPeriod;
+  late String _cashFlowPeriod;
   int? _hoveredMonthIndex;
 
-  // 12 Months default mockup data (in thousands of dollars/AED)
-  final List<Map<String, dynamic>> _defaultMonthlyData = [
-    {'month': 'Jan', 'income': 15.0, 'expense': 8.5},
-    {'month': 'Feb', 'income': 17.0, 'expense': 11.2},
-    {'month': 'Mar', 'income': 21.5, 'expense': 10.0},
-    {'month': 'Apr', 'income': 16.5, 'expense': 7.8},
-    {'month': 'May', 'income': 17.5, 'expense': 7.5},
-    {'month': 'Jun', 'income': 12.5, 'expense': 9.2},
-    {'month': 'Jul', 'income': 15.5, 'expense': 10.0},
-    {'month': 'Aug', 'income': 15.2, 'expense': 8.5},
-    {'month': 'Sep', 'income': 15.3, 'expense': 9.8},
-    {'month': 'Oct', 'income': 15.8, 'expense': 10.2},
-    {'month': 'Nov', 'income': 17.8, 'expense': 10.8},
-    {'month': 'Dec', 'income': 21.0, 'expense': 12.5},
-  ];
-
-  // Default transactions from mockup
-  final List<Map<String, dynamic>> _defaultTransactions = [
-    {
-      'date': '14 Apr 2024',
-      'description': 'Consulting Services',
-      'type': 'Income',
-      'customer': 'BrightMind Ltd',
-      'amount': '\$2,400',
-      'status': 'Paid',
-    },
-    {
-      'date': '12 Apr 2024',
-      'description': 'Website Redesign',
-      'type': 'Income',
-      'customer': 'Summit Marketing',
-      'amount': '\$3,200',
-      'status': 'Paid',
-    },
-    {
-      'date': '10 Apr 2024',
-      'description': 'Office Rent',
-      'type': 'Expense',
-      'customer': 'City Properties',
-      'amount': '\$1,200',
-      'status': 'Paid',
-    },
-    {
-      'date': '08 Apr 2024',
-      'description': 'Staff Salaries',
-      'type': 'Expense',
-      'customer': '—',
-      'amount': '\$4,500',
-      'status': 'Paid',
-    },
-    {
-      'date': '05 Apr 2024',
-      'description': 'Business Consulting',
-      'type': 'Income',
-      'customer': 'Horizon Group',
-      'amount': '\$5,000',
-      'status': 'Unpaid',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedPeriod = 'This Year (${now.year})';
+    _cashFlowPeriod = 'This Month';
+  }
 
   void _showDateRangePicker() {
+    final now = DateTime.now();
     final periods = [
       'This Month',
       'This Quarter',
-      '1 Jan 2024 - 31 Dec 2024',
-      '1 Jan 2025 - 31 Dec 2025',
+      'This Year (${now.year})',
+      'Year ${now.year - 1}',
       'Last 12 Months',
       'All Time',
     ];
@@ -174,9 +123,44 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  String _formatAmount(double val) {
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+  String _formatAmount(double val, {bool showDecimals = false}) {
+    final formatter = NumberFormat.currency(
+      symbol: 'AED ',
+      decimalDigits: showDecimals ? 2 : (val % 1 == 0 ? 0 : 2),
+    );
     return formatter.format(val);
+  }
+
+  bool _isDateInSelectedPeriod(String dateStr, String period) {
+    if (dateStr.isEmpty) return false;
+    final now = DateTime.now();
+    final d = DateTime.tryParse(dateStr);
+    if (d == null) return false;
+
+    if (period == 'This Month') {
+      return d.year == now.year && d.month == now.month;
+    } else if (period == 'This Quarter') {
+      final currentQ = ((now.month - 1) ~/ 3) + 1;
+      final dateQ = ((d.month - 1) ~/ 3) + 1;
+      return d.year == now.year && dateQ == currentQ;
+    } else if (period.startsWith('This Year')) {
+      return d.year == now.year;
+    } else if (period.startsWith('Year')) {
+      final y = int.tryParse(period.replaceAll(RegExp(r'[^0-9]'), '')) ?? (now.year - 1);
+      return d.year == y;
+    } else if (period == 'Last 12 Months') {
+      final cutoff = now.subtract(const Duration(days: 365));
+      return d.isAfter(cutoff) && d.isBefore(now.add(const Duration(days: 1)));
+    }
+    return true; // 'All Time'
+  }
+
+  int _getSelectedYear() {
+    final now = DateTime.now();
+    if (_selectedPeriod.startsWith('Year')) {
+      return int.tryParse(_selectedPeriod.replaceAll(RegExp(r'[^0-9]'), '')) ?? now.year;
+    }
+    return now.year;
   }
 
   @override
@@ -191,51 +175,232 @@ class _DashboardViewState extends State<DashboardView> {
         return BlocBuilder<OfficeCubit, OfficeState>(
           builder: (context, officeState) {
             final invoices = billingState.data.invoices;
-            final hasRealData = invoices.isNotEmpty;
+            final officeData = officeState.data;
 
-            // Compute live figures if available
-            double totalIncome = 124580.0;
-            double totalExpenses = 52340.0;
-            double netProfit = 72240.0;
-            double bankBalance = 96780.0;
-            double receivables = 18420.0;
-            double payables = 9150.0;
+            // ---------------------------------------------------------
+            // 1. LIVE KPI CALCULATIONS
+            // ---------------------------------------------------------
+            double liveIncome = 0;
+            double liveExpenses = 0;
+            double liveReceivables = 0;
+            double livePayables = 0;
+            double liveOtherIncome = 0;
+            double liveOtherExpenses = 0;
 
-            if (hasRealData) {
-              double livePaid = 0;
-              double liveUnpaid = 0;
+            // Invoices: Collections & Receivables
+            for (final inv in invoices) {
+              final totals = Totals.of(inv);
+              if (inv.status == 'issued') {
+                liveReceivables += totals.balance / 100.0;
+              }
+              // Payment receipts in selected period
+              for (final p in inv.payments) {
+                if (_isDateInSelectedPeriod(p.date, _selectedPeriod)) {
+                  liveIncome += p.cents / 100.0;
+                }
+              }
+            }
 
-              for (final inv in invoices) {
-                try {
-                  final t = Totals.of(inv);
-                  livePaid += t.paid / 100.0;
-                  liveUnpaid += t.balance / 100.0;
-                } catch (_) {}
+            // Office Finance entries
+            for (final e in officeData.entries) {
+              final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
+              final date = e['date']?.toString() ?? (e['paidDate']?.toString() ?? '');
+              final isPaid = e['status'] == 'paid';
+              final isUnpaid = e['status'] == 'unpaid';
+
+              if (isUnpaid) {
+                livePayables += amount;
               }
 
-              // Office finance records
-              final financeList = officeState.data.entries;
-              double liveFinanceExpenses = 0;
-              double liveFinanceIncome = 0;
-              for (final f in financeList) {
-                final kind = f['kind']?.toString();
-                final amount = double.tryParse(f['amount']?.toString() ?? '0') ?? 0;
-                if (kind == 'expense') {
-                  liveFinanceExpenses += amount;
-                } else if (kind == 'income') {
-                  liveFinanceIncome += amount;
+              if (isPaid && _isDateInSelectedPeriod(date, _selectedPeriod)) {
+                if (e['kind'] == 'income') {
+                  liveIncome += amount;
+                  liveOtherIncome += amount;
+                } else if (e['kind'] == 'expense') {
+                  liveExpenses += amount;
+                  liveOtherExpenses += amount;
+                }
+              }
+            }
+
+            // Payroll payouts
+            for (final p in officeData.payroll) {
+              final net = (p['netCents'] as num? ?? 0) / 100.0;
+              final paidDate = p['paidDate']?.toString() ?? '${p['month']}-01';
+              final isPaid = p['status'] == 'paid';
+              final isApproved = p['status'] == 'approved';
+
+              if (isApproved) {
+                livePayables += net;
+              }
+
+              if (isPaid && _isDateInSelectedPeriod(paidDate, _selectedPeriod)) {
+                liveExpenses += net;
+              }
+            }
+
+            final netProfit = liveIncome - liveExpenses;
+            final bankBalance = liveIncome - liveExpenses;
+
+            // ---------------------------------------------------------
+            // 2. LIVE MONTHLY 12-MONTH DUAL BAR CHART DATA
+            // ---------------------------------------------------------
+            final targetYear = _getSelectedYear();
+            final monthlyData = <Map<String, dynamic>>[];
+            double maxMonthVal = 0;
+
+            final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            for (int m = 1; m <= 12; m++) {
+              final monthKey = '$targetYear-${m.toString().padLeft(2, '0')}';
+              double mIncome = 0;
+              double mExpense = 0;
+
+              // Invoice payments in this month
+              for (final inv in invoices) {
+                for (final p in inv.payments) {
+                  if (p.date.startsWith(monthKey)) {
+                    mIncome += p.cents / 100.0;
+                  }
                 }
               }
 
-              if (livePaid > 0 || liveFinanceIncome > 0) {
-                totalIncome = livePaid + liveFinanceIncome;
+              // Office entries in this month
+              for (final e in officeData.entries) {
+                final date = e['paidDate']?.toString() ?? (e['date']?.toString() ?? '');
+                if (date.startsWith(monthKey) && e['status'] == 'paid') {
+                  final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
+                  if (e['kind'] == 'income') {
+                    mIncome += amount;
+                  } else if (e['kind'] == 'expense') {
+                    mExpense += amount;
+                  }
+                }
               }
-              if (liveFinanceExpenses > 0) {
-                totalExpenses = liveFinanceExpenses;
+
+              // Payroll in this month
+              for (final p in officeData.payroll) {
+                final paidDate = p['paidDate']?.toString() ?? '${p['month']}-01';
+                if ((p['month'] == monthKey || paidDate.startsWith(monthKey)) && p['status'] == 'paid') {
+                  final net = (p['netCents'] as num? ?? 0) / 100.0;
+                  mExpense += net;
+                }
               }
-              netProfit = totalIncome - totalExpenses;
-              receivables = liveUnpaid > 0 ? liveUnpaid : receivables;
+
+              if (mIncome > maxMonthVal) maxMonthVal = mIncome;
+              if (mExpense > maxMonthVal) maxMonthVal = mExpense;
+
+              monthlyData.add({
+                'month': monthNames[m - 1],
+                'income': mIncome,
+                'expense': mExpense,
+              });
             }
+
+            // ---------------------------------------------------------
+            // 3. LIVE RECENT TRANSACTIONS LIST
+            // ---------------------------------------------------------
+            final liveTransactions = <_LiveTransactionItem>[];
+
+            // Invoices
+            for (final inv in invoices) {
+              final t = Totals.of(inv);
+              final statusStr = inv.status == 'draft'
+                  ? 'Draft'
+                  : t.balance <= 0
+                      ? 'Paid'
+                      : 'Unpaid';
+
+              liveTransactions.add(
+                _LiveTransactionItem(
+                  date: inv.date,
+                  description: inv.number.isNotEmpty ? 'Invoice ${inv.number}' : 'Draft Invoice',
+                  type: 'Income',
+                  customer: inv.customer.name.isNotEmpty ? inv.customer.name : 'Unknown Customer',
+                  amount: t.total / 100.0,
+                  status: statusStr,
+                  sortDate: inv.date,
+                ),
+              );
+            }
+
+            // Office Finance entries
+            for (final e in officeData.entries) {
+              final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
+              final date = e['date']?.toString() ?? '';
+              final isIncome = e['kind'] == 'income';
+              final category = e['category']?.toString() ?? '';
+              final party = e['party']?.toString() ?? '—';
+
+              liveTransactions.add(
+                _LiveTransactionItem(
+                  date: date,
+                  description: category.isNotEmpty ? category : (isIncome ? 'Income Entry' : 'Expense Entry'),
+                  type: isIncome ? 'Income' : 'Expense',
+                  customer: party.isNotEmpty ? party : '—',
+                  amount: amount,
+                  status: e['status'] == 'paid' ? 'Paid' : 'Unpaid',
+                  sortDate: date,
+                ),
+              );
+            }
+
+            // Payroll payouts
+            for (final p in officeData.payroll) {
+              final net = (p['netCents'] as num? ?? 0) / 100.0;
+              final date = p['paidDate']?.toString() ?? '${p['month']}-01';
+              final empName = p['employeeName']?.toString() ?? 'Staff';
+
+              liveTransactions.add(
+                _LiveTransactionItem(
+                  date: date,
+                  description: 'Salary Payout - $empName',
+                  type: 'Expense',
+                  customer: empName,
+                  amount: net,
+                  status: p['status'] == 'paid' ? 'Paid' : 'Approved',
+                  sortDate: date,
+                ),
+              );
+            }
+
+            // Sort newest first
+            liveTransactions.sort((a, b) => b.sortDate.compareTo(a.sortDate));
+
+            // ---------------------------------------------------------
+            // 4. LIVE CASH FLOW CALCULATION
+            // ---------------------------------------------------------
+            double cfInflows = 0;
+            double cfOutflows = 0;
+
+            for (final inv in invoices) {
+              for (final p in inv.payments) {
+                if (_isDateInSelectedPeriod(p.date, _cashFlowPeriod)) {
+                  cfInflows += p.cents / 100.0;
+                }
+              }
+            }
+
+            for (final e in officeData.entries) {
+              final date = e['paidDate']?.toString() ?? (e['date']?.toString() ?? '');
+              if (e['status'] == 'paid' && _isDateInSelectedPeriod(date, _cashFlowPeriod)) {
+                final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
+                if (e['kind'] == 'income') {
+                  cfInflows += amount;
+                } else if (e['kind'] == 'expense') {
+                  cfOutflows += amount;
+                }
+              }
+            }
+
+            for (final p in officeData.payroll) {
+              final paidDate = p['paidDate']?.toString() ?? '${p['month']}-01';
+              if (p['status'] == 'paid' && _isDateInSelectedPeriod(paidDate, _cashFlowPeriod)) {
+                final net = (p['netCents'] as num? ?? 0) / 100.0;
+                cfOutflows += net;
+              }
+            }
+
+            final cfNetMovement = cfInflows - cfOutflows;
 
             return Container(
               color: isDark ? const Color(0xFF0B0F19) : const Color(0xFFF8FAFC),
@@ -250,14 +415,12 @@ class _DashboardViewState extends State<DashboardView> {
                   const SizedBox(height: 24),
                   _buildKpiGrid(
                     isDark,
-                    isDesktop,
-                    isTablet,
-                    totalIncome: totalIncome,
-                    totalExpenses: totalExpenses,
+                    totalIncome: liveIncome,
+                    totalExpenses: liveExpenses,
                     netProfit: netProfit,
                     bankBalance: bankBalance,
-                    receivables: receivables,
-                    payables: payables,
+                    receivables: liveReceivables,
+                    payables: livePayables,
                   ),
                   const SizedBox(height: 24),
                   if (isDesktop) ...[
@@ -266,16 +429,18 @@ class _DashboardViewState extends State<DashboardView> {
                       children: [
                         Expanded(
                           flex: 62,
-                          child: _buildMonthlyChartCard(isDark),
+                          child: _buildMonthlyChartCard(isDark, monthlyData, maxMonthVal, targetYear),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
                           flex: 38,
                           child: _buildProfitAndLossCard(
                             isDark,
-                            totalIncome: totalIncome,
-                            totalExpenses: totalExpenses,
+                            totalIncome: liveIncome,
+                            totalExpenses: liveExpenses,
                             netProfit: netProfit,
+                            otherIncome: liveOtherIncome,
+                            otherExpenses: liveOtherExpenses,
                           ),
                         ),
                       ],
@@ -286,28 +451,40 @@ class _DashboardViewState extends State<DashboardView> {
                       children: [
                         Expanded(
                           flex: 62,
-                          child: _buildRecentTransactionsCard(isDark, invoices),
+                          child: _buildRecentTransactionsCard(isDark, liveTransactions),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
                           flex: 38,
-                          child: _buildCashFlowSummaryCard(isDark),
+                          child: _buildCashFlowSummaryCard(
+                            isDark,
+                            inflows: cfInflows,
+                            outflows: cfOutflows,
+                            netMovement: cfNetMovement,
+                          ),
                         ),
                       ],
                     ),
                   ] else ...[
-                    _buildMonthlyChartCard(isDark),
+                    _buildMonthlyChartCard(isDark, monthlyData, maxMonthVal, targetYear),
                     const SizedBox(height: 20),
                     _buildProfitAndLossCard(
                       isDark,
-                      totalIncome: totalIncome,
-                      totalExpenses: totalExpenses,
+                      totalIncome: liveIncome,
+                      totalExpenses: liveExpenses,
                       netProfit: netProfit,
+                      otherIncome: liveOtherIncome,
+                      otherExpenses: liveOtherExpenses,
                     ),
                     const SizedBox(height: 20),
-                    _buildRecentTransactionsCard(isDark, invoices),
+                    _buildRecentTransactionsCard(isDark, liveTransactions),
                     const SizedBox(height: 20),
-                    _buildCashFlowSummaryCard(isDark),
+                    _buildCashFlowSummaryCard(
+                      isDark,
+                      inflows: cfInflows,
+                      outflows: cfOutflows,
+                      netMovement: cfNetMovement,
+                    ),
                   ],
                   const SizedBox(height: 36),
                   _buildFooter(isDark),
@@ -324,11 +501,10 @@ class _DashboardViewState extends State<DashboardView> {
   // 1. Welcome Header
   // -------------------------------------------------------------
   Widget _buildWelcomeHeader(bool isDark, BillingState billingState) {
-    String greetingName = 'Sarah';
+    String greetingName = 'Business Owner';
     final companyName = billingState.data.company.name;
     if (companyName.isNotEmpty) {
-      final parts = companyName.split(' ');
-      if (parts.isNotEmpty) greetingName = parts.first;
+      greetingName = companyName;
     }
 
     return LayoutBuilder(
@@ -434,9 +610,7 @@ class _DashboardViewState extends State<DashboardView> {
   // 2. 6 KPI Stat Cards
   // -------------------------------------------------------------
   Widget _buildKpiGrid(
-    bool isDark,
-    bool isDesktop,
-    bool isTablet, {
+    bool isDark, {
     required double totalIncome,
     required double totalExpenses,
     required double netProfit,
@@ -448,8 +622,7 @@ class _DashboardViewState extends State<DashboardView> {
       _KpiData(
         title: 'Total Income',
         value: _formatAmount(totalIncome),
-        comparison: '↑ 12% vs. previous period',
-        isPositive: true,
+        comparison: 'Live revenue & receipts',
         icon: CupertinoIcons.arrow_up,
         iconColor: const Color(0xFF10B981),
         iconBgColor: const Color(0xFFECFDF5),
@@ -458,8 +631,7 @@ class _DashboardViewState extends State<DashboardView> {
       _KpiData(
         title: 'Total Expenses',
         value: _formatAmount(totalExpenses),
-        comparison: '↓ 8% vs. previous period',
-        isPositive: true, // down in expenses is favorable
+        comparison: 'Paid bills & salaries',
         icon: CupertinoIcons.arrow_down,
         iconColor: const Color(0xFFEF4444),
         iconBgColor: const Color(0xFFFEF2F2),
@@ -468,18 +640,16 @@ class _DashboardViewState extends State<DashboardView> {
       _KpiData(
         title: 'Net Profit',
         value: _formatAmount(netProfit),
-        comparison: '↑ 28% vs. previous period',
-        isPositive: true,
+        comparison: netProfit >= 0 ? 'Profitable period' : 'Net deficit',
         icon: CupertinoIcons.chart_bar_alt_fill,
-        iconColor: const Color(0xFF10B981),
+        iconColor: netProfit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
         iconBgColor: const Color(0xFFECFDF5),
         iconBgDark: const Color(0xFF064E3B),
       ),
       _KpiData(
         title: 'Cash / Bank Balance',
         value: _formatAmount(bankBalance),
-        comparison: '↑ 6% vs. previous period',
-        isPositive: true,
+        comparison: 'Active liquidity tracking',
         icon: CupertinoIcons.creditcard_fill,
         iconColor: const Color(0xFF3B82F6),
         iconBgColor: const Color(0xFFEFF6FF),
@@ -488,8 +658,7 @@ class _DashboardViewState extends State<DashboardView> {
       _KpiData(
         title: 'Receivables',
         value: _formatAmount(receivables),
-        comparison: '↑ 14% vs. previous period',
-        isPositive: true,
+        comparison: 'Unpaid customer invoices',
         icon: CupertinoIcons.person_2_fill,
         iconColor: const Color(0xFFA855F7),
         iconBgColor: const Color(0xFFFAF5FF),
@@ -498,8 +667,7 @@ class _DashboardViewState extends State<DashboardView> {
       _KpiData(
         title: 'Payables',
         value: _formatAmount(payables),
-        comparison: '↓ 22% vs. previous period',
-        isPositive: true,
+        comparison: 'Pending supplier & staff dues',
         icon: CupertinoIcons.doc_text_fill,
         iconColor: const Color(0xFFF97316),
         iconBgColor: const Color(0xFFFFF7ED),
@@ -510,9 +678,9 @@ class _DashboardViewState extends State<DashboardView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         int columns = 3;
-        if (constraints.maxWidth < 600) {
+        if (constraints.maxWidth < 650) {
           columns = 1;
-        } else if (constraints.maxWidth < 960) {
+        } else if (constraints.maxWidth < 1000) {
           columns = 2;
         }
 
@@ -580,39 +748,30 @@ class _DashboardViewState extends State<DashboardView> {
             ],
           ),
           const SizedBox(height: 14),
-          Text(
-            kpi.value,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-              letterSpacing: -0.8,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              kpi.value,
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                letterSpacing: -0.8,
+              ),
             ),
           ),
           const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  kpi.comparison.split(' vs.').first,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF10B981),
-                  ),
-                ),
-                Text(
-                  ' vs. previous period',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                  ),
-                ),
-              ],
+            child: Text(
+              kpi.comparison,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
             ),
           ),
         ],
@@ -623,7 +782,22 @@ class _DashboardViewState extends State<DashboardView> {
   // -------------------------------------------------------------
   // 3. Monthly Income vs Expense Bar Chart
   // -------------------------------------------------------------
-  Widget _buildMonthlyChartCard(bool isDark) {
+  Widget _buildMonthlyChartCard(
+    bool isDark,
+    List<Map<String, dynamic>> monthlyData,
+    double maxMonthVal,
+    int year,
+  ) {
+    final scaleMax = max(maxMonthVal * 1.15, 1000.0);
+    final yLabels = [
+      _formatShortAmount(scaleMax),
+      _formatShortAmount(scaleMax * 0.8),
+      _formatShortAmount(scaleMax * 0.6),
+      _formatShortAmount(scaleMax * 0.4),
+      _formatShortAmount(scaleMax * 0.2),
+      '0',
+    ];
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -652,7 +826,7 @@ class _DashboardViewState extends State<DashboardView> {
             runSpacing: 8,
             children: [
               Text(
-                'Monthly Income vs Expense',
+                'Monthly Income vs Expense ($year)',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
@@ -674,83 +848,76 @@ class _DashboardViewState extends State<DashboardView> {
           // Chart Body
           SizedBox(
             height: 230,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const maxVal = 25.0; // 25K max scale
-                final yLabels = ['25K', '20K', '15K', '10K', '5K', '0'];
-
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Y Axis Labels
-                    SizedBox(
-                      width: 32,
-                      child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Y Axis Labels
+                SizedBox(
+                  width: 44,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final label in yLabels)
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Bars Area with Gridlines
+                Expanded(
+                  child: Stack(
+                    children: [
+                      // Gridlines
+                      Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (final label in yLabels)
-                            Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Bars Area with Gridlines
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          // Gridlines
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: List.generate(
-                              6,
-                              (index) => Divider(
-                                height: 1,
-                                thickness: 0.8,
-                                color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
-                              ),
-                            ),
+                        children: List.generate(
+                          6,
+                          (index) => Divider(
+                            height: 1,
+                            thickness: 0.8,
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
                           ),
-                          // Bars for each month
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                for (int i = 0; i < _defaultMonthlyData.length; i++)
-                                  Expanded(
-                                    child: _buildMonthBarGroup(
-                                      i,
-                                      _defaultMonthlyData[i],
-                                      maxVal,
-                                      isDark,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                      // Bars for each month
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (int i = 0; i < monthlyData.length; i++)
+                              Expanded(
+                                child: _buildMonthBarGroup(
+                                  i,
+                                  monthlyData[i],
+                                  scaleMax,
+                                  isDark,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
           // X-Axis Month Labels
           Padding(
-            padding: const EdgeInsets.only(left: 40),
+            padding: const EdgeInsets.only(left: 48),
             child: Row(
               children: [
-                for (final item in _defaultMonthlyData)
+                for (final item in monthlyData)
                   Expanded(
                     child: Center(
                       child: Text(
@@ -769,6 +936,15 @@ class _DashboardViewState extends State<DashboardView> {
         ],
       ),
     );
+  }
+
+  String _formatShortAmount(double val) {
+    if (val >= 1000000) {
+      return '${(val / 1000000).toStringAsFixed(1)}M';
+    } else if (val >= 1000) {
+      return '${(val / 1000).toStringAsFixed(0)}K';
+    }
+    return val.toInt().toString();
   }
 
   Widget _buildLegendItem(String label, Color color, bool isDark) {
@@ -806,14 +982,14 @@ class _DashboardViewState extends State<DashboardView> {
     final expense = (data['expense'] as num).toDouble();
     final isHovered = _hoveredMonthIndex == index;
 
-    final incomeHeightPercent = (income / maxVal).clamp(0.05, 1.0);
-    final expenseHeightPercent = (expense / maxVal).clamp(0.05, 1.0);
+    final incomeHeightPercent = (income / maxVal).clamp(0.0, 1.0);
+    final expenseHeightPercent = (expense / maxVal).clamp(0.0, 1.0);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoveredMonthIndex = index),
       onExit: (_) => setState(() => _hoveredMonthIndex = null),
       child: Tooltip(
-        message: '${data['month']}: Income \$${(income * 1000).toInt()} | Expense \$${(expense * 1000).toInt()}',
+        message: '${data['month']}: Income ${_formatAmount(income)} | Expense ${_formatAmount(expense)}',
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3),
           child: Row(
@@ -822,33 +998,25 @@ class _DashboardViewState extends State<DashboardView> {
             children: [
               // Income Bar (Green)
               Flexible(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Container(
-                      width: 9,
-                      height: 190 * incomeHeightPercent,
-                      decoration: BoxDecoration(
-                        color: isHovered ? const Color(0xFF059669) : const Color(0xFF10B981),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-                      ),
-                    );
-                  },
+                child: Container(
+                  width: 9,
+                  height: max(190 * incomeHeightPercent, income > 0 ? 4.0 : 0.0),
+                  decoration: BoxDecoration(
+                    color: isHovered ? const Color(0xFF059669) : const Color(0xFF10B981),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                  ),
                 ),
               ),
               const SizedBox(width: 2.5),
               // Expense Bar (Orange)
               Flexible(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Container(
-                      width: 9,
-                      height: 190 * expenseHeightPercent,
-                      decoration: BoxDecoration(
-                        color: isHovered ? const Color(0xFFEA580C) : const Color(0xFFFB923C),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-                      ),
-                    );
-                  },
+                child: Container(
+                  width: 9,
+                  height: max(190 * expenseHeightPercent, expense > 0 ? 4.0 : 0.0),
+                  decoration: BoxDecoration(
+                    color: isHovered ? const Color(0xFFEA580C) : const Color(0xFFFB923C),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                  ),
                 ),
               ),
             ],
@@ -866,7 +1034,12 @@ class _DashboardViewState extends State<DashboardView> {
     required double totalIncome,
     required double totalExpenses,
     required double netProfit,
+    required double otherIncome,
+    required double otherExpenses,
   }) {
+    final profitMargin = totalIncome > 0 ? ((netProfit / totalIncome) * 100) : 0.0;
+    final opexMargin = totalIncome > 0 ? ((totalExpenses / totalIncome) * 100) : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -968,13 +1141,13 @@ class _DashboardViewState extends State<DashboardView> {
           const SizedBox(height: 14),
           const Divider(height: 1),
           const SizedBox(height: 14),
-          _buildPnlRow('Profit Margin', '58.0%', isDark),
+          _buildPnlRow('Profit Margin', '${profitMargin.toStringAsFixed(1)}%', isDark),
           const SizedBox(height: 10),
-          _buildPnlRow('Operating Expenses', '42.0%', isDark),
+          _buildPnlRow('Operating Expenses', '${opexMargin.toStringAsFixed(1)}%', isDark),
           const SizedBox(height: 10),
-          _buildPnlRow('Other Income', '\$2,150', isDark),
+          _buildPnlRow('Other Income', _formatAmount(otherIncome), isDark),
           const SizedBox(height: 10),
-          _buildPnlRow('Other Expenses', '(\$3,620)', isDark, isNegative: true),
+          _buildPnlRow('Other Expenses', '(${_formatAmount(otherExpenses)})', isDark, isNegative: true),
         ],
       ),
     );
@@ -1009,7 +1182,7 @@ class _DashboardViewState extends State<DashboardView> {
   // -------------------------------------------------------------
   // 5. Recent Transactions Table
   // -------------------------------------------------------------
-  Widget _buildRecentTransactionsCard(bool isDark, List<Invoice> invoices) {
+  Widget _buildRecentTransactionsCard(bool isDark, List<_LiveTransactionItem> transactions) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -1071,192 +1244,245 @@ class _DashboardViewState extends State<DashboardView> {
             ],
           ),
           const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 650) {
-                // Mobile Card List
-                return Column(
+          if (transactions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Column(
                   children: [
-                    for (final item in _defaultTransactions)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                              width: 0.6,
+                    Icon(
+                      CupertinoIcons.creditcard,
+                      size: 38,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFFCBD5E1),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No transactions recorded yet',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Create an invoice or add an expense to see live activity.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: widget.onNewInvoice,
+                      icon: const Icon(CupertinoIcons.plus, size: 15),
+                      label: const Text('Create First Invoice'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final displayItems = transactions.take(6).toList();
+
+                if (constraints.maxWidth < 650) {
+                  // Mobile Card List
+                  return Column(
+                    children: [
+                      for (final item in displayItems)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                width: 0.6,
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: item['type'] == 'Income'
-                                      ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5))
-                                      : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    item['type'] == 'Income'
-                                        ? CupertinoIcons.arrow_down_left
-                                        : CupertinoIcons.arrow_up_right,
-                                    size: 16,
-                                    color: item['type'] == 'Income'
-                                        ? const Color(0xFF10B981)
-                                        : const Color(0xFFEF4444),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: item.type == 'Income'
+                                        ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5))
+                                        : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      item.type == 'Income'
+                                          ? CupertinoIcons.arrow_down_left
+                                          : CupertinoIcons.arrow_up_right,
+                                      size: 16,
+                                      color: item.type == 'Income'
+                                          ? const Color(0xFF10B981)
+                                          : const Color(0xFFEF4444),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.description,
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${item.date} • ${item.customer}',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      item['description'],
+                                      _formatAmount(item.amount),
                                       style: TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
                                         color: isDark ? Colors.white : const Color(0xFF0F172A),
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${item['date']} • ${item['customer']}',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                      ),
-                                    ),
+                                    const SizedBox(height: 4),
+                                    _buildStatusBadge(item.status, isDark),
                                   ],
                                 ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    item['amount'],
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  _buildStatusBadge(item['status'], isDark),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                );
-              }
-
-              // Desktop Clean Table View
-              return Table(
-                columnWidths: const {
-                  0: FlexColumnWidth(1.2),
-                  1: FlexColumnWidth(2.0),
-                  2: FlexColumnWidth(1.0),
-                  3: FlexColumnWidth(1.8),
-                  4: FlexColumnWidth(1.1),
-                  5: FlexColumnWidth(1.0),
-                },
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    children: [
-                      _buildTableHeader('Date', isDark),
-                      _buildTableHeader('Description', isDark),
-                      _buildTableHeader('Type', isDark),
-                      _buildTableHeader('Customer / Payee', isDark),
-                      _buildTableHeader('Amount', isDark),
-                      _buildTableHeader('Status', isDark),
                     ],
-                  ),
-                  for (final row in _defaultTransactions)
+                  );
+                }
+
+                // Desktop Clean Table View
+                return Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(1.2),
+                    1: FlexColumnWidth(2.0),
+                    2: FlexColumnWidth(1.0),
+                    3: FlexColumnWidth(1.8),
+                    4: FlexColumnWidth(1.3),
+                    5: FlexColumnWidth(1.0),
+                  },
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  children: [
                     TableRow(
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
-                            color: isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
                             width: 1,
                           ),
                         ),
                       ),
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            row['date'],
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            row['description'],
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: _buildTypeBadge(row['type'], isDark),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            row['customer'],
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            row['amount'],
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: _buildStatusBadge(row['status'], isDark),
-                        ),
+                        _buildTableHeader('Date', isDark),
+                        _buildTableHeader('Description', isDark),
+                        _buildTableHeader('Type', isDark),
+                        _buildTableHeader('Customer / Payee', isDark),
+                        _buildTableHeader('Amount', isDark),
+                        _buildTableHeader('Status', isDark),
                       ],
                     ),
-                ],
-              );
-            },
-          ),
+                    for (final row in displayItems)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              row.date,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              row.description,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: _buildTypeBadge(row.type, isDark),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              row.customer,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              _formatAmount(row.amount),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: _buildStatusBadge(row.status, isDark),
+                          ),
+                        ],
+                      ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );
@@ -1302,14 +1528,28 @@ class _DashboardViewState extends State<DashboardView> {
 
   Widget _buildStatusBadge(String status, bool isDark) {
     final isPaid = status == 'Paid';
+    final isDraft = status == 'Draft';
+
+    Color bgColor;
+    Color fgColor;
+
+    if (isPaid) {
+      bgColor = isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5);
+      fgColor = const Color(0xFF10B981);
+    } else if (isDraft) {
+      bgColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+      fgColor = const Color(0xFF64748B);
+    } else {
+      bgColor = isDark ? const Color(0xFF7C2D12) : const Color(0xFFFFF7ED);
+      fgColor = const Color(0xFFF97316);
+    }
+
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: isPaid
-              ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5))
-              : (isDark ? const Color(0xFF7C2D12) : const Color(0xFFFFF7ED)),
+          color: bgColor,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
@@ -1317,7 +1557,7 @@ class _DashboardViewState extends State<DashboardView> {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: isPaid ? const Color(0xFF10B981) : const Color(0xFFF97316),
+            color: fgColor,
           ),
         ),
       ),
@@ -1327,7 +1567,12 @@ class _DashboardViewState extends State<DashboardView> {
   // -------------------------------------------------------------
   // 6. Cash Flow Summary Card
   // -------------------------------------------------------------
-  Widget _buildCashFlowSummaryCard(bool isDark) {
+  Widget _buildCashFlowSummaryCard(
+    bool isDark, {
+    required double inflows,
+    required double outflows,
+    required double netMovement,
+  }) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -1401,13 +1646,11 @@ class _DashboardViewState extends State<DashboardView> {
             ],
           ),
           const SizedBox(height: 18),
-          _buildPnlRow('Opening Balance', '\$82,430', isDark),
+          _buildPnlRow('Cash Inflows', _formatAmount(inflows), isDark),
           const SizedBox(height: 12),
-          _buildPnlRow('Cash Inflows', '\$18,250', isDark),
-          const SizedBox(height: 12),
-          _buildPnlRow('Cash Outflows', '(\$11,900)', isDark, isNegative: true),
+          _buildPnlRow('Cash Outflows', '(${_formatAmount(outflows)})', isDark, isNegative: true),
           const SizedBox(height: 16),
-          // Highlighted Closing Balance Row
+          // Highlighted Net Movement Row
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -1422,7 +1665,7 @@ class _DashboardViewState extends State<DashboardView> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Closing Balance',
+                  'Net Cash Movement',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1430,7 +1673,7 @@ class _DashboardViewState extends State<DashboardView> {
                   ),
                 ),
                 Text(
-                  '\$88,780',
+                  _formatAmount(netMovement),
                   style: TextStyle(
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
@@ -1472,7 +1715,11 @@ class _DashboardViewState extends State<DashboardView> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Your cash balance has increased by 7% compared to last month.',
+                    netMovement >= 0 && inflows > 0
+                        ? 'Net positive cash flow of ${_formatAmount(netMovement)} tracked for $_cashFlowPeriod.'
+                        : netMovement < 0
+                            ? 'Net cash outflow of ${_formatAmount(outflows - inflows)} recorded for $_cashFlowPeriod.'
+                            : 'No cash movements recorded yet for $_cashFlowPeriod.',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -1569,7 +1816,6 @@ class _KpiData {
   final String title;
   final String value;
   final String comparison;
-  final bool isPositive;
   final IconData icon;
   final Color iconColor;
   final Color iconBgColor;
@@ -1579,10 +1825,29 @@ class _KpiData {
     required this.title,
     required this.value,
     required this.comparison,
-    required this.isPositive,
     required this.icon,
     required this.iconColor,
     required this.iconBgColor,
     required this.iconBgDark,
+  });
+}
+
+class _LiveTransactionItem {
+  final String date;
+  final String description;
+  final String type;
+  final String customer;
+  final double amount;
+  final String status;
+  final String sortDate;
+
+  const _LiveTransactionItem({
+    required this.date,
+    required this.description,
+    required this.type,
+    required this.customer,
+    required this.amount,
+    required this.status,
+    required this.sortDate,
   });
 }
