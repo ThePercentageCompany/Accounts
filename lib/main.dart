@@ -25,6 +25,9 @@ import 'features/office/domain/office_documents.dart';
 import 'features/office/domain/office_repository.dart';
 import 'features/office/presentation/office_cubit.dart';
 import 'features/office/presentation/office_screen.dart';
+import 'features/office/presentation/capital_equity_screen.dart';
+import 'features/office/presentation/assets_screen.dart';
+import 'features/office/presentation/balance_sheet_screen.dart';
 import 'features/quotations/data/google_direct_quotation_repository.dart';
 import 'features/quotations/data/local_quotation_repository.dart';
 import 'features/quotations/data/quotation_pdf.dart';
@@ -237,18 +240,27 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
             body = const OfficeScreen(key: ValueKey('office-fin'), initialPage: 3);
             break;
           case 4:
-            body = const CustomersView();
+            body = const CapitalEquityScreen();
             break;
           case 5:
-            body = const OfficeScreen(key: ValueKey('office-emp'), initialPage: 0);
+            body = const AssetsScreen();
             break;
           case 6:
-            body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
+            body = const BalanceSheetScreen();
             break;
           case 7:
-            body = const OfficeScreen(key: ValueKey('office-rep'), initialPage: 3, showReports: true);
+            body = const CustomersView();
             break;
           case 8:
+            body = const OfficeScreen(key: ValueKey('office-emp'), initialPage: 0);
+            break;
+          case 9:
+            body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
+            break;
+          case 10:
+            body = const OfficeScreen(key: ValueKey('office-rep'), initialPage: 3, showReports: true);
+            break;
+          case 11:
             body = CompanyEditor(company: billingState.data.company);
             break;
           default:

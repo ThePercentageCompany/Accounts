@@ -48,6 +48,11 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       final attendance = await _sync.loadCachedRecords(spreadsheetId, 'Attendance');
       final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
       final entries = await _sync.loadCachedRecords(spreadsheetId, 'Finance');
+      final shareholders = await _sync.loadCachedRecords(spreadsheetId, 'Shareholders');
+      final capitalTransactions = await _sync.loadCachedRecords(spreadsheetId, 'CapitalTransactions');
+      final shareholderLoans = await _sync.loadCachedRecords(spreadsheetId, 'ShareholderLoans');
+      final assets = await _sync.loadCachedRecords(spreadsheetId, 'Assets');
+      final journals = await _sync.loadCachedRecords(spreadsheetId, 'Journals');
 
       _scheduleBackgroundSync();
 
@@ -56,6 +61,11 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'attendance': attendance,
         'payroll': payroll,
         'entries': entries,
+        'shareholders': shareholders,
+        'capitalTransactions': capitalTransactions,
+        'shareholderLoans': shareholderLoans,
+        'assets': assets,
+        'journals': journals,
       };
     }
 
@@ -295,6 +305,217 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       );
       _scheduleBackgroundSync();
       return updated;
+    }
+
+    if (action == 'shareholderSave') {
+      final id = d['id'] as String? ?? 'SHR_${DateTime.now().millisecondsSinceEpoch}';
+      final shareholders = await _sync.loadCachedRecords(spreadsheetId, 'Shareholders');
+      final old = shareholders.where((x) => x['id'] == id).firstOrNull;
+      final record = {
+        ...d,
+        'id': id,
+        'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
+      };
+      await _sync.upsertCachedRecord(spreadsheetId, 'Shareholders', id, record);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Shareholders',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
+      _scheduleBackgroundSync();
+      return record;
+    }
+
+    if (action == 'shareholderDelete') {
+      final id = d['id'] as String;
+      await _sync.deleteCachedRecord(spreadsheetId, 'Shareholders', id);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Shareholders',
+        recordId: id,
+        action: 'delete',
+        data: {},
+      );
+      _scheduleBackgroundSync();
+      return {'id': id};
+    }
+
+    if (action == 'capitalTransactionSave') {
+      final id = d['id'] as String? ?? 'CAP_${DateTime.now().millisecondsSinceEpoch}';
+      final amountCents = scaled(d['amount'].toString(), 2);
+      final journal = createCapitalJournal(
+        transactionId: id,
+        shareholderName: d['shareholderName'] ?? 'Shareholder',
+        date: d['date'] ?? DateTime.now().toIso8601String().substring(0, 10),
+        transactionType: d['transactionType'] ?? 'capitalContribution',
+        contributionType: d['contributionType'] ?? 'bank',
+        amountCents: amountCents,
+        assetName: d['assetName'],
+        accountName: d['bankAccountId'] ?? 'Bank Account',
+      );
+      await _sync.upsertCachedRecord(spreadsheetId, 'Journals', journal['id'] as String, journal);
+
+      final record = {
+        ...d,
+        'id': id,
+        'amountCents': amountCents,
+        'journalId': journal['id'],
+        'version': ((d['version'] as int?) ?? 0) + 1,
+      };
+      await _sync.upsertCachedRecord(spreadsheetId, 'CapitalTransactions', id, record);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'CapitalTransactions',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
+      _scheduleBackgroundSync();
+      return record;
+    }
+
+    if (action == 'capitalTransactionDelete') {
+      final id = d['id'] as String;
+      await _sync.deleteCachedRecord(spreadsheetId, 'CapitalTransactions', id);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'CapitalTransactions',
+        recordId: id,
+        action: 'delete',
+        data: {},
+      );
+      _scheduleBackgroundSync();
+      return {'id': id};
+    }
+
+    if (action == 'shareholderLoanSave') {
+      final id = d['id'] as String? ?? 'LOAN_${DateTime.now().millisecondsSinceEpoch}';
+      final amountCents = scaled(d['amount'].toString(), 2);
+      final journal = createShareholderLoanJournal(
+        loanId: id,
+        shareholderName: d['shareholderName'] ?? 'Shareholder',
+        date: d['date'] ?? DateTime.now().toIso8601String().substring(0, 10),
+        type: d['type'] ?? 'loanReceived',
+        amountCents: amountCents,
+        paymentAccount: d['paymentAccount'] ?? 'Bank',
+      );
+      await _sync.upsertCachedRecord(spreadsheetId, 'Journals', journal['id'] as String, journal);
+
+      final record = {
+        ...d,
+        'id': id,
+        'amountCents': amountCents,
+        'journalId': journal['id'],
+        'version': ((d['version'] as int?) ?? 0) + 1,
+      };
+      await _sync.upsertCachedRecord(spreadsheetId, 'ShareholderLoans', id, record);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'ShareholderLoans',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
+      _scheduleBackgroundSync();
+      return record;
+    }
+
+    if (action == 'shareholderLoanDelete') {
+      final id = d['id'] as String;
+      await _sync.deleteCachedRecord(spreadsheetId, 'ShareholderLoans', id);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'ShareholderLoans',
+        recordId: id,
+        action: 'delete',
+        data: {},
+      );
+      _scheduleBackgroundSync();
+      return {'id': id};
+    }
+
+    if (action == 'assetSave') {
+      final id = d['id'] as String? ?? 'AST_${DateTime.now().millisecondsSinceEpoch}';
+      final costCents = scaled(d['cost'].toString(), 2);
+      final accDepCents = (d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
+      final bookValueCents = (costCents - accDepCents).clamp(0, costCents);
+
+      final record = {
+        ...d,
+        'id': id,
+        'costCents': costCents,
+        'accumulatedDepreciationCents': accDepCents,
+        'bookValueCents': bookValueCents,
+        'version': ((d['version'] as int?) ?? 0) + 1,
+      };
+      await _sync.upsertCachedRecord(spreadsheetId, 'Assets', id, record);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Assets',
+        recordId: id,
+        action: 'upsert',
+        data: record,
+      );
+      _scheduleBackgroundSync();
+      return record;
+    }
+
+    if (action == 'assetDelete') {
+      final id = d['id'] as String;
+      await _sync.deleteCachedRecord(spreadsheetId, 'Assets', id);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: 'Assets',
+        recordId: id,
+        action: 'delete',
+        data: {},
+      );
+      _scheduleBackgroundSync();
+      return {'id': id};
+    }
+
+    if (action == 'runDepreciation') {
+      final assets = await _sync.loadCachedRecords(spreadsheetId, 'Assets');
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      var count = 0;
+
+      for (final a in assets) {
+        if (a['status'] == 'active') {
+          final cost = (a['costCents'] as num?)?.toInt() ?? 0;
+          final residual = scaled((a['residualValue'] ?? 0).toString(), 2);
+          final months = (a['usefulLifeMonths'] as num?)?.toInt() ?? 36;
+          final currentAccDep = (a['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
+          final depCalc = calculateDepreciation(costCents: cost, residualValueCents: residual, usefulLifeMonths: months);
+          final monthlyDep = depCalc['monthlyCents'] ?? 0;
+
+          if (monthlyDep > 0 && currentAccDep < (cost - residual)) {
+            final newAccDep = (currentAccDep + monthlyDep).clamp(0, cost - residual);
+            final newBookVal = (cost - newAccDep).clamp(0, cost);
+            final jrn = createDepreciationJournal(
+              assetId: a['id'] as String,
+              assetName: a['name'] as String? ?? 'Asset',
+              date: today,
+              depreciationCents: monthlyDep,
+            );
+            await _sync.upsertCachedRecord(spreadsheetId, 'Journals', jrn['id'] as String, jrn);
+
+            final updated = {
+              ...a,
+              'accumulatedDepreciationCents': newAccDep,
+              'accumulatedDepreciation': newAccDep / 100.0,
+              'bookValueCents': newBookVal,
+              'bookValue': newBookVal / 100.0,
+              'version': ((a['version'] as int?) ?? 0) + 1,
+            };
+            await _sync.upsertCachedRecord(spreadsheetId, 'Assets', a['id'] as String, updated);
+            count++;
+          }
+        }
+      }
+      _scheduleBackgroundSync();
+      return {'status': 'success', 'depreciatedCount': count};
     }
 
     if (action == 'officeUploadDocument') {

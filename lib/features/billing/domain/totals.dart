@@ -12,6 +12,7 @@ int scaled(String value, int decimals) {
 }
 int lineTotal(LineItem item) => (scaled(item.quantity, 3) * scaled(item.rate, 2) + 500) ~/ 1000;
 String money(int cents) => 'AED ${(cents / 100).toStringAsFixed(2)}';
+String currency(int cents) => money(cents);
 class Totals {
   final int subtotal, discount, tax, total, paid, balance;
   const Totals(this.subtotal, this.discount, this.tax, this.total, this.paid, this.balance);

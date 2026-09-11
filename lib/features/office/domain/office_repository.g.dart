@@ -27,6 +27,31 @@ _OfficeData _$OfficeDataFromJson(Map<String, dynamic> json) => _OfficeData(
           ?.map((e) => e as Map<String, dynamic>)
           .toList() ??
       const [],
+  shareholders:
+      (json['shareholders'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
+  capitalTransactions:
+      (json['capitalTransactions'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
+  shareholderLoans:
+      (json['shareholderLoans'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
+  assets:
+      (json['assets'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
+  journals:
+      (json['journals'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$OfficeDataToJson(_OfficeData instance) =>
@@ -35,4 +60,9 @@ Map<String, dynamic> _$OfficeDataToJson(_OfficeData instance) =>
       'attendance': instance.attendance,
       'payroll': instance.payroll,
       'entries': instance.entries,
+      'shareholders': instance.shareholders,
+      'capitalTransactions': instance.capitalTransactions,
+      'shareholderLoans': instance.shareholderLoans,
+      'assets': instance.assets,
+      'journals': instance.journals,
     };

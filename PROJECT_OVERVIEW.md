@@ -1,12 +1,12 @@
 # The Percentage Company (TPC) — Business Accounts & Management System
 
-> **Enterprise Invoicing, Quotations, Operational Accounting, Shareholders Equity, HR & Payroll System** built with **Flutter** (Web & Mobile) and styled with the **Zoho Books** and **Apple iOS** design language.
+> **Enterprise Invoicing, Quotations, Operational Accounting, Shareholders Equity, HR & Payroll System** built with **Flutter** (Web & Mobile) and inspired by the modern **Zoho Books** and **Apple iOS** design language.
 
 ---
 
 ## 🌟 Executive Summary
 
-**TPC Accounts** is a unified business management and financial ERP workspace designed for **The Percentage Company FZ LLC**. It eliminates the need for expensive SaaS subscriptions and database infrastructure by interfacing directly with **Google Workspace (Google Sheets, Google Drive, Google OAuth 2.0)** while offering a local-first offline cache with automatic background synchronization.
+**TPC Accounts** is an all-in-one business management and financial ERP workspace designed for **The Percentage Company FZ LLC**. It eliminates the need for expensive proprietary subscriptions and database infrastructure by directly interfacing with **Google Workspace (Google Sheets, Google Drive, Google OAuth 2.0)** while providing a local-first offline cache with automatic background synchronization.
 
 ---
 
@@ -161,6 +161,8 @@ flutter run -d chrome
 
 ## 🧪 Testing & Code Quality
 
+The project includes an automated test suite covering state management, accounting arithmetic, payroll logic, and responsive widget layout:
+
 ```bash
 # Run static analysis (0 warnings, 0 errors)
 flutter analyze
@@ -184,4 +186,3 @@ The web application is configured for deployment on **Vercel** or any static/clo
 
 © 2026 **The Percentage Company FZ LLC**. All rights reserved.  
 *Internal business software developed exclusively for company accounting, payroll, and invoicing operations.*
-

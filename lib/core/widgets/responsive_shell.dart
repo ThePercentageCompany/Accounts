@@ -51,6 +51,27 @@ const List<NavDestinationItem> appNavDestinations = [
     pastelColor: Color(0xFF10B981),
   ),
   NavDestinationItem(
+    title: 'Capital & Equity',
+    icon: CupertinoIcons.briefcase,
+    selectedIcon: CupertinoIcons.briefcase_fill,
+    section: 'ACCOUNTS',
+    pastelColor: Color(0xFF8B5CF6),
+  ),
+  NavDestinationItem(
+    title: 'Fixed Assets',
+    icon: CupertinoIcons.cube_box,
+    selectedIcon: CupertinoIcons.cube_box_fill,
+    section: 'ACCOUNTS',
+    pastelColor: Color(0xFFEC4899),
+  ),
+  NavDestinationItem(
+    title: 'Balance Sheet',
+    icon: CupertinoIcons.building_2_fill,
+    selectedIcon: CupertinoIcons.building_2_fill,
+    section: 'ACCOUNTS',
+    pastelColor: Color(0xFF06B6D4),
+  ),
+  NavDestinationItem(
     title: 'Customers',
     icon: CupertinoIcons.person_2,
     selectedIcon: CupertinoIcons.person_2_fill,
