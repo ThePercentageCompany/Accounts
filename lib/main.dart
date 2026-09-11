@@ -28,6 +28,7 @@ import 'features/office/presentation/office_screen.dart';
 import 'features/office/presentation/capital_equity_screen.dart';
 import 'features/office/presentation/assets_screen.dart';
 import 'features/office/presentation/balance_sheet_screen.dart';
+import 'features/reports/presentation/reports_hub_screen.dart';
 import 'features/quotations/data/google_direct_quotation_repository.dart';
 import 'features/quotations/data/local_quotation_repository.dart';
 import 'features/quotations/data/quotation_pdf.dart';
@@ -258,7 +259,7 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
             body = const OfficeScreen(key: ValueKey('office-pay'), initialPage: 2);
             break;
           case 10:
-            body = const OfficeScreen(key: ValueKey('office-rep'), initialPage: 3, showReports: true);
+            body = const ReportsHubScreen();
             break;
           case 11:
             body = CompanyEditor(company: billingState.data.company);
