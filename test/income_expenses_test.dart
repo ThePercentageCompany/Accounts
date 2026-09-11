@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -125,4 +126,71 @@ void main() {
     expect(find.text('AED 300000.00'), findsOneWidget);
     expect(find.text('AED 200000.00'), findsOneWidget);
   });
+
+  testWidgets('Income & Expenses screen renders cleanly on compact mobile viewport (375x812) with zero overflow', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final billingCubit = BillingCubit(LocalRepository());
+    final officeCubit = OfficeCubit(LocalOfficeRepository());
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          Provider<OfficeDocuments>(create: (_) => PdfOfficeDocuments()),
+        ],
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: billingCubit),
+            BlocProvider.value(value: officeCubit),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: OfficeScreen(initialPage: 3),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Verify Mobile 2x2 Bento Stat Cards
+    expect(find.text('TOTAL INCOME & RECEIPTS'), findsOneWidget);
+    expect(find.text('TOTAL EXPENSES & OUTFLOWS'), findsOneWidget);
+    expect(find.text('NET CASH MOVEMENT'), findsOneWidget);
+    expect(find.text('PENDING BILLS DUE'), findsOneWidget);
+
+    // Verify Mobile Action Buttons
+    expect(find.text('Add Income'), findsWidgets);
+    expect(find.text('Add Expense'), findsWidgets);
+
+    // Verify Mobile Capsule Filter Badges
+    expect(find.textContaining('All Transactions'), findsOneWidget);
+    expect(find.textContaining('Income'), findsWidgets);
+    expect(find.textContaining('Expenses'), findsWidgets);
+    expect(find.textContaining('Unpaid Bills'), findsOneWidget);
+
+    // Verify Bank & Cash Movement bar
+    expect(find.textContaining('Bank:'), findsOneWidget);
+    expect(find.textContaining('Cash:'), findsOneWidget);
+
+    // Tap Add Income to open TransactionDialog on mobile
+    await tester.tap(find.text('Add Income').first);
+    await tester.pumpAndSettle();
+
+    // Verify TransactionDialog elements render without overflow
+    expect(find.text('Record Transaction'), findsOneWidget);
+    expect(find.text('Amount (AED) *'), findsOneWidget);
+    expect(find.text('Date *'), findsOneWidget);
+    expect(find.text('Category *'), findsOneWidget);
+    expect(find.text('Payment Status'), findsNothing); // for income, payment status is not shown
+    expect(find.text('Account / Method'), findsOneWidget);
+
+    // Close Dialog via top header close icon
+    await tester.tap(find.byIcon(CupertinoIcons.xmark_circle_fill));
+    await tester.pumpAndSettle();
+  });
 }
+

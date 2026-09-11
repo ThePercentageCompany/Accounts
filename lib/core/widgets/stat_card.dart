@@ -75,13 +75,17 @@ class StatCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Text(
-              value,
-              style: TextStyle(
-                color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.6,
+                ),
               ),
             ),
             if (progress != null) ...[
