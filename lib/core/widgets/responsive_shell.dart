@@ -368,7 +368,264 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
     );
   }
 
+  void _showAccountsBottomSheet(BuildContext context, bool isDark) {
+    final accountModules = [
+      (index: 3, title: 'Income & Expenses', subtitle: 'Operating P&L, bills & cash', icon: CupertinoIcons.arrow_right_arrow_left_circle_fill, color: const Color(0xFF10B981)),
+      (index: 4, title: 'Capital & Equity', subtitle: 'Shareholders & investments', icon: CupertinoIcons.briefcase_fill, color: const Color(0xFF8B5CF6)),
+      (index: 5, title: 'Fixed Assets', subtitle: 'Depreciation & equipment', icon: CupertinoIcons.cube_box_fill, color: const Color(0xFFEC4899)),
+      (index: 6, title: 'Balance Sheet', subtitle: 'General ledger & trial balance', icon: CupertinoIcons.building_2_fill, color: const Color(0xFF06B6D4)),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Accounts & Financial Statements',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                    ),
+                    IconButton(
+                      icon: const Icon(CupertinoIcons.xmark_circle_fill, size: 22, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                for (final mod in accountModules) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        widget.onIndexChanged(mod.index);
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: widget.selectedIndex == mod.index
+                              ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF))
+                              : (isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: widget.selectedIndex == mod.index
+                                ? const Color(0xFF2563EB)
+                                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                            width: widget.selectedIndex == mod.index ? 1.5 : 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: mod.color.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(mod.icon, color: mod.color, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    mod.title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    mod.subtitle,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 16,
+                              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showQuickAddBottomSheet(BuildContext context, bool isDark) {
+    final actions = [
+      (title: 'Create Invoice', subtitle: 'Bill client & generate PDF', icon: CupertinoIcons.doc_text_fill, color: const Color(0xFF38BDF8), action: () => widget.onNewInvoice()),
+      (title: 'Create Quotation', subtitle: 'Prepare proposal & estimation', icon: CupertinoIcons.doc_on_clipboard_fill, color: const Color(0xFF2DD4BF), action: () => widget.onIndexChanged(2)),
+      (title: 'Record Expense / Income', subtitle: 'Add financial transaction', icon: CupertinoIcons.arrow_right_arrow_left_circle_fill, color: const Color(0xFF10B981), action: () => widget.onIndexChanged(3)),
+      (title: 'Add Capital Contribution', subtitle: 'Shareholder investment entry', icon: CupertinoIcons.briefcase_fill, color: const Color(0xFF8B5CF6), action: () => widget.onIndexChanged(4)),
+      (title: 'Register Fixed Asset', subtitle: 'Add hardware or equipment', icon: CupertinoIcons.cube_box_fill, color: const Color(0xFFEC4899), action: () => widget.onIndexChanged(5)),
+      (title: 'Add New Customer', subtitle: 'Save client contact info', icon: CupertinoIcons.person_2_fill, color: const Color(0xFF818CF8), action: () => widget.onIndexChanged(7)),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Quick Actions',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4),
+                      ),
+                      IconButton(
+                        icon: const Icon(CupertinoIcons.xmark_circle_fill, size: 22, color: Colors.grey),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (final a in actions) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          a.action();
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: a.color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(a.icon, color: a.color, size: 20),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      a.title,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      a.subtitle,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                CupertinoIcons.arrow_up_right,
+                                size: 16,
+                                color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showMoreBottomSheet(BuildContext context, bool isDark) {
+    final sections = {
+      'FINANCIALS': [0, 1, 2, 3],
+      'ACCOUNTS & EQUITY': [4, 5, 6],
+      'PEOPLE & OPERATIONS': [7, 8, 9],
+      'SYSTEM & INSIGHTS': [10, 11],
+    };
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -414,15 +671,30 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (int idx = 0; idx < appNavDestinations.length; idx++)
-                        _buildModuleGridCard(ctx, idx, isDark),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                  for (final entry in sections.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      child: Text(
+                        entry.key,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final idx in entry.value)
+                          _buildModuleGridCard(ctx, idx, isDark),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -594,11 +866,28 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         child: _buildSidebar(context, true, isDrawer: true),
       ),
       body: widget.child,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showQuickAddBottomSheet(context, isDark),
+        backgroundColor: const Color(0xFF10B981),
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: const CircleBorder(),
+        tooltip: 'Quick Action',
+        child: const Icon(CupertinoIcons.plus, size: 24),
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.selectedIndex < 3 ? widget.selectedIndex : 3,
+        selectedIndex: widget.selectedIndex < 3
+            ? widget.selectedIndex
+            : (widget.selectedIndex <= 6 ? 3 : 4),
         onDestinationSelected: (v) {
-          if (v < 3) {
-            widget.onIndexChanged(v);
+          if (v == 0) {
+            widget.onIndexChanged(0);
+          } else if (v == 1) {
+            widget.onIndexChanged(1);
+          } else if (v == 2) {
+            widget.onIndexChanged(2);
+          } else if (v == 3) {
+            _showAccountsBottomSheet(context, isDark);
           } else {
             _showMoreBottomSheet(context, isDark);
           }
@@ -620,9 +909,16 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             label: 'Quotations',
           ),
           NavigationDestination(
+            icon: const Icon(CupertinoIcons.briefcase),
+            selectedIcon: const Icon(CupertinoIcons.briefcase_fill),
+            label: (widget.selectedIndex >= 3 && widget.selectedIndex <= 6)
+                ? currentItem.title
+                : 'Accounts',
+          ),
+          NavigationDestination(
             icon: const Icon(CupertinoIcons.square_grid_2x2),
             selectedIcon: const Icon(CupertinoIcons.square_grid_2x2_fill),
-            label: widget.selectedIndex >= 3 ? currentItem.title : 'More',
+            label: widget.selectedIndex > 6 ? currentItem.title : 'More',
           ),
         ],
       ),

@@ -26,6 +26,8 @@ class _DashboardViewState extends State<DashboardView> {
   late String _selectedPeriod;
   late String _cashFlowPeriod;
   int? _hoveredMonthIndex;
+  String _transactionFilter = 'All';
+  String _chartMetricFilter = 'All';
 
   @override
   void initState() {
@@ -403,17 +405,21 @@ class _DashboardViewState extends State<DashboardView> {
 
             final cfNetMovement = cfInflows - cfOutflows;
 
+            final isMobile = !isDesktop && !isTablet;
+
             return Container(
               color: isDark ? const Color(0xFF0B0F19) : const Color(0xFFF8FAFC),
               child: ListView(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isDesktop ? 32 : (isTablet ? 24 : 16),
-                  vertical: 24,
+                  horizontal: isDesktop ? 32 : (isTablet ? 20 : 16),
+                  vertical: isDesktop ? 24 : 16,
                 ),
                 physics: const BouncingScrollPhysics(),
                 children: [
                   _buildWelcomeHeader(isDark, billingState),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
+                  _buildQuickActionsGrid(isDark, isMobile: isMobile, isTablet: isTablet),
+                  const SizedBox(height: 20),
                   _buildKpiGrid(
                     isDark,
                     totalIncome: liveIncome,
@@ -423,7 +429,7 @@ class _DashboardViewState extends State<DashboardView> {
                     receivables: liveReceivables,
                     payables: livePayables,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   if (isDesktop) ...[
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,7 +452,7 @@ class _DashboardViewState extends State<DashboardView> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -468,7 +474,7 @@ class _DashboardViewState extends State<DashboardView> {
                     ),
                   ] else ...[
                     _buildMonthlyChartCard(isDark, monthlyData, maxMonthVal, targetYear),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildProfitAndLossCard(
                       isDark,
                       totalIncome: liveIncome,
@@ -477,9 +483,9 @@ class _DashboardViewState extends State<DashboardView> {
                       otherIncome: liveOtherIncome,
                       otherExpenses: liveOtherExpenses,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildRecentTransactionsCard(isDark, liveTransactions),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildCashFlowSummaryCard(
                       isDark,
                       inflows: cfInflows,
@@ -487,9 +493,237 @@ class _DashboardViewState extends State<DashboardView> {
                       netMovement: cfNetMovement,
                     ),
                   ],
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 32),
                   _buildFooter(isDark),
                 ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // -------------------------------------------------------------
+  // Quick Actions Grid (1-Tap Shortcuts)
+  // -------------------------------------------------------------
+  Widget _buildQuickActionsGrid(bool isDark, {required bool isMobile, required bool isTablet}) {
+    final actions = [
+      _QuickActionItem(
+        title: 'New Invoice',
+        subtitle: 'Bill customer',
+        icon: CupertinoIcons.doc_text_fill,
+        color: const Color(0xFF38BDF8),
+        onTap: widget.onNewInvoice,
+      ),
+      _QuickActionItem(
+        title: 'New Quotation',
+        subtitle: 'Send quote',
+        icon: CupertinoIcons.doc_on_clipboard_fill,
+        color: const Color(0xFF2DD4BF),
+        onTap: () => widget.onNavigate(2),
+      ),
+      _QuickActionItem(
+        title: 'Add Expense',
+        subtitle: 'Record payout',
+        icon: CupertinoIcons.arrow_right_arrow_left_circle_fill,
+        color: const Color(0xFF10B981),
+        onTap: () => widget.onNavigate(3),
+      ),
+      _QuickActionItem(
+        title: 'Capital & Equity',
+        subtitle: 'Investments & loans',
+        icon: CupertinoIcons.briefcase_fill,
+        color: const Color(0xFF8B5CF6),
+        onTap: () => widget.onNavigate(4),
+      ),
+      _QuickActionItem(
+        title: 'Fixed Assets',
+        subtitle: 'Register & dep',
+        icon: CupertinoIcons.cube_box_fill,
+        color: const Color(0xFFEC4899),
+        onTap: () => widget.onNavigate(5),
+      ),
+      _QuickActionItem(
+        title: 'Balance Sheet',
+        subtitle: 'Ledger & statements',
+        icon: CupertinoIcons.building_2_fill,
+        color: const Color(0xFF06B6D4),
+        onTap: () => widget.onNavigate(6),
+      ),
+    ];
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              Text(
+                '1-Tap Shortcuts',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              mainAxisExtent: 80,
+            ),
+            itemCount: actions.length,
+            itemBuilder: (context, index) {
+              final a = actions[index];
+              return InkWell(
+                onTap: a.onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      width: 0.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: a.color.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(a.icon, color: a.color, size: 16),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        a.title,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
+    // Tablet / Desktop Grid
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = constraints.maxWidth > 1000 ? 6 : 3;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            mainAxisExtent: 74,
+          ),
+          itemCount: actions.length,
+          itemBuilder: (context, index) {
+            final a = actions[index];
+            return InkWell(
+              onTap: a.onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                    width: 0.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: a.color.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(a.icon, color: a.color, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            a.title,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            a.subtitle,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -608,7 +842,7 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   // -------------------------------------------------------------
-  // 2. 6 KPI Stat Cards
+  // 2. 6 KPI Stat Cards (Responsive Bento Grid)
   // -------------------------------------------------------------
   Widget _buildKpiGrid(
     bool isDark, {
@@ -678,88 +912,111 @@ class _DashboardViewState extends State<DashboardView> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        int columns = 3;
-        if (constraints.maxWidth < 650) {
-          columns = 1;
-        } else if (constraints.maxWidth < 1000) {
-          columns = 2;
-        }
+        final isMobile = constraints.maxWidth < 650;
+        final int columns = isMobile ? 2 : (constraints.maxWidth < 1000 ? 3 : 3);
+        final double extent = isMobile ? 128 : 138;
+        final double spacing = isMobile ? 10 : 16;
 
-        final double spacing = 16;
-        final double itemWidth = (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final kpi in cards)
-              SizedBox(
-                width: itemWidth,
-                child: _buildKpiCardItem(isDark, kpi),
-              ),
-          ],
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            mainAxisExtent: extent,
+          ),
+          itemCount: cards.length,
+          itemBuilder: (context, index) {
+            return _buildKpiCardItem(isDark, cards[index], isCompact: isMobile);
+          },
         );
       },
     );
   }
 
-  Widget _buildKpiCardItem(bool isDark, _KpiData kpi) {
+  Widget _buildKpiCardItem(bool isDark, _KpiData kpi, {bool isCompact = false}) {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: AppTheme.zohoCardDecoration(isDark),
+      padding: EdgeInsets.all(isCompact ? 12 : 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: isCompact ? 30 : 36,
+                height: isCompact ? 30 : 36,
                 decoration: BoxDecoration(
                   color: isDark ? kpi.iconBgDark : kpi.iconBgColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
-                  child: Icon(kpi.icon, size: 18, color: kpi.iconColor),
+                  child: Icon(kpi.icon, size: isCompact ? 15 : 18, color: kpi.iconColor),
                 ),
               ),
-              Text(
-                kpi.title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  kpi.title,
+                  style: TextStyle(
+                    fontSize: isCompact ? 11.5 : 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              kpi.value,
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                letterSpacing: -0.8,
+          const SizedBox(height: 4),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  kpi.value,
+                  style: TextStyle(
+                    fontSize: isCompact ? 18 : 24,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.6,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              kpi.comparison,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              const SizedBox(height: 2),
+              Text(
+                kpi.comparison,
+                style: TextStyle(
+                  fontSize: isCompact ? 10 : 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -1036,7 +1293,7 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
               InkWell(
-                onTap: () => widget.onNavigate(9), // Navigate to Reports
+                onTap: () => widget.onNavigate(10), // Navigate to Reports
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -1100,10 +1357,76 @@ class _DashboardViewState extends State<DashboardView> {
           const SizedBox(height: 14),
           const Divider(height: 1),
           const SizedBox(height: 14),
-          _buildPnlRow('Profit Margin', '${profitMargin.toStringAsFixed(1)}%', isDark),
-          const SizedBox(height: 10),
-          _buildPnlRow('Operating Expenses', '${opexMargin.toStringAsFixed(1)}%', isDark),
-          const SizedBox(height: 10),
+          // Visual Margin Progress Bars
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Profit Margin',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                    ),
+                  ),
+                  Text(
+                    '${profitMargin.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (profitMargin / 100).clamp(0.0, 1.0),
+                  minHeight: 5,
+                  backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Operating Expenses',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                    ),
+                  ),
+                  Text(
+                    '${opexMargin.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (opexMargin / 100).clamp(0.0, 1.0),
+                  minHeight: 5,
+                  backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFB923C)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           _buildPnlRow('Other Income', _formatAmount(otherIncome), isDark),
           const SizedBox(height: 10),
           _buildPnlRow('Other Expenses', '(${_formatAmount(otherExpenses)})', isDark, isNegative: true),
@@ -1142,6 +1465,12 @@ class _DashboardViewState extends State<DashboardView> {
   // 5. Recent Transactions Table
   // -------------------------------------------------------------
   Widget _buildRecentTransactionsCard(bool isDark, List<_LiveTransactionItem> transactions) {
+    final filtered = transactions.where((t) {
+      if (_transactionFilter == 'Income') return t.type == 'Income';
+      if (_transactionFilter == 'Expense') return t.type == 'Expense';
+      return true;
+    }).toList();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: AppTheme.zohoCardDecoration(isDark),
@@ -1188,8 +1517,44 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          if (transactions.isEmpty)
+          const SizedBox(height: 12),
+          // Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', 'Income', 'Expense'].map((f) {
+                final isSel = _transactionFilter == f;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(f),
+                    selected: isSel,
+                    onSelected: (_) => setState(() => _transactionFilter = f),
+                    backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                    selectedColor: const Color(0xFF10B981).withValues(alpha: 0.18),
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                      color: isSel
+                          ? const Color(0xFF10B981)
+                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: isSel
+                            ? const Color(0xFF10B981)
+                            : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        width: 0.8,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (filtered.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
@@ -1234,7 +1599,7 @@ class _DashboardViewState extends State<DashboardView> {
           else
             LayoutBuilder(
               builder: (context, constraints) {
-                final displayItems = transactions.take(6).toList();
+                final displayItems = filtered.take(6).toList();
 
                 if (constraints.maxWidth < 650) {
                   // Mobile Card List
@@ -1780,5 +2145,21 @@ class _LiveTransactionItem {
     required this.amount,
     required this.status,
     required this.sortDate,
+  });
+}
+
+class _QuickActionItem {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionItem({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
   });
 }
