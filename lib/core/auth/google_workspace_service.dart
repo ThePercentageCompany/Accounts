@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/billing/domain/models.dart';
 import '../sync/sheet_schema.dart';
+import '../sync/sync_manager.dart';
 
 const String defaultMasterAdminEmail = String.fromEnvironment(
   'MASTER_ADMIN_EMAIL',
@@ -212,6 +213,13 @@ class GoogleWorkspaceService {
         'data': valueData,
       }),
     ).timeout(const Duration(seconds: 25));
+
+    // Seed local cache with initial company settings
+    try {
+      await SyncManager.instance.saveCachedRecords(spreadsheetId, 'Settings', [
+        {'id': 'company', 'value': company.toJson()}
+      ]);
+    } catch (_) {}
 
     // STEP 4: Share View Access with Master Admin Account
     if (masterEmail.isNotEmpty && masterEmail.contains('@')) {

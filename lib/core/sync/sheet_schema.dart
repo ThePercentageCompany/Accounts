@@ -271,8 +271,18 @@ class SheetSchema {
       case 'Settings':
         return [
           'Setting Key',
-          'Setting Title',
-          'Summary / Details',
+          'Company Name',
+          'Email Address',
+          'Phone Number',
+          'TRN / Tax Number',
+          'Invoice Prefix',
+          'Company Address',
+          'Bank Name',
+          'Account Holder',
+          'Account Number',
+          'IBAN',
+          'Default Payment Terms',
+          'Default Notes',
           'Version',
           'JSON Payload',
         ];
@@ -646,17 +656,37 @@ class SheetSchema {
 
       case 'Settings':
         final val = record['value'] ?? record;
-        final name = val is Map ? (val['name']?.toString() ?? 'Company Settings') : 'Setting';
-        final email = val is Map ? (val['email']?.toString() ?? '') : '';
-        final phone = val is Map ? (val['phone']?.toString() ?? '') : '';
-        final trn = val is Map ? (val['trn']?.toString() ?? '') : '';
-        final summary = '$name | $email | $phone | TRN: $trn';
+        final map = val is Map ? Map<String, dynamic>.from(val) : <String, dynamic>{};
+        final key = record['id']?.toString() ?? 'company';
+        final name = map['name']?.toString() ?? (key == 'company' ? 'The Percentage FZ LLC' : key);
+        final email = map['email']?.toString() ?? '';
+        final phone = map['phone']?.toString() ?? '';
+        final trn = map['trn']?.toString() ?? '';
+        final prefix = map['prefix']?.toString() ?? 'TPC';
+        final address = map['address']?.toString() ?? '';
+        final bank = map['bank']?.toString() ?? '';
+        final accountHolder = map['accountHolder']?.toString() ?? '';
+        final accountNumber = map['accountNumber']?.toString() ?? '';
+        final iban = map['iban']?.toString() ?? '';
+        final terms = map['terms']?.toString() ?? '';
+        final notes = map['notes']?.toString() ?? '';
+        final version = map['version'] ?? record['version'] ?? 0;
 
         return [
-          record['id']?.toString() ?? 'company',
+          key,
           name,
-          summary,
-          record['version'] ?? 0,
+          email,
+          phone,
+          trn,
+          prefix,
+          address,
+          bank,
+          accountHolder,
+          accountNumber,
+          iban,
+          terms,
+          notes,
+          version,
           jsonStr,
         ];
 
@@ -748,6 +778,24 @@ class SheetSchema {
         if (row.length > 8) record['status'] = row[8]?.toString().toLowerCase() ?? 'active';
         if (row.length > 9) record['notes'] = row[9]?.toString() ?? '';
         break;
+
+      case 'Settings':
+        final key = row.isNotEmpty ? row[0]?.toString().trim() ?? 'company' : 'company';
+        final valueMap = <String, dynamic>{};
+        if (row.length > 1) valueMap['name'] = row[1]?.toString() ?? '';
+        if (row.length > 2) valueMap['email'] = row[2]?.toString() ?? '';
+        if (row.length > 3) valueMap['phone'] = row[3]?.toString() ?? '';
+        if (row.length > 4) valueMap['trn'] = row[4]?.toString() ?? '';
+        if (row.length > 5) valueMap['prefix'] = row[5]?.toString() ?? 'TPC';
+        if (row.length > 6) valueMap['address'] = row[6]?.toString() ?? '';
+        if (row.length > 7) valueMap['bank'] = row[7]?.toString() ?? '';
+        if (row.length > 8) valueMap['accountHolder'] = row[8]?.toString() ?? '';
+        if (row.length > 9) valueMap['accountNumber'] = row[9]?.toString() ?? '';
+        if (row.length > 10) valueMap['iban'] = row[10]?.toString() ?? '';
+        if (row.length > 11) valueMap['terms'] = row[11]?.toString() ?? '';
+        if (row.length > 12) valueMap['notes'] = row[12]?.toString() ?? '';
+        if (row.length > 13) valueMap['version'] = int.tryParse(row[13]?.toString() ?? '0') ?? 0;
+        return {'id': key, 'value': valueMap};
 
       default:
         break;

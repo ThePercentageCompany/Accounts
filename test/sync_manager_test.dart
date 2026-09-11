@@ -207,6 +207,69 @@ void main() {
       expect(SheetSchema.getColLetter(28), 'AB');
     });
 
+    test('Settings tab maps Company data to dedicated columns and deserializes cleanly', () {
+      final companyPayload = {
+        'id': 'company',
+        'value': {
+          'name': 'The Percentage Company FZ LLC',
+          'email': 'accounts@thepercentage.com',
+          'phone': '+971 4 123 4567',
+          'trn': '100456789000003',
+          'prefix': 'TPC-2026',
+          'address': 'Level 14, Boulevard Plaza Tower 1, Downtown Dubai, UAE',
+          'bank': 'Emirates NBD',
+          'accountHolder': 'The Percentage Company FZ LLC',
+          'accountNumber': '1012345678901',
+          'iban': 'AE0702600001012345678901',
+          'terms': 'Payment due within 14 calendar days from invoice date.',
+          'notes': 'Thank you for choosing The Percentage Company.',
+          'version': 5,
+        }
+      };
+
+      final row = SheetSchema.recordToRow('Settings', companyPayload);
+      expect(row[0], 'company');
+      expect(row[1], 'The Percentage Company FZ LLC');
+      expect(row[2], 'accounts@thepercentage.com');
+      expect(row[3], '+971 4 123 4567');
+      expect(row[4], '100456789000003');
+      expect(row[5], 'TPC-2026');
+      expect(row[6], 'Level 14, Boulevard Plaza Tower 1, Downtown Dubai, UAE');
+      expect(row[7], 'Emirates NBD');
+      expect(row[8], 'The Percentage Company FZ LLC');
+      expect(row[9], '1012345678901');
+      expect(row[10], 'AE0702600001012345678901');
+      expect(row[11], 'Payment due within 14 calendar days from invoice date.');
+      expect(row[12], 'Thank you for choosing The Percentage Company.');
+      expect(row[13], 5);
+
+      // Reconstructed with JSON payload
+      final reconstructed = SheetSchema.rowToRecord('Settings', row);
+      expect(reconstructed['id'], 'company');
+      final val = reconstructed['value'] as Map<String, dynamic>;
+      expect(val['name'], 'The Percentage Company FZ LLC');
+      expect(val['trn'], '100456789000003');
+      expect(val['iban'], 'AE0702600001012345678901');
+
+      // Reconstructed without JSON payload (e.g. row created/edited manually in Google Sheets)
+      final rowWithoutJson = row.sublist(0, 14);
+      final reconstructedFromCols = SheetSchema.rowToRecord('Settings', rowWithoutJson);
+      expect(reconstructedFromCols['id'], 'company');
+      final valFromCols = reconstructedFromCols['value'] as Map<String, dynamic>;
+      expect(valFromCols['name'], 'The Percentage Company FZ LLC');
+      expect(valFromCols['email'], 'accounts@thepercentage.com');
+      expect(valFromCols['phone'], '+971 4 123 4567');
+      expect(valFromCols['trn'], '100456789000003');
+      expect(valFromCols['prefix'], 'TPC-2026');
+      expect(valFromCols['bank'], 'Emirates NBD');
+      expect(valFromCols['accountHolder'], 'The Percentage Company FZ LLC');
+      expect(valFromCols['accountNumber'], '1012345678901');
+      expect(valFromCols['iban'], 'AE0702600001012345678901');
+      expect(valFromCols['terms'], 'Payment due within 14 calendar days from invoice date.');
+      expect(valFromCols['notes'], 'Thank you for choosing The Percentage Company.');
+      expect(valFromCols['version'], 5);
+    });
+
     test('rowToRecord provides backwards compatibility for legacy 2-column [ID, JSON] rows', () {
       final legacyRow = [
         'cust_legacy_1',
