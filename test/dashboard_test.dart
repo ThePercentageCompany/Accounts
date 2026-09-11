@@ -69,4 +69,46 @@ void main() {
     expect(find.text('Cash Outflows'), findsOneWidget);
     expect(find.text('Net Cash Movement'), findsOneWidget);
   });
+
+  testWidgets('DashboardView renders 2-column KPI grid and horizontal scrolling Quick Action pills on mobile', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844); // iPhone 14/15 size
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final billingCubit = BillingCubit(LocalRepository());
+    final officeCubit = OfficeCubit(LocalOfficeRepository());
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: billingCubit),
+          BlocProvider.value(value: officeCubit),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: DashboardView(
+              onNewInvoice: () {},
+              onNavigate: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Verify Quick Actions Pills & Swipe indicator
+    expect(find.text('Quick Actions'), findsOneWidget);
+    expect(find.text('Swipe'), findsOneWidget);
+    expect(find.text('New Invoice'), findsOneWidget);
+    expect(find.text('New Quotation'), findsOneWidget);
+    expect(find.text('Add Expense'), findsOneWidget);
+    expect(find.text('Capital & Equity'), findsOneWidget);
+
+    // Verify 6 KPI Cards in 2-column grid
+    expect(find.text('Total Income'), findsWidgets);
+    expect(find.text('Total Expenses'), findsWidgets);
+    expect(find.text('Net Profit'), findsWidgets);
+    expect(find.text('Cash / Bank Balance'), findsOneWidget);
+  });
 }

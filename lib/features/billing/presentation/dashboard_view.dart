@@ -551,6 +551,13 @@ class _DashboardViewState extends State<DashboardView> {
         color: const Color(0xFF06B6D4),
         onTap: () => widget.onNavigate(6),
       ),
+      _QuickActionItem(
+        title: 'New Customer',
+        subtitle: 'Save client',
+        icon: CupertinoIcons.person_2_fill,
+        color: const Color(0xFFF59E0B),
+        onTap: () => widget.onNavigate(7),
+      ),
     ];
 
     if (isMobile) {
@@ -569,78 +576,95 @@ class _DashboardViewState extends State<DashboardView> {
                   letterSpacing: -0.3,
                 ),
               ),
-              Text(
-                '1-Tap Shortcuts',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.arrow_right_arrow_left,
+                    size: 11,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Swipe',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              mainAxisExtent: 80,
-            ),
-            itemCount: actions.length,
-            itemBuilder: (context, index) {
-              final a = actions[index];
-              return InkWell(
-                onTap: a.onTap,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                      width: 0.8,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            clipBehavior: Clip.none,
+            child: Row(
+              children: [
+                for (int i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  InkWell(
+                    onTap: actions[i].onTap,
+                    borderRadius: BorderRadius.circular(100),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(
+                          color: isDark
+                              ? actions[i].color.withValues(alpha: 0.3)
+                              : actions[i].color.withValues(alpha: 0.25),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: actions[i].color.withValues(alpha: isDark ? 0.15 : 0.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: actions[i].color.withValues(alpha: 0.16),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Icon(actions[i].icon, color: actions[i].color, size: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            actions[i].title,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            CupertinoIcons.chevron_right,
+                            size: 10,
+                            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          ),
+                        ],
+                      ),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: a.color.withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(a.icon, color: a.color, size: 16),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        a.title,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : const Color(0xFF1E293B),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                ],
+              ],
+            ),
           ),
         ],
       );
