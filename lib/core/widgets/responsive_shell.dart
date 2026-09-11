@@ -352,20 +352,86 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   },
                 ),
               ],
-              if (!widget.isDemo && widget.session.user != null)
-                ListTile(
-                  leading: const Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444)),
-                  title: const Text('Sign Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    widget.session.signOut();
-                  },
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmAndSignOut(context);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Log Out',
+                        style: TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmAndSignOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 22),
+            SizedBox(width: 10),
+            Text('Log Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to log out of your TPC Business account?',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await widget.session.signOut();
+    }
   }
 
   void _showAccountsBottomSheet(BuildContext context, bool isDark) {
@@ -1230,7 +1296,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
 
             // Bottom Sprout Card (*Good businesses grow with clarity*)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -1280,6 +1346,46 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+
+            // Dedicated Logout Button in Sidebar & Drawer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: InkWell(
+                onTap: () {
+                  if (isDrawer) Navigator.pop(context);
+                  _confirmAndSignOut(context);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(CupertinoIcons.square_arrow_right, size: 16, color: Color(0xFFEF4444)),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Log Out',
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Icon(CupertinoIcons.chevron_right, size: 12, color: Color(0xFFEF4444)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1352,6 +1458,33 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                     ),
                   );
                 },
+              ),
+            ),
+
+            // Logout Icon Button in Tablet Compact Rail
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Tooltip(
+                message: 'Log Out',
+                child: InkWell(
+                  onTap: () => _confirmAndSignOut(context),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        CupertinoIcons.square_arrow_right,
+                        size: 19,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

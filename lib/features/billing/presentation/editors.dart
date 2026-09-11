@@ -3,7 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/auth/google_session.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/date_field.dart';
 import '../domain/models.dart';
@@ -542,7 +544,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                   ),
                   const SizedBox(height: 24),
 
-                  FilledButton(
+                    FilledButton(
                     onPressed: state.busy
                         ? null
                         : () async {
@@ -562,6 +564,107 @@ class _CompanyEditorState extends State<CompanyEditor> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                     ),
                     child: const Text('Save Company Settings', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Current Account & Logout Section
+                  Builder(
+                    builder: (context) {
+                      GoogleSession? session;
+                      try {
+                        session = Provider.of<GoogleSession?>(context, listen: false);
+                      } catch (_) {}
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Current Session',
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    session?.user?.email ?? 'Local Demo Workspace',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    title: const Row(
+                                      children: [
+                                        Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 22),
+                                        SizedBox(width: 10),
+                                        Text('Log Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    content: const Text(
+                                      'Are you sure you want to log out of your TPC Business account?',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                                      ),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: const Color(0xFFEF4444),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true && session != null) {
+                                  await session.signOut();
+                                }
+                              },
+                              icon: const Icon(CupertinoIcons.square_arrow_right, size: 14, color: Color(0xFFEF4444)),
+                              label: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFFEF4444), width: 0.8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 40),
                 ],
