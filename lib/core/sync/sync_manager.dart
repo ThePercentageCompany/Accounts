@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/google_workspace_service.dart';
+import 'sheet_schema.dart';
 
 enum SyncStatus {
   synced,
@@ -184,16 +185,7 @@ class SyncManager extends ChangeNotifier {
       await syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
 
       // 2. Fetch all latest remote tabs in a single batch request
-      const tabs = [
-        'Customers',
-        'Invoices',
-        'Settings',
-        'Quotations',
-        'Employees',
-        'Attendance',
-        'Payroll',
-        'Finance',
-      ];
+      final tabs = SheetSchema.dataTabsToSync;
       final batchData = await _service.readAllTabsBatch(token, spreadsheetId, tabs);
 
       bool hasData = false;

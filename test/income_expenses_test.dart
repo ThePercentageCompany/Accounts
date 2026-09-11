@@ -59,7 +59,7 @@ void main() {
     expect(find.textContaining('Expenses'), findsWidgets);
   });
 
-  testWidgets('Company Settings includes Shareholders & Capital Equity management', (WidgetTester tester) async {
+  testWidgets('Company Settings renders company profile and bank details cleanly', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1400, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -69,28 +69,14 @@ void main() {
 
     const sampleCompany = Company(
       name: 'The Percentage FZ LLC',
-      shareholders: [
-        {
-          'id': 'sh_1',
-          'name': 'Ahmed Al Mansoori',
-          'role': 'Managing Partner',
-          'sharesPercent': '60.0',
-          'investedAmount': '300000.00',
-          'date': '2024-01-01',
-          'email': 'ahmed@tpc.com',
-          'phone': '+971501234567',
-        },
-        {
-          'id': 'sh_2',
-          'name': 'John Partner',
-          'role': 'Executive Director',
-          'sharesPercent': '40.0',
-          'investedAmount': '200000.00',
-          'date': '2024-01-01',
-          'email': 'john@tpc.com',
-          'phone': '+971509876543',
-        },
-      ],
+      email: 'info@thepercentage.ae',
+      phone: '+971 4 123 4567',
+      address: 'Business Bay, Dubai, UAE',
+      trn: '100200300400003',
+      bank: 'Emirates NBD',
+      accountHolder: 'The Percentage FZ LLC',
+      accountNumber: '1234567890',
+      iban: 'AE123456789012345678901',
     );
 
     await tester.pumpWidget(
@@ -109,22 +95,17 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Verify Shareholders & Capital Equity card
-    expect(find.text('Shareholders & Capital Equity'), findsOneWidget);
-    expect(find.text('TOTAL INVESTED CAPITAL'), findsOneWidget);
-    expect(find.text('AED 500000.00'), findsOneWidget);
-    expect(find.text('ACTIVE PARTNERS'), findsOneWidget);
-    expect(find.text('2'), findsWidgets);
-    expect(find.text('EQUITY ALLOCATED'), findsOneWidget);
-    expect(find.text('100.0%'), findsOneWidget);
+    // Verify Company Settings headers & cards
+    expect(find.text('Company Settings'), findsOneWidget);
+    expect(find.text('Business Profile'), findsOneWidget);
+    expect(find.text('The Percentage FZ LLC'), findsWidgets);
+    expect(find.text('info@thepercentage.ae'), findsOneWidget);
 
-    // Verify Shareholders in the list
-    expect(find.text('Ahmed Al Mansoori'), findsOneWidget);
-    expect(find.text('John Partner'), findsOneWidget);
-    expect(find.text('60.0% Equity'), findsOneWidget);
-    expect(find.text('40.0% Equity'), findsOneWidget);
-    expect(find.text('AED 300000.00'), findsOneWidget);
-    expect(find.text('AED 200000.00'), findsOneWidget);
+    // Verify Bank & Payment Information card & fields
+    expect(find.text('Bank & Payment Information'), findsOneWidget);
+    expect(find.text('Emirates NBD'), findsOneWidget);
+    expect(find.text('Save Company Settings'), findsOneWidget);
+    expect(find.text('Current Session'), findsOneWidget);
   });
 
   testWidgets('Income & Expenses screen renders cleanly on compact mobile viewport (375x812) with zero overflow', (WidgetTester tester) async {

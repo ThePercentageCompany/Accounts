@@ -23,6 +23,7 @@ class ReportsHubScreen extends StatefulWidget {
 
 class _ReportsHubScreenState extends State<ReportsHubScreen> {
   ReportType? _selectedReport;
+  ReportCategory? _selectedCategory;
   ReportFilter _filter = ReportFilter();
   String _searchQuery = '';
   final _calcService = const ReportCalculationService();
@@ -105,8 +106,13 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
   // Header
   // -------------------------------------------------------------
   Widget _buildTopHeader(bool isDark) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 14 : 24,
+        vertical: isMobile ? 10 : 14,
+      ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F172A) : Colors.white,
         border: Border(
@@ -118,42 +124,40 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF472B6).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+          if (_selectedReport != null && isMobile) ...[
+            IconButton(
+              icon: const Icon(CupertinoIcons.chevron_left, size: 20),
+              onPressed: () => setState(() => _selectedReport = null),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
-            child: const Icon(CupertinoIcons.chart_pie_fill, color: Color(0xFFF472B6), size: 18),
-          ),
-          const SizedBox(width: 12),
+            const SizedBox(width: 6),
+          ] else ...[
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF472B6).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(CupertinoIcons.chart_pie_fill, color: Color(0xFFF472B6), size: 18),
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    const Flexible(
-                      child: Text(
-                        'Financial & Business Reports',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.3),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (_selectedReport != null) ...[
-                      const SizedBox(width: 8),
-                      const Icon(CupertinoIcons.chevron_right, size: 12, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _selectedReport!.title,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF10B981)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ],
+                Text(
+                  _selectedReport != null ? _selectedReport!.title : 'Financial & Business Reports',
+                  style: TextStyle(
+                    fontSize: isMobile ? 14.5 : 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -161,7 +165,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                       ? 'The Percentage Company FZ LLC — Certified Statutory & Management Reporting'
                       : _selectedReport!.description,
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: isMobile ? 10.5 : 11.5,
                     color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                   ),
                   maxLines: 1,
@@ -171,13 +175,20 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             ),
           ),
           if (_selectedReport != null) ...[
-            FilledButton.tonalIcon(
+            const SizedBox(width: 8),
+            FilledButton.tonal(
               onPressed: () => setState(() => _selectedReport = null),
-              icon: const Icon(CupertinoIcons.square_grid_2x2, size: 14),
-              label: const Text('All Reports Hub'),
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 14, vertical: isMobile ? 6 : 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.square_grid_2x2, size: 14),
+                  const SizedBox(width: 6),
+                  const Text('All Reports Hub', style: TextStyle(fontSize: 12)),
+                ],
               ),
             ),
           ],
@@ -222,25 +233,25 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       (title: 'Shareholder Capital', amount: (summary['totalShareholderEquityCents'] as num?)?.toInt() ?? 0, color: const Color(0xFF6366F1), icon: CupertinoIcons.briefcase_fill),
     ];
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 8 Executive Summary Cards (Responsive Grid)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < 650;
-              final cols = isMobile ? 2 : (constraints.maxWidth < 1100 ? 4 : 4);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isMobile = screenWidth < 650 || constraints.maxWidth < 650;
 
-              return GridView.builder(
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isMobile ? 14 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 8 Executive Summary Cards (Responsive 2x4 Bento Grid on Mobile)
+              GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  mainAxisExtent: 84,
+                  crossAxisCount: isMobile ? 2 : (constraints.maxWidth < 1100 ? 4 : 4),
+                  crossAxisSpacing: isMobile ? 10 : 12,
+                  mainAxisSpacing: isMobile ? 10 : 12,
+                  mainAxisExtent: isMobile ? 86 : 84,
                 ),
                 itemCount: kpis.length,
                 itemBuilder: (context, index) {
@@ -248,7 +259,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                   final isNegative = kpi.amount < 0;
 
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF0F172A) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -260,15 +271,15 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                     child: Row(
                       children: [
                         Container(
-                          width: 34,
-                          height: 34,
+                          width: isMobile ? 30 : 34,
+                          height: isMobile ? 30 : 34,
                           decoration: BoxDecoration(
                             color: kpi.color.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(kpi.icon, color: kpi.color, size: 18),
+                          child: Icon(kpi.icon, color: kpi.color, size: isMobile ? 16 : 18),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: isMobile ? 8 : 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +288,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                               Text(
                                 kpi.title,
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: isMobile ? 10.5 : 11,
                                   fontWeight: FontWeight.w600,
                                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                 ),
@@ -291,7 +302,7 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                                 child: Text(
                                   currency.format(kpi.amount / 100.0),
                                   style: TextStyle(
-                                    fontSize: 14.5,
+                                    fontSize: isMobile ? 13.5 : 14.5,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: -0.3,
                                     color: isNegative
@@ -307,42 +318,205 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                     ),
                   );
                 },
-              );
-            },
-          ),
-          const SizedBox(height: 28),
-
-          // Search Bar & Reports Directory
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Report Directory',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4),
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 280),
-                child: CupertinoSearchTextField(
-                  placeholder: 'Search reports...',
+              const SizedBox(height: 24),
+
+              // Search Bar & Reports Directory Header (Clean & Mobile Friendly)
+              if (isMobile) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Report Directory',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${ReportType.values.length} Reports',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                CupertinoSearchTextField(
+                  placeholder: 'Search all reports...',
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
                   onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
                 ),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Report Directory',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${ReportType.values.length} Reports',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 280),
+                        child: CupertinoSearchTextField(
+                          placeholder: 'Search reports...',
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                          onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
+
+              // Quick Category Filter Pill Box (Scrollable on Mobile)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    _buildCategoryPill(
+                      null,
+                      'All Reports',
+                      ReportType.values.length,
+                      CupertinoIcons.square_grid_2x2_fill,
+                      const Color(0xFF38BDF8),
+                      isDark,
+                    ),
+                    for (final cat in ReportCategory.values) ...[
+                      const SizedBox(width: 8),
+                      _buildCategoryPill(
+                        cat,
+                        cat.title,
+                        ReportType.values.where((r) => r.category == cat).length,
+                        cat.icon,
+                        cat.color,
+                        isDark,
+                      ),
+                    ],
+                  ],
+                ),
               ),
+              const SizedBox(height: 20),
+
+              // Categorized Report Cards Grid Matrix
+              for (final cat in ReportCategory.values) ...[
+                if (_selectedCategory == null || _selectedCategory == cat) ...[
+                  _buildCategorySection(cat, isDark, isMobile),
+                  const SizedBox(height: 22),
+                ],
+              ],
             ],
           ),
-          const SizedBox(height: 18),
+        );
+      },
+    );
+  }
 
-          // Categorized Report Cards Matrix
-          for (final cat in ReportCategory.values) ...[
-            _buildCategorySection(cat, isDark),
-            const SizedBox(height: 20),
+  Widget _buildCategoryPill(
+    ReportCategory? cat,
+    String label,
+    int count,
+    IconData icon,
+    Color color,
+    bool isDark,
+  ) {
+    final isSelected = _selectedCategory == cat;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedCategory = cat),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color
+              : (isDark ? const Color(0xFF0F172A) : Colors.white),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? color
+                : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? Colors.white : color,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155)),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.25)
+                    : color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : color,
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildCategorySection(ReportCategory category, bool isDark) {
+  Widget _buildCategorySection(ReportCategory category, bool isDark, bool isMobile) {
     final reports = ReportType.values
         .where((r) => r.category == category)
         .where((r) => _searchQuery.isEmpty || r.title.toLowerCase().contains(_searchQuery) || r.description.toLowerCase().contains(_searchQuery))
@@ -355,15 +529,25 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
       children: [
         Row(
           children: [
-            Icon(category.icon, size: 16, color: category.color),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: category.color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(category.icon, size: 14, color: category.color),
+            ),
             const SizedBox(width: 8),
-            Text(
-              category.title.toUpperCase(),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                color: category.color,
+            Expanded(
+              child: Text(
+                category.title.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: category.color,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -371,29 +555,30 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final isMobile = constraints.maxWidth < 650;
-            final cols = isMobile ? 1 : (constraints.maxWidth < 1100 ? 2 : 3);
+            final cols = isMobile ? 2 : (constraints.maxWidth < 1100 ? 2 : 3);
+            final spacing = isMobile ? 10.0 : 14.0;
+            final extent = isMobile ? 154.0 : 132.0;
 
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: cols,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                mainAxisExtent: 130,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                mainAxisExtent: extent,
               ),
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final rep = reports[index];
                 return InkWell(
                   onTap: () => setState(() => _selectedReport = rep),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isMobile ? 12 : 16),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF0F172A) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
                         width: 0.8,
@@ -403,31 +588,38 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Text(
                                 rep.title,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 13.5,
+                                  fontSize: isMobile ? 12.5 : 13.5,
                                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                                   letterSpacing: -0.2,
+                                  height: 1.2,
                                 ),
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const Icon(CupertinoIcons.arrow_up_right, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Icon(
+                              CupertinoIcons.arrow_up_right,
+                              size: isMobile ? 12 : 14,
+                              color: category.color,
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Expanded(
                           child: Text(
                             rep.description,
                             style: TextStyle(
-                              fontSize: 11.5,
+                              fontSize: isMobile ? 10.5 : 11.5,
                               color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                              height: 1.3,
+                              height: 1.25,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -437,21 +629,28 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: category.color.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Certified Ledger',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: category.color),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: category.color.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  'Ledger',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: category.color,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                             Text(
-                              'View Report ➔',
+                              'View ➔',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: isMobile ? 10.5 : 11,
                                 fontWeight: FontWeight.w700,
                                 color: category.color,
                               ),
@@ -481,8 +680,9 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
     OfficeData office,
     List<Map<String, dynamic>> companyShareholders,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isMobile ? 12 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -584,7 +784,14 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -663,7 +870,14 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Balance Sheet (Statement of Financial Position)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              const Expanded(
+                child: Text(
+                  'Balance Sheet (Statement of Financial Position)',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -1040,14 +1254,18 @@ class _ReportsHubScreenState extends State<ReportsHubScreen> {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 6,
               children: [
                 const Text('TOTAL BALANCES', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                Row(
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
                   children: [
                     Text('Dr AED ${currency.format(totalDr / 100.0)}', style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF10B981))),
-                    const SizedBox(width: 20),
                     Text('Cr AED ${currency.format(totalCr / 100.0)}', style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF38BDF8))),
                   ],
                 ),

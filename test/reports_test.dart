@@ -215,5 +215,56 @@ void main() {
 
       expect(find.text('Report Directory'), findsOneWidget);
     });
+
+    testWidgets('ReportsHubScreen renders 2-column grid and category pills on compact mobile viewport (375x812)', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final billingCubit = BillingCubit(LocalRepository());
+      final officeCubit = OfficeCubit(LocalOfficeRepository());
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: billingCubit),
+            BlocProvider.value(value: officeCubit),
+          ],
+          child: const MaterialApp(
+            home: ReportsHubScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify Mobile Header & Directory
+      expect(find.text('Financial & Business Reports'), findsOneWidget);
+      expect(find.text('Report Directory'), findsOneWidget);
+
+      // Verify Category Filter Pills
+      expect(find.text('All Reports'), findsOneWidget);
+      expect(find.text('Financial Statements'), findsOneWidget);
+
+      // Verify 2-column grid report cards render
+      expect(find.text('Profit & Loss (Income Statement)'), findsOneWidget);
+      expect(find.text('Balance Sheet'), findsOneWidget);
+      expect(find.text('Cash Flow Statement'), findsOneWidget);
+
+      // Filter by Financial Statements
+      await tester.ensureVisible(find.text('Financial Statements'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Financial Statements'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FINANCIAL STATEMENTS'), findsOneWidget);
+
+      // Tap Profit & Loss from mobile grid
+      await tester.tap(find.text('Profit & Loss (Income Statement)').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Profit & Loss Statement'), findsOneWidget);
+      expect(find.text('Audited Ledger Figures'), findsOneWidget);
+    });
   });
 }

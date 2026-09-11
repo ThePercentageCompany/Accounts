@@ -35,84 +35,80 @@ class ReportFilterBar extends StatelessWidget {
         ),
       ),
       child: Wrap(
-        spacing: 12,
+        spacing: 10,
         runSpacing: 10,
         crossAxisAlignment: WrapCrossAlignment.center,
         alignment: WrapAlignment.spaceBetween,
         children: [
-          // Left: Date Presets & Date Label
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Date Range Preset Pill Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-                    width: 0.8,
-                  ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<DateRangePreset>(
-                    value: filter.preset,
-                    dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    icon: const Icon(CupertinoIcons.chevron_down, size: 13),
-                    isDense: true,
-                    items: [
-                      for (final p in DateRangePreset.values)
-                        DropdownMenuItem(
-                          value: p,
-                          child: Text(
-                            p.label,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ),
-                    ],
-                    onChanged: (p) {
-                      if (p != null) {
-                        onFilterChanged(filter.copyWith(preset: p));
-                      }
-                    },
-                  ),
-                ),
+          // Date Range Preset Pill Dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                width: 0.8,
               ),
-              const SizedBox(width: 10),
-              // Formatted Date Range Pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(CupertinoIcons.calendar, size: 13, color: Color(0xFF10B981)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${df.format(filter.startDate)} – ${df.format(filter.endDate)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF10B981),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<DateRangePreset>(
+                value: filter.preset,
+                dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                icon: const Icon(CupertinoIcons.chevron_down, size: 13),
+                isDense: true,
+                items: [
+                  for (final p in DateRangePreset.values)
+                    DropdownMenuItem(
+                      value: p,
+                      child: Text(
+                        p.label,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                ],
+                onChanged: (p) {
+                  if (p != null) {
+                    onFilterChanged(filter.copyWith(preset: p));
+                  }
+                },
               ),
-            ],
+            ),
           ),
 
-          // Right: Accounting Basis, Comparison & Action Buttons
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          // Formatted Date Range Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              children: [
+                const Icon(CupertinoIcons.calendar, size: 13, color: Color(0xFF10B981)),
+                Text(
+                  '${df.format(filter.startDate)} – ${df.format(filter.endDate)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Accounting Basis Selector & Actions Wrap
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Accounting Basis Selector
               SegmentedButton<AccountingBasis>(
@@ -137,7 +133,6 @@ class ReportFilterBar extends StatelessWidget {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-              const SizedBox(width: 8),
 
               // Export CSV / Excel Button
               if (onExportCsv != null)

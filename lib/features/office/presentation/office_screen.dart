@@ -1114,58 +1114,40 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     label: const Text('Add Employee'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.zohoBlue,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                     ),
-                  );
-                } else if (page == 3) {
-                  actionButton = Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () => finance(null, 'income'),
-                        icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 16),
-                        label: const Text('Add Income'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.zohoGreen,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                        ),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => finance(null, 'expense'),
-                        icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 16),
-                        label: const Text('Add Expense'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.zohoRed,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                        ),
-                      ),
-                    ],
                   );
                 }
 
                 if (isCompact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        titleText,
-                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitleText,
-                        style: TextStyle(
-                          color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
-                          fontSize: 13.5,
-                          letterSpacing: -0.1,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              titleText,
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              subtitleText,
+                              style: TextStyle(
+                                color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                       if (actionButton != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(width: 8),
                         actionButton,
                       ],
                     ],
@@ -1858,88 +1840,102 @@ class _OfficeScreenState extends State<OfficeScreen> {
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < 560;
             if (isNarrow) {
-              return Column(
+              return Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => finance(null, 'income'),
-                          icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 16),
-                          label: const Text('Add Income'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.zohoGreen,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                          ),
-                        ),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => finance(null, 'income'),
+                      icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 15),
+                      label: const Text('Add Income', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.zohoGreen,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => finance(null, 'expense'),
-                          icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 16),
-                          label: const Text('Add Expense'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.zohoRed,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => guarded(() async {
-                            await preview(
-                              await context.read<OfficeDocuments>().financialReport(
-                                    billing.company.name,
-                                    month,
-                                    summary,
-                                    state.data.entries,
-                                  ),
-                              'Finance-$month.pdf',
-                            );
-                          }),
-                          icon: const Icon(CupertinoIcons.doc_plaintext, size: 15),
-                          label: const Text('Export PDF', style: TextStyle(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                          ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => finance(null, 'expense'),
+                      icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 15),
+                      label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.zohoRed,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  PopupMenuButton<String>(
+                    tooltip: 'Report options',
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (action) {
+                      if (action == 'pdf') {
+                        guarded(() async {
+                          await preview(
+                            await context.read<OfficeDocuments>().financialReport(
+                                  billing.company.name,
+                                  month,
+                                  summary,
+                                  state.data.entries,
+                                ),
+                            'Finance-$month.pdf',
+                          );
+                        });
+                      } else if (action == 'drive') {
+                        guarded(() async {
+                          final bytes = await context.read<OfficeDocuments>().financialReport(
+                                billing.company.name,
+                                month,
+                                summary,
+                                state.data.entries,
+                              );
+                          await run('reportArchive', {
+                            'month': month,
+                            'requestId': const Uuid().v4(),
+                            'pdf': base64Encode(bytes),
+                          });
+                        });
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'pdf',
+                        child: Row(
+                          children: [
+                            Icon(CupertinoIcons.doc_plaintext, size: 16),
+                            SizedBox(width: 8),
+                            Text('Export PDF Report', style: TextStyle(fontSize: 13)),
+                          ],
                         ),
                       ),
-                      if (!demo) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => guarded(() async {
-                              final bytes = await context.read<OfficeDocuments>().financialReport(
-                                    billing.company.name,
-                                    month,
-                                    summary,
-                                    state.data.entries,
-                                  );
-                              await run('reportArchive', {
-                                'month': month,
-                                'requestId': const Uuid().v4(),
-                                'pdf': base64Encode(bytes),
-                              });
-                            }),
-                            icon: const Icon(CupertinoIcons.cloud_upload, size: 15),
-                            label: const Text('Save to Drive', style: TextStyle(fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                            ),
+                      if (!demo)
+                        const PopupMenuItem(
+                          value: 'drive',
+                          child: Row(
+                            children: [
+                              Icon(CupertinoIcons.cloud_upload, size: 16),
+                              SizedBox(width: 8),
+                              Text('Save to Drive', style: TextStyle(fontSize: 13)),
+                            ],
                           ),
                         ),
-                      ],
                     ],
+                    child: Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      ),
+                      child: Icon(
+                        CupertinoIcons.ellipsis_vertical,
+                        size: 16,
+                        color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
+                      ),
+                    ),
                   ),
                 ],
               );

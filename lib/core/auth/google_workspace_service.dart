@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/billing/domain/models.dart';
+import '../sync/sheet_schema.dart';
 
 const String defaultMasterAdminEmail = String.fromEnvironment(
   'MASTER_ADMIN_EMAIL',
@@ -157,20 +158,9 @@ class GoogleWorkspaceService {
     final folderData = jsonDecode(folderRes.body) as Map<String, dynamic>;
     final folderId = folderData['id'] as String;
 
-    // STEP 2: Create Spreadsheet with all 10 tabs
+    // STEP 2: Create Spreadsheet with all tabs defined in SheetSchema
     onProgress?.call('Creating private Google Spreadsheet database...');
-    final sheetTitles = [
-      'Customers',
-      'Invoices',
-      'Settings',
-      'Employees',
-      'Attendance',
-      'Payroll',
-      'Finance',
-      'Quotations',
-      'Invoice Register',
-      'Payment Register',
-    ];
+    final sheetTitles = SheetSchema.allTabs;
 
     final sheetRes = await http.post(
       Uri.parse('https://sheets.googleapis.com/v4/spreadsheets'),
@@ -195,36 +185,20 @@ class GoogleWorkspaceService {
     onProgress?.call('Writing initial schema & company settings...');
     final valueData = <Map<String, dynamic>>[];
     for (final title in sheetTitles) {
-      if (title == 'Invoice Register') {
-        valueData.add({
-          'range': '$title!A1:I1',
-          'values': [
-            ['ID', 'Number', 'Date', 'Customer', 'Status', 'Total AED', 'Paid AED', 'Balance AED', 'PDF Link']
-          ],
-        });
-      } else if (title == 'Payment Register') {
-        valueData.add({
-          'range': '$title!A1:E1',
-          'values': [
-            ['Payment ID', 'Invoice #', 'Date', 'Amount AED', 'Reference']
-          ],
-        });
-      } else {
-        valueData.add({
-          'range': '$title!A1:B1',
-          'values': [
-            ['ID', 'JSON']
-          ],
-        });
-      }
+      final headers = SheetSchema.getHeaders(title);
+      final endCol = SheetSchema.getColLetter(headers.length);
+      valueData.add({
+        'range': '$title!A1:${endCol}1',
+        'values': [headers],
+      });
     }
 
     // Add company profile to Settings sheet
+    final companyRow = SheetSchema.recordToRow('Settings', {'id': 'company', 'value': company.toJson()});
+    final settingsEndCol = SheetSchema.getColLetter(companyRow.length);
     valueData.add({
-      'range': 'Settings!A2:B2',
-      'values': [
-        ['company', jsonEncode({'id': 'company', 'value': company.toJson()})]
-      ],
+      'range': 'Settings!A2:${settingsEndCol}2',
+      'values': [companyRow],
     });
 
     await http.post(
@@ -284,14 +258,14 @@ class GoogleWorkspaceService {
     );
   }
 
-  /// Reads all JSON records from multiple sheet tabs in a SINGLE batch API request.
+  /// Reads all records from multiple sheet tabs in a SINGLE batch API request.
   Future<Map<String, List<Map<String, dynamic>>>> readAllTabsBatch(
     String accessToken,
     String spreadsheetId,
     List<String> tabNames,
   ) async {
     try {
-      final queryRanges = tabNames.map((t) => 'ranges=${Uri.encodeComponent('$t!A2:B')}').join('&');
+      final queryRanges = tabNames.map((t) => 'ranges=${Uri.encodeComponent('$t!A2:Z')}').join('&');
       final url = Uri.parse(
         'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$queryRanges',
       );
@@ -309,14 +283,11 @@ class GoogleWorkspaceService {
         final values = (vr['values'] as List?) ?? [];
         final list = <Map<String, dynamic>>[];
         for (final row in values) {
-          if (row is List && row.length >= 2) {
-            try {
-              final jsonStr = row[1].toString();
-              final parsed = jsonDecode(jsonStr);
-              if (parsed is Map) {
-                list.add(Map<String, dynamic>.from(parsed));
-              }
-            } catch (_) {}
+          if (row is List && row.isNotEmpty) {
+            final record = SheetSchema.rowToRecord(tabName, row);
+            if (record.isNotEmpty) {
+              list.add(record);
+            }
           }
         }
         resultMap[tabName] = list;
@@ -327,10 +298,10 @@ class GoogleWorkspaceService {
     }
   }
 
-  /// Reads all JSON records from a sheet tab.
+  /// Reads all records from a sheet tab.
   Future<List<Map<String, dynamic>>> readTabRecords(String accessToken, String spreadsheetId, String sheetName) async {
     try {
-      final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:B');
+      final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z');
       final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return [];
@@ -339,14 +310,11 @@ class GoogleWorkspaceService {
 
       final list = <Map<String, dynamic>>[];
       for (final row in values) {
-        if (row is List && row.length >= 2) {
-          try {
-            final jsonStr = row[1].toString();
-            final parsed = jsonDecode(jsonStr);
-            if (parsed is Map) {
-              list.add(Map<String, dynamic>.from(parsed));
-            }
-          } catch (_) {}
+        if (row is List && row.isNotEmpty) {
+          final record = SheetSchema.rowToRecord(sheetName, row);
+          if (record.isNotEmpty) {
+            list.add(record);
+          }
         }
       }
       return list;
@@ -355,7 +323,7 @@ class GoogleWorkspaceService {
     }
   }
 
-  /// Inserts or updates a JSON record by ID in a sheet tab.
+  /// Inserts or updates a record by ID in a sheet tab with human-readable column fields.
   Future<void> upsertTabRecord(String accessToken, String spreadsheetId, String sheetName, String id, Map<String, dynamic> record) async {
     // Read existing IDs
     final getUrl = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:A');
@@ -373,11 +341,13 @@ class GoogleWorkspaceService {
       }
     }
 
+    final rowValues = SheetSchema.recordToRow(sheetName, record);
+    final endCol = SheetSchema.getColLetter(rowValues.length);
+
     final putUrl = Uri.parse(
-      'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A$targetRow:B$targetRow?valueInputOption=USER_ENTERED',
+      'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A$targetRow:$endCol$targetRow?valueInputOption=USER_ENTERED',
     );
 
-    final jsonPayload = jsonEncode(record);
     await http.put(
       putUrl,
       headers: {
@@ -385,9 +355,7 @@ class GoogleWorkspaceService {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'values': [
-          [id, jsonPayload]
-        ]
+        'values': [rowValues]
       }),
     ).timeout(const Duration(seconds: 20));
   }
@@ -400,14 +368,16 @@ class GoogleWorkspaceService {
 
     // Clear range
     await http.post(
-      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:B:clear'),
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z:clear'),
       headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
     ).timeout(const Duration(seconds: 15));
 
     if (updated.isNotEmpty) {
-      final rows = updated.map((r) => [r['id']?.toString() ?? '', jsonEncode(r)]).toList();
+      final rows = updated.map((r) => SheetSchema.recordToRow(sheetName, r)).toList();
+      final maxCols = rows.map((r) => r.length).fold(1, (a, b) => a > b ? a : b);
+      final endCol = SheetSchema.getColLetter(maxCols);
       await http.put(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:B${rows.length + 1}?valueInputOption=USER_ENTERED'),
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:$endCol${rows.length + 1}?valueInputOption=USER_ENTERED'),
         headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
         body: jsonEncode({'values': rows}),
       ).timeout(const Duration(seconds: 20));

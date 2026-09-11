@@ -157,36 +157,85 @@ class _InvoicesViewState extends State<InvoicesView> {
               ),
               const SizedBox(height: 10),
             ] else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 560;
+                  if (isCompact) {
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Invoices',
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                'Manage, track and collect customer invoices.',
+                                style: TextStyle(
+                                  color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: widget.onNewInvoice,
+                          icon: const Icon(CupertinoIcons.plus_circle_fill, size: 15),
+                          label: const Text('New Invoice', style: TextStyle(fontSize: 12.5)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.pastelBlue,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Invoices',
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Invoices',
+                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Manage, track and collect customer invoices.',
+                              style: TextStyle(
+                                color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                fontSize: 14,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      Text(
-                        'Manage, track and collect customer invoices.',
-                        style: TextStyle(
-                          color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
-                          fontSize: 14,
-                          letterSpacing: -0.1,
+                      const SizedBox(width: 14),
+                      FilledButton.icon(
+                        onPressed: widget.onNewInvoice,
+                        icon: const Icon(CupertinoIcons.plus_circle_fill, size: 16),
+                        label: const Text('New Invoice'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.pastelBlue,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                         ),
                       ),
                     ],
-                  ),
-                  FilledButton.icon(
-                    onPressed: widget.onNewInvoice,
-                    icon: const Icon(CupertinoIcons.plus_circle_fill, size: 16),
-                    label: const Text('New Invoice'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.pastelBlue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
               const SizedBox(height: 18),
             ],
@@ -578,36 +627,85 @@ class _CustomersViewState extends State<CustomersView> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 560;
+                if (isCompact) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Customers',
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              'Client directory and contact info.',
+                              style: TextStyle(
+                                color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: state.busy ? null : () => editCustomer(context),
+                        icon: const Icon(CupertinoIcons.person_add_solid, size: 15),
+                        label: const Text('Add Customer', style: TextStyle(fontSize: 12.5)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.pastelBlue,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Customers',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Customers',
+                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Client directory, contact info and tax registrations.',
+                            style: TextStyle(
+                              color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                              fontSize: 14,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Text(
-                      'Client directory, contact info and tax registrations.',
-                      style: TextStyle(
-                        color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
-                        fontSize: 14,
-                        letterSpacing: -0.1,
+                    const SizedBox(width: 14),
+                    FilledButton.icon(
+                      onPressed: state.busy ? null : () => editCustomer(context),
+                      icon: const Icon(CupertinoIcons.person_add_solid, size: 16),
+                      label: const Text('Add Customer'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.pastelBlue,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                       ),
                     ),
                   ],
-                ),
-                FilledButton.icon(
-                  onPressed: state.busy ? null : () => editCustomer(context),
-                  icon: const Icon(CupertinoIcons.person_add_solid, size: 16),
-                  label: const Text('Add Customer'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.pastelBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 18),
 
