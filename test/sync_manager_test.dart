@@ -177,14 +177,13 @@ void main() {
       expect(row[2], 'Founding Partner');
       expect(row[3], '35.00');
       expect(row[4], '175000.00');
-      expect(row[5], '2026-01-01');
-
       final capTx = {
         'id': 'ctx_55',
         'date': '2026-09-10',
         'shareholderId': 'sh_101',
         'shareholderName': 'Fatima Al Suwaidi',
-        'type': 'cash',
+        'transactionType': 'capitalContribution',
+        'contributionType': 'cash',
         'amount': '50000.00',
         'assetName': '',
         'account': 'Bank',
@@ -194,9 +193,26 @@ void main() {
 
       final capRow = SheetSchema.recordToRow('CapitalTransactions', capTx);
       expect(capRow[0], 'ctx_55');
-      expect(capRow[4], 'CASH');
-      expect(capRow[5], '50000.00');
-      expect(capRow[8], 'COMPLETED');
+      expect(capRow[1], '2026-09-10');
+      expect(capRow[2], 'sh_101');
+      expect(capRow[3], 'Fatima Al Suwaidi');
+      expect(capRow[4], 'CAPITALCONTRIBUTION');
+      expect(capRow[5], 'CASH');
+      expect(capRow[6], '50000.00');
+      expect(capRow[8], 'Bank');
+      expect(capRow[9], 'COMPLETED');
+
+      final reconstructedSh = SheetSchema.rowToRecord('Shareholders', row);
+      expect(reconstructedSh['id'], 'sh_101');
+      expect(reconstructedSh['name'], 'Fatima Al Suwaidi');
+      expect(reconstructedSh['ownershipPercentage'], 35.0);
+      expect(reconstructedSh['agreedCapital'], 175000.0);
+
+      final reconstructedCap = SheetSchema.rowToRecord('CapitalTransactions', capRow);
+      expect(reconstructedCap['id'], 'ctx_55');
+      expect(reconstructedCap['shareholderName'], 'Fatima Al Suwaidi');
+      expect(reconstructedCap['amountCents'], 5000000);
+      expect(reconstructedCap['transactionType'], 'capitalContribution');
     });
 
     test('getColLetter accurately computes column letters across boundaries', () {

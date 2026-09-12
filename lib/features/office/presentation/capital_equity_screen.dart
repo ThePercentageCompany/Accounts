@@ -27,40 +27,56 @@ class _CapitalEquityScreenState extends State<CapitalEquityScreen> with SingleTi
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cubit = context.watch<OfficeCubit>();
-    final office = cubit.state.data;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text('Capital & Equity', style: TextStyle(fontWeight: FontWeight.w700)),
-        elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF2563EB),
-          unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-          indicatorColor: const Color(0xFF2563EB),
-          indicatorWeight: 3,
-          tabs: const [
-            Tab(icon: Icon(Icons.dashboard_outlined, size: 20), text: 'Overview'),
-            Tab(icon: Icon(Icons.people_outline, size: 20), text: 'Shareholders'),
-            Tab(icon: Icon(Icons.account_balance_outlined, size: 20), text: 'Contributions'),
-            Tab(icon: Icon(Icons.receipt_long_outlined, size: 20), text: 'Shareholder Loans'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _OverviewTab(office: office),
-          _ShareholdersTab(office: office),
-          _ContributionsTab(office: office),
-          _LoansTab(office: office),
-        ],
-      ),
+    return BlocConsumer<OfficeCubit, OfficeState>(
+      listener: (context, state) {
+        if (state.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${state.error}'),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      },
+      builder: (context, state) {
+        final office = state.data;
+
+        return Scaffold(
+          backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          appBar: AppBar(
+            title: const Text('Capital & Equity', style: TextStyle(fontWeight: FontWeight.w700)),
+            elevation: 0,
+            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            bottom: TabBar(
+              controller: _tabController,
+              labelColor: const Color(0xFF2563EB),
+              unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              indicatorColor: const Color(0xFF2563EB),
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(icon: Icon(Icons.dashboard_outlined, size: 20), text: 'Overview'),
+                Tab(icon: Icon(Icons.people_outline, size: 20), text: 'Shareholders'),
+                Tab(icon: Icon(Icons.account_balance_outlined, size: 20), text: 'Contributions'),
+                Tab(icon: Icon(Icons.receipt_long_outlined, size: 20), text: 'Shareholder Loans'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _OverviewTab(office: office),
+              _ShareholdersTab(office: office),
+              _ContributionsTab(office: office),
+              _LoansTab(office: office),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -708,8 +724,15 @@ class _LoansTab extends StatelessWidget {
 
 void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? shareholder}) {
   final nameCtrl = TextEditingController(text: shareholder?['name'] ?? '');
-  final pctCtrl = TextEditingController(text: (shareholder?['ownershipPercentage'] ?? '').toString());
-  final capitalCtrl = TextEditingController(text: (shareholder?['agreedCapital'] ?? '').toString());
+  final roleCtrl = TextEditingController(text: shareholder?['role'] ?? 'Partner & Shareholder');
+  final pctCtrl = TextEditingController(
+    text: (shareholder?['ownershipPercentage'] ?? shareholder?['sharesPercent'] ?? '').toString(),
+  );
+  final capitalCtrl = TextEditingController(
+    text: (shareholder?['agreedCapital'] ?? shareholder?['investedAmount'] ?? '').toString(),
+  );
+  final emailCtrl = TextEditingController(text: shareholder?['email'] ?? '');
+  final phoneCtrl = TextEditingController(text: shareholder?['phone'] ?? '');
   final notesCtrl = TextEditingController(text: shareholder?['notes'] ?? '');
 
   showDialog(
@@ -728,6 +751,11 @@ void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? share
               ),
               const SizedBox(height: 12),
               TextField(
+                controller: roleCtrl,
+                decoration: const InputDecoration(labelText: 'Role / Title', hintText: 'e.g. Managing Partner'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: pctCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Ownership Percentage (%) *', hintText: 'e.g. 60.0'),
@@ -737,6 +765,18 @@ void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? share
                 controller: capitalCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Agreed Capital (AED) *', hintText: 'e.g. 60000.00'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email Address', hintText: 'partner@example.com'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone Number', hintText: '+971 50 123 4567'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -752,12 +792,20 @@ void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? share
         FilledButton(
           onPressed: () {
             if (nameCtrl.text.trim().isEmpty) return;
+            final pct = double.tryParse(pctCtrl.text.trim()) ?? 0.0;
+            final cap = double.tryParse(capitalCtrl.text.trim()) ?? 0.0;
+
             final payload = {
               if (shareholder != null) 'id': shareholder['id'],
               if (shareholder != null) 'version': shareholder['version'] ?? 0,
               'name': nameCtrl.text.trim(),
-              'ownershipPercentage': double.tryParse(pctCtrl.text.trim()) ?? 0.0,
-              'agreedCapital': double.tryParse(capitalCtrl.text.trim()) ?? 0.0,
+              'role': roleCtrl.text.trim().isNotEmpty ? roleCtrl.text.trim() : 'Partner & Shareholder',
+              'ownershipPercentage': pct,
+              'sharesPercent': pct.toStringAsFixed(2),
+              'agreedCapital': cap,
+              'investedAmount': cap.toStringAsFixed(2),
+              'email': emailCtrl.text.trim(),
+              'phone': phoneCtrl.text.trim(),
               'notes': notesCtrl.text.trim(),
               'status': 'active',
             };
@@ -875,9 +923,12 @@ void _showAddContributionModal(BuildContext context) {
                 'shareholderName': sh['name'],
                 'date': dateCtrl.text.trim(),
                 'transactionType': selectedType,
+                'type': selectedType,
                 'contributionType': selectedContributionType,
                 'amount': amt,
+                'amountCents': (amt * 100).round(),
                 'bankAccountId': selectedContributionType == 'cash' ? 'Cash' : 'Bank',
+                'account': selectedContributionType == 'cash' ? 'Cash' : 'Bank',
                 'assetName': assetNameCtrl.text.trim(),
                 'reference': refCtrl.text.trim(),
                 'notes': notesCtrl.text.trim(),
@@ -892,9 +943,11 @@ void _showAddContributionModal(BuildContext context) {
                   'acquisitionType': 'shareholderContribution',
                   'purchaseDate': dateCtrl.text.trim(),
                   'cost': amt,
+                  'costCents': (amt * 100).round(),
                   'shareholderId': selectedShareholderId,
                   'shareholderName': sh['name'],
                   'status': 'active',
+                  'usefulLifeYears': 3,
                   'usefulLifeMonths': 36,
                 });
               }
@@ -1002,7 +1055,10 @@ void _showAddLoanModal(BuildContext context) {
                 'date': dateCtrl.text.trim(),
                 'type': selectedType,
                 'amount': amt,
+                'amountCents': (amt * 100).round(),
+                'principalAmount': amt.toStringAsFixed(2),
                 'paymentAccount': selectedAccount,
+                'account': selectedAccount,
                 'reference': refCtrl.text.trim(),
                 'notes': notesCtrl.text.trim(),
                 'status': 'posted',

@@ -190,12 +190,13 @@ class SheetSchema {
           'Shareholder Name',
           'Role / Title',
           'Equity Share %',
-          'Invested Capital AED',
+          'Agreed Capital AED',
           'Investment Date',
           'Email Address',
           'Phone Number',
           'Status',
           'Notes',
+          'Version',
         ];
 
       case 'CapitalTransactions':
@@ -204,13 +205,15 @@ class SheetSchema {
           'Transaction Date',
           'Shareholder ID',
           'Shareholder Name',
-          'Contribution Type',
+          'Transaction Type',
+          'Contribution Method',
           'Capital Amount AED',
           'Asset Name / Details',
           'Destination Account',
           'Status',
           'Reference / Doc #',
           'Notes',
+          'Version',
         ];
 
       case 'ShareholderLoans':
@@ -219,7 +222,7 @@ class SheetSchema {
           'Loan Date',
           'Shareholder ID',
           'Shareholder Name',
-          'Loan Type',
+          'Loan Action / Type',
           'Principal Amount AED',
           'Interest Rate %',
           'Repaid Amount AED',
@@ -227,7 +230,9 @@ class SheetSchema {
           'Due Date',
           'Payment Account',
           'Loan Status',
+          'Reference / Doc #',
           'Notes',
+          'Version',
         ];
 
       case 'Assets':
@@ -244,6 +249,7 @@ class SheetSchema {
           'Net Book Value AED',
           'Location / Status',
           'Notes',
+          'Version',
         ];
 
       case 'Journals':
@@ -257,6 +263,7 @@ class SheetSchema {
           'Credit Account',
           'Amount AED',
           'Notes',
+          'Version',
         ];
 
       case 'Settings':
@@ -548,8 +555,14 @@ class SheetSchema {
         ];
 
       case 'Shareholders':
-        final invested = double.tryParse(record['investedAmount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
-        final shares = double.tryParse(record['sharesPercent']?.toString().replaceAll('%', '') ?? '0') ?? 0.0;
+        final invested = double.tryParse(
+              (record['agreedCapital'] ?? record['investedAmount'] ?? record['amount'])?.toString().replaceAll(',', '') ?? '0',
+            ) ??
+            0.0;
+        final shares = double.tryParse(
+              (record['ownershipPercentage'] ?? record['sharesPercent'] ?? record['equityPercent'])?.toString().replaceAll('%', '') ?? '0',
+            ) ??
+            0.0;
 
         return [
           record['id']?.toString() ?? '',
@@ -562,45 +575,64 @@ class SheetSchema {
           record['phone']?.toString() ?? '',
           (record['status']?.toString() ?? 'active').toUpperCase(),
           record['notes']?.toString() ?? '',
+          record['version'] ?? 0,
         ];
 
       case 'CapitalTransactions':
-        final amount = double.tryParse(record['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+        final amtCents = (record['amountCents'] as num?)?.toDouble() ?? 0.0;
+        final amount = amtCents != 0
+            ? amtCents / 100.0
+            : (double.tryParse(record['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
+        final tType = (record['transactionType'] ?? record['type'] ?? 'capitalContribution').toString();
+        final cType = (record['contributionType'] ?? record['method'] ?? 'bank').toString();
+        final account = (record['bankAccountId'] ?? record['account'] ?? (cType == 'cash' ? 'Cash' : 'Bank')).toString();
 
         return [
           record['id']?.toString() ?? '',
           record['date']?.toString() ?? '',
           record['shareholderId']?.toString() ?? '',
           record['shareholderName']?.toString() ?? '',
-          (record['type']?.toString() ?? 'cash').toUpperCase(),
+          tType.toUpperCase(),
+          cType.toUpperCase(),
           amount.toStringAsFixed(2),
           record['assetName']?.toString() ?? '',
-          record['account']?.toString() ?? 'Bank',
-          (record['status']?.toString() ?? 'completed').toUpperCase(),
+          account,
+          (record['status']?.toString() ?? 'posted').toUpperCase(),
           record['reference']?.toString() ?? '',
           record['notes']?.toString() ?? '',
+          record['version'] ?? 0,
         ];
 
       case 'ShareholderLoans':
-        final principal = double.tryParse(record['principalAmount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+        final amtCents = (record['amountCents'] as num?)?.toDouble() ?? 0.0;
+        final rawAmt = amtCents != 0
+            ? amtCents / 100.0
+            : (double.tryParse(record['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
+        final principal = rawAmt != 0
+            ? rawAmt
+            : (double.tryParse(record['principalAmount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
         final repaid = double.tryParse(record['repaidAmount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
         final balance = (principal - repaid).clamp(0.0, double.infinity);
         final rate = double.tryParse(record['interestRate']?.toString() ?? '0') ?? 0.0;
+        final type = (record['type'] ?? 'loanReceived').toString();
+        final acc = (record['paymentAccount'] ?? record['account'] ?? 'Bank').toString();
 
         return [
           record['id']?.toString() ?? '',
           record['date']?.toString() ?? '',
           record['shareholderId']?.toString() ?? '',
           record['shareholderName']?.toString() ?? '',
-          (record['type']?.toString() ?? 'loan_to_company').toUpperCase(),
+          type.toUpperCase(),
           principal.toStringAsFixed(2),
           rate.toStringAsFixed(2),
           repaid.toStringAsFixed(2),
           balance.toStringAsFixed(2),
           record['dueDate']?.toString() ?? '',
-          record['account']?.toString() ?? 'Bank',
-          (record['status']?.toString() ?? 'active').toUpperCase(),
+          acc,
+          (record['status']?.toString() ?? 'posted').toUpperCase(),
+          record['reference']?.toString() ?? '',
           record['notes']?.toString() ?? '',
+          record['version'] ?? 0,
         ];
 
       case 'Assets':
@@ -626,6 +658,7 @@ class SheetSchema {
           bookValAed.toStringAsFixed(2),
           record['status']?.toString() ?? 'Active',
           record['notes']?.toString() ?? '',
+          record['version'] ?? 0,
         ];
 
       case 'Journals':
@@ -642,6 +675,7 @@ class SheetSchema {
           record['creditAccount']?.toString() ?? '',
           amountAed.toStringAsFixed(2),
           record['notes']?.toString() ?? '',
+          record['version'] ?? 0,
         ];
 
       case 'Settings':
@@ -901,41 +935,84 @@ class SheetSchema {
 
       case 'Shareholders':
         if (row.length > 1) record['name'] = row[1]?.toString() ?? '';
-        if (row.length > 2) record['role'] = row[2]?.toString() ?? '';
-        if (row.length > 3) record['sharesPercent'] = row[3]?.toString() ?? '0';
-        if (row.length > 4) record['investedAmount'] = row[4]?.toString() ?? '0';
+        if (row.length > 2) record['role'] = row[2]?.toString() ?? 'Partner & Shareholder';
+        if (row.length > 3) {
+          final pct = double.tryParse(row[3]?.toString().replaceAll('%', '') ?? '0') ?? 0.0;
+          record['ownershipPercentage'] = pct;
+          record['sharesPercent'] = pct.toStringAsFixed(2);
+        }
+        if (row.length > 4) {
+          final cap = double.tryParse(row[4]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+          record['agreedCapital'] = cap;
+          record['investedAmount'] = cap.toStringAsFixed(2);
+        }
         if (row.length > 5) record['date'] = row[5]?.toString() ?? '';
         if (row.length > 6) record['email'] = row[6]?.toString() ?? '';
         if (row.length > 7) record['phone'] = row[7]?.toString() ?? '';
         if (row.length > 8) record['status'] = row[8]?.toString().toLowerCase() ?? 'active';
         if (row.length > 9) record['notes'] = row[9]?.toString() ?? '';
+        if (row.length > 10) record['version'] = int.tryParse(row[10]?.toString() ?? '0') ?? 0;
         break;
 
       case 'CapitalTransactions':
         if (row.length > 1) record['date'] = row[1]?.toString() ?? '';
         if (row.length > 2) record['shareholderId'] = row[2]?.toString() ?? '';
         if (row.length > 3) record['shareholderName'] = row[3]?.toString() ?? '';
-        if (row.length > 4) record['type'] = row[4]?.toString().toLowerCase() ?? 'cash';
-        if (row.length > 5) record['amount'] = row[5]?.toString() ?? '0.00';
-        if (row.length > 6) record['assetName'] = row[6]?.toString() ?? '';
-        if (row.length > 7) record['account'] = row[7]?.toString() ?? 'Bank';
-        if (row.length > 8) record['status'] = row[8]?.toString().toLowerCase() ?? 'completed';
-        if (row.length > 9) record['reference'] = row[9]?.toString() ?? '';
-        if (row.length > 10) record['notes'] = row[10]?.toString() ?? '';
+        if (row.length > 4) {
+          final t = row[4]?.toString().toLowerCase() ?? 'capitalcontribution';
+          record['transactionType'] = t == 'capital_withdrawal' || t == 'capitalwithdrawal'
+              ? 'capitalWithdrawal'
+              : (t == 'additional_capital' || t == 'additionalcapital'
+                  ? 'additionalCapital'
+                  : 'capitalContribution');
+          record['type'] = record['transactionType'];
+        }
+        if (row.length > 5) {
+          record['contributionType'] = row[5]?.toString().toLowerCase() ?? 'bank';
+        }
+        if (row.length > 6) {
+          final amt = double.tryParse(row[6]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+          record['amount'] = amt.toStringAsFixed(2);
+          record['amountCents'] = (amt * 100).round();
+        }
+        if (row.length > 7) record['assetName'] = row[7]?.toString() ?? '';
+        if (row.length > 8) {
+          record['bankAccountId'] = row[8]?.toString() ?? 'Bank';
+          record['account'] = record['bankAccountId'];
+        }
+        if (row.length > 9) record['status'] = row[9]?.toString().toLowerCase() ?? 'posted';
+        if (row.length > 10) record['reference'] = row[10]?.toString() ?? '';
+        if (row.length > 11) record['notes'] = row[11]?.toString() ?? '';
+        if (row.length > 12) record['version'] = int.tryParse(row[12]?.toString() ?? '0') ?? 0;
         break;
 
       case 'ShareholderLoans':
         if (row.length > 1) record['date'] = row[1]?.toString() ?? '';
         if (row.length > 2) record['shareholderId'] = row[2]?.toString() ?? '';
         if (row.length > 3) record['shareholderName'] = row[3]?.toString() ?? '';
-        if (row.length > 4) record['type'] = row[4]?.toString().toLowerCase() ?? 'loan_to_company';
-        if (row.length > 5) record['principalAmount'] = row[5]?.toString() ?? '0.00';
+        if (row.length > 4) {
+          final t = row[4]?.toString().toLowerCase() ?? 'loanreceived';
+          record['type'] = t == 'loan_repayment' || t == 'loanrepayment'
+              ? 'loanRepayment'
+              : 'loanReceived';
+        }
+        if (row.length > 5) {
+          final p = double.tryParse(row[5]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+          record['principalAmount'] = p.toStringAsFixed(2);
+          record['amount'] = p.toStringAsFixed(2);
+          record['amountCents'] = (p * 100).round();
+        }
         if (row.length > 6) record['interestRate'] = row[6]?.toString() ?? '0';
         if (row.length > 7) record['repaidAmount'] = row[7]?.toString() ?? '0.00';
         if (row.length > 9) record['dueDate'] = row[9]?.toString() ?? '';
-        if (row.length > 10) record['account'] = row[10]?.toString() ?? 'Bank';
-        if (row.length > 11) record['status'] = row[11]?.toString().toLowerCase() ?? 'active';
-        if (row.length > 12) record['notes'] = row[12]?.toString() ?? '';
+        if (row.length > 10) {
+          record['paymentAccount'] = row[10]?.toString() ?? 'Bank';
+          record['account'] = record['paymentAccount'];
+        }
+        if (row.length > 11) record['status'] = row[11]?.toString().toLowerCase() ?? 'posted';
+        if (row.length > 12) record['reference'] = row[12]?.toString() ?? '';
+        if (row.length > 13) record['notes'] = row[13]?.toString() ?? '';
+        if (row.length > 14) record['version'] = int.tryParse(row[14]?.toString() ?? '0') ?? 0;
         break;
 
       case 'Assets':
@@ -947,7 +1024,11 @@ class SheetSchema {
           record['costCents'] = (c * 100).round();
           record['cost'] = c.toStringAsFixed(2);
         }
-        if (row.length > 5) record['usefulLifeYears'] = row[5]?.toString() ?? '3';
+        if (row.length > 5) {
+          record['usefulLifeYears'] = row[5]?.toString() ?? '3';
+          final yrs = int.tryParse(record['usefulLifeYears'] ?? '3') ?? 3;
+          record['usefulLifeMonths'] = yrs * 12;
+        }
         if (row.length > 6) {
           final s = double.tryParse(row[6]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
           record['salvageValueCents'] = (s * 100).round();
@@ -957,13 +1038,17 @@ class SheetSchema {
         if (row.length > 8) {
           final ad = double.tryParse(row[8]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
           record['accumulatedDepreciationCents'] = (ad * 100).round();
+          record['accumulatedDepreciation'] = ad.toStringAsFixed(2);
         }
         if (row.length > 9) {
           final bv = double.tryParse(row[9]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
           record['currentBookValueCents'] = (bv * 100).round();
+          record['bookValueCents'] = record['currentBookValueCents'];
+          record['bookValue'] = bv.toStringAsFixed(2);
         }
         if (row.length > 10) record['status'] = row[10]?.toString() ?? 'Active';
         if (row.length > 11) record['notes'] = row[11]?.toString() ?? '';
+        if (row.length > 12) record['version'] = int.tryParse(row[12]?.toString() ?? '0') ?? 0;
         break;
 
       case 'Journals':
@@ -982,6 +1067,7 @@ class SheetSchema {
           record['amount'] = a.toStringAsFixed(2);
         }
         if (row.length > 8) record['notes'] = row[8]?.toString() ?? '';
+        if (row.length > 9) record['version'] = int.tryParse(row[9]?.toString() ?? '0') ?? 0;
         break;
 
       case 'Settings':

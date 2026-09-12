@@ -266,6 +266,110 @@ class GoogleWorkspaceService {
     );
   }
 
+  /// Ensures all required tabs from SheetSchema exist in the spreadsheet.
+  /// Automatically creates any missing tabs and sets up their column headers.
+  Future<void> ensureAllTabsExist(String accessToken, String spreadsheetId) async {
+    try {
+      final res = await http.get(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId?fields=sheets.properties.title'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode != 200) return;
+
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final sheets = (body['sheets'] as List?) ?? [];
+      final existingTitles = sheets
+          .map((s) => (s['properties'] as Map<String, dynamic>?)?['title'] as String?)
+          .whereType<String>()
+          .toSet();
+
+      final requiredTabs = SheetSchema.allTabs;
+      final missingTabs = requiredTabs.where((t) => !existingTitles.contains(t)).toList();
+
+      if (missingTabs.isEmpty) return;
+
+      // 1. Add missing sheets via batchUpdate
+      final addSheetRequests = missingTabs
+          .map((title) => {
+                'addSheet': {
+                  'properties': {'title': title},
+                }
+              })
+          .toList();
+
+      final addRes = await http.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'requests': addSheetRequests}),
+      ).timeout(const Duration(seconds: 20));
+
+      if (addRes.statusCode != 200 && addRes.statusCode != 201) return;
+
+      // 2. Initialize headers for newly added sheets
+      final headerData = <Map<String, dynamic>>[];
+      for (final tab in missingTabs) {
+        final headers = SheetSchema.getHeaders(tab);
+        final endCol = SheetSchema.getColLetter(headers.length);
+        headerData.add({
+          'range': '$tab!A1:${endCol}1',
+          'values': [headers],
+        });
+      }
+
+      if (headerData.isNotEmpty) {
+        await http.post(
+          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'valueInputOption': 'USER_ENTERED',
+            'data': headerData,
+          }),
+        ).timeout(const Duration(seconds: 20));
+      }
+    } catch (_) {}
+  }
+
+  /// Ensures a single tab exists with appropriate headers.
+  Future<void> ensureTabExists(String accessToken, String spreadsheetId, String tabName) async {
+    try {
+      final addRes = await http.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'requests': [
+            {
+              'addSheet': {
+                'properties': {'title': tabName},
+              }
+            }
+          ]
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (addRes.statusCode == 200 || addRes.statusCode == 201) {
+        final headers = SheetSchema.getHeaders(tabName);
+        final endCol = SheetSchema.getColLetter(headers.length);
+        await http.put(
+          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$tabName!A1:${endCol}1?valueInputOption=USER_ENTERED'),
+          headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'values': [headers]
+          }),
+        ).timeout(const Duration(seconds: 15));
+      }
+    } catch (_) {}
+  }
+
   /// Reads all records from multiple sheet tabs in a SINGLE batch API request.
   Future<Map<String, List<Map<String, dynamic>>>> readAllTabsBatch(
     String accessToken,
@@ -273,13 +377,26 @@ class GoogleWorkspaceService {
     List<String> tabNames,
   ) async {
     try {
+      // First ensure all required tabs exist
+      await ensureAllTabsExist(accessToken, spreadsheetId);
+
       final queryRanges = tabNames.map((t) => 'ranges=${Uri.encodeComponent('$t!A2:Z')}').join('&');
       final url = Uri.parse(
         'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$queryRanges',
       );
 
       final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) return {};
+      if (res.statusCode != 200) {
+        // Fallback: read tabs individually if batch range fails
+        final fallbackMap = <String, List<Map<String, dynamic>>>{};
+        for (final tab in tabNames) {
+          final records = await readTabRecords(accessToken, spreadsheetId, tab);
+          if (records.isNotEmpty) {
+            fallbackMap[tab] = records;
+          }
+        }
+        return fallbackMap;
+      }
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final valueRanges = (body['valueRanges'] as List?) ?? [];
@@ -310,7 +427,12 @@ class GoogleWorkspaceService {
   Future<List<Map<String, dynamic>>> readTabRecords(String accessToken, String spreadsheetId, String sheetName) async {
     try {
       final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z');
-      final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+      var res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 400 || res.statusCode == 404) {
+        await ensureTabExists(accessToken, spreadsheetId, sheetName);
+        res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+      }
 
       if (res.statusCode != 200) return [];
       final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -335,7 +457,12 @@ class GoogleWorkspaceService {
   Future<void> upsertTabRecord(String accessToken, String spreadsheetId, String sheetName, String id, Map<String, dynamic> record) async {
     // Read existing IDs
     final getUrl = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:A');
-    final res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+    var res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+
+    if (res.statusCode == 400 || res.statusCode == 404) {
+      await ensureTabExists(accessToken, spreadsheetId, sheetName);
+      res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
+    }
 
     int targetRow = 2;
     if (res.statusCode == 200) {
@@ -356,7 +483,7 @@ class GoogleWorkspaceService {
       'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A$targetRow:$endCol$targetRow?valueInputOption=USER_ENTERED',
     );
 
-    await http.put(
+    var putRes = await http.put(
       putUrl,
       headers: {
         'Authorization': 'Bearer $accessToken',
@@ -366,6 +493,20 @@ class GoogleWorkspaceService {
         'values': [rowValues]
       }),
     ).timeout(const Duration(seconds: 20));
+
+    if (putRes.statusCode == 400 || putRes.statusCode == 404) {
+      await ensureTabExists(accessToken, spreadsheetId, sheetName);
+      await http.put(
+        putUrl,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'values': [rowValues]
+        }),
+      ).timeout(const Duration(seconds: 20));
+    }
   }
 
   /// Deletes a record from a sheet tab by ID.
