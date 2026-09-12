@@ -77,7 +77,6 @@ class GoogleSession extends ChangeNotifier {
         notifyListeners();
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
-        isDemoMode = false;
         user = null;
         _inMemoryAccessToken = null;
         authorized = false;
@@ -349,15 +348,7 @@ class GoogleSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool isDemoMode = false;
-
-  void startDemoMode() {
-    isDemoMode = true;
-    notifyListeners();
-  }
-
   Future<void> signOut() async {
-    isDemoMode = false;
     user = null;
     _inMemoryAccessToken = null;
     authorized = false;
