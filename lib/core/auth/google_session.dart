@@ -55,12 +55,13 @@ class GoogleSession extends ChangeNotifier {
   static const _cachedNameKey = 'tpc_cached_user_name';
   static const _cachedPhotoKey = 'tpc_cached_user_photo';
   static const _cachedWorkspaceKey = 'tpc_cached_workspace_global';
+  static const defaultClientId = '110697421185-klclvve50ibedrqjc830doqrenp44hif.apps.googleusercontent.com';
 
   Future<void> initialize() async {
     await syncManager.initialize();
     await _loadCachedSession();
 
-    const client = String.fromEnvironment('GOOGLE_CLIENT_ID');
+    const client = String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: defaultClientId);
     const server = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
     await GoogleSignIn.instance.initialize(
       clientId: client.isEmpty ? null : client,
@@ -206,10 +207,10 @@ class GoogleSession extends ChangeNotifier {
       cachedDisplayName = null;
       cachedPhotoUrl = null;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-    } catch (_) {}
-    try {
-      await clearBrowserStorage();
+      await prefs.remove(_cachedEmailKey);
+      await prefs.remove(_cachedNameKey);
+      await prefs.remove(_cachedPhotoKey);
+      await prefs.remove(_cachedWorkspaceKey);
     } catch (_) {}
   }
 
@@ -273,6 +274,21 @@ class GoogleSession extends ChangeNotifier {
 
   Future<void> refreshWorkspaceDiscovery() async {
     await _loadOrDiscoverWorkspace();
+  }
+
+  Future<void> useOfflineDemo() async {
+    const demoConfig = WorkspaceConfig(
+      companyName: 'The Percentage Company (Local)',
+      spreadsheetId: 'local_demo_workspace',
+      driveFolderId: 'local_demo_folder',
+    );
+    user = null;
+    cachedEmail = 'local@thepercentage.co';
+    cachedDisplayName = 'Local Demo User';
+    isOffline = true;
+    authorized = true;
+    error = null;
+    await setWorkspace(demoConfig);
   }
 
   Future<void> signIn() async {

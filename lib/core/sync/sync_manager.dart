@@ -79,12 +79,20 @@ class SyncManager extends ChangeNotifier {
     await _loadPendingQueue();
   }
 
-  /// Clears in-memory pending queue, error states, and resets sync status.
+  /// Clears in-memory pending queue, error states, remote tab caches, and resets sync status.
   Future<void> clearAll() async {
     _pendingQueue.clear();
     _status = SyncStatus.synced;
     _lastError = null;
     _lastSyncedTime = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_queueKey);
+      final keysToRemove = prefs.getKeys().where((k) => k.startsWith('tpc_tab_cache_')).toList();
+      for (final k in keysToRemove) {
+        await prefs.remove(k);
+      }
+    } catch (_) {}
     notifyListeners();
   }
 

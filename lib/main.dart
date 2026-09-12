@@ -140,15 +140,19 @@ class Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final BillingRepository billingRepo = session.workspace != null
+    final isLocalWorkspace = session.workspace == null ||
+        session.workspace!.spreadsheetId == 'local_demo_workspace' ||
+        session.workspace!.spreadsheetId.isEmpty;
+
+    final BillingRepository billingRepo = !isLocalWorkspace
         ? GoogleDirectBillingRepository(session)
         : LocalRepository();
 
-    final OfficeRepository officeRepo = session.workspace != null
+    final OfficeRepository officeRepo = !isLocalWorkspace
         ? GoogleDirectOfficeRepository(session)
         : LocalOfficeRepository();
 
-    final QuotationRepository quotationRepo = session.workspace != null
+    final QuotationRepository quotationRepo = !isLocalWorkspace
         ? GoogleDirectQuotationRepository(session)
         : LocalQuotationRepository();
 
@@ -343,6 +347,65 @@ class GoogleLogin extends StatelessWidget {
                               fontSize: 12,
                               color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                             ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder,
+                                  thickness: 0.5,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder,
+                                  thickness: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => session.useOfflineDemo(),
+                              icon: const Icon(CupertinoIcons.device_laptop, size: 18),
+                              label: const Text(
+                                'Continue with Local / Offline Storage',
+                                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: isDark ? Colors.white : AppTheme.iosLightTextPrimary,
+                                side: BorderSide(
+                                  color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder,
+                                  width: 0.8,
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Work entirely on this device without cloud sync.',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       )

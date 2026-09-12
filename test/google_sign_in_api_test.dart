@@ -55,5 +55,33 @@ void main() {
     final records = await sync.loadCachedRecords('sheet_123', 'Invoices');
     expect(records.isEmpty, isTrue);
   });
+
+  test('GoogleSession useOfflineDemo activates offline mode with local demo workspace', () async {
+    final session = GoogleSession();
+    await session.useOfflineDemo();
+
+    expect(session.authorized, isTrue);
+    expect(session.isOffline, isTrue);
+    expect(session.workspace, isNotNull);
+    expect(session.workspace!.spreadsheetId, 'local_demo_workspace');
+    expect(session.effectiveEmail, 'local@thepercentage.co');
+    expect(session.effectiveDisplayName, 'Local Demo User');
+  });
+
+  test('GoogleSession signOut strictly preserves local repositories data in SharedPreferences', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('tpc_demo_v1', '{"company":{"name":"My Preserved Co"},"invoices":[]}');
+    await prefs.setString('tpc_quotations_v1', '[{"id":"q1","title":"Web Dev"}]');
+    await prefs.setString('tpc_office_demo_v2', '{"employees":[{"id":"e1","name":"Alex"}]}');
+
+    final session = GoogleSession();
+    await session.useOfflineDemo();
+    await session.signOut();
+
+    // Verify local storage is intact
+    expect(prefs.getString('tpc_demo_v1'), contains('My Preserved Co'));
+    expect(prefs.getString('tpc_quotations_v1'), contains('Web Dev'));
+    expect(prefs.getString('tpc_office_demo_v2'), contains('Alex'));
+  });
 }
 

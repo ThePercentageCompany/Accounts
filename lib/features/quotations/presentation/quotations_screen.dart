@@ -115,6 +115,7 @@ class _QuotationsViewState extends State<QuotationsView> {
     final pdfService = PdfQuotationDocumentService();
     try {
       final bytes = await pdfService.render(quotation);
+      if (!mounted) return;
       final cubit = context.read<QuotationCubit>();
       final link = await cubit.archive(quotation, bytes);
       if (mounted) {
