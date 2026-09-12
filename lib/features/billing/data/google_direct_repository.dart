@@ -87,6 +87,18 @@ class GoogleDirectBillingRepository implements BillingRepository {
   }
 
   @override
+  Future<void> deleteCustomer(String customerId) async {
+    await _sync.deleteCachedRecord(_spreadsheetId, 'Customers', customerId);
+    await _sync.enqueueOperation(
+      spreadsheetId: _spreadsheetId,
+      tabName: 'Customers',
+      recordId: customerId,
+      action: 'delete',
+    );
+    _scheduleBackgroundSync();
+  }
+
+  @override
   Future<void> saveCompany(Company company) async {
     final updated = company.copyWith(version: company.version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
@@ -156,6 +168,22 @@ class GoogleDirectBillingRepository implements BillingRepository {
     );
     _scheduleBackgroundSync();
     return updated;
+  }
+
+  @override
+  Future<void> deleteDraft(String invoiceId) async {
+    final current = await _findInvoice(invoiceId);
+    if (current != null && current.status != 'draft') {
+      throw StateError('Only draft invoices can be deleted.');
+    }
+    await _sync.deleteCachedRecord(_spreadsheetId, 'Invoices', invoiceId);
+    await _sync.enqueueOperation(
+      spreadsheetId: _spreadsheetId,
+      tabName: 'Invoices',
+      recordId: invoiceId,
+      action: 'delete',
+    );
+    _scheduleBackgroundSync();
   }
 
   @override

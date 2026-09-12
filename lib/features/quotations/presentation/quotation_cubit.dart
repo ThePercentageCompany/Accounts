@@ -39,7 +39,6 @@ class QuotationCubit extends Cubit<QuotationState> {
   Future<bool> run(Future<void> Function() action) => _run(action);
 
   Future<bool> _run(Future<void> Function() action) async {
-    if (state.busy) return false;
     emit(state.copyWith(busy: true, error: null));
     try {
       await action();

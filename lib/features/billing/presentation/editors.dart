@@ -78,6 +78,43 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
         ),
       ),
       actions: [
+        if (old != null)
+          TextButton.icon(
+            onPressed: () async {
+              final invoiceCount = cubit.state.data.invoices.where((i) => i.customer.id == old.id).length;
+              final confirm = await showDialog<bool>(
+                context: ctx,
+                builder: (deleteCtx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Delete Customer?'),
+                  content: Text(
+                    invoiceCount > 0
+                        ? 'Customer "${old.name}" has $invoiceCount linked invoice(s). Are you sure you want to delete this customer record from the directory?'
+                        : 'Are you sure you want to permanently delete customer "${old.name}"?',
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(deleteCtx, false), child: const Text('Cancel')),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(deleteCtx, true),
+                      style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                      child: const Text('Delete Customer'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                Navigator.pop(ctx);
+                final ok = await cubit.deleteCustomer(old.id);
+                if (ok && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Customer "${old.name}" deleted.')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
+            label: const Text('Delete', style: TextStyle(color: AppTheme.pastelRose)),
+          ),
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
@@ -93,7 +130,7 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
   );
 
   if (result != null) {
-    final ok = await cubit.run(() => cubit.repository.saveCustomer(result));
+    final ok = await cubit.saveCustomer(result);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cubit.state.error ?? 'Save failed')));
     }
@@ -953,15 +990,56 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             ],
           ),
 
-          // Back Button
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(CupertinoIcons.arrow_left, size: 14),
-            label: const Text('Back'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-            ),
+          // Top Action Buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.invoice != null) ...[
+                TextButton.icon(
+                  onPressed: () async {
+                    final cubit = context.read<BillingCubit>();
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Delete Draft Invoice?'),
+                        content: Text('Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                            child: const Text('Delete Draft'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && mounted) {
+                      setState(() => dirty = false);
+                      final ok = await cubit.deleteDraft(invoice.id);
+                      if (ok && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Draft invoice deleted.')),
+                        );
+                        Navigator.of(context).pop();
+                      }
+                    }
+                  },
+                  icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
+                  label: const Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+              ],
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(CupertinoIcons.arrow_left, size: 14),
+                label: const Text('Back'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

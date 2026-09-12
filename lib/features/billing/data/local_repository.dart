@@ -23,6 +23,10 @@ class LocalRepository implements BillingRepository {
     _data = _data.copyWith(customers:[..._data.customers.where((x)=>x.id != c.id),c.copyWith(version:c.version+1)]);
     await _write();
   }
+  @override Future<void> deleteCustomer(String customerId) async {
+    _data = _data.copyWith(customers: _data.customers.where((x) => x.id != customerId).toList());
+    await _write();
+  }
   @override Future<void> saveCompany(Company c) async { _data = _data.copyWith(company:c.copyWith(version:c.version+1)); await _write(); }
   Future<Invoice> _put(Invoice i) async {
     _data = _data.copyWith(invoices:[..._data.invoices.where((x)=>x.id != i.id),i]); await _write(); return i;
@@ -31,6 +35,14 @@ class LocalRepository implements BillingRepository {
     if (i.status != 'draft') throw StateError('Only drafts can be edited.');
     Totals.of(i);
     return _put(i.copyWith(version:i.version+1));
+  }
+  @override Future<void> deleteDraft(String invoiceId) async {
+    final target = _data.invoices.where((x) => x.id == invoiceId).firstOrNull;
+    if (target != null && target.status != 'draft') {
+      throw StateError('Only draft invoices can be deleted.');
+    }
+    _data = _data.copyWith(invoices: _data.invoices.where((x) => x.id != invoiceId).toList());
+    await _write();
   }
   @override Future<Invoice> issue(Invoice i) async {
     final current = _data.invoices.firstWhere((x)=>x.id == i.id);

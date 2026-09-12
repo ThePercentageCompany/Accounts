@@ -589,11 +589,122 @@ class _InvoicesViewState extends State<InvoicesView> {
                     ),
                 ],
               ),
-              const SizedBox(width: 8),
-              const Icon(
-                CupertinoIcons.chevron_forward,
-                size: 16,
-                color: Colors.grey,
+              const SizedBox(width: 4),
+
+              // Quick Actions Menu
+              PopupMenuButton<String>(
+                icon: const Icon(CupertinoIcons.ellipsis_vertical, size: 16, color: Colors.grey),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onSelected: (action) async {
+                  if (action == 'edit') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => BlocProvider.value(value: cubit, child: InvoiceEditor(invoice: invoice)),
+                      ),
+                    );
+                  } else if (action == 'view') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => BlocProvider.value(value: cubit, child: InvoiceDetail(id: invoice.id)),
+                      ),
+                    );
+                  } else if (action == 'pdf') {
+                    await showPdf(context, invoice);
+                  } else if (action == 'pay') {
+                    await recordPayment(context, invoice);
+                  } else if (action == 'delete') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Delete Draft Invoice?'),
+                        content: Text('Are you sure you want to delete this draft invoice for ${invoice.customer.name}?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                            child: const Text('Delete Draft'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      final ok = await cubit.deleteDraft(invoice.id);
+                      if (context.mounted && ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Draft invoice deleted.')),
+                        );
+                      }
+                    }
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  if (invoice.status == 'draft') ...[
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.pencil, size: 16),
+                          SizedBox(width: 8),
+                          Text('Edit Draft'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.doc_plaintext, size: 16),
+                          SizedBox(width: 8),
+                          Text('Preview PDF'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.trash, size: 16, color: AppTheme.pastelRose),
+                          SizedBox(width: 8),
+                          Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose)),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.eye, size: 16),
+                          SizedBox(width: 8),
+                          Text('View Details'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.doc_plaintext, size: 16),
+                          SizedBox(width: 8),
+                          Text('Print / PDF'),
+                        ],
+                      ),
+                    ),
+                    if (invoice.status == 'issued' && totals.balance > 0)
+                      const PopupMenuItem(
+                        value: 'pay',
+                        child: Row(
+                          children: [
+                            Icon(CupertinoIcons.money_dollar_circle_fill, size: 16, color: AppTheme.pastelMint),
+                            SizedBox(width: 8),
+                            Text('Record Payment'),
+                          ],
+                        ),
+                      ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -829,7 +940,69 @@ class _CustomersViewState extends State<CustomersView> {
             ],
           ],
         ),
-        trailing: const Icon(CupertinoIcons.chevron_forward, size: 16, color: Colors.grey),
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(CupertinoIcons.ellipsis_vertical, size: 16, color: Colors.grey),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          onSelected: (action) async {
+            if (action == 'edit') {
+              editCustomer(context, c);
+            } else if (action == 'delete') {
+              final cubit = context.read<BillingCubit>();
+              final state = cubit.state;
+              final invoiceCount = state.data.invoices.where((i) => i.customer.id == c.id).length;
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Delete Customer?'),
+                  content: Text(
+                    invoiceCount > 0
+                        ? 'Customer "${c.name}" has $invoiceCount linked invoice(s). Are you sure you want to delete this customer record from the directory?'
+                        : 'Are you sure you want to permanently delete customer "${c.name}"?',
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                      child: const Text('Delete Customer'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                final ok = await cubit.deleteCustomer(c.id);
+                if (context.mounted && ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Customer "${c.name}" deleted.')),
+                  );
+                }
+              }
+            }
+          },
+          itemBuilder: (ctx) => [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.pencil, size: 16),
+                  SizedBox(width: 8),
+                  Text('Edit Customer'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.trash, size: 16, color: AppTheme.pastelRose),
+                  SizedBox(width: 8),
+                  Text('Delete Customer', style: TextStyle(color: AppTheme.pastelRose)),
+                ],
+              ),
+            ),
+          ],
+        ),
         onTap: () => editCustomer(context, c),
       ),
     );
@@ -1025,6 +1198,54 @@ class InvoiceDetail extends StatelessWidget {
                         label: Text(invoice.archivedVersion == invoice.version ? 'PDF Archived' : 'Save to Drive'),
                         style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
                       ),
+                      if (invoice.status == 'draft') ...[
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute<void>(
+                                builder: (_) => BlocProvider.value(value: c, child: InvoiceEditor(invoice: invoice)),
+                              ),
+                            );
+                          },
+                          icon: const Icon(CupertinoIcons.pencil, size: 16),
+                          label: const Text('Edit Draft'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.pastelBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Delete Draft Invoice?'),
+                                content: Text('Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                                    child: const Text('Delete Draft'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              final ok = await c.deleteDraft(invoice.id);
+                              if (context.mounted && ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Draft invoice deleted.')),
+                                );
+                                Navigator.of(context).pop();
+                              }
+                            }
+                          },
+                          icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
+                          label: const Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose)),
+                        ),
+                      ],
                       if (invoice.driveUrl.isNotEmpty)
                         TextButton.icon(
                           onPressed: () => launchUrl(Uri.parse(invoice.driveUrl), mode: LaunchMode.externalApplication),

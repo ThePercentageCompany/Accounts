@@ -344,6 +344,39 @@ class _QuotationEditorState extends State<QuotationEditor> {
     }
   }
 
+  Future<void> _deleteQuotation() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Quotation?'),
+        content: Text('Are you sure you want to permanently delete quotation ${_number.isNotEmpty ? _number : "(Draft)"}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.pastelRose,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      setState(() => _dirty = false);
+      final ok = await context.read<QuotationCubit>().delete(_id);
+      if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation deleted.')),
+        );
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -625,15 +658,28 @@ class _QuotationEditorState extends State<QuotationEditor> {
             ],
           ),
 
-          // Back Button
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(CupertinoIcons.arrow_left, size: 14),
-            label: const Text('Back'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-            ),
+          // Top Action Buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.quotation != null) ...[
+                TextButton.icon(
+                  onPressed: _deleteQuotation,
+                  icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
+                  label: const Text('Delete Quotation', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+              ],
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(CupertinoIcons.arrow_left, size: 14),
+                label: const Text('Back'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
