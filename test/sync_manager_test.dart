@@ -243,7 +243,7 @@ void main() {
       expect(row[12], 'Thank you for choosing The Percentage Company.');
       expect(row[13], 5);
 
-      // Reconstructed with JSON payload
+      // Reconstructed directly from dedicated scalar columns
       final reconstructed = SheetSchema.rowToRecord('Settings', row);
       expect(reconstructed['id'], 'company');
       final val = reconstructed['value'] as Map<String, dynamic>;
@@ -251,9 +251,9 @@ void main() {
       expect(val['trn'], '100456789000003');
       expect(val['iban'], 'AE0702600001012345678901');
 
-      // Reconstructed without JSON payload (e.g. row created/edited manually in Google Sheets)
-      final rowWithoutJson = row.sublist(0, 14);
-      final reconstructedFromCols = SheetSchema.rowToRecord('Settings', rowWithoutJson);
+      // Reconstructed from partial column row (e.g. row created/edited manually in Google Sheets)
+      final rowPartial = row.sublist(0, 14);
+      final reconstructedFromCols = SheetSchema.rowToRecord('Settings', rowPartial);
       expect(reconstructedFromCols['id'], 'company');
       final valFromCols = reconstructedFromCols['value'] as Map<String, dynamic>;
       expect(valFromCols['name'], 'The Percentage Company FZ LLC');
