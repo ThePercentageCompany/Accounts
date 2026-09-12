@@ -235,6 +235,15 @@ class GoogleWorkspaceService {
       ]);
     } catch (_) {}
 
+    // STEP 3.5: Migrate and sync all existing offline/local data to the new cloud spreadsheet
+    onProgress?.call('Migrating and synchronizing offline local data to Google Sheets...');
+    try {
+      await SyncManager.instance.migrateAndSyncLocalDataToCloud(
+        spreadsheetId: spreadsheetId,
+        token: accessToken,
+      );
+    } catch (_) {}
+
     // STEP 4: Share View Access with Master Admin Account
     if (masterEmail.isNotEmpty && masterEmail.contains('@')) {
       onProgress?.call('Sharing view-only access with master admin ($masterEmail)...');
@@ -510,7 +519,7 @@ class GoogleWorkspaceService {
 
     if (putRes.statusCode == 400 || putRes.statusCode == 404) {
       await ensureTabExists(accessToken, spreadsheetId, sheetName);
-      await http.put(
+      putRes = await http.put(
         putUrl,
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -521,6 +530,10 @@ class GoogleWorkspaceService {
         }),
       ).timeout(const Duration(seconds: 20));
     }
+
+    if (putRes.statusCode != 200 && putRes.statusCode != 201) {
+      throw StateError('Failed to upsert tab record (${putRes.statusCode}): ${putRes.body}');
+    }
   }
 
   /// Deletes a record from a sheet tab by ID.
@@ -530,20 +543,27 @@ class GoogleWorkspaceService {
     final updated = existing.where((x) => x['id']?.toString() != id).toList();
 
     // Clear range
-    await http.post(
+    final clearRes = await http.post(
       Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z:clear'),
       headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
     ).timeout(const Duration(seconds: 15));
+
+    if (clearRes.statusCode != 200 && clearRes.statusCode != 204) {
+      throw StateError('Failed to clear tab range (${clearRes.statusCode})');
+    }
 
     if (updated.isNotEmpty) {
       final rows = updated.map((r) => SheetSchema.recordToRow(sheetName, r)).toList();
       final maxCols = rows.map((r) => r.length).fold(1, (a, b) => a > b ? a : b);
       final endCol = SheetSchema.getColLetter(maxCols);
-      await http.put(
+      final putRes = await http.put(
         Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:$endCol${rows.length + 1}?valueInputOption=USER_ENTERED'),
         headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
         body: jsonEncode({'values': rows}),
       ).timeout(const Duration(seconds: 20));
+      if (putRes.statusCode != 200 && putRes.statusCode != 201) {
+        throw StateError('Failed to rewrite tab records (${putRes.statusCode})');
+      }
     }
   }
 

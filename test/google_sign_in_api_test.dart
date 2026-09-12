@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/auth/google_session.dart';
 import 'package:tpc_invoice/core/auth/google_workspace_service.dart';
+import 'package:tpc_invoice/core/sync/sync_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +83,36 @@ void main() {
     expect(prefs.getString('tpc_demo_v1'), contains('My Preserved Co'));
     expect(prefs.getString('tpc_quotations_v1'), contains('Web Dev'));
     expect(prefs.getString('tpc_office_demo_v2'), contains('Alex'));
+  });
+
+  test('SyncManager migrateAndSyncLocalDataToCloud migrates all local data into pending cloud sync queue', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('tpc_demo_v1', '{"company":{"name":"TPC Middle East"},"customers":[{"id":"c1","name":"Acme Corp"}],"invoices":[{"id":"inv_10","number":"INV-010"}]}');
+    await prefs.setString('tpc_quotations_v1', '[{"id":"q1","number":"QT-001"}]');
+    await prefs.setString('tpc_office_demo_v2', '{"employees":[{"id":"e1","name":"Sarah"}],"shareholders":[{"id":"sh1","name":"Founder"}],"entries":[{"id":"f1","description":"Server hosting"}]}');
+
+    final sync = SyncManager.instance;
+    await sync.initialize();
+    await sync.migrateAndSyncLocalDataToCloud(
+      spreadsheetId: 'sheet_cloud_456',
+      token: 'mock_token',
+    );
+
+    // Verify all tabs were cached and enqueued
+    final customers = await sync.loadCachedRecords('sheet_cloud_456', 'Customers');
+    final invoices = await sync.loadCachedRecords('sheet_cloud_456', 'Invoices');
+    final quotes = await sync.loadCachedRecords('sheet_cloud_456', 'Quotations');
+    final employees = await sync.loadCachedRecords('sheet_cloud_456', 'Employees');
+    final shareholders = await sync.loadCachedRecords('sheet_cloud_456', 'Shareholders');
+    final finance = await sync.loadCachedRecords('sheet_cloud_456', 'Finance');
+
+    expect(customers.any((c) => c['id'] == 'c1'), isTrue);
+    expect(invoices.any((i) => i['id'] == 'inv_10'), isTrue);
+    expect(quotes.any((q) => q['id'] == 'q1'), isTrue);
+    expect(employees.any((e) => e['id'] == 'e1'), isTrue);
+    expect(shareholders.any((s) => s['id'] == 'sh1'), isTrue);
+    expect(finance.any((f) => f['id'] == 'f1'), isTrue);
+    expect(sync.pendingQueue.isNotEmpty, isTrue);
   });
 }
 

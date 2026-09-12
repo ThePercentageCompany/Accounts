@@ -235,8 +235,10 @@ class GoogleSession extends ChangeNotifier {
         if (discovered != null) {
           await setWorkspace(discovered);
           isOffline = false;
-          // Trigger sync of pending queue
-          await syncManager.syncPendingChanges(token: tokenStr, spreadsheetId: discovered.spreadsheetId);
+          await syncManager.migrateAndSyncLocalDataToCloud(
+            token: tokenStr,
+            spreadsheetId: discovered.spreadsheetId,
+          );
         } else {
           workspace = null;
         }
@@ -261,6 +263,20 @@ class GoogleSession extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_cachedWorkspaceKey, jsonEncode(config.toJson()));
     notifyListeners();
+
+    // If connected to a real cloud workspace, automatically migrate any local offline data and sync
+    if (config.spreadsheetId.isNotEmpty && config.spreadsheetId != 'local_demo_workspace') {
+      try {
+        final tok = await tryGetToken();
+        if (tok != null) {
+          isOffline = false;
+          await syncManager.migrateAndSyncLocalDataToCloud(
+            spreadsheetId: config.spreadsheetId,
+            token: tok,
+          );
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> clearWorkspace() async {
@@ -412,11 +428,11 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
-    if (workspace == null) return;
+    if (workspace == null || workspace!.spreadsheetId.isEmpty || workspace!.spreadsheetId == 'local_demo_workspace') return;
     final tok = await tryGetToken();
     if (tok != null) {
       isOffline = false;
-      await syncManager.syncPendingChanges(token: tok, spreadsheetId: workspace!.spreadsheetId);
+      await syncManager.triggerBackgroundSync(token: tok, spreadsheetId: workspace!.spreadsheetId);
     } else {
       isOffline = true;
       syncManager.markOffline();
