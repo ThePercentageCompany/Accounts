@@ -8,8 +8,7 @@ import 'core/auth/sign_in_button.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/brand_logo.dart';
 import 'core/widgets/responsive_shell.dart';
-import 'features/billing/data/google_direct_repository.dart';
-import 'features/billing/data/local_repository.dart';
+import 'features/billing/data/hybrid_billing_repository.dart';
 import 'features/billing/data/invoice_pdf.dart';
 import 'features/billing/domain/billing_repository.dart';
 import 'features/billing/domain/invoice_document_service.dart';
@@ -18,8 +17,7 @@ import 'features/billing/presentation/billing_cubit.dart';
 import 'features/billing/presentation/dashboard_view.dart';
 import 'features/billing/presentation/screens.dart';
 import 'features/billing/presentation/editors.dart';
-import 'features/office/data/google_direct_office_repository.dart';
-import 'features/office/data/local_office_repository.dart';
+import 'features/office/data/hybrid_office_repository.dart';
 import 'features/office/data/pdf_office_documents.dart';
 import 'features/office/domain/office_documents.dart';
 import 'features/office/domain/office_repository.dart';
@@ -29,8 +27,7 @@ import 'features/office/presentation/capital_equity_screen.dart';
 import 'features/office/presentation/assets_screen.dart';
 import 'features/office/presentation/balance_sheet_screen.dart';
 import 'features/reports/presentation/reports_hub_screen.dart';
-import 'features/quotations/data/google_direct_quotation_repository.dart';
-import 'features/quotations/data/local_quotation_repository.dart';
+import 'features/quotations/data/hybrid_quotation_repository.dart';
 import 'features/quotations/data/quotation_pdf.dart';
 import 'features/quotations/domain/quotation_document_service.dart';
 import 'features/quotations/domain/quotation_repository.dart';
@@ -140,21 +137,11 @@ class Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLocalWorkspace = session.workspace == null ||
-        session.workspace!.spreadsheetId == 'local_demo_workspace' ||
-        session.workspace!.spreadsheetId.isEmpty;
-
-    final BillingRepository billingRepo = !isLocalWorkspace
-        ? GoogleDirectBillingRepository(session)
-        : LocalRepository();
-
-    final OfficeRepository officeRepo = !isLocalWorkspace
-        ? GoogleDirectOfficeRepository(session)
-        : LocalOfficeRepository();
-
-    final QuotationRepository quotationRepo = !isLocalWorkspace
-        ? GoogleDirectQuotationRepository(session)
-        : LocalQuotationRepository();
+    // Unified hybrid repositories: offline-first local storage + automatic
+    // background cloud sync — no mode switching needed.
+    final BillingRepository billingRepo = HybridBillingRepository(session);
+    final OfficeRepository officeRepo = HybridOfficeRepository(session);
+    final QuotationRepository quotationRepo = HybridQuotationRepository(session);
 
     return MultiBlocProvider(
       providers: [
