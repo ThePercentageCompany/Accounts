@@ -72,7 +72,7 @@ function officeDispatch_(action,d,actor) {
       requireValue_(p.status==='approved','Approve payroll first');p.paidDate=dateField_(d.paidDate);p.account=accountField_(d.account);p.reference=textField_(d.reference||'',200);p.status='paid';p.version++;return put_('Payroll',p.id,p);
     }
     requireValue_(p.status!=='draft','Approve payroll before archive');
-    const file=archiveBlob_(d.pdf,'Payslip-'+p.employee.code+'-'+p.month+'-v'+p.version+'.pdf','application/pdf');
+    const file=archiveBlob_(d.pdf,'Payslip-'+p.employee.code+'-'+p.month+'-v'+p.version+'.pdf','application/pdf','Payroll');
     p.driveUrl=file.getUrl();p.archivedVersion=p.version;put_('Payroll',p.id,p);return {url:p.driveUrl};
   }
   if(action==='financeSave'){
@@ -100,17 +100,18 @@ function officeDispatch_(action,d,actor) {
     checkVersion_(parent,d.version);requireValue_(parent.documents.length<20,'Maximum 20 documents per record');
     const ext=String(d.extension).toLowerCase();requireValue_(['pdf','png','jpg','jpeg'].includes(ext),'Use PDF, PNG or JPEG');
     const name=textField_(d.name,150,true);
-    const file=archiveBlob_(d.bytes,d.table+'-'+parent.id+'-'+documentId+'.'+ext,ext==='pdf'?'application/pdf':ext==='png'?'image/png':'image/jpeg');
+    const subfolder=d.table==='Employees'?'Payroll':'Assets';
+    const file=archiveBlob_(d.bytes,d.table+'-'+parent.id+'-'+documentId+'.'+ext,ext==='pdf'?'application/pdf':ext==='png'?'image/png':'image/jpeg',subfolder);
     const doc={id:documentId,name,url:file.getUrl()};parent.documents.push(doc);parent.version++;put_(d.table,parent.id,parent);return doc;
   }
   if(action==='reportArchive'){
     monthField_(d.month);validId_(d.requestId);
-    return {url:archiveBlob_(d.pdf,'Finance-'+d.month+'-'+d.requestId+'.pdf','application/pdf').getUrl()};
+    return {url:archiveBlob_(d.pdf,'Finance-'+d.month+'-'+d.requestId+'.pdf','application/pdf','Reports').getUrl()};
   }
   throw new Error('Unknown office action');
 }
 function accountField_(value){requireValue_(['Bank','Cash'].includes(value),'Select Bank or Cash');return value;}
-function archiveBlob_(encoded,name,mime){
+function archiveBlob_(encoded,name,mime,subfolderName){
   authorize_();
   requireValue_(typeof encoded==='string'&&encoded.length<7000000,'File exceeds 5 MB');
   const bytes=Utilities.base64Decode(encoded);
@@ -119,6 +120,7 @@ function archiveBlob_(encoded,name,mime){
   if(mime==='application/pdf')requireValue_(u(0)===37&&u(1)===80&&u(2)===68&&u(3)===70&&u(4)===45,'Invalid PDF');
   if(mime==='image/png')requireValue_(u(0)===137&&u(1)===80&&u(2)===78&&u(3)===71,'Invalid PNG');
   if(mime==='image/jpeg')requireValue_(u(0)===255&&u(1)===216,'Invalid JPEG');
-  const folder=DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID'));
+  const rootFolder=DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID'));
+  const folder=(subfolderName && rootFolder.getFoldersByName) ? (rootFolder.getFoldersByName(subfolderName).hasNext() ? rootFolder.getFoldersByName(subfolderName).next() : (rootFolder.createFolder ? rootFolder.createFolder(subfolderName) : rootFolder)) : rootFolder;
   const matches=folder.getFilesByName(name);return matches.hasNext()?matches.next():folder.createFile(Utilities.newBlob(bytes,mime,name));
 }

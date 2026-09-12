@@ -1,10 +1,13 @@
+import 'dart:typed_data';
 import '../../../core/auth/google_session.dart';
+import '../../../core/auth/google_workspace_service.dart';
 import '../../../core/sync/sync_manager.dart';
 import '../domain/quotation.dart';
 import '../domain/quotation_repository.dart';
 
 class GoogleDirectQuotationRepository implements QuotationRepository {
   final GoogleSession session;
+  final GoogleWorkspaceService _service = GoogleWorkspaceService();
   final SyncManager _sync = SyncManager.instance;
 
   GoogleDirectQuotationRepository(this.session);
@@ -19,6 +22,8 @@ class GoogleDirectQuotationRepository implements QuotationRepository {
     }
     return id;
   }
+
+  String get _driveFolderId => session.workspace?.driveFolderId ?? '';
 
   void _scheduleBackgroundSync() {
     Future.microtask(() async {
@@ -118,5 +123,24 @@ class GoogleDirectQuotationRepository implements QuotationRepository {
       action: 'delete',
     );
     _scheduleBackgroundSync();
+  }
+
+  @override
+  Future<String> archive(Quotation quotation, Uint8List bytes) async {
+    final token = await session.tryGetToken();
+    if (token == null) {
+      return '';
+    }
+    final fileName = '${quotation.number.isNotEmpty ? quotation.number : quotation.id}.pdf';
+    final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes, subfolder: 'Quotations');
+
+    if (link.isNotEmpty) {
+      final updated = quotation.copyWith(driveUrl: link);
+      await _sync.upsertCachedRecord(_spreadsheetId, 'Quotations', updated.id, updated.toJson());
+      try {
+        await _service.upsertTabRecord(token, _spreadsheetId, 'Quotations', updated.id, updated.toJson());
+      } catch (_) {}
+    }
+    return link;
   }
 }

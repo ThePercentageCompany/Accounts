@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../billing/domain/models.dart';
 import '../../billing/presentation/billing_cubit.dart';
@@ -35,6 +36,8 @@ class QuotationCubit extends Cubit<QuotationState> {
 
   Future<void> refresh() => _run(() async {});
 
+  Future<bool> run(Future<void> Function() action) => _run(action);
+
   Future<bool> _run(Future<void> Function() action) async {
     if (state.busy) return false;
     emit(state.copyWith(busy: true, error: null));
@@ -61,6 +64,18 @@ class QuotationCubit extends Cubit<QuotationState> {
       result = await repository.issue(quotation);
     });
     return ok ? result : null;
+  }
+
+  Future<String> archive(Quotation quotation, Uint8List bytes) async {
+    try {
+      final link = await repository.archive(quotation, bytes);
+      final data = await repository.load();
+      emit(QuotationState(quotations: data));
+      return link;
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+      return '';
+    }
   }
 
   Future<bool> updateStatus(String id, String status) async {

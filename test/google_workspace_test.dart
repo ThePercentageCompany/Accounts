@@ -54,6 +54,45 @@ void main() {
     expect(loaded, isNull);
   });
 
+  test('GoogleWorkspaceService standardSubfolders contains 5 core directories', () {
+    expect(
+      GoogleWorkspaceService.standardSubfolders,
+      equals(['Invoices', 'Quotations', 'Payroll', 'Assets', 'Reports']),
+    );
+  });
+
+  test('GoogleWorkspaceService detectSubfolder routes files accurately', () {
+    // Invoices
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'INV-2026-000001.pdf'), equals('Invoices'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'invoice_tax.pdf'), equals('Invoices'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'payment_receipt_REC12.pdf'), equals('Invoices'));
+
+    // Quotations
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'QT-TPC-2026-000001.pdf'), equals('Quotations'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'QTN-2026-000005.pdf'), equals('Quotations'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'quotation_draft.pdf'), equals('Quotations'));
+
+    // Payroll
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'Payslip_EMP001_2026-09.pdf'), equals('Payroll'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'payroll_summary.pdf'), equals('Payroll'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'attendance_report.pdf'), equals('Payroll'));
+
+    // Reports
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'Financial_Report_2026-09.pdf'), equals('Reports'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'Finance-2026-09.pdf'), equals('Reports'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'pnl_statement.pdf'), equals('Reports'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'balance_sheet_2026.pdf'), equals('Reports'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'vat_return_q3.pdf'), equals('Reports'));
+
+    // Assets
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'company_logo.png', mimeType: 'image/png'), equals('Assets'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'asset_photo.jpg', mimeType: 'image/jpeg'), equals('Assets'));
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'shareholder_agreement.pdf'), equals('Assets'));
+
+    // Explicit category override
+    expect(GoogleWorkspaceService.detectSubfolder(fileName: 'custom.pdf', category: 'Quotations'), equals('Quotations'));
+  });
+
   test('GoogleDirect repositories report isDemo as false', () {
     final session = GoogleSession();
     final billingRepo = GoogleDirectBillingRepository(session);

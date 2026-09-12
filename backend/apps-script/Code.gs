@@ -116,7 +116,8 @@ function dispatch_(action,d,actor) {
     requireValue_(typeof d.pdf==='string' && d.pdf.length<7000000,'PDF exceeds 5 MB');
     const bytes=Utilities.base64Decode(d.pdf);
     requireValue_(bytes.length>5 && bytes[0]===37 && bytes[1]===80 && bytes[2]===68 && bytes[3]===70 && bytes[4]===45,'Invalid PDF');
-    const folder=DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID'));
+    const rootFolder=DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID'));
+    const folder=rootFolder.getFoldersByName ? (rootFolder.getFoldersByName('Invoices').hasNext() ? rootFolder.getFoldersByName('Invoices').next() : (rootFolder.createFolder ? rootFolder.createFolder('Invoices') : rootFolder)) : rootFolder;
     if(d.paymentId) requireValue_(i.payments.some(p=>p.id===d.paymentId),'Payment not found');
     const name=i.number+(d.paymentId?'-receipt-'+validId_(d.paymentId):'')+'-v'+i.version+'.pdf';
     const matches=folder.getFilesByName(name);

@@ -46,6 +46,16 @@ class WorkspaceConfig {
 class GoogleWorkspaceService {
   static const _prefsKeyPrefix = 'tpc_workspace_';
 
+  static const List<String> standardSubfolders = [
+    'Invoices',
+    'Quotations',
+    'Payroll',
+    'Assets',
+    'Reports',
+  ];
+
+  static final Map<String, Map<String, String>> _subfolderCache = {};
+
   static Future<WorkspaceConfig?> loadSavedWorkspace(String email) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('$_prefsKeyPrefix$email');
@@ -158,6 +168,10 @@ class GoogleWorkspaceService {
     }
     final folderData = jsonDecode(folderRes.body) as Map<String, dynamic>;
     final folderId = folderData['id'] as String;
+
+    // STEP 1.5: Create Standard Structured Subfolders in Drive
+    onProgress?.call('Creating structured Drive folders (Invoices, Quotations, Payroll, Assets, Reports)...');
+    await ensureFolderStructure(accessToken, folderId);
 
     // STEP 2: Create Spreadsheet with all tabs defined in SheetSchema
     onProgress?.call('Creating private Google Spreadsheet database...');
@@ -533,19 +547,172 @@ class GoogleWorkspaceService {
     }
   }
 
-  /// Uploads a PDF to the user's Drive folder and returns its web link.
-  Future<String> uploadPdfFile(String accessToken, String folderId, String fileName, Uint8List bytes) async {
+  /// Ensures the standard 5-folder subfolder hierarchy exists within the root Drive folder.
+  /// Standard subfolders: Invoices, Quotations, Payroll, Assets, Reports.
+  Future<Map<String, String>> ensureFolderStructure(String accessToken, String rootFolderId) async {
+    if (rootFolderId.isEmpty) return {};
+    final cached = _subfolderCache[rootFolderId];
+    if (cached != null && standardSubfolders.every((f) => cached.containsKey(f))) {
+      return cached;
+    }
+
+    final folderMap = Map<String, String>.from(cached ?? {});
     try {
+      // 1. Query existing child folders
+      final query = Uri.encodeComponent(
+        "'$rootFolderId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      );
+      final listRes = await http.get(
+        Uri.parse('https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name)&pageSize=50'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ).timeout(const Duration(seconds: 15));
+
+      if (listRes.statusCode == 200) {
+        final body = jsonDecode(listRes.body) as Map<String, dynamic>;
+        final files = (body['files'] as List?) ?? [];
+        for (final f in files) {
+          if (f is Map) {
+            final name = f['name'] as String?;
+            final id = f['id'] as String?;
+            if (name != null && id != null) {
+              folderMap[name] = id;
+            }
+          }
+        }
+      }
+
+      // 2. Create any missing standard subfolders
+      for (final subfolderName in standardSubfolders) {
+        if (!folderMap.containsKey(subfolderName)) {
+          final createRes = await http.post(
+            Uri.parse('https://www.googleapis.com/drive/v3/files'),
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'name': subfolderName,
+              'mimeType': 'application/vnd.google-apps.folder',
+              'parents': [rootFolderId],
+            }),
+          ).timeout(const Duration(seconds: 15));
+
+          if (createRes.statusCode == 200 || createRes.statusCode == 201) {
+            final data = jsonDecode(createRes.body) as Map<String, dynamic>;
+            folderMap[subfolderName] = data['id'] as String;
+          }
+        }
+      }
+
+      _subfolderCache[rootFolderId] = folderMap;
+    } catch (_) {}
+
+    return folderMap;
+  }
+
+  /// Gets the folder ID for a given subfolder name, creating it if it doesn't exist.
+  Future<String> getSubfolderId(String accessToken, String rootFolderId, String subfolderName) async {
+    if (rootFolderId.isEmpty) return '';
+    final cached = _subfolderCache[rootFolderId]?[subfolderName];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    final structure = await ensureFolderStructure(accessToken, rootFolderId);
+    return structure[subfolderName] ?? rootFolderId;
+  }
+
+  /// Automatically detects the appropriate subfolder based on file name, MIME type, or category.
+  static String detectSubfolder({String? fileName, String? mimeType, String? category}) {
+    if (category != null && standardSubfolders.contains(category)) {
+      return category;
+    }
+
+    final lowerName = (fileName ?? '').toLowerCase();
+    final lowerMime = (mimeType ?? '').toLowerCase();
+
+    // 1. Invoices & Receipts
+    if (lowerName.startsWith('inv-') ||
+        lowerName.contains('invoice') ||
+        lowerName.contains('receipt') ||
+        lowerName.contains('tax_invoice') ||
+        lowerName.contains('bill_payment')) {
+      return 'Invoices';
+    }
+
+    // 2. Quotations
+    if (lowerName.startsWith('qt-') ||
+        lowerName.startsWith('qtn-') ||
+        lowerName.contains('quotation') ||
+        lowerName.contains('quote') ||
+        lowerName.contains('estimate') ||
+        lowerName.contains('proposal')) {
+      return 'Quotations';
+    }
+
+    // 3. Payroll & Attendance & HR
+    if (lowerName.contains('payslip') ||
+        lowerName.contains('payroll') ||
+        lowerName.contains('salary') ||
+        lowerName.contains('attendance') ||
+        lowerName.contains('wps') ||
+        lowerName.contains('employee') ||
+        lowerName.contains('timesheet')) {
+      return 'Payroll';
+    }
+
+    // 4. Financial & Audit Reports
+    if (lowerName.contains('finance-') ||
+        lowerName.contains('report') ||
+        lowerName.contains('pnl') ||
+        lowerName.contains('profit_loss') ||
+        lowerName.contains('balance_sheet') ||
+        lowerName.contains('vat_return') ||
+        lowerName.contains('statement') ||
+        lowerName.contains('audit') ||
+        lowerName.contains('trial_balance')) {
+      return 'Reports';
+    }
+
+    // 5. Assets, Logos & Branding
+    if (lowerMime.startsWith('image/') ||
+        lowerName.contains('logo') ||
+        lowerName.contains('asset') ||
+        lowerName.contains('brand') ||
+        lowerName.contains('shareholder') ||
+        lowerName.contains('agreement') ||
+        lowerName.contains('contract') ||
+        lowerName.contains('passport') ||
+        lowerName.contains('emirates_id') ||
+        lowerName.contains('visa')) {
+      return 'Assets';
+    }
+
+    return 'Assets';
+  }
+
+  /// Uploads any file or document directly into the structured Google Drive folder hierarchy.
+  Future<String> uploadDriveFile(
+    String accessToken,
+    String rootFolderId,
+    String fileName,
+    Uint8List bytes, {
+    String mimeType = 'application/octet-stream',
+    String? subfolder,
+  }) async {
+    try {
+      final targetSubfolder = subfolder ?? detectSubfolder(fileName: fileName, mimeType: mimeType);
+      final targetFolderId = await getSubfolderId(accessToken, rootFolderId, targetSubfolder);
+      final folderId = targetFolderId.isNotEmpty ? targetFolderId : rootFolderId;
+
       const boundary = 'tpc_drive_boundary_xyz';
       final metadata = jsonEncode({
         'name': fileName,
         'parents': folderId.isNotEmpty ? [folderId] : [],
-        'mimeType': 'application/pdf',
+        'mimeType': mimeType,
       });
 
       final body = <int>[];
       body.addAll(utf8.encode('--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata\r\n'));
-      body.addAll(utf8.encode('--$boundary\r\nContent-Type: application/pdf\r\n\r\n'));
+      body.addAll(utf8.encode('--$boundary\r\nContent-Type: $mimeType\r\n\r\n'));
       body.addAll(bytes);
       body.addAll(utf8.encode('\r\n--$boundary--\r\n'));
 
@@ -556,7 +723,7 @@ class GoogleWorkspaceService {
           'Content-Type': 'multipart/related; boundary=$boundary',
         },
         body: Uint8List.fromList(body),
-      ).timeout(const Duration(seconds: 35));
+      ).timeout(const Duration(seconds: 40));
 
       if (uploadRes.statusCode == 200 || uploadRes.statusCode == 201) {
         final data = jsonDecode(uploadRes.body) as Map<String, dynamic>;
@@ -564,5 +731,42 @@ class GoogleWorkspaceService {
       }
     } catch (_) {}
     return '';
+  }
+
+  /// Uploads a PDF to the user's structured Drive folder and returns its web link.
+  Future<String> uploadPdfFile(
+    String accessToken,
+    String folderId,
+    String fileName,
+    Uint8List bytes, {
+    String? subfolder,
+  }) async {
+    return uploadDriveFile(
+      accessToken,
+      folderId,
+      fileName,
+      bytes,
+      mimeType: 'application/pdf',
+      subfolder: subfolder ?? detectSubfolder(fileName: fileName, mimeType: 'application/pdf'),
+    );
+  }
+
+  /// Uploads an image (PNG/JPG) asset to the user's structured Assets Drive folder.
+  Future<String> uploadImageFile(
+    String accessToken,
+    String folderId,
+    String fileName,
+    Uint8List bytes, {
+    String mimeType = 'image/png',
+    String? subfolder = 'Assets',
+  }) async {
+    return uploadDriveFile(
+      accessToken,
+      folderId,
+      fileName,
+      bytes,
+      mimeType: mimeType,
+      subfolder: subfolder ?? 'Assets',
+    );
   }
 }

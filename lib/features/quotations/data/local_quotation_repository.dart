@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/quotation.dart';
 import '../domain/quotation_repository.dart';
@@ -99,4 +100,8 @@ class LocalQuotationRepository implements QuotationRepository {
     _quotations.removeWhere((x) => x.id == quotationId);
     await _write();
   }
+
+  @override
+  Future<String> archive(Quotation quotation, Uint8List bytes) async =>
+      throw StateError('Drive archive is available in connected mode.');
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../sync/sync_manager.dart';
 import '../utils/browser_storage_cleaner.dart';
@@ -11,12 +12,14 @@ const googleScopes = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
 class GoogleSession extends ChangeNotifier {
   GoogleSignInAccount? user;
   String? cachedEmail;
   String? cachedDisplayName;
+  String? cachedPhotoUrl;
   String? _inMemoryAccessToken;
   bool authorized = false;
   bool isAuthorizing = false;
@@ -29,10 +32,28 @@ class GoogleSession extends ChangeNotifier {
   final SyncManager syncManager = SyncManager.instance;
 
   String get effectiveEmail => user?.email ?? cachedEmail ?? 'Offline User';
-  String get effectiveDisplayName => user?.displayName ?? cachedDisplayName ?? effectiveEmail;
+
+  String get effectiveDisplayName {
+    final direct = user?.displayName?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final cached = cachedDisplayName?.trim();
+    if (cached != null && cached.isNotEmpty) return cached;
+    if (effectiveEmail.isNotEmpty && effectiveEmail != 'Offline User') {
+      final prefix = effectiveEmail.split('@').first;
+      final parts = prefix.split(RegExp(r'[._-]')).where((p) => p.isNotEmpty);
+      if (parts.isNotEmpty) {
+        return parts.map((p) => p[0].toUpperCase() + (p.length > 1 ? p.substring(1) : '')).join(' ');
+      }
+      return prefix;
+    }
+    return workspace?.companyName ?? 'Account Owner';
+  }
+
+  String? get effectivePhotoUrl => user?.photoUrl ?? cachedPhotoUrl;
 
   static const _cachedEmailKey = 'tpc_cached_user_email';
   static const _cachedNameKey = 'tpc_cached_user_name';
+  static const _cachedPhotoKey = 'tpc_cached_user_photo';
   static const _cachedWorkspaceKey = 'tpc_cached_workspace_global';
 
   Future<void> initialize() async {
@@ -51,12 +72,13 @@ class GoogleSession extends ChangeNotifier {
         user = event.user;
         error = null;
         isOffline = false;
-        await _saveUserToCache(user!.email, user!.displayName ?? '');
+        await _saveUserToCache(user!.email, user!.displayName ?? '', photoUrl: user!.photoUrl);
         try {
           final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
           if (auth != null && auth.accessToken.isNotEmpty) {
             _inMemoryAccessToken = auth.accessToken;
             authorized = true;
+            _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
             await _loadOrDiscoverWorkspace();
           } else {
             // Attempt auto authorization of scopes
@@ -65,6 +87,7 @@ class GoogleSession extends ChangeNotifier {
               if (authNew.accessToken.isNotEmpty) {
                 _inMemoryAccessToken = authNew.accessToken;
                 authorized = true;
+                _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
                 await _loadOrDiscoverWorkspace();
               }
             } catch (_) {
@@ -104,6 +127,7 @@ class GoogleSession extends ChangeNotifier {
         if (auth != null && auth.accessToken.isNotEmpty) {
           _inMemoryAccessToken = auth.accessToken;
           authorized = true;
+          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
           await _loadOrDiscoverWorkspace();
         }
       }
@@ -118,11 +142,38 @@ class GoogleSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _fetchUserProfileIfAvailable(String accessToken) async {
+    try {
+      final res = await http.get(
+        Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final name = (data['name'] as String?)?.trim();
+        final picture = (data['picture'] as String?)?.trim();
+        if (name != null && name.isNotEmpty) {
+          cachedDisplayName = name;
+        }
+        if (picture != null && picture.isNotEmpty) {
+          cachedPhotoUrl = picture;
+        }
+        await _saveUserToCache(
+          user?.email ?? cachedEmail ?? (data['email'] as String? ?? ''),
+          cachedDisplayName ?? '',
+          photoUrl: cachedPhotoUrl,
+        );
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadCachedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       cachedEmail = prefs.getString(_cachedEmailKey);
       cachedDisplayName = prefs.getString(_cachedNameKey);
+      cachedPhotoUrl = prefs.getString(_cachedPhotoKey);
 
       final wsRaw = prefs.getString(_cachedWorkspaceKey);
       if (wsRaw != null && wsRaw.isNotEmpty) {
@@ -133,13 +184,19 @@ class GoogleSession extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _saveUserToCache(String email, String name) async {
+  Future<void> _saveUserToCache(String email, String name, {String? photoUrl}) async {
     try {
       cachedEmail = email;
       cachedDisplayName = name;
+      if (photoUrl != null && photoUrl.isNotEmpty) {
+        cachedPhotoUrl = photoUrl;
+      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_cachedEmailKey, email);
       await prefs.setString(_cachedNameKey, name);
+      if (cachedPhotoUrl != null) {
+        await prefs.setString(_cachedPhotoKey, cachedPhotoUrl!);
+      }
     } catch (_) {}
   }
 
@@ -147,6 +204,7 @@ class GoogleSession extends ChangeNotifier {
     try {
       cachedEmail = null;
       cachedDisplayName = null;
+      cachedPhotoUrl = null;
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
     } catch (_) {}
@@ -225,13 +283,14 @@ class GoogleSession extends ChangeNotifier {
       final account = await GoogleSignIn.instance.authenticate();
       user = account;
       isOffline = false;
-      await _saveUserToCache(user!.email, user!.displayName ?? '');
+      await _saveUserToCache(user!.email, user!.displayName ?? '', photoUrl: user!.photoUrl);
       
       try {
         final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
         if (auth.accessToken.isNotEmpty) {
           _inMemoryAccessToken = auth.accessToken;
           authorized = true;
+          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
           await _loadOrDiscoverWorkspace();
           return;
         }
@@ -240,6 +299,7 @@ class GoogleSession extends ChangeNotifier {
         if (check != null && check.accessToken.isNotEmpty) {
           _inMemoryAccessToken = check.accessToken;
           authorized = true;
+          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
           await _loadOrDiscoverWorkspace();
           return;
         }
@@ -271,6 +331,7 @@ class GoogleSession extends ChangeNotifier {
         _inMemoryAccessToken = auth.accessToken;
         authorized = true;
         isOffline = false;
+        _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
         await _loadOrDiscoverWorkspace();
       }
     } catch (e) {
@@ -278,7 +339,6 @@ class GoogleSession extends ChangeNotifier {
       if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
         error = msg;
       }
-      authorized = false;
     } finally {
       isAuthorizing = false;
       notifyListeners();

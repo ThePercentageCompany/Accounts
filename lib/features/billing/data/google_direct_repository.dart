@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
@@ -55,6 +56,9 @@ class GoogleDirectBillingRepository implements BillingRepository {
         }
       }
     }
+    if (company.name.isEmpty && session.workspace?.companyName != null && session.workspace!.companyName.isNotEmpty) {
+      company = company.copyWith(name: session.workspace!.companyName);
+    }
 
     final localData = BillingData(
       customers: cachedCustomers.map((x) => Customer.fromJson(x)).toList(),
@@ -94,6 +98,46 @@ class GoogleDirectBillingRepository implements BillingRepository {
       action: 'upsert',
       data: payload,
     );
+    if (session.workspace != null && company.name.isNotEmpty && session.workspace!.companyName != company.name) {
+      final updatedWs = WorkspaceConfig(
+        spreadsheetId: session.workspace!.spreadsheetId,
+        spreadsheetUrl: session.workspace!.spreadsheetUrl,
+        driveFolderId: session.workspace!.driveFolderId,
+        folderUrl: session.workspace!.folderUrl,
+        companyName: company.name,
+      );
+      await session.setWorkspace(updatedWs);
+    }
+
+    // Archive company logo into Assets/ subfolder in Drive in background
+    if (company.logo.isNotEmpty) {
+      Future.microtask(() async {
+        try {
+          final token = await session.tryGetToken();
+          if (token != null && _driveFolderId.isNotEmpty) {
+            String raw = company.logo;
+            String mime = 'image/png';
+            if (raw.contains(';base64,')) {
+              final parts = raw.split(';base64,');
+              mime = parts.first.replaceFirst('data:', '');
+              raw = parts.last;
+            }
+            final bytes = base64Decode(raw);
+            final ext = mime.contains('jpeg') || mime.contains('jpg') ? 'jpg' : 'png';
+            final cleanName = company.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+            await _service.uploadImageFile(
+              token,
+              _driveFolderId,
+              '${cleanName.isNotEmpty ? cleanName : "company"}_logo.$ext',
+              bytes,
+              mimeType: mime,
+              subfolder: 'Assets',
+            );
+          }
+        } catch (_) {}
+      });
+    }
+
     _scheduleBackgroundSync();
   }
 
@@ -199,8 +243,13 @@ class GoogleDirectBillingRepository implements BillingRepository {
     if (token == null) {
       return ''; // Saved locally, Drive upload requires active connection
     }
-    final fileName = '${invoice.number.isNotEmpty ? invoice.number : invoice.id}.pdf';
-    final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes);
+    final String fileName;
+    if (paymentId != null && paymentId.isNotEmpty) {
+      fileName = '${invoice.number.isNotEmpty ? invoice.number : invoice.id}_Receipt_$paymentId.pdf';
+    } else {
+      fileName = '${invoice.number.isNotEmpty ? invoice.number : invoice.id}.pdf';
+    }
+    final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes, subfolder: 'Invoices');
 
     if (link.isNotEmpty) {
       final updated = invoice.copyWith(

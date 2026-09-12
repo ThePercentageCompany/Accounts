@@ -111,6 +111,32 @@ class _QuotationsViewState extends State<QuotationsView> {
     }
   }
 
+  Future<void> _archiveToDrive(Quotation quotation) async {
+    final pdfService = PdfQuotationDocumentService();
+    try {
+      final bytes = await pdfService.render(quotation);
+      final cubit = context.read<QuotationCubit>();
+      final link = await cubit.archive(quotation, bytes);
+      if (mounted) {
+        if (link.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Quotation saved to Google Drive (Quotations folder).')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not save to Drive. Check internet connection.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Drive archive failed: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _convertToInvoice(Quotation quotation) async {
     final billingCubit = context.read<BillingCubit>();
     final quotationCubit = context.read<QuotationCubit>();
@@ -705,6 +731,9 @@ class _QuotationsViewState extends State<QuotationsView> {
                             case 'pdf':
                               _previewPdf(q);
                               break;
+                            case 'drive':
+                              _archiveToDrive(q);
+                              break;
                             case 'convert':
                               _convertToInvoice(q);
                               break;
@@ -736,6 +765,16 @@ class _QuotationsViewState extends State<QuotationsView> {
                                 Icon(CupertinoIcons.printer, size: 16),
                                 SizedBox(width: 10),
                                 Text('View / Print PDF'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'drive',
+                            child: Row(
+                              children: [
+                                Icon(CupertinoIcons.cloud_upload, size: 16, color: AppTheme.pastelIndigo),
+                                SizedBox(width: 10),
+                                Text('Save to Google Drive'),
                               ],
                             ),
                           ),

@@ -284,8 +284,14 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
 
   void _showUserMenu(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final userName = widget.session.user?.displayName ?? 'Sarah Mitchell';
-    final userEmail = widget.session.effectiveEmail.isNotEmpty ? widget.session.effectiveEmail : 'admin@percentage.com';
+    final userName = widget.session.effectiveDisplayName;
+    final userEmail = widget.session.effectiveEmail != 'Offline User'
+        ? widget.session.effectiveEmail
+        : (widget.session.user?.email ?? widget.session.cachedEmail ?? '');
+    final companyName = widget.companyName.isNotEmpty
+        ? widget.companyName
+        : (widget.session.workspace?.companyName ?? '');
+    final photoUrl = widget.session.effectivePhotoUrl;
 
     showModalBottomSheet<void>(
       context: context,
@@ -304,10 +310,15 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
-                    child: Text(
-                      userName.isNotEmpty ? userName[0].toUpperCase() : 'S',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF10B981)),
-                    ),
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? Text(
+                            userName.isNotEmpty
+                                ? userName[0].toUpperCase()
+                                : (companyName.isNotEmpty ? companyName[0].toUpperCase() : 'U'),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF10B981)),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -315,8 +326,24 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(userName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                        const SizedBox(height: 2),
-                        Text(userEmail, style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                        if (userEmail.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(userEmail, style: TextStyle(fontSize: 12.5, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                        ],
+                        if (companyName.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              companyName,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF10B981)),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -915,15 +942,19 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           ),
           IconButton(
             icon: CircleAvatar(
-              radius: 12,
+              radius: 13,
               backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
-              child: Text(
-                (widget.session.user?.displayName?.isNotEmpty == true
-                        ? widget.session.user!.displayName![0]
-                        : 'S')
-                    .toUpperCase(),
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
-              ),
+              backgroundImage: (widget.session.effectivePhotoUrl != null && widget.session.effectivePhotoUrl!.isNotEmpty)
+                  ? NetworkImage(widget.session.effectivePhotoUrl!)
+                  : null,
+              child: (widget.session.effectivePhotoUrl == null || widget.session.effectivePhotoUrl!.isEmpty)
+                  ? Text(
+                      widget.session.effectiveDisplayName.isNotEmpty
+                          ? widget.session.effectiveDisplayName[0].toUpperCase()
+                          : (widget.companyName.isNotEmpty ? widget.companyName[0].toUpperCase() : 'U'),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                    )
+                  : null,
             ),
             tooltip: 'User menu',
             onPressed: () => _showUserMenu(context),
@@ -998,8 +1029,11 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // Top Header Bar
   // -------------------------------------------------------------
   Widget _buildTopHeader(BuildContext context, bool isDark) {
-    final userName = widget.session.user?.displayName ?? 'Sarah Mitchell';
-    final userRole = 'Admin';
+    final userName = widget.session.effectiveDisplayName;
+    final companyName = widget.companyName.isNotEmpty
+        ? widget.companyName
+        : (widget.session.workspace?.companyName ?? 'Admin');
+    final photoUrl = widget.session.effectivePhotoUrl;
 
     return Container(
       height: 68,
@@ -1122,14 +1156,19 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   CircleAvatar(
                     radius: 17,
                     backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
-                    child: Text(
-                      userName.isNotEmpty ? userName[0].toUpperCase() : 'S',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF10B981),
-                      ),
-                    ),
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? Text(
+                            userName.isNotEmpty
+                                ? userName[0].toUpperCase()
+                                : (companyName.isNotEmpty ? companyName[0].toUpperCase() : 'U'),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF10B981),
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 10),
                   Column(
@@ -1146,7 +1185,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                         ),
                       ),
                       Text(
-                        userRole,
+                        companyName,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w400,
@@ -1175,6 +1214,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // -------------------------------------------------------------
   Widget _buildSidebar(BuildContext context, bool isDark, {bool isDrawer = false}) {
     const sidebarBg = Color(0xFF0F172A);
+    final companyName = widget.companyName.isNotEmpty
+        ? widget.companyName
+        : (widget.session.workspace?.companyName ?? 'The Percentage Company');
+    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : '%';
 
     return Container(
       width: 250,
@@ -1195,12 +1238,12 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       color: const Color(0xFF10B981),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        '%',
-                        style: TextStyle(
+                        initial,
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -1210,35 +1253,28 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
-                          'The',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            height: 1.1,
-                          ),
-                        ),
-                        Text(
-                          'Percentage',
-                          style: TextStyle(
+                          companyName,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.3,
-                            height: 1.1,
+                            height: 1.2,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        Text(
-                          'Company',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            height: 1.1,
+                        if (widget.isDemo)
+                          const Text(
+                            'Demo Workspace',
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -1403,6 +1439,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // -------------------------------------------------------------
   Widget _buildCompactRail(BuildContext context, bool isDark) {
     const sidebarBg = Color(0xFF0F172A);
+    final companyName = widget.companyName.isNotEmpty
+        ? widget.companyName
+        : (widget.session.workspace?.companyName ?? 'The Percentage Company');
+    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : '%';
 
     return Container(
       width: 68,
@@ -1418,10 +1458,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                 color: const Color(0xFF10B981),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  '%',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  initial,
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

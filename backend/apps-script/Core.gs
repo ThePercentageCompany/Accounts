@@ -46,7 +46,7 @@ function companyValue_(d) {
     result[key]=textField_(d[key], key === 'notes' ? 1000 : 600, key==='name'||key==='prefix');
   }
   requireValue_(/^[A-Z0-9]{1,12}$/.test(result.prefix),'Prefix must be 1-12 uppercase letters or digits');
-  result.logo=textField_(d.logo,28000);
+  result.logo=textField_(d.logo,2000000);
   if(result.logo) requireValue_(/^[A-Za-z0-9+/]+={0,2}$/.test(result.logo),'Invalid logo data');
   result.version=d.version || 0;
   return result;

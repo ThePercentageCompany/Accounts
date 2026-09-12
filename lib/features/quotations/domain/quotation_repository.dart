@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'quotation.dart';
 
 abstract interface class QuotationRepository {
@@ -7,4 +8,5 @@ abstract interface class QuotationRepository {
   Future<Quotation> issue(Quotation quotation);
   Future<Quotation> updateStatus(String quotationId, String newStatus);
   Future<void> delete(String quotationId);
+  Future<String> archive(Quotation quotation, Uint8List bytes);
 }

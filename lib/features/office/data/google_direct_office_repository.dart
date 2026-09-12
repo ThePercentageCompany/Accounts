@@ -596,6 +596,51 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       return {'status': 'success', 'depreciatedCount': count};
     }
 
+    if (action == 'payrollArchive') {
+      final token = await session.tryGetToken();
+      if (token == null) {
+        throw StateError('Archiving to Google Drive requires an active internet connection.');
+      }
+      final id = d['id'] as String;
+      final bytes = base64Decode(d['pdf'] as String);
+      final fileName = 'Payslip_$id.pdf';
+      final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes, subfolder: 'Payroll');
+
+      if (link.isNotEmpty) {
+        final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
+        final current = payroll.where((x) => x['id'] == id).firstOrNull;
+        if (current != null) {
+          final updated = {
+            ...current,
+            'driveUrl': link,
+            'archivedVersion': current['version'] ?? 0,
+          };
+          await _sync.upsertCachedRecord(spreadsheetId, 'Payroll', id, updated);
+          await _sync.enqueueOperation(
+            spreadsheetId: spreadsheetId,
+            tabName: 'Payroll',
+            recordId: id,
+            action: 'upsert',
+            data: updated,
+          );
+          _scheduleBackgroundSync();
+        }
+      }
+      return {'url': link};
+    }
+
+    if (action == 'reportArchive') {
+      final token = await session.tryGetToken();
+      if (token == null) {
+        throw StateError('Archiving to Google Drive requires an active internet connection.');
+      }
+      final month = d['month'] as String? ?? DateTime.now().toIso8601String().substring(0, 7);
+      final bytes = base64Decode(d['pdf'] as String);
+      final fileName = 'Financial_Report_$month.pdf';
+      final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes, subfolder: 'Reports');
+      return {'url': link};
+    }
+
     if (action == 'officeUploadDocument') {
       final token = await session.tryGetToken();
       if (token == null) {
@@ -603,7 +648,21 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       }
       final bytes = base64Decode(d['base64'] as String);
       final fileName = d['name'] as String;
-      final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes);
+      final mimeType = d['type'] as String? ?? 'application/octet-stream';
+      final category = d['category'] as String?;
+      final targetSubfolder = GoogleWorkspaceService.detectSubfolder(
+        fileName: fileName,
+        mimeType: mimeType,
+        category: category,
+      );
+      final link = await _service.uploadDriveFile(
+        token,
+        _driveFolderId,
+        fileName,
+        bytes,
+        mimeType: mimeType,
+        subfolder: targetSubfolder,
+      );
       return {'url': link};
     }
 

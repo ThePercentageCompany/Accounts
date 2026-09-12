@@ -127,8 +127,8 @@ class _CompanyEditorState extends State<CompanyEditor> {
       );
       if (result == null) return;
       final bytes = result.files.single.bytes;
-      if (bytes == null || bytes.length > 20000) {
-        throw const FormatException('Choose a PNG or JPG logo under 20 KB.');
+      if (bytes == null || bytes.length > 1024 * 1024) {
+        throw const FormatException('Choose a PNG or JPG logo under 1 MB.');
       }
       final png = bytes.length > 8 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71;
       final jpg = bytes.length > 3 && bytes[0] == 255 && bytes[1] == 216;
@@ -233,7 +233,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'PNG or JPG, up to 20 KB. Applied to newly issued invoices.',
+                                    'PNG or JPG, up to 1 MB. Applied to newly issued invoices and quotations.',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
