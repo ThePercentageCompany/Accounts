@@ -346,7 +346,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                     builder: (context) {
                       GoogleSession? session;
                       try {
-                        session = Provider.of<GoogleSession?>(context, listen: false);
+                        session = Provider.of<GoogleSession>(context, listen: false);
                       } catch (_) {}
 
                       return Container(
@@ -381,7 +381,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    session?.user?.email ?? 'Local Demo Workspace',
+                                    session?.effectiveEmail ?? 'Local Demo Workspace',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
@@ -404,7 +404,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                       ],
                                     ),
                                     content: const Text(
-                                      'Are you sure you want to log out of your TPC Business account?',
+                                      'Are you sure you want to log out of your TPC Business account? All local cache and browser data will be cleared.',
                                       style: TextStyle(fontSize: 14),
                                     ),
                                     actions: [
@@ -426,6 +426,9 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                 );
                                 if (confirmed == true && session != null) {
                                   await session.signOut();
+                                  if (context.mounted) {
+                                    Navigator.of(context).popUntil((route) => route.isFirst);
+                                  }
                                 }
                               },
                               icon: const Icon(CupertinoIcons.square_arrow_right, size: 14, color: Color(0xFFEF4444)),

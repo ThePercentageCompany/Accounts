@@ -408,7 +408,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           ],
         ),
         content: const Text(
-          'Are you sure you want to log out of your TPC Business account?',
+          'Are you sure you want to log out? All local session cache and browser data will be securely cleared.',
           style: TextStyle(fontSize: 14),
         ),
         actions: [
@@ -431,6 +431,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
 
     if (confirmed == true) {
       await widget.session.signOut();
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     }
   }
 

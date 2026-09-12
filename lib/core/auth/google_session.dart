@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../sync/sync_manager.dart';
+import '../utils/browser_storage_cleaner.dart';
 import 'google_workspace_service.dart';
 
 const connectedMode = bool.fromEnvironment('CONNECTED', defaultValue: false);
@@ -76,12 +77,15 @@ class GoogleSession extends ChangeNotifier {
         notifyListeners();
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
+        isDemoMode = false;
         user = null;
         _inMemoryAccessToken = null;
         authorized = false;
         isAuthorizing = false;
         workspace = null;
         isOffline = false;
+        error = null;
+        await syncManager.clearAll();
         await _clearCachedSession();
         notifyListeners();
       }
@@ -145,9 +149,10 @@ class GoogleSession extends ChangeNotifier {
       cachedEmail = null;
       cachedDisplayName = null;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cachedEmailKey);
-      await prefs.remove(_cachedNameKey);
-      await prefs.remove(_cachedWorkspaceKey);
+      await prefs.clear();
+    } catch (_) {}
+    try {
+      await clearBrowserStorage();
     } catch (_) {}
   }
 
@@ -344,17 +349,40 @@ class GoogleSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool isDemoMode = false;
+
+  void startDemoMode() {
+    isDemoMode = true;
+    notifyListeners();
+  }
+
   Future<void> signOut() async {
-    try {
-      await GoogleSignIn.instance.signOut();
-    } catch (_) {}
+    isDemoMode = false;
     user = null;
     _inMemoryAccessToken = null;
     authorized = false;
     isAuthorizing = false;
     workspace = null;
     isOffline = false;
-    await _clearCachedSession();
+    cachedEmail = null;
+    cachedDisplayName = null;
+    error = null;
+
+    try {
+      await syncManager.clearAll();
+    } catch (_) {}
+
+    try {
+      await _clearCachedSession();
+    } catch (_) {}
+
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {}
+    try {
+      await GoogleSignIn.instance.disconnect();
+    } catch (_) {}
+
     notifyListeners();
   }
 }

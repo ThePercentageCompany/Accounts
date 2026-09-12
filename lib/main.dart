@@ -43,18 +43,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Provider.debugCheckInvalidValueType = null;
   try {
-    if (connectedMode) await session.initialize();
+    await session.initialize();
     runApp(const TpcApp());
   } catch (e) {
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SelectableText('Google configuration failed. Check SETUP.md.\n$e'),
-          ),
-        ),
-      ),
-    );
+    runApp(const TpcApp());
   }
 }
 
@@ -80,7 +72,7 @@ class TpcApp extends StatelessWidget {
             home: ListenableBuilder(
               listenable: session,
               builder: (context, _) {
-                if (!connectedMode) {
+                if (session.isDemoMode) {
                   return const Workspace(key: ValueKey('demo'));
                 }
 
@@ -152,15 +144,17 @@ class Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final BillingRepository billingRepo = connectedMode && session.workspace != null
+    final bool useCloud = session.workspace != null && !session.isDemoMode;
+
+    final BillingRepository billingRepo = useCloud
         ? GoogleDirectBillingRepository(session)
         : LocalRepository();
 
-    final OfficeRepository officeRepo = connectedMode && session.workspace != null
+    final OfficeRepository officeRepo = useCloud
         ? GoogleDirectOfficeRepository(session)
         : LocalOfficeRepository();
 
-    final QuotationRepository quotationRepo = connectedMode && session.workspace != null
+    final QuotationRepository quotationRepo = useCloud
         ? GoogleDirectQuotationRepository(session)
         : LocalQuotationRepository();
 
@@ -354,6 +348,34 @@ class GoogleLogin extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: isDark ? AppTheme.iosDarkBorder : AppTheme.iosLightBorder)),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          OutlinedButton.icon(
+                            onPressed: () => session.startDemoMode(),
+                            icon: const Icon(CupertinoIcons.device_laptop, size: 18),
+                            label: const Text('Explore Demo Workspace (Offline Preview)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
                         ],

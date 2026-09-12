@@ -79,6 +79,15 @@ class SyncManager extends ChangeNotifier {
     await _loadPendingQueue();
   }
 
+  /// Clears in-memory pending queue, error states, and resets sync status.
+  Future<void> clearAll() async {
+    _pendingQueue.clear();
+    _status = SyncStatus.synced;
+    _lastError = null;
+    _lastSyncedTime = null;
+    notifyListeners();
+  }
+
   // --- LOCAL PERSISTENT CACHE ---
 
   static String _cacheKey(String spreadsheetId, String tabName) => 'tpc_tab_cache_${spreadsheetId}_$tabName';
