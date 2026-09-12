@@ -257,7 +257,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       final record = {
         ...d,
         'amountCents': amount,
-        'status': d['kind'] == 'income' ? 'paid' : d['status'],
+        'status': (d['kind'] == 'income' || d['kind'] == 'capital') ? 'paid' : d['status'],
         'documents': old?['documents'] ?? [],
         'version': ((d['version'] as int?) ?? 0) + 1,
       };

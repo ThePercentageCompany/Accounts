@@ -8,7 +8,7 @@ import 'package:tpc_invoice/features/office/data/local_office_repository.dart';
 import 'package:tpc_invoice/features/office/presentation/office_cubit.dart';
 
 void main() {
-  testWidgets('DashboardView renders 6 KPI cards, dual bar chart, P&L, transactions and cash flow', (WidgetTester tester) async {
+  testWidgets('DashboardView renders 7 KPI cards, dual bar chart, P&L, transactions and cash flow', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1280, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -39,10 +39,11 @@ void main() {
     expect(find.textContaining('Welcome back'), findsOneWidget);
     expect(find.text("Here's what's happening with your business today."), findsOneWidget);
 
-    // Verify 6 KPI Cards
+    // Verify 7 KPI Cards
     expect(find.text('Total Income'), findsWidgets);
     expect(find.text('Total Expenses'), findsWidgets);
     expect(find.text('Net Profit'), findsWidgets);
+    expect(find.text('Capital & Investment'), findsOneWidget);
     expect(find.text('Cash / Bank Balance'), findsOneWidget);
     expect(find.text('Receivables'), findsOneWidget);
     expect(find.text('Payables'), findsOneWidget);
@@ -105,10 +106,11 @@ void main() {
     expect(find.text('Add Expense'), findsOneWidget);
     expect(find.text('Capital & Equity'), findsOneWidget);
 
-    // Verify 6 KPI Cards in 2-column grid
+    // Verify 7 KPI Cards in 2-column grid
     expect(find.text('Total Income'), findsWidgets);
     expect(find.text('Total Expenses'), findsWidgets);
     expect(find.text('Net Profit'), findsWidgets);
+    expect(find.text('Capital & Investment'), findsOneWidget);
     expect(find.text('Cash / Bank Balance'), findsOneWidget);
   });
 }

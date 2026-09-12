@@ -112,6 +112,12 @@ class _OverviewTab extends StatelessWidget {
         totalCashInvested += amt;
       }
     }
+    for (final e in office.entries) {
+      if (e['kind'] == 'capital' && e['status'] == 'paid') {
+        final amt = (e['amountCents'] as num?)?.toInt() ?? scaled(e['amount']?.toString() ?? '0', 2);
+        totalCashInvested += amt;
+      }
+    }
 
     var totalLoans = 0;
     for (final l in loans) {
@@ -496,7 +502,32 @@ class _ContributionsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final transactions = office.capitalTransactions;
+    final List<Map<String, dynamic>> transactions = [];
+
+    for (final tx in office.capitalTransactions) {
+      if (tx['status'] == 'void') continue;
+      transactions.add({...tx, 'source': 'capital'});
+    }
+    for (final e in office.entries) {
+      if (e['kind'] == 'capital' && e['status'] == 'paid') {
+        final amt = (e['amountCents'] as num?)?.toInt() ?? scaled(e['amount']?.toString() ?? '0', 2);
+        transactions.add({
+          'id': e['id'],
+          'shareholderName': (e['party'] != null && e['party'].toString().isNotEmpty)
+              ? e['party']
+              : ((e['description'] != null && e['description'].toString().isNotEmpty)
+                  ? e['description']
+                  : 'Shareholder Capital'),
+          'date': e['date'] ?? '',
+          'transactionType': 'capitalContribution',
+          'contributionType': e['account'] ?? 'bank',
+          'amountCents': amt,
+          'reference': e['ref'] ?? e['category'] ?? 'Finance Entry',
+          'source': 'finance',
+        });
+      }
+    }
+    transactions.sort((a, b) => (b['date']?.toString() ?? '').compareTo(a['date']?.toString() ?? ''));
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -545,6 +576,7 @@ class _ContributionsTab extends StatelessWidget {
                   final amount = (tx['amountCents'] as num?)?.toInt() ?? 0;
                   final isWithdrawal = type == 'capitalWithdrawal';
                   final ref = tx['reference'] as String? ?? '';
+                  final isFinanceSource = tx['source'] == 'finance';
 
                   return Container(
                     padding: const EdgeInsets.all(16),
@@ -558,12 +590,14 @@ class _ContributionsTab extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: (isWithdrawal ? Colors.red : Colors.green).withOpacity(0.12),
+                            color: (isWithdrawal ? Colors.red : (isFinanceSource ? const Color(0xFF8B5CF6) : Colors.green)).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
-                            isWithdrawal ? Icons.arrow_upward : Icons.arrow_downward,
-                            color: isWithdrawal ? Colors.red : Colors.green,
+                            isWithdrawal
+                                ? Icons.arrow_upward
+                                : (isFinanceSource ? Icons.account_balance_wallet_outlined : Icons.arrow_downward),
+                            color: isWithdrawal ? Colors.red : (isFinanceSource ? const Color(0xFF8B5CF6) : Colors.green),
                             size: 20,
                           ),
                         ),
@@ -572,7 +606,27 @@ class _ContributionsTab extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(sName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(sName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), overflow: TextOverflow.ellipsis),
+                                  ),
+                                  if (isFinanceSource) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF8B5CF6).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Finance',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF8B5CF6)),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                               const SizedBox(height: 4),
                               Text('$date • ${cType.toUpperCase()}${ref.isNotEmpty ? ' • Ref: $ref' : ''}',
                                   style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
@@ -584,14 +638,18 @@ class _ContributionsTab extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: isWithdrawal ? Colors.red : Colors.green,
+                            color: isWithdrawal ? Colors.red : (isFinanceSource ? const Color(0xFF8B5CF6) : Colors.green),
                           ),
                         ),
                         const SizedBox(width: 12),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
                           onPressed: () => _confirmDelete(context, 'Contribution', () {
-                            context.read<OfficeCubit>().run('capitalTransactionDelete', {'id': tx['id']});
+                            if (isFinanceSource) {
+                              context.read<OfficeCubit>().run('financeDelete', {'id': tx['id']});
+                            } else {
+                              context.read<OfficeCubit>().run('capitalTransactionDelete', {'id': tx['id']});
+                            }
                           }),
                         ),
                       ],

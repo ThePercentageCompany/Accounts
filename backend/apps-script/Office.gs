@@ -78,9 +78,9 @@ function officeDispatch_(action,d,actor) {
   if(action==='financeSave'){
     const id=validId_(d.id),old=get_('Finance',id);checkVersion_(old,d.version);
     requireValue_(!old||old.status==='unpaid','Only unpaid bills may be edited');
-    requireValue_(['income','expense'].includes(d.kind),'Invalid entry type');
+    requireValue_(['income','expense','capital'].includes(d.kind),'Invalid entry type');
     const amountCents=scaled_(String(d.amount),2);requireValue_(amountCents>0,'Amount must exceed zero');
-    const status=d.kind==='income'?'paid':d.status;
+    const status=(d.kind==='income'||d.kind==='capital')?'paid':d.status;
     requireValue_(['paid','unpaid'].includes(status),'Invalid bill status');
     const entry={id,kind:d.kind,date:dateField_(d.date),dueDate:d.dueDate?dateField_(d.dueDate):'',paidDate:status==='paid'?dateField_(d.paidDate):'',status,amount:String(d.amount),amountCents,category:textField_(d.category,100,true),party:textField_(d.party||'',200),reference:textField_(d.reference||'',200),notes:textField_(d.notes||'',600),account:accountField_(d.account),version:d.version+1,documents:old?old.documents:[]};
     return put_('Finance',id,entry);

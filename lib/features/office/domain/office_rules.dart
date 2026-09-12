@@ -254,6 +254,7 @@ Map<String, dynamic> calculateBalanceSheet(
   var accountsPayable = 0, payrollPayable = 0;
   var totalOriginalAssetCost = 0, totalAccumulatedDepreciation = 0;
   var operatingIncome = 0, operatingExpenses = 0, depreciationExpense = 0;
+  var totalShareholderEquity = 0;
 
   void flow(String account, int cents) {
     if (account.toLowerCase() == 'cash') {
@@ -274,7 +275,7 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // 2. Operational Entries (Bills, Operating Expenses, Other Income)
+  // 2. Operational Entries (Bills, Operating Expenses, Other Income, and Finance Capital)
   for (final e in office.entries) {
     final amount = (e['amountCents'] as num?)?.toInt() ?? 0;
     if (e['status'] == 'unpaid') {
@@ -284,6 +285,9 @@ Map<String, dynamic> calculateBalanceSheet(
       final account = e['account'] as String? ?? 'Bank';
       if (e['kind'] == 'income') {
         operatingIncome += amount;
+        flow(account, amount);
+      } else if (e['kind'] == 'capital') {
+        totalShareholderEquity += amount;
         flow(account, amount);
       } else if (e['kind'] == 'expense') {
         operatingExpenses += amount;
@@ -359,7 +363,6 @@ Map<String, dynamic> calculateBalanceSheet(
 
   // 7. Shareholder Equity per partner
   final List<Map<String, dynamic>> shareholderEquityRows = [];
-  var totalShareholderEquity = 0;
 
   // Build map of contributions
   final Map<String, int> partnerCashContributed = {};
@@ -509,6 +512,9 @@ Map<String, dynamic> calculateTrialBalance(List<Invoice> invoices, OfficeData of
       if (e['kind'] == 'income') {
         record(accId, accName, 'Asset', amount, 0);
         record('other_income', 'Other Business Income', 'Income', 0, amount);
+      } else if (e['kind'] == 'capital') {
+        record(accId, accName, 'Asset', amount, 0);
+        record('shareholder_capital', 'Shareholder Capital (${e['party']?.toString().isNotEmpty == true ? e['party'] : (e['category'] ?? 'General')})', 'Equity', 0, amount);
       } else {
         record('operating_expenses', 'Operating Expenses - ${(e['category'] ?? 'General')}', 'Expense', amount, 0);
         record(accId, accName, 'Asset', 0, amount);
@@ -621,7 +627,7 @@ Map<String, dynamic> calculateTrialBalance(List<Invoice> invoices, OfficeData of
 
 /// Legacy monthly cash flow summary for backward compatibility
 Map<String, int> financialSummary(List<Invoice> invoices, OfficeData office, String month) {
-  var receipts = 0, otherIncome = 0, expenses = 0, salaries = 0, receivable = 0, payable = 0, payrollDue = 0, bank = 0, cash = 0;
+  var receipts = 0, otherIncome = 0, capitalInflow = 0, expenses = 0, salaries = 0, receivable = 0, payable = 0, payrollDue = 0, bank = 0, cash = 0;
   void flow(String account, int cents) {
     if (account.toLowerCase() == 'cash') {
       cash += cents;
@@ -643,6 +649,7 @@ Map<String, int> financialSummary(List<Invoice> invoices, OfficeData office, Str
     if (e['status'] != 'paid' || !(e['paidDate'] as String).startsWith(month)) continue;
     if (e['kind'] == 'income' || e['kind'] == 'capital') {
       otherIncome += amount;
+      if (e['kind'] == 'capital') capitalInflow += amount;
       flow(e['account'], amount);
     } else {
       expenses += amount;
@@ -660,6 +667,7 @@ Map<String, int> financialSummary(List<Invoice> invoices, OfficeData office, Str
   return {
     'Invoice collections': receipts,
     'Other income': otherIncome,
+    'Capital / Investment': capitalInflow,
     'Expenses paid': expenses,
     'Payroll paid': salaries,
     'Net cash movement': receipts + otherIncome - expenses - salaries,

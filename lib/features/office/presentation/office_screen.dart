@@ -291,15 +291,17 @@ class _TransactionDialogState extends State<TransactionDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isEdit = widget.initial != null;
 
-    final themeColor = _kind == 'income' ? AppTheme.zohoGreen : AppTheme.zohoRed;
+    final themeColor = _kind == 'income'
+        ? AppTheme.zohoGreen
+        : (_kind == 'capital' ? const Color(0xFF8B5CF6) : AppTheme.zohoRed);
 
     final partyLabel = _kind == 'income'
         ? 'Customer / Client / Payer'
-        : 'Supplier / Vendor / Payee';
+        : (_kind == 'capital' ? 'Shareholder / Investor / Contributor' : 'Supplier / Vendor / Payee');
 
     final partyHint = _kind == 'income'
         ? 'e.g. Acme Corp, John Doe'
-        : 'e.g. Amazon Web Services, Office Landlord, Etisalat';
+        : (_kind == 'capital' ? 'e.g. Founder, Angel Investor, Holding Co.' : 'e.g. Amazon Web Services, Office Landlord, Etisalat');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
@@ -334,7 +336,9 @@ class _TransactionDialogState extends State<TransactionDialog> {
                                 child: Icon(
                                   _kind == 'income'
                                       ? CupertinoIcons.arrow_down_left_circle_fill
-                                      : CupertinoIcons.arrow_up_right_circle_fill,
+                                      : (_kind == 'capital'
+                                          ? CupertinoIcons.briefcase_fill
+                                          : CupertinoIcons.arrow_up_right_circle_fill),
                                   color: themeColor,
                                   size: 20,
                                 ),
@@ -373,6 +377,8 @@ class _TransactionDialogState extends State<TransactionDialog> {
                           _buildKindTab('income', 'Income', CupertinoIcons.arrow_down_left, AppTheme.zohoGreen, isDark),
                           const SizedBox(width: 4),
                           _buildKindTab('expense', 'Expense', CupertinoIcons.arrow_up_right, AppTheme.zohoRed, isDark),
+                          const SizedBox(width: 4),
+                          _buildKindTab('capital', 'Capital / Invest', CupertinoIcons.briefcase, const Color(0xFF8B5CF6), isDark),
                         ],
                       ),
                     ),
@@ -802,19 +808,24 @@ class _TransactionDialogState extends State<TransactionDialog> {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
-                size: 15,
+                size: 14,
                 color: isSelected ? color : (isDark ? Colors.grey[400] : Colors.grey[600]),
               ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  color: isSelected ? (isDark ? Colors.white : const Color(0xFF0F172A)) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                    color: isSelected ? (isDark ? Colors.white : const Color(0xFF0F172A)) : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1832,110 +1843,129 @@ class _OfficeScreenState extends State<OfficeScreen> {
     final bankMovement = summary['Bank movement'] ?? 0;
     final cashMovement = summary['Cash movement'] ?? 0;
 
+    final capitalInflow = (summary['Capital / Investment'] ?? 0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Action Buttons Toolbar
         LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 560;
+            final isNarrow = constraints.maxWidth < 650;
             if (isNarrow) {
-              return Row(
+              return Column(
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => finance(null, 'income'),
-                      icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 15),
-                      label: const Text('Add Income', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.zohoGreen,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => finance(null, 'expense'),
-                      icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 15),
-                      label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.zohoRed,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  PopupMenuButton<String>(
-                    tooltip: 'Report options',
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onSelected: (action) {
-                      if (action == 'pdf') {
-                        guarded(() async {
-                          await preview(
-                            await context.read<OfficeDocuments>().financialReport(
-                                  billing.company.name,
-                                  month,
-                                  summary,
-                                  state.data.entries,
-                                ),
-                            'Finance-$month.pdf',
-                          );
-                        });
-                      } else if (action == 'drive') {
-                        guarded(() async {
-                          final bytes = await context.read<OfficeDocuments>().financialReport(
-                                billing.company.name,
-                                month,
-                                summary,
-                                state.data.entries,
-                              );
-                          await run('reportArchive', {
-                            'month': month,
-                            'requestId': const Uuid().v4(),
-                            'pdf': base64Encode(bytes),
-                          });
-                        });
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'pdf',
-                        child: Row(
-                          children: [
-                            Icon(CupertinoIcons.doc_plaintext, size: 16),
-                            SizedBox(width: 8),
-                            Text('Export PDF Report', style: TextStyle(fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      if (!demo)
-                        const PopupMenuItem(
-                          value: 'drive',
-                          child: Row(
-                            children: [
-                              Icon(CupertinoIcons.cloud_upload, size: 16),
-                              SizedBox(width: 8),
-                              Text('Save to Drive', style: TextStyle(fontSize: 13)),
-                            ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => finance(null, 'income'),
+                          icon: const Icon(CupertinoIcons.arrow_down_left_circle_fill, size: 13),
+                          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Add Income', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.zohoGreen,
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => finance(null, 'expense'),
+                          icon: const Icon(CupertinoIcons.arrow_up_right_circle_fill, size: 13),
+                          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Add Expense', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.zohoRed,
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => finance(null, 'capital'),
+                          icon: const Icon(CupertinoIcons.briefcase_fill, size: 13),
+                          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Add Capital', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF8B5CF6),
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      PopupMenuButton<String>(
+                        tooltip: 'Report options',
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onSelected: (action) {
+                          if (action == 'pdf') {
+                            guarded(() async {
+                              await preview(
+                                await context.read<OfficeDocuments>().financialReport(
+                                      billing.company.name,
+                                      month,
+                                      summary,
+                                      state.data.entries,
+                                    ),
+                                'Finance-$month.pdf',
+                              );
+                            });
+                          } else if (action == 'drive') {
+                            guarded(() async {
+                              final bytes = await context.read<OfficeDocuments>().financialReport(
+                                    billing.company.name,
+                                    month,
+                                    summary,
+                                    state.data.entries,
+                                  );
+                              await run('reportArchive', {
+                                'month': month,
+                                'requestId': const Uuid().v4(),
+                                'pdf': base64Encode(bytes),
+                              });
+                            });
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'pdf',
+                            child: Row(
+                              children: [
+                                Icon(CupertinoIcons.doc_plaintext, size: 16),
+                                SizedBox(width: 8),
+                                Text('Export PDF Report', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          if (!demo)
+                            const PopupMenuItem(
+                              value: 'drive',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.cloud_upload, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Save to Drive', style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                            border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                          ),
+                          child: Icon(
+                            CupertinoIcons.ellipsis_vertical,
+                            size: 16,
+                            color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
+                          ),
+                        ),
+                      ),
                     ],
-                    child: Container(
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                        borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
-                        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-                      ),
-                      child: Icon(
-                        CupertinoIcons.ellipsis_vertical,
-                        size: 16,
-                        color: isDark ? AppTheme.iosDarkTextPrimary : AppTheme.iosLightTextPrimary,
-                      ),
-                    ),
                   ),
                 ],
               );
@@ -1960,6 +1990,16 @@ class _OfficeScreenState extends State<OfficeScreen> {
                   label: const Text('Add Expense'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.zohoRed,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: () => finance(null, 'capital'),
+                  icon: const Icon(CupertinoIcons.briefcase_fill, size: 16),
+                  label: const Text('Add Capital / Investment'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                   ),
@@ -2127,6 +2167,29 @@ class _OfficeScreenState extends State<OfficeScreen> {
                   ),
                 ],
               ),
+              if (capitalInflow != 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(CupertinoIcons.briefcase_fill, size: 13, color: Color(0xFF8B5CF6)),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Capital: ${capitalInflow >= 0 ? '+' : ''}${money(capitalInflow)}',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF8B5CF6),
+                      ),
+                    ),
+                  ],
+                ),
               Wrap(
                 spacing: 6,
                 runSpacing: 4,
@@ -2175,11 +2238,9 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 const SizedBox(width: 4),
                 _buildFinanceFilterTab('expense', 'Expenses', expenseCount, isDark, accentColor: AppTheme.zohoRed),
                 const SizedBox(width: 4),
+                _buildFinanceFilterTab('capital', 'Capital / Investment', capitalCount, isDark, accentColor: const Color(0xFF8B5CF6)),
+                const SizedBox(width: 4),
                 _buildFinanceFilterTab('unpaid', 'Unpaid Bills', unpaidCount, isDark, accentColor: const Color(0xFFF59E0B)),
-                if (capitalCount > 0) ...[
-                  const SizedBox(width: 4),
-                  _buildFinanceFilterTab('capital', 'Capital', capitalCount, isDark, accentColor: const Color(0xFF8B5CF6)),
-                ],
               ],
             ),
           ),
@@ -2419,7 +2480,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
 
     final icon = isIncome
         ? CupertinoIcons.arrow_down_left_circle_fill
-        : (isCapital ? CupertinoIcons.money_dollar_circle_fill : CupertinoIcons.arrow_up_right_circle_fill);
+        : (isCapital ? CupertinoIcons.briefcase_fill : CupertinoIcons.arrow_up_right_circle_fill);
 
     final amountCents = (e['amountCents'] as num?)?.toInt() ?? 0;
     final partyName = (e['party']?.toString() ?? '').trim();

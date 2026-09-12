@@ -64,7 +64,7 @@ class LocalOfficeRepository implements OfficeRepository {
    key='entries';final old=find(key,d['id']);version(old);
    if(old!=null&&old['status']!='unpaid')throw StateError('Posted entries are locked.');
    final amount=scaled(d['amount'].toString(),2);if(amount<=0)throw StateError('Amount must exceed zero.');
-   record={...d,'amountCents':amount,'status':d['kind']=='income'?'paid':d['status'],'documents':old?['documents']??[],'version':(d['version'] as int)+1};
+   record={...d,'amountCents':amount,'status':(d['kind']=='income'||d['kind']=='capital')?'paid':d['status'],'documents':old?['documents']??[],'version':(d['version'] as int)+1};
   }else if(action=='financePay'||action=='financeVoid'){
    key='entries';record=find(key,d['id'])!;if(record['status']==(action=='financePay'?'paid':'void'))return record;version(record);
    if(record['status']!='unpaid')throw StateError('Only unpaid bills can change.');

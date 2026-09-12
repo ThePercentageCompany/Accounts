@@ -185,10 +185,13 @@ class _DashboardViewState extends State<DashboardView> {
             // ---------------------------------------------------------
             double liveIncome = 0;
             double liveExpenses = 0;
+            double liveCapital = 0;
             double liveReceivables = 0;
             double livePayables = 0;
             double liveOtherIncome = 0;
             double liveOtherExpenses = 0;
+            double liveLoans = 0;
+            double liveAssetPurchases = 0;
 
             // Invoices: Collections & Receivables
             for (final inv in invoices) {
@@ -222,7 +225,53 @@ class _DashboardViewState extends State<DashboardView> {
                 } else if (e['kind'] == 'expense') {
                   liveExpenses += amount;
                   liveOtherExpenses += amount;
+                } else if (e['kind'] == 'capital') {
+                  liveCapital += amount;
                 }
+              }
+            }
+
+            // Capital Transactions (Contributions & Withdrawals)
+            for (final cap in officeData.capitalTransactions) {
+              if (cap['status'] == 'void') continue;
+              final amount = ((cap['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = cap['date']?.toString() ?? '';
+              final type = cap['transactionType']?.toString() ?? 'capitalContribution';
+              final contribType = cap['contributionType']?.toString() ?? 'bank';
+              if (contribType.toLowerCase() != 'asset') {
+                if (_isDateInSelectedPeriod(date, _selectedPeriod)) {
+                  if (type == 'capitalWithdrawal') {
+                    liveCapital -= amount;
+                  } else {
+                    liveCapital += amount;
+                  }
+                }
+              }
+            }
+
+            // Shareholder Loans
+            for (final loan in officeData.shareholderLoans) {
+              if (loan['status'] == 'void') continue;
+              final amount = ((loan['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = loan['date']?.toString() ?? '';
+              final type = loan['type']?.toString() ?? 'loanReceived';
+              if (_isDateInSelectedPeriod(date, _selectedPeriod)) {
+                if (type == 'loanReceived') {
+                  liveLoans += amount;
+                } else if (type == 'loanRepayment') {
+                  liveLoans -= amount;
+                }
+              }
+            }
+
+            // Fixed Asset Purchases
+            for (final a in officeData.assets) {
+              if (a['status'] == 'void' || a['status'] == 'disposed') continue;
+              final cost = ((a['costCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final acqType = a['acquisitionType']?.toString() ?? 'companyPurchase';
+              final date = a['purchaseDate']?.toString() ?? '';
+              if (acqType == 'companyPurchase' && _isDateInSelectedPeriod(date, _selectedPeriod)) {
+                liveAssetPurchases += cost;
               }
             }
 
@@ -243,7 +292,7 @@ class _DashboardViewState extends State<DashboardView> {
             }
 
             final netProfit = liveIncome - liveExpenses;
-            final bankBalance = liveIncome - liveExpenses;
+            final bankBalance = liveIncome + liveCapital + liveLoans - liveExpenses - liveAssetPurchases;
 
             // ---------------------------------------------------------
             // 2. LIVE MONTHLY 12-MONTH DUAL BAR CHART DATA
@@ -331,17 +380,62 @@ class _DashboardViewState extends State<DashboardView> {
               final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
               final date = e['date']?.toString() ?? '';
               final isIncome = e['kind'] == 'income';
+              final isCapital = e['kind'] == 'capital';
               final category = e['category']?.toString() ?? '';
               final party = e['party']?.toString() ?? '—';
 
               liveTransactions.add(
                 _LiveTransactionItem(
                   date: date,
-                  description: category.isNotEmpty ? category : (isIncome ? 'Income Entry' : 'Expense Entry'),
-                  type: isIncome ? 'Income' : 'Expense',
+                  description: category.isNotEmpty ? category : (isCapital ? 'Capital Contribution' : (isIncome ? 'Income Entry' : 'Expense Entry')),
+                  type: isCapital ? 'Capital' : (isIncome ? 'Income' : 'Expense'),
                   customer: party.isNotEmpty ? party : '—',
                   amount: amount,
                   status: e['status'] == 'paid' ? 'Paid' : 'Unpaid',
+                  sortDate: date,
+                ),
+              );
+            }
+
+            // Capital Transactions
+            for (final cap in officeData.capitalTransactions) {
+              if (cap['status'] == 'void') continue;
+              final amount = ((cap['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = cap['date']?.toString() ?? '';
+              final sName = cap['shareholderName']?.toString() ?? 'Shareholder';
+              final type = cap['transactionType']?.toString() ?? 'capitalContribution';
+              final isWithdrawal = type == 'capitalWithdrawal';
+
+              liveTransactions.add(
+                _LiveTransactionItem(
+                  date: date,
+                  description: isWithdrawal ? 'Capital Withdrawal - $sName' : 'Capital Contribution - $sName',
+                  type: isWithdrawal ? 'Withdrawal' : 'Capital',
+                  customer: sName,
+                  amount: amount,
+                  status: 'Paid',
+                  sortDate: date,
+                ),
+              );
+            }
+
+            // Shareholder Loans
+            for (final loan in officeData.shareholderLoans) {
+              if (loan['status'] == 'void') continue;
+              final amount = ((loan['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = loan['date']?.toString() ?? '';
+              final sName = loan['shareholderName']?.toString() ?? 'Shareholder';
+              final type = loan['type']?.toString() ?? 'loanReceived';
+              final isRepayment = type == 'loanRepayment';
+
+              liveTransactions.add(
+                _LiveTransactionItem(
+                  date: date,
+                  description: isRepayment ? 'Loan Repayment - $sName' : 'Loan Received - $sName',
+                  type: isRepayment ? 'Loan Repayment' : 'Loan',
+                  customer: sName,
+                  amount: amount,
+                  status: 'Paid',
                   sortDate: date,
                 ),
               );
@@ -387,9 +481,40 @@ class _DashboardViewState extends State<DashboardView> {
               final date = e['paidDate']?.toString() ?? (e['date']?.toString() ?? '');
               if (e['status'] == 'paid' && _isDateInSelectedPeriod(date, _cashFlowPeriod)) {
                 final amount = double.tryParse(e['amount']?.toString() ?? '0') ?? 0;
-                if (e['kind'] == 'income') {
+                if (e['kind'] == 'income' || e['kind'] == 'capital') {
                   cfInflows += amount;
                 } else if (e['kind'] == 'expense') {
+                  cfOutflows += amount;
+                }
+              }
+            }
+
+            for (final cap in officeData.capitalTransactions) {
+              if (cap['status'] == 'void') continue;
+              final amount = ((cap['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = cap['date']?.toString() ?? '';
+              final type = cap['transactionType']?.toString() ?? 'capitalContribution';
+              final contribType = cap['contributionType']?.toString() ?? 'bank';
+              if (contribType.toLowerCase() != 'asset') {
+                if (_isDateInSelectedPeriod(date, _cashFlowPeriod)) {
+                  if (type == 'capitalWithdrawal') {
+                    cfOutflows += amount;
+                  } else {
+                    cfInflows += amount;
+                  }
+                }
+              }
+            }
+
+            for (final loan in officeData.shareholderLoans) {
+              if (loan['status'] == 'void') continue;
+              final amount = ((loan['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
+              final date = loan['date']?.toString() ?? '';
+              final type = loan['type']?.toString() ?? 'loanReceived';
+              if (_isDateInSelectedPeriod(date, _cashFlowPeriod)) {
+                if (type == 'loanReceived') {
+                  cfInflows += amount;
+                } else if (type == 'loanRepayment') {
                   cfOutflows += amount;
                 }
               }
@@ -425,6 +550,7 @@ class _DashboardViewState extends State<DashboardView> {
                     totalIncome: liveIncome,
                     totalExpenses: liveExpenses,
                     netProfit: netProfit,
+                    totalCapital: liveCapital,
                     bankBalance: bankBalance,
                     receivables: liveReceivables,
                     payables: livePayables,
@@ -866,13 +992,14 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   // -------------------------------------------------------------
-  // 2. 6 KPI Stat Cards (Responsive Bento Grid)
+  // 2. 7 KPI Stat Cards (Responsive Bento Grid)
   // -------------------------------------------------------------
   Widget _buildKpiGrid(
     bool isDark, {
     required double totalIncome,
     required double totalExpenses,
     required double netProfit,
+    required double totalCapital,
     required double bankBalance,
     required double receivables,
     required double payables,
@@ -906,6 +1033,15 @@ class _DashboardViewState extends State<DashboardView> {
         iconBgDark: const Color(0xFF064E3B),
       ),
       _KpiData(
+        title: 'Capital & Investment',
+        value: _formatAmount(totalCapital),
+        comparison: 'Shareholder & equity funds',
+        icon: CupertinoIcons.briefcase_fill,
+        iconColor: const Color(0xFF8B5CF6),
+        iconBgColor: const Color(0xFFFAF5FF),
+        iconBgDark: const Color(0xFF581C87),
+      ),
+      _KpiData(
         title: 'Cash / Bank Balance',
         value: _formatAmount(bankBalance),
         comparison: 'Active liquidity tracking',
@@ -937,7 +1073,7 @@ class _DashboardViewState extends State<DashboardView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 650;
-        final int columns = isMobile ? 2 : (constraints.maxWidth < 1000 ? 3 : 3);
+        final int columns = isMobile ? 2 : (constraints.maxWidth < 1100 ? 3 : 4);
         final double extent = isMobile ? 128 : 138;
         final double spacing = isMobile ? 10 : 16;
 
@@ -1492,6 +1628,7 @@ class _DashboardViewState extends State<DashboardView> {
     final filtered = transactions.where((t) {
       if (_transactionFilter == 'Income') return t.type == 'Income';
       if (_transactionFilter == 'Expense') return t.type == 'Expense';
+      if (_transactionFilter == 'Capital') return t.type == 'Capital' || t.type == 'Loan';
       return true;
     }).toList();
 
@@ -1546,7 +1683,7 @@ class _DashboardViewState extends State<DashboardView> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: ['All', 'Income', 'Expense'].map((f) {
+              children: ['All', 'Income', 'Expense', 'Capital'].map((f) {
                 final isSel = _transactionFilter == f;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -1650,18 +1787,24 @@ class _DashboardViewState extends State<DashboardView> {
                                   decoration: BoxDecoration(
                                     color: item.type == 'Income'
                                         ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5))
-                                        : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
+                                        : item.type == 'Capital' || item.type == 'Loan'
+                                            ? (isDark ? const Color(0xFF581C87) : const Color(0xFFFAF5FF))
+                                            : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Center(
                                     child: Icon(
                                       item.type == 'Income'
                                           ? CupertinoIcons.arrow_down_left
-                                          : CupertinoIcons.arrow_up_right,
+                                          : item.type == 'Capital' || item.type == 'Loan'
+                                              ? CupertinoIcons.briefcase_fill
+                                              : CupertinoIcons.arrow_up_right,
                                       size: 16,
                                       color: item.type == 'Income'
                                           ? const Color(0xFF10B981)
-                                          : const Color(0xFFEF4444),
+                                          : item.type == 'Capital' || item.type == 'Loan'
+                                              ? const Color(0xFF8B5CF6)
+                                              : const Color(0xFFEF4444),
                                     ),
                                   ),
                                 ),
@@ -1838,6 +1981,7 @@ class _DashboardViewState extends State<DashboardView> {
 
   Widget _buildTypeBadge(String type, bool isDark) {
     final isIncome = type == 'Income';
+    final isCapital = type == 'Capital' || type == 'Loan';
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -1845,7 +1989,9 @@ class _DashboardViewState extends State<DashboardView> {
         decoration: BoxDecoration(
           color: isIncome
               ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5))
-              : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
+              : isCapital
+                  ? (isDark ? const Color(0xFF581C87) : const Color(0xFFFAF5FF))
+                  : (isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2)),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
@@ -1853,7 +1999,11 @@ class _DashboardViewState extends State<DashboardView> {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: isIncome ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+            color: isIncome
+                ? const Color(0xFF10B981)
+                : isCapital
+                    ? const Color(0xFF8B5CF6)
+                    : const Color(0xFFEF4444),
           ),
         ),
       ),
