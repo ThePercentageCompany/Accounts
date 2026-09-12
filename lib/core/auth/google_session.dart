@@ -4,7 +4,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../sync/sync_manager.dart';
-import '../utils/browser_storage_cleaner.dart';
 import 'google_workspace_service.dart';
 
 const connectedMode = bool.fromEnvironment('CONNECTED', defaultValue: false);
@@ -178,9 +177,13 @@ class GoogleSession extends ChangeNotifier {
 
       final wsRaw = prefs.getString(_cachedWorkspaceKey);
       if (wsRaw != null && wsRaw.isNotEmpty) {
-        workspace = WorkspaceConfig.fromJson(jsonDecode(wsRaw) as Map<String, dynamic>);
-        authorized = true;
-        isOffline = true;
+        final ws = WorkspaceConfig.fromJson(jsonDecode(wsRaw) as Map<String, dynamic>);
+        // Never auto-restore offline/local demo sessions — always require Google Sign-In
+        if (ws.spreadsheetId != 'local_demo_workspace' && ws.spreadsheetId.isNotEmpty) {
+          workspace = ws;
+          authorized = true;
+          isOffline = true;
+        }
       }
     } catch (_) {}
   }
