@@ -81,9 +81,14 @@ class LocalOfficeRepository implements OfficeRepository {
   }else if(action=='capitalTransactionSave'){
    key='capitalTransactions';final id=d['id']??'CAP_${DateTime.now().millisecondsSinceEpoch}';
    final old=find(key,id);if(old!=null)version(old);
-   final amountCents=scaled(d['amount'].toString(),2);
+   final amountCents = (d['amountCents'] as num?)?.toInt() ??
+       ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    if(amountCents<=0)throw StateError('Contribution amount must be greater than zero.');
    
+   if (old != null && old['journalId'] != null) {
+     root['journals'] = list('journals').where((j) => j['id'] != old['journalId']).toList();
+   }
+
    // Auto generate balanced journal entry
    final journal=createCapitalJournal(
      transactionId: id,
@@ -93,47 +98,75 @@ class LocalOfficeRepository implements OfficeRepository {
      contributionType: d['contributionType']??'bank',
      amountCents: amountCents,
      assetName: d['assetName'],
-     accountName: d['bankAccountId']??'Bank Account',
+     accountName: d['bankAccountId']??(d['account']??'Bank Account'),
    );
    root['journals']=[...list('journals'), journal];
    
-   record={...d,'id':id,'amountCents':amountCents,'journalId':journal['id'],'version':((d['version'] as int?)??0)+1};
+   record={
+     ...d,
+     'id': id,
+     'amountCents': amountCents,
+     'amount': (amountCents / 100.0).toStringAsFixed(2),
+     'journalId': journal['id'],
+     'version': ((d['version'] as int?) ?? (old?['version'] as int? ?? 0)) + 1,
+   };
   }else if(action=='capitalTransactionDelete'){
    key='capitalTransactions';final id=d['id'] as String;
+   final old=find(key,id);
+   if (old != null && old['journalId'] != null) {
+     root['journals'] = list('journals').where((j) => j['id'] != old['journalId']).toList();
+   }
    root[key]=list(key).where((x)=>x['id']!=id).toList();
    await prefs.setString('tpc_office_demo_v2',jsonEncode(root));
    return {'id':id};
   }else if(action=='shareholderLoanSave'){
    key='shareholderLoans';final id=d['id']??'LOAN_${DateTime.now().millisecondsSinceEpoch}';
    final old=find(key,id);if(old!=null)version(old);
-   final amountCents=scaled(d['amount'].toString(),2);
+   final amountCents = (d['amountCents'] as num?)?.toInt() ??
+       ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    if(amountCents<=0)throw StateError('Loan amount must be greater than zero.');
    
+   if (old != null && old['journalId'] != null) {
+     root['journals'] = list('journals').where((j) => j['id'] != old['journalId']).toList();
+   }
+
    final journal=createShareholderLoanJournal(
      loanId: id,
      shareholderName: d['shareholderName']??'Shareholder',
      date: d['date']??DateTime.now().toIso8601String().substring(0,10),
      type: d['type']??'loanReceived',
      amountCents: amountCents,
-     paymentAccount: d['paymentAccount']??'Bank',
+     paymentAccount: d['paymentAccount']??(d['account']??'Bank'),
    );
    root['journals']=[...list('journals'), journal];
 
-   record={...d,'id':id,'amountCents':amountCents,'journalId':journal['id'],'version':((d['version'] as int?)??0)+1};
+   record={
+     ...d,
+     'id': id,
+     'amountCents': amountCents,
+     'amount': (amountCents / 100.0).toStringAsFixed(2),
+     'journalId': journal['id'],
+     'version': ((d['version'] as int?) ?? (old?['version'] as int? ?? 0)) + 1,
+   };
   }else if(action=='shareholderLoanDelete'){
    key='shareholderLoans';final id=d['id'] as String;
+   final old=find(key,id);
+   if (old != null && old['journalId'] != null) {
+     root['journals'] = list('journals').where((j) => j['id'] != old['journalId']).toList();
+   }
    root[key]=list(key).where((x)=>x['id']!=id).toList();
    await prefs.setString('tpc_office_demo_v2',jsonEncode(root));
    return {'id':id};
   }else if(action=='assetSave'){
    key='assets';final id=d['id']??'AST_${DateTime.now().millisecondsSinceEpoch}';
    final old=find(key,id);if(old!=null)version(old);
-   final costCents=scaled(d['cost'].toString(),2);
+   final costCents = (d['costCents'] as num?)?.toInt() ??
+       ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    final accDepCents=(d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
    final bookValueCents=(costCents - accDepCents).clamp(0, costCents);
 
-   // Auto create asset acquisition journal if new asset
-   if(old==null){
+   // Auto create asset acquisition journal if new asset and not skipJournal
+   if(old==null && d['skipJournal'] != true){
      final journal=createAssetPurchaseJournal(
        assetId: id,
        assetName: d['name']??'Asset',
@@ -151,9 +184,10 @@ class LocalOfficeRepository implements OfficeRepository {
      ...d,
      'id': id,
      'costCents': costCents,
+     'cost': (costCents / 100.0).toStringAsFixed(2),
      'accumulatedDepreciationCents': accDepCents,
      'bookValueCents': bookValueCents,
-     'version': ((d['version'] as int?) ?? 0) + 1,
+     'version': ((d['version'] as int?) ?? (old?['version'] as int? ?? 0)) + 1,
    };
   }else if(action=='assetDelete'){
    key='assets';final id=d['id'] as String;

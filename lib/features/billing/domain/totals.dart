@@ -7,7 +7,7 @@ int scaled(String value, int decimals) {
   final p = value.trim().split('.');
   final result = int.parse(p[0]) * (decimals == 2 ? 100 : 1000) +
     int.parse((p.length == 2 ? p[1] : '').padRight(decimals, '0'));
-  if (result > (decimals == 3 ? 1000000 : 100000000)) throw const FormatException('Amount or quantity is too large.');
+  if (result > (decimals == 3 ? 1000000 : 1000000000000)) throw const FormatException('Amount or quantity is too large.');
   return result;
 }
 int lineTotal(LineItem item) => (scaled(item.quantity, 3) * scaled(item.rate, 2) + 500) ~/ 1000;

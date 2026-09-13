@@ -350,7 +350,8 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── capitalTransactionSave ────────────────────────────────────────────────
     if (action == 'capitalTransactionSave') {
       final id = d['id'] as String? ?? 'CAP_${DateTime.now().millisecondsSinceEpoch}';
-      final amountCents = scaled(d['amount'].toString(), 2);
+      final amountCents = (d['amountCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
       if (amountCents <= 0) throw StateError('Contribution amount must be greater than zero.');
 
       final txs = await _sync.loadCachedRecords(sid, 'CapitalTransactions');
@@ -400,7 +401,8 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── shareholderLoanSave ───────────────────────────────────────────────────
     if (action == 'shareholderLoanSave') {
       final id = d['id'] as String? ?? 'LOAN_${DateTime.now().millisecondsSinceEpoch}';
-      final amountCents = scaled(d['amount'].toString(), 2);
+      final amountCents = (d['amountCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
       if (amountCents <= 0) throw StateError('Loan amount must be greater than zero.');
 
       final loans = await _sync.loadCachedRecords(sid, 'ShareholderLoans');
@@ -449,14 +451,15 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── assetSave ─────────────────────────────────────────────────────────────
     if (action == 'assetSave') {
       final id = d['id'] as String? ?? 'AST_${DateTime.now().millisecondsSinceEpoch}';
-      final costCents = scaled(d['cost'].toString(), 2);
+      final costCents = (d['costCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
       final accDepCents = (d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
       final bookValueCents = (costCents - accDepCents).clamp(0, costCents);
 
       final assets = await _sync.loadCachedRecords(sid, 'Assets');
       final old = assets.where((x) => x['id'] == id).firstOrNull;
 
-      if (old == null) {
+      if (old == null && d['skipJournal'] != true) {
         final journal = createAssetPurchaseJournal(
           assetId: id,
           assetName: d['name'] ?? 'Asset',

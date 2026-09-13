@@ -355,7 +355,23 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
 
     if (action == 'capitalTransactionSave') {
       final id = d['id'] as String? ?? 'CAP_${DateTime.now().millisecondsSinceEpoch}';
-      final amountCents = scaled(d['amount'].toString(), 2);
+      final amountCents = (d['amountCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
+      if (amountCents <= 0) throw StateError('Contribution amount must be greater than zero.');
+
+      final txs = await _sync.loadCachedRecords(spreadsheetId, 'CapitalTransactions');
+      final old = txs.where((x) => x['id'] == id).firstOrNull;
+      if (old != null && old['journalId'] != null) {
+        await _sync.deleteCachedRecord(spreadsheetId, 'Journals', old['journalId'] as String);
+        await _sync.enqueueOperation(
+          spreadsheetId: spreadsheetId,
+          tabName: 'Journals',
+          recordId: old['journalId'] as String,
+          action: 'delete',
+          data: {},
+        );
+      }
+
       final journal = createCapitalJournal(
         transactionId: id,
         shareholderName: d['shareholderName'] ?? 'Shareholder',
@@ -364,7 +380,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         contributionType: d['contributionType'] ?? 'bank',
         amountCents: amountCents,
         assetName: d['assetName'],
-        accountName: d['bankAccountId'] ?? 'Bank Account',
+        accountName: d['bankAccountId'] ?? (d['account'] ?? 'Bank Account'),
       );
       await _sync.upsertCachedRecord(spreadsheetId, 'Journals', journal['id'] as String, journal);
       await _sync.enqueueOperation(
@@ -381,7 +397,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'amountCents': amountCents,
         'amount': (amountCents / 100.0).toStringAsFixed(2),
         'journalId': journal['id'],
-        'version': ((d['version'] as int?) ?? 0) + 1,
+        'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
       };
       await _sync.upsertCachedRecord(spreadsheetId, 'CapitalTransactions', id, record);
       await _sync.enqueueOperation(
@@ -424,14 +440,30 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
 
     if (action == 'shareholderLoanSave') {
       final id = d['id'] as String? ?? 'LOAN_${DateTime.now().millisecondsSinceEpoch}';
-      final amountCents = scaled(d['amount'].toString(), 2);
+      final amountCents = (d['amountCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
+      if (amountCents <= 0) throw StateError('Loan amount must be greater than zero.');
+
+      final loans = await _sync.loadCachedRecords(spreadsheetId, 'ShareholderLoans');
+      final old = loans.where((x) => x['id'] == id).firstOrNull;
+      if (old != null && old['journalId'] != null) {
+        await _sync.deleteCachedRecord(spreadsheetId, 'Journals', old['journalId'] as String);
+        await _sync.enqueueOperation(
+          spreadsheetId: spreadsheetId,
+          tabName: 'Journals',
+          recordId: old['journalId'] as String,
+          action: 'delete',
+          data: {},
+        );
+      }
+
       final journal = createShareholderLoanJournal(
         loanId: id,
         shareholderName: d['shareholderName'] ?? 'Shareholder',
         date: d['date'] ?? DateTime.now().toIso8601String().substring(0, 10),
         type: d['type'] ?? 'loanReceived',
         amountCents: amountCents,
-        paymentAccount: d['paymentAccount'] ?? 'Bank',
+        paymentAccount: d['paymentAccount'] ?? (d['account'] ?? 'Bank'),
       );
       await _sync.upsertCachedRecord(spreadsheetId, 'Journals', journal['id'] as String, journal);
       await _sync.enqueueOperation(
@@ -449,7 +481,7 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
         'amount': (amountCents / 100.0).toStringAsFixed(2),
         'principalAmount': (amountCents / 100.0).toStringAsFixed(2),
         'journalId': journal['id'],
-        'version': ((d['version'] as int?) ?? 0) + 1,
+        'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
       };
       await _sync.upsertCachedRecord(spreadsheetId, 'ShareholderLoans', id, record);
       await _sync.enqueueOperation(
@@ -492,13 +524,14 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
 
     if (action == 'assetSave') {
       final id = d['id'] as String? ?? 'AST_${DateTime.now().millisecondsSinceEpoch}';
-      final costCents = scaled(d['cost'].toString(), 2);
+      final costCents = (d['costCents'] as num?)?.toInt() ??
+          ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
       final accDepCents = (d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
       final bookValueCents = (costCents - accDepCents).clamp(0, costCents);
 
       final assets = await _sync.loadCachedRecords(spreadsheetId, 'Assets');
       final old = assets.where((x) => x['id'] == id).firstOrNull;
-      if (old == null) {
+      if (old == null && d['skipJournal'] != true) {
         final journal = createAssetPurchaseJournal(
           assetId: id,
           assetName: d['name'] ?? 'Asset',
