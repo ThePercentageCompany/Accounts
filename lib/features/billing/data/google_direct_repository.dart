@@ -100,6 +100,11 @@ class GoogleDirectBillingRepository implements BillingRepository {
 
   @override
   Future<void> saveCompany(Company company) async {
+    String previousLogoDriveUrl = '';
+    final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
+    final currentSettings = settings.where((record) => record['id'] == 'company').firstOrNull;
+    final currentValue = currentSettings?['value'];
+    if (currentValue is Map) previousLogoDriveUrl = currentValue['logoDriveUrl']?.toString() ?? '';
     final updated = company.copyWith(version: company.version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
     await _sync.upsertCachedRecord(_spreadsheetId, 'Settings', 'company', payload);
@@ -157,9 +162,17 @@ class GoogleDirectBillingRepository implements BillingRepository {
                 action: 'upsert',
                 data: logoPayload,
               );
+              if (previousLogoDriveUrl.isNotEmpty && previousLogoDriveUrl != logoLink) {
+                await _service.deleteDriveFile(token, previousLogoDriveUrl);
+              }
             }
           }
         } catch (_) {}
+      });
+    } else if (previousLogoDriveUrl.isNotEmpty) {
+      Future.microtask(() async {
+        final token = await session.tryGetToken();
+        if (token != null) await _service.deleteDriveFile(token, previousLogoDriveUrl);
       });
     }
 

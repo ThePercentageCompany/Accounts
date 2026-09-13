@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -13,7 +12,8 @@ Future<Uint8List> render(Invoice i, {Payment? receipt}) async {
   final t=Totals.of(i), c=i.company;
   pw.Widget text(String v,{bool bold=false,double size=10})=>pw.Text(v,style:pw.TextStyle(fontSize:size,fontWeight:bold?pw.FontWeight.bold:pw.FontWeight.normal));
   pw.Widget summary(String label,int value,{bool bold=false})=>pw.Padding(padding:const pw.EdgeInsets.symmetric(vertical:5),child:pw.Row(mainAxisAlignment:pw.MainAxisAlignment.spaceBetween,children:[text(label,bold:bold),text(money(value),bold:bold)]));
-  final logo=c.logo.isEmpty?null:pw.MemoryImage(base64Decode(c.logo));
+  final logoBytes=companyLogoBytes(c.logo);
+  final logo=logoBytes==null?null:pw.MemoryImage(logoBytes);
   doc.addPage(pw.MultiPage(pageFormat:PdfPageFormat.a4,margin:const pw.EdgeInsets.all(38),
     footer:(context)=>pw.Column(children:[pw.Divider(color:PdfColors.grey400),pw.Row(mainAxisAlignment:pw.MainAxisAlignment.spaceBetween,children:[text(c.name,size:8),text('${context.pageNumber} / ${context.pagesCount}',size:8)])]),
     build:(context)=>[

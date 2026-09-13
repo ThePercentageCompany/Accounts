@@ -186,6 +186,13 @@ class HybridBillingRepository implements BillingRepository {
 
   @override
   Future<void> saveCompany(Company company) async {
+    String previousLogoDriveUrl = '';
+    if (_hasCloudWorkspace) {
+      final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
+      final current = settings.where((record) => record['id'] == 'company').firstOrNull;
+      final value = current?['value'];
+      if (value is Map) previousLogoDriveUrl = value['logoDriveUrl']?.toString() ?? '';
+    }
     final updated = company.copyWith(version: company.version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
     await _upsert('Settings', 'company', payload);
@@ -233,9 +240,17 @@ class HybridBillingRepository implements BillingRepository {
               final value = Map<String, dynamic>.from(updated.toJson())
                 ..['logoDriveUrl'] = logoLink;
               await _upsert('Settings', 'company', {'id': 'company', 'value': value});
+              if (previousLogoDriveUrl.isNotEmpty && previousLogoDriveUrl != logoLink) {
+                await _service.deleteDriveFile(token, previousLogoDriveUrl);
+              }
             }
           }
         } catch (_) {}
+      });
+    } else if (previousLogoDriveUrl.isNotEmpty && _hasCloudWorkspace) {
+      Future.microtask(() async {
+        final token = await session.tryGetToken();
+        if (token != null) await _service.deleteDriveFile(token, previousLogoDriveUrl);
       });
     }
 

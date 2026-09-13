@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../billing/domain/totals.dart';
+import '../../billing/domain/models.dart' show companyLogoBytes;
 import '../domain/quotation.dart';
 import '../domain/quotation_document_service.dart';
 
@@ -32,7 +32,8 @@ class PdfQuotationDocumentService implements QuotationDocumentService {
           ),
         );
 
-    final logo = c.logo.isEmpty ? null : pw.MemoryImage(base64Decode(c.logo));
+    final logoBytes = companyLogoBytes(c.logo);
+    final logo = logoBytes == null ? null : pw.MemoryImage(logoBytes);
 
     doc.addPage(
       pw.MultiPage(

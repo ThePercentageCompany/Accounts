@@ -788,4 +788,22 @@ class GoogleWorkspaceService {
       subfolder: subfolder ?? 'Assets',
     );
   }
+
+  /// Deletes a Drive file identified by one of Drive's standard view links.
+  /// Returns false for an unrecognised URL so callers never delete a file
+  /// outside the company's managed Drive workspace by accident.
+  Future<bool> deleteDriveFile(String accessToken, String driveUrl) async {
+    final match = RegExp(r'/d/([^/?]+)|[?&]id=([^&]+)').firstMatch(driveUrl);
+    final fileId = match?.group(1) ?? match?.group(2);
+    if (fileId == null || fileId.isEmpty) return false;
+    try {
+      final response = await http.delete(
+        Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      ).timeout(const Duration(seconds: 20));
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }

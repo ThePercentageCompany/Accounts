@@ -169,7 +169,8 @@ class _CompanyEditorState extends State<CompanyEditor> {
       final png = bytes.length > 8 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71;
       final jpg = bytes.length > 3 && bytes[0] == 255 && bytes[1] == 216;
       if (!png && !jpg) throw const FormatException('Use a valid PNG or JPEG image.');
-      if (mounted) setState(() => data['logo'] = base64Encode(bytes));
+      final mimeType = png ? 'image/png' : 'image/jpeg';
+      if (mounted) setState(() => data['logo'] = 'data:$mimeType;base64,${base64Encode(bytes)}');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
@@ -227,6 +228,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                           LayoutBuilder(
                             builder: (context, constraints) {
                               final isSmall = constraints.maxWidth < 460;
+                              final logoBytes = companyLogoBytes(data['logo']?.toString() ?? '');
                               final logoBox = Container(
                                 width: isSmall ? 110 : 130,
                                 height: isSmall ? 60 : 70,
@@ -234,10 +236,10 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                   color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: (data['logo'] as String).isNotEmpty
+                                child: logoBytes != null
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.memory(base64Decode(data['logo']), fit: BoxFit.contain),
+                                        child: Image.memory(logoBytes, fit: BoxFit.contain),
                                       )
                                     : const Center(
                                         child: Icon(CupertinoIcons.photo, color: Colors.grey, size: 28),
@@ -254,14 +256,19 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                       FilledButton.tonalIcon(
                                         onPressed: state.busy ? null : pickLogo,
                                         icon: const Icon(CupertinoIcons.cloud_upload, size: 16),
-                                        label: const Text('Upload Logo'),
+                                        label: Text(logoBytes == null ? 'Upload Logo' : 'Replace Logo'),
                                         style: FilledButton.styleFrom(
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                                         ),
                                       ),
-                                      if ((data['logo'] as String).isNotEmpty)
+                                      if (logoBytes != null)
                                         TextButton.icon(
-                                          onPressed: () => setState(() => data['logo'] = ''),
+                                          onPressed: () {
+                                            setState(() => data['logo'] = '');
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Logo removed. Save Company Settings to sync the change.')),
+                                            );
+                                          },
                                           icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
                                           label: const Text('Remove', style: TextStyle(color: AppTheme.pastelRose)),
                                         ),
@@ -269,7 +276,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'PNG or JPG, up to 1 MB. Applied to newly issued invoices and quotations.',
+                                    'PNG or JPG, up to 1 MB. Saved to Google Drive and linked in Settings when you save.',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,

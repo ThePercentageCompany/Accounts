@@ -1,6 +1,21 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:freezed_annotation/freezed_annotation.dart';
 part 'models.freezed.dart';
 part 'models.g.dart';
+
+/// Supports both older raw-base64 logos and the MIME-qualified data URLs used
+/// for new uploads. Invalid logo data must never prevent an invoice from
+/// rendering.
+Uint8List? companyLogoBytes(String value) {
+  if (value.trim().isEmpty) return null;
+  try {
+    final raw = value.contains(';base64,') ? value.split(';base64,').last : value;
+    return base64Decode(raw);
+  } catch (_) {
+    return null;
+  }
+}
 
 @freezed
 abstract class Customer with _$Customer {
