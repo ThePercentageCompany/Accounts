@@ -7,8 +7,9 @@ Map<String, dynamic> calculatePayroll(
   List<Map<String, dynamic>> rows,
   Map<String, dynamic> d,
 ) {
-  final salary = scaled(employee['basic'].toString(), 2) +
-      scaled(employee['allowances'].toString(), 2);
+  final monthlyBasic = scaled(employee['basic'].toString(), 2);
+  final monthlyAllowances = scaled(employee['allowances'].toString(), 2);
+  final salary = monthlyBasic + monthlyAllowances;
   final divisor = int.parse(d['divisor'].toString()),
       days = double.parse(d['baseDays'].toString()),
       scheduled = int.parse(d['scheduledDays'].toString());
@@ -29,8 +30,12 @@ Map<String, dynamic> calculatePayroll(
           (['absent', 'unpaidLeave'].contains(r['status'])
               ? 1.0
               : (r['status'] == 'halfDay' ? 0.5 : 0.0)));
-  final base = (salary * days / divisor).round(),
-      absence = (salary * absent / divisor).round();
+  // Prorate basic salary and allowances separately. Keeping each component
+  // in cents makes the payslip, Sheets row, and net calculation agree.
+  final basic = (monthlyBasic * days / divisor).round();
+  final allowances = (monthlyAllowances * days / divisor).round();
+  final base = basic + allowances;
+  final absence = (salary * absent / divisor).round();
   final overtime = (rows.fold<int>(
               0, (n, r) => n + scaled(r['overtimeHours'].toString(), 2)) *
           scaled(d['overtimeRate'].toString(), 2) /
@@ -38,14 +43,20 @@ Map<String, dynamic> calculatePayroll(
       .round();
   final bonus = scaled(d['bonus'].toString(), 2),
       deduction = scaled(d['deductions'].toString(), 2);
-  final net = base + overtime + bonus - absence - deduction;
+  final gross = base + overtime + bonus;
+  final totalDeductions = absence + deduction;
+  final net = gross - totalDeductions;
   if (absent > days || net < 0) throw StateError('Deductions exceed salary.');
   return {
+    'basicCents': basic,
+    'allowancesCents': allowances,
     'baseCents': base,
     'absenceCents': absence,
     'overtimeCents': overtime,
     'bonusCents': bonus,
     'deductionCents': deduction,
+    'deductionsCents': totalDeductions,
+    'grossCents': gross,
     'netCents': net,
     'absentDays': absent,
     'markedDays': counted,
@@ -753,4 +764,3 @@ Map<String, int> financialSummary(List<Invoice> invoices, OfficeData office, Str
     'Approved payroll due (all dates)': payrollDue,
   };
 }
-

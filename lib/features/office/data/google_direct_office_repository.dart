@@ -73,11 +73,22 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
     if (action == 'employeeSave') {
       final employees = await _sync.loadCachedRecords(spreadsheetId, 'Employees');
       final id = d['id'] as String;
+      final code = d['code']?.toString().trim() ?? '';
+      final name = d['name']?.toString().trim() ?? '';
+      final joinDate = d['joinDate']?.toString() ?? '';
       final old = employees.where((x) => x['id'] == id).firstOrNull;
       if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) {
         throw StateError('Record changed. Refresh and reopen.');
       }
-      if (employees.any((e) => e['id'] != id && e['code'] == d['code'])) {
+      if (id.isEmpty || code.isEmpty || name.isEmpty) {
+        throw StateError('Employee ID, code, and full name are required.');
+      }
+      if (DateTime.tryParse(joinDate) == null) throw StateError('Use a valid joining date (YYYY-MM-DD).');
+      final endDate = d['endDate']?.toString() ?? '';
+      if (endDate.isNotEmpty && (DateTime.tryParse(endDate) == null || endDate.compareTo(joinDate) < 0)) {
+        throw StateError('Last employment date must be on or after the joining date.');
+      }
+      if (employees.any((e) => e['id'] != id && e['code']?.toString().toLowerCase() == code.toLowerCase())) {
         throw StateError('Employee code already exists.');
       }
       scaled(d['basic'].toString(), 2);
@@ -85,6 +96,8 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
 
       final record = {
         ...d,
+        'code': code,
+        'name': name,
         'documents': old?['documents'] ?? [],
         'version': ((d['version'] as int?) ?? 0) + 1,
       };
@@ -98,6 +111,20 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       );
       _scheduleBackgroundSync();
       return record;
+    }
+
+    if (action == 'employeeDelete') {
+      final id = d['id']?.toString() ?? '';
+      final attendance = await _sync.loadCachedRecords(spreadsheetId, 'Attendance');
+      final payroll = await _sync.loadCachedRecords(spreadsheetId, 'Payroll');
+      if (attendance.any((row) => row['employeeId']?.toString() == id) ||
+          payroll.any((row) => row['employeeId']?.toString() == id)) {
+        throw StateError('This employee has attendance or payroll history and cannot be deleted. Mark the employee inactive instead.');
+      }
+      await _sync.deleteCachedRecord(spreadsheetId, 'Employees', id);
+      await _sync.enqueueOperation(spreadsheetId: spreadsheetId, tabName: 'Employees', recordId: id, action: 'delete', data: {});
+      _scheduleBackgroundSync();
+      return {'id': id};
     }
 
     if (action == 'attendanceSave') {

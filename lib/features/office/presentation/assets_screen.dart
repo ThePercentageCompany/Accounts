@@ -471,7 +471,11 @@ class _StatusChip extends StatelessWidget {
 }
 
 void _showAddAssetModal(BuildContext context, {Map<String, dynamic>? asset}) {
-  final office = context.read<OfficeCubit>().state.data;
+  // A dialog is presented on a separate route. Capture the cubit from the
+  // calling page before opening it so Save always targets the active office
+  // state rather than attempting a provider lookup from the dialog route.
+  final cubit = context.read<OfficeCubit>();
+  final office = cubit.state.data;
   final shareholders = office.shareholders;
   final employees = office.employees;
 
@@ -713,7 +717,6 @@ void _showAddAssetModal(BuildContext context, {Map<String, dynamic>? asset}) {
                 'status': asset?['status'] ?? 'active',
               };
 
-              final cubit = context.read<OfficeCubit>();
               final saved = await cubit.run('assetSave', payload);
               if (!context.mounted) return;
               if (saved) {

@@ -178,6 +178,12 @@ class SheetSchema {
           'Notes',
           'Version',
           'Attachment Drive Links',
+          'Address',
+          'Bank Name',
+          'Emirates ID',
+          'Passport Number',
+          'Visa Expiry',
+          'Last Employment Date',
         ];
 
       case 'Attendance':
@@ -210,6 +216,15 @@ class SheetSchema {
           'Payment Account',
           'Version',
           'Drive Payslip Link',
+          'Unpaid Absence Deduction AED',
+          'Salary Daily Divisor',
+          'Base Paid Days',
+          'Scheduled Working Days',
+          'Marked Working Days',
+          'Unpaid Days',
+          'Overtime Rate AED',
+          'Adjustment Note',
+          'Payment Reference',
         ];
 
       case 'Shareholders':
@@ -271,14 +286,24 @@ class SheetSchema {
           'Purchase Date',
           'Purchase Cost AED',
           'Useful Life (Years)',
-          'Salvage Value AED',
+          'Residual Value AED',
           'Depreciation Method',
           'Accumulated Depreciation AED',
           'Net Book Value AED',
-          'Location / Status',
+          'Status',
           'Notes',
           'Version',
           'Last Depreciation Month',
+          'Asset Code',
+          'Acquisition Type',
+          'Payment Account',
+          'Shareholder ID',
+          'Shareholder Name',
+          'Location',
+          'Assigned Employee ID',
+          'Assigned Employee Name',
+          'Serial Number',
+          'Acquisition Journal ID',
         ];
 
       case 'Journals':
@@ -537,7 +562,7 @@ class SheetSchema {
           record['id']?.toString() ?? '',
           record['code']?.toString() ?? '',
           record['name']?.toString() ?? '',
-          record['role']?.toString() ?? '',
+          record['title']?.toString() ?? record['role']?.toString() ?? '',
           record['department']?.toString() ?? '',
           record['joinDate']?.toString() ?? '',
           basic.toStringAsFixed(2),
@@ -550,6 +575,12 @@ class SheetSchema {
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
           attachmentLinks(record),
+          record['address']?.toString() ?? '',
+          record['bank']?.toString() ?? '',
+          record['emiratesId']?.toString() ?? '',
+          record['passport']?.toString() ?? '',
+          record['visaExpiry']?.toString() ?? '',
+          record['endDate']?.toString() ?? '',
         ];
 
       case 'Attendance':
@@ -565,6 +596,7 @@ class SheetSchema {
         ];
 
       case 'Payroll':
+        final employeeMap = record['employee'] is Map ? record['employee'] as Map : const <dynamic, dynamic>{};
         final basicCents = (record['basicCents'] as num?)?.toDouble() ?? 0.0;
         final basicAed = basicCents != 0 ? basicCents / 100.0 : (double.tryParse(record['basic']?.toString() ?? '0') ?? 0.0);
         final allowancesCents = (record['allowancesCents'] as num?)?.toDouble() ?? 0.0;
@@ -584,7 +616,7 @@ class SheetSchema {
           record['id']?.toString() ?? '',
           record['month']?.toString() ?? '',
           record['employeeId']?.toString() ?? '',
-          record['employeeName']?.toString() ?? '',
+          record['employeeName']?.toString() ?? employeeMap['name']?.toString() ?? '',
           basicAed.toStringAsFixed(2),
           allowancesAed.toStringAsFixed(2),
           overtimeAed.toStringAsFixed(2),
@@ -597,6 +629,17 @@ class SheetSchema {
           record['account']?.toString() ?? 'Bank',
           record['version'] ?? 0,
           record['driveUrl']?.toString() ?? '',
+          // Kept at the end so existing Payroll columns retain their stable
+          // positions in already-provisioned workspaces.
+          (((record['absenceCents'] as num?)?.toDouble() ?? 0.0) / 100.0).toStringAsFixed(2),
+          record['divisor']?.toString() ?? '',
+          record['baseDays']?.toString() ?? '',
+          record['scheduledDays']?.toString() ?? '',
+          record['markedDays']?.toString() ?? '',
+          record['absentDays']?.toString() ?? '',
+          record['overtimeRate']?.toString() ?? '',
+          record['adjustmentNote']?.toString() ?? '',
+          record['reference']?.toString() ?? '',
         ];
 
       case 'Shareholders':
@@ -683,11 +726,13 @@ class SheetSchema {
       case 'Assets':
         final costCents = (record['costCents'] as num?)?.toDouble() ?? 0.0;
         final costAed = costCents != 0 ? costCents / 100.0 : (double.tryParse(record['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
-        final salvageCents = (record['salvageValueCents'] as num?)?.toDouble() ?? 0.0;
-        final salvageAed = salvageCents != 0 ? salvageCents / 100.0 : (double.tryParse(record['salvageValue']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
+        final residualCents = ((record['residualValueCents'] ?? record['salvageValueCents']) as num?)?.toDouble() ?? 0.0;
+        final residualAed = residualCents != 0
+            ? residualCents / 100.0
+            : (double.tryParse((record['residualValue'] ?? record['salvageValue'])?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
         final accDepCents = (record['accumulatedDepreciationCents'] as num?)?.toDouble() ?? 0.0;
         final accDepAed = accDepCents / 100.0;
-        final bookValCents = (record['currentBookValueCents'] as num?)?.toDouble() ?? 0.0;
+        final bookValCents = ((record['bookValueCents'] ?? record['currentBookValueCents']) as num?)?.toDouble() ?? 0.0;
         final bookValAed = bookValCents != 0 ? bookValCents / 100.0 : (costAed - accDepAed);
 
         return [
@@ -696,8 +741,10 @@ class SheetSchema {
           record['category']?.toString() ?? 'Office Equipment',
           record['purchaseDate']?.toString() ?? '',
           costAed.toStringAsFixed(2),
-          record['usefulLifeYears']?.toString() ?? '3',
-          salvageAed.toStringAsFixed(2),
+          (double.tryParse(record['usefulLifeYears']?.toString() ?? '') ??
+                  (((record['usefulLifeMonths'] as num?)?.toDouble() ?? 36.0) / 12.0))
+              .toStringAsFixed(2),
+          residualAed.toStringAsFixed(2),
           record['depreciationMethod']?.toString() ?? 'Straight Line',
           accDepAed.toStringAsFixed(2),
           bookValAed.toStringAsFixed(2),
@@ -705,6 +752,16 @@ class SheetSchema {
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
           record['lastDepreciationMonth']?.toString() ?? '',
+          record['code']?.toString() ?? '',
+          record['acquisitionType']?.toString() ?? 'companyPurchase',
+          record['paymentAccount']?.toString() ?? 'Bank',
+          record['shareholderId']?.toString() ?? '',
+          record['shareholderName']?.toString() ?? '',
+          record['location']?.toString() ?? '',
+          record['assignedEmployeeId']?.toString() ?? '',
+          record['assignedEmployeeName']?.toString() ?? '',
+          record['serialNumber']?.toString() ?? '',
+          record['journalId']?.toString() ?? '',
         ];
 
       case 'Journals':
@@ -959,7 +1016,10 @@ class SheetSchema {
       case 'Employees':
         if (row.length > 1) record['code'] = row[1]?.toString() ?? '';
         if (row.length > 2) record['name'] = row[2]?.toString() ?? '';
-        if (row.length > 3) record['role'] = row[3]?.toString() ?? '';
+        if (row.length > 3) {
+          record['title'] = row[3]?.toString() ?? '';
+          record['role'] = record['title']; // compatibility with earlier rows
+        }
         if (row.length > 4) record['department'] = row[4]?.toString() ?? '';
         if (row.length > 5) record['joinDate'] = row[5]?.toString() ?? '';
         if (row.length > 6) record['basic'] = row[6]?.toString() ?? '0.00';
@@ -971,6 +1031,12 @@ class SheetSchema {
         if (row.length > 13) record['notes'] = row[13]?.toString() ?? '';
         if (row.length > 14) record['version'] = int.tryParse(row[14]?.toString() ?? '0') ?? 0;
         if (row.length > 15) record['documents'] = attachmentsFromCell(row[15]);
+        if (row.length > 16) record['address'] = row[16]?.toString() ?? '';
+        if (row.length > 17) record['bank'] = row[17]?.toString() ?? '';
+        if (row.length > 18) record['emiratesId'] = row[18]?.toString() ?? '';
+        if (row.length > 19) record['passport'] = row[19]?.toString() ?? '';
+        if (row.length > 20) record['visaExpiry'] = row[20]?.toString() ?? '';
+        if (row.length > 21) record['endDate'] = row[21]?.toString() ?? '';
         break;
 
       case 'Attendance':
@@ -1022,6 +1088,30 @@ class SheetSchema {
         if (row.length > 13) record['account'] = row[13]?.toString() ?? 'Bank';
         if (row.length > 14) record['version'] = int.tryParse(row[14]?.toString() ?? '0') ?? 0;
         if (row.length > 15) record['driveUrl'] = row[15]?.toString() ?? '';
+        if (row.length > 16) {
+          final absence = double.tryParse(row[16]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
+          record['absenceCents'] = (absence * 100).round();
+        }
+        if (row.length > 17) record['divisor'] = row[17]?.toString() ?? '';
+        if (row.length > 18) record['baseDays'] = row[18]?.toString() ?? '';
+        if (row.length > 19) record['scheduledDays'] = row[19]?.toString() ?? '';
+        if (row.length > 20) record['markedDays'] = int.tryParse(row[20]?.toString() ?? '') ?? 0;
+        if (row.length > 21) record['absentDays'] = double.tryParse(row[21]?.toString() ?? '') ?? 0.0;
+        if (row.length > 22) record['overtimeRate'] = row[22]?.toString() ?? '';
+        if (row.length > 23) record['adjustmentNote'] = row[23]?.toString() ?? '';
+        if (row.length > 24) record['reference'] = row[24]?.toString() ?? '';
+        // Legacy rows only have one Deductions column. Treat it as the
+        // complete deduction when an absence breakdown is unavailable.
+        final totalDeductions = (record['deductionsCents'] as num?)?.toInt() ?? 0;
+        final absenceDeduction = (record['absenceCents'] as num?)?.toInt() ?? 0;
+        record['deductionCents'] = (totalDeductions - absenceDeduction).clamp(0, totalDeductions);
+        if (record['grossCents'] == null) {
+          record['grossCents'] =
+              ((record['basicCents'] as num?)?.toInt() ?? 0) +
+              ((record['allowancesCents'] as num?)?.toInt() ?? 0) +
+              ((record['overtimeCents'] as num?)?.toInt() ?? 0) +
+              ((record['bonusCents'] as num?)?.toInt() ?? 0);
+        }
         record['employee'] = {'id': record['employeeId'], 'name': record['employeeName']};
         break;
 
@@ -1118,13 +1208,16 @@ class SheetSchema {
         }
         if (row.length > 5) {
           record['usefulLifeYears'] = row[5]?.toString() ?? '3';
-          final yrs = int.tryParse(record['usefulLifeYears'] ?? '3') ?? 3;
-          record['usefulLifeMonths'] = yrs * 12;
+          final years = double.tryParse(record['usefulLifeYears'] ?? '3') ?? 3.0;
+          record['usefulLifeMonths'] = (years * 12).round();
         }
         if (row.length > 6) {
           final s = double.tryParse(row[6]?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
-          record['salvageValueCents'] = (s * 100).round();
-          record['salvageValue'] = s.toStringAsFixed(2);
+          record['residualValueCents'] = (s * 100).round();
+          record['residualValue'] = s.toStringAsFixed(2);
+          // Keep legacy aliases for any existing presentation code.
+          record['salvageValueCents'] = record['residualValueCents'];
+          record['salvageValue'] = record['residualValue'];
         }
         if (row.length > 7) record['depreciationMethod'] = row[7]?.toString() ?? 'Straight Line';
         if (row.length > 8) {
@@ -1142,6 +1235,20 @@ class SheetSchema {
         if (row.length > 11) record['notes'] = row[11]?.toString() ?? '';
         if (row.length > 12) record['version'] = int.tryParse(row[12]?.toString() ?? '0') ?? 0;
         if (row.length > 13) record['lastDepreciationMonth'] = row[13]?.toString() ?? '';
+        // These appended columns preserve the complete fixed-asset register
+        // on Sheets without shifting legacy rows.
+        record['code'] = row.length > 14 && row[14]?.toString().trim().isNotEmpty == true
+            ? row[14].toString().trim()
+            : id;
+        if (row.length > 15) record['acquisitionType'] = row[15]?.toString() ?? 'companyPurchase';
+        if (row.length > 16) record['paymentAccount'] = row[16]?.toString() ?? 'Bank';
+        if (row.length > 17) record['shareholderId'] = row[17]?.toString() ?? '';
+        if (row.length > 18) record['shareholderName'] = row[18]?.toString() ?? '';
+        if (row.length > 19) record['location'] = row[19]?.toString() ?? '';
+        if (row.length > 20) record['assignedEmployeeId'] = row[20]?.toString() ?? '';
+        if (row.length > 21) record['assignedEmployeeName'] = row[21]?.toString() ?? '';
+        if (row.length > 22) record['serialNumber'] = row[22]?.toString() ?? '';
+        if (row.length > 23) record['journalId'] = row[23]?.toString() ?? '';
         break;
 
       case 'Journals':

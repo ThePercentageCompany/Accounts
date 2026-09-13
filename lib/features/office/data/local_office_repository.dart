@@ -33,6 +33,10 @@ class LocalOfficeRepository implements OfficeRepository {
    if(list(key).any((e)=>e['id']!=d['id']&&e['code']==d['code']))throw StateError('Employee code already exists.');
    scaled(d['basic'].toString(),2);scaled(d['allowances'].toString(),2);
    record={...d,'documents':old?['documents']??[],'version':(d['version'] as int)+1};
+  }else if(action=='employeeDelete'){
+   key='employees';final id=d['id'].toString();
+   if(list('attendance').any((a)=>a['employeeId']==id)||list('payroll').any((p)=>p['employeeId']==id))throw StateError('This employee has attendance or payroll history and cannot be deleted. Mark the employee inactive instead.');
+   root[key]=(root[key] as List).where((e)=>(e as Map)['id']!=id).toList();await prefs.setString('tpc_office_v1',jsonEncode(root));return {'id':id};
   }else if(action=='attendanceSave'){
    key='attendance';final id='${d['employeeId']}_${d['date']}';final old=find(key,id);version(old);
    if(list('payroll').any((p)=>p['employee']['id']==d['employeeId']&&p['month']==d['date'].toString().substring(0,7)&&p['status']!='draft'))throw StateError('Attendance is locked by approved payroll.');

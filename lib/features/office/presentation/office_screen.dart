@@ -956,6 +956,25 @@ class _OfficeScreenState extends State<OfficeScreen> {
     }
   }
 
+  Future<void> deleteEmployee(Map<String, dynamic> employee) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete employee?'),
+        content: Text('Delete ${employee['name']} from the employee register? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.zohoRed),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (approved == true) await run('employeeDelete', {'id': employee['id']});
+  }
+
   Future<void> attendance(Map<String, dynamic> employee, Map<String, dynamic>? old) async {
     final result = await officeForm(
       context,
@@ -1506,6 +1525,13 @@ class _OfficeScreenState extends State<OfficeScreen> {
                           onPressed: () => employee(e),
                           icon: const Icon(CupertinoIcons.pencil, size: 15),
                           label: const Text('Edit Record'),
+                        ),
+                        const SizedBox(width: 6),
+                        TextButton.icon(
+                          onPressed: () => deleteEmployee(e),
+                          icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.zohoRed),
+                          label: const Text('Delete'),
+                          style: TextButton.styleFrom(foregroundColor: AppTheme.zohoRed),
                         ),
                         if (!demo) ...[
                           const SizedBox(width: 6),
