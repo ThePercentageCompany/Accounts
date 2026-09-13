@@ -104,6 +104,32 @@ void main() {
     expect(quotationRepo.isDemo, isFalse);
   });
 
+  test('GoogleSession signOut clears all SharedPreferences, syncManager, and in-memory caches', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('tpc_demo_v1', '{"invoices": []}');
+    await prefs.setString('tpc_office_demo_v2', '{"employees": []}');
+    await prefs.setString('tpc_google_auth_session', '{"email": "test@company.com"}');
+    await prefs.setString('tpc_tab_cache_sheet123_Invoices', '[{"id": "inv-1"}]');
+
+    final session = GoogleSession();
+    session.setWorkspace(const WorkspaceConfig(
+      spreadsheetId: 'sheet123',
+      driveFolderId: 'folder123',
+      companyName: 'Test Company',
+    ));
+
+    expect(prefs.getKeys(), isNotEmpty);
+
+    await session.signOut();
+
+    expect(session.user, isNull);
+    expect(session.workspace, isNull);
+    expect(session.authorized, isFalse);
+    expect(session.cachedEmail, isNull);
+    expect(session.cachedDisplayName, isNull);
+    expect(prefs.getKeys(), isEmpty);
+  });
+
   testWidgets('CompanyOnboardingView mounts with iOS styling and form fields', (tester) async {
     final session = GoogleSession();
 

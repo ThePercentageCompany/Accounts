@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../sync/sync_manager.dart';
+import '../utils/browser_storage_cleaner.dart';
 import 'google_workspace_service.dart';
 
 const connectedMode = bool.fromEnvironment('CONNECTED', defaultValue: false);
@@ -254,10 +255,7 @@ class GoogleSession extends ChangeNotifier {
       cachedDisplayName = null;
       cachedPhotoUrl = null;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cachedEmailKey);
-      await prefs.remove(_cachedNameKey);
-      await prefs.remove(_cachedPhotoKey);
-      await prefs.remove(_cachedWorkspaceKey);
+      await prefs.clear();
     } catch (_) {}
   }
 
@@ -520,6 +518,7 @@ class GoogleSession extends ChangeNotifier {
     isOffline = false;
     cachedEmail = null;
     cachedDisplayName = null;
+    cachedPhotoUrl = null;
     error = null;
 
     try {
@@ -528,6 +527,10 @@ class GoogleSession extends ChangeNotifier {
 
     try {
       await _clearCachedSession();
+    } catch (_) {}
+
+    try {
+      await clearBrowserStorage();
     } catch (_) {}
 
     try {
