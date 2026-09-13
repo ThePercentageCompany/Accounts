@@ -14,7 +14,27 @@ abstract class OfficeData with _$OfficeData {
     @Default([]) List<Map<String,dynamic>> assets,
     @Default([]) List<Map<String,dynamic>> journals,
   }) = _OfficeData;
-  factory OfficeData.fromJson(Map<String,dynamic> json)=>_$OfficeDataFromJson(json);
+  factory OfficeData.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> parseList(dynamic raw) {
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    return OfficeData(
+      employees: parseList(json['employees']),
+      attendance: parseList(json['attendance']),
+      payroll: parseList(json['payroll']),
+      entries: parseList(json['entries']),
+      shareholders: parseList(json['shareholders']),
+      capitalTransactions: parseList(json['capitalTransactions']),
+      shareholderLoans: parseList(json['shareholderLoans']),
+      assets: parseList(json['assets']),
+      journals: parseList(json['journals']),
+    );
+  }
 }
 abstract interface class OfficeRepository {
   bool get isDemo;

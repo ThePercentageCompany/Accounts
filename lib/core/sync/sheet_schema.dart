@@ -759,7 +759,9 @@ class SheetSchema {
         if (row.length > 3) record['dueDate'] = row[3]?.toString() ?? '';
         final custName = row.length > 4 ? row[4]?.toString() ?? '' : '';
         final custId = row.length > 5 ? row[5]?.toString() ?? '' : '';
-        record['customer'] = {'id': custId, 'name': custName};
+        record['customer'] = {'id': custId, 'name': custName, 'email': '', 'phone': '', 'address': '', 'trn': ''};
+        record['company'] = defaultCompanyMap();
+        record['payments'] = <Map<String, dynamic>>[];
         if (row.length > 6) record['status'] = row[6]?.toString().toLowerCase() ?? 'draft';
         if (row.length > 7) record['taxRate'] = row[7]?.toString() ?? '0';
         if (row.length > 8) record['discount'] = row[8]?.toString() ?? '0.00';
@@ -800,7 +802,8 @@ class SheetSchema {
         if (row.length > 3) record['validUntil'] = row[3]?.toString() ?? '';
         final qCustName = row.length > 4 ? row[4]?.toString() ?? '' : '';
         final qCustId = row.length > 5 ? row[5]?.toString() ?? '' : '';
-        record['customer'] = {'id': qCustId, 'name': qCustName};
+        record['customer'] = {'id': qCustId, 'name': qCustName, 'email': '', 'phone': '', 'address': '', 'trn': ''};
+        record['company'] = defaultCompanyMap();
         if (row.length > 6) record['status'] = row[6]?.toString().toLowerCase() ?? 'draft';
         if (row.length > 7) record['taxRate'] = row[7]?.toString() ?? '0';
         if (row.length > 8) record['discount'] = row[8]?.toString() ?? '0.00';
@@ -1094,4 +1097,23 @@ class SheetSchema {
 
     return record;
   }
+
+  /// Default company information map for invoices & quotations deserialization
+  static Map<String, dynamic> defaultCompanyMap() => {
+    'name': 'The Percentage FZ LLC',
+    'address': 'Dubai U.A.E',
+    'phone': '+971 56 331 9030',
+    'email': 'thepercentagecompany1@gmail.com',
+    'trn': '',
+    'prefix': 'TPC',
+    'bank': 'Mashreq Bank',
+    'accountHolder': 'The Percentage FZ LLC',
+    'accountNumber': '019102062841',
+    'iban': '',
+    'terms': 'Due on Receipt',
+    'notes': 'Thanks for your business.',
+    'logo': '',
+    'shareholders': <Map<String, dynamic>>[],
+    'version': 0,
+  };
 }

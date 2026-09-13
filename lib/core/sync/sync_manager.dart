@@ -105,8 +105,9 @@ class SyncManager extends ChangeNotifier {
     final raw = prefs.getString(_cacheKey(spreadsheetId, tabName));
     if (raw == null || raw.isEmpty) return [];
     try {
-      final list = jsonDecode(raw) as List<dynamic>;
-      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final list = jsonDecode(raw);
+      if (list is! List) return [];
+      return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (_) {
       return [];
     }
@@ -280,7 +281,7 @@ class SyncManager extends ChangeNotifier {
     final billingRaw = prefs.getString('tpc_demo_v1');
     if (billingRaw != null && billingRaw.isNotEmpty) {
       try {
-        final billingMap = jsonDecode(billingRaw) as Map<String, dynamic>;
+        final billingMap = Map<String, dynamic>.from(jsonDecode(billingRaw) as Map);
         // Customers
         final customers = (billingMap['customers'] as List?) ?? [];
         for (final c in customers) {
@@ -338,7 +339,8 @@ class SyncManager extends ChangeNotifier {
     final quotesRaw = prefs.getString('tpc_quotations_v1');
     if (quotesRaw != null && quotesRaw.isNotEmpty) {
       try {
-        final quotesList = jsonDecode(quotesRaw) as List<dynamic>;
+        final quotesDecoded = jsonDecode(quotesRaw);
+        final quotesList = quotesDecoded is List ? quotesDecoded : [];
         for (final q in quotesList) {
           if (q is Map) {
             final map = Map<String, dynamic>.from(q);
@@ -362,7 +364,7 @@ class SyncManager extends ChangeNotifier {
     final officeRaw = prefs.getString('tpc_office_demo_v2');
     if (officeRaw != null && officeRaw.isNotEmpty) {
       try {
-        final officeMap = jsonDecode(officeRaw) as Map<String, dynamic>;
+        final officeMap = Map<String, dynamic>.from(jsonDecode(officeRaw) as Map);
         final tabMapping = {
           'employees': 'Employees',
           'attendance': 'Attendance',

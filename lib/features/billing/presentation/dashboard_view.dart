@@ -27,7 +27,6 @@ class _DashboardViewState extends State<DashboardView> {
   late String _cashFlowPeriod;
   int? _hoveredMonthIndex;
   String _transactionFilter = 'All';
-  String _chartMetricFilter = 'All';
 
   @override
   void initState() {

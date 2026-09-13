@@ -8,7 +8,15 @@ abstract class Customer with _$Customer {
     @Default('') String email, @Default('') String phone,
     @Default('') String address, @Default('') String trn,
     @Default(0) int version}) = _Customer;
-  factory Customer.fromJson(Map<String,dynamic> json) => _$CustomerFromJson(json);
+  factory Customer.fromJson(Map<String, dynamic> json) => Customer(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    email: json['email']?.toString() ?? '',
+    phone: json['phone']?.toString() ?? '',
+    address: json['address']?.toString() ?? '',
+    trn: json['trn']?.toString() ?? '',
+    version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
+  );
 }
 
 @freezed
@@ -30,21 +38,50 @@ abstract class Company with _$Company {
     @Default([]) List<Map<String, dynamic>> shareholders,
     @Default(0) int version,
   }) = _Company;
-  factory Company.fromJson(Map<String,dynamic> json) => _$CompanyFromJson(json);
+  factory Company.fromJson(Map<String, dynamic> json) => Company(
+    name: json['name']?.toString() ?? 'The Percentage FZ LLC',
+    address: json['address']?.toString() ?? 'Dubai U.A.E',
+    phone: json['phone']?.toString() ?? '+971 56 331 9030',
+    email: json['email']?.toString() ?? 'thepercentagecompany1@gmail.com',
+    trn: json['trn']?.toString() ?? '',
+    prefix: json['prefix']?.toString() ?? 'TPC',
+    accountHolder: json['accountHolder']?.toString() ?? 'The Percentage FZ LLC',
+    bank: json['bank']?.toString() ?? 'Mashreq Bank',
+    accountNumber: json['accountNumber']?.toString() ?? '019102062841',
+    iban: json['iban']?.toString() ?? '',
+    notes: json['notes']?.toString() ?? 'Thanks for your business.',
+    terms: json['terms']?.toString() ?? 'Due on Receipt',
+    logo: json['logo']?.toString() ?? '',
+    shareholders: (json['shareholders'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(),
+    version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
+  );
 }
 
 @freezed
 abstract class LineItem with _$LineItem {
   const factory LineItem({required String description,
     @Default('1') String quantity, @Default('0.00') String rate}) = _LineItem;
-  factory LineItem.fromJson(Map<String,dynamic> json) => _$LineItemFromJson(json);
+  factory LineItem.fromJson(Map<String, dynamic> json) => LineItem(
+    description: json['description']?.toString() ?? '',
+    quantity: json['quantity']?.toString() ?? '1',
+    rate: json['rate']?.toString() ?? '0.00',
+  );
 }
 
 @freezed
 abstract class Payment with _$Payment {
   const factory Payment({required String id, required int cents,
     required String date, @Default('Bank') String account, @Default('') String reference}) = _Payment;
-  factory Payment.fromJson(Map<String,dynamic> json) => _$PaymentFromJson(json);
+  factory Payment.fromJson(Map<String, dynamic> json) => Payment(
+    id: json['id']?.toString() ?? '',
+    cents: (json['cents'] as num?)?.toInt() ?? int.tryParse(json['cents']?.toString() ?? '0') ?? 0,
+    date: json['date']?.toString() ?? '',
+    account: json['account']?.toString() ?? 'Bank',
+    reference: json['reference']?.toString() ?? '',
+  );
 }
 
 @freezed
@@ -61,7 +98,46 @@ abstract class Invoice with _$Invoice {
     @Default(0) int archivedVersion,
     @Default('') String issuedAt,
   }) = _Invoice;
-  factory Invoice.fromJson(Map<String,dynamic> json) => _$InvoiceFromJson(json);
+  factory Invoice.fromJson(Map<String, dynamic> json) {
+    final custRaw = json['customer'];
+    final compRaw = json['company'];
+    final itemsRaw = json['items'];
+    final paymentsRaw = json['payments'];
+
+    return Invoice(
+      id: json['id']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      customer: custRaw is Map
+          ? Customer.fromJson(Map<String, dynamic>.from(custRaw))
+          : const Customer(id: '', name: ''),
+      company: compRaw is Map
+          ? Company.fromJson(Map<String, dynamic>.from(compRaw))
+          : const Company(),
+      items: itemsRaw is List
+          ? itemsRaw
+              .whereType<Map>()
+              .map((e) => LineItem.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      discount: json['discount']?.toString() ?? '0.00',
+      taxRate: json['taxRate']?.toString() ?? '0',
+      number: json['number']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'draft',
+      dueDate: json['dueDate']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+      terms: json['terms']?.toString() ?? 'Due on Receipt',
+      payments: paymentsRaw is List
+          ? paymentsRaw
+              .whereType<Map>()
+              .map((e) => Payment.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
+      driveUrl: json['driveUrl']?.toString() ?? '',
+      archivedVersion: (json['archivedVersion'] as num?)?.toInt() ?? int.tryParse(json['archivedVersion']?.toString() ?? '0') ?? 0,
+      issuedAt: json['issuedAt']?.toString() ?? '',
+    );
+  }
 }
 
 @freezed
@@ -69,5 +145,27 @@ abstract class BillingData with _$BillingData {
   const factory BillingData({@Default(Company()) Company company,
     @Default([]) List<Customer> customers,
     @Default([]) List<Invoice> invoices}) = _BillingData;
-  factory BillingData.fromJson(Map<String,dynamic> json) => _$BillingDataFromJson(json);
+  factory BillingData.fromJson(Map<String, dynamic> json) {
+    final compRaw = json['company'];
+    final custRaw = json['customers'];
+    final invRaw = json['invoices'];
+
+    return BillingData(
+      company: compRaw is Map
+          ? Company.fromJson(Map<String, dynamic>.from(compRaw))
+          : const Company(),
+      customers: custRaw is List
+          ? custRaw
+              .whereType<Map>()
+              .map((e) => Customer.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      invoices: invRaw is List
+          ? invRaw
+              .whereType<Map>()
+              .map((e) => Invoice.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
 }

@@ -135,15 +135,18 @@ class HybridBillingRepository implements BillingRepository {
       final prefs = await SharedPreferences.getInstance();
       final billingRaw = prefs.getString('tpc_demo_v1');
       if (billingRaw == null || billingRaw.isEmpty) return;
-      final billingMap = jsonDecode(billingRaw) as Map<String, dynamic>;
+      final billingMap = Map<String, dynamic>.from(jsonDecode(billingRaw) as Map);
 
       final customers = (billingMap['customers'] as List? ?? [])
-          .map((x) => Map<String, dynamic>.from(x as Map))
+          .whereType<Map>()
+          .map((x) => Map<String, dynamic>.from(x))
           .toList();
       final invoices = (billingMap['invoices'] as List? ?? [])
-          .map((x) => Map<String, dynamic>.from(x as Map))
+          .whereType<Map>()
+          .map((x) => Map<String, dynamic>.from(x))
           .toList();
-      final company = billingMap['company'] as Map<String, dynamic>?;
+      final compRaw = billingMap['company'];
+      final company = compRaw is Map ? Map<String, dynamic>.from(compRaw) : null;
 
       if (customers.isNotEmpty) {
         await _sync.saveCachedRecords(spreadsheetId, 'Customers', customers);

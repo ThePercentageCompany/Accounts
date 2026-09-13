@@ -61,7 +61,7 @@ class GoogleWorkspaceService {
     final raw = prefs.getString('$_prefsKeyPrefix$email');
     if (raw == null || raw.isEmpty) return null;
     try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       return WorkspaceConfig.fromJson(map);
     } catch (_) {
       return null;
@@ -94,11 +94,11 @@ class GoogleWorkspaceService {
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
       final files = (body['files'] as List?) ?? [];
       if (files.isEmpty) return null;
 
-      final file = files.first as Map<String, dynamic>;
+      final file = Map<String, dynamic>.from(files.first as Map);
       final spreadsheetId = file['id'] as String;
       final name = file['name'] as String;
       final webViewLink = file['webViewLink'] as String?;
@@ -116,10 +116,10 @@ class GoogleWorkspaceService {
         ).timeout(const Duration(seconds: 10));
 
         if (folderRes.statusCode == 200) {
-          final folderBody = jsonDecode(folderRes.body) as Map<String, dynamic>;
+          final folderBody = Map<String, dynamic>.from(jsonDecode(folderRes.body) as Map);
           final folderFiles = (folderBody['files'] as List?) ?? [];
           if (folderFiles.isNotEmpty) {
-            final f = folderFiles.first as Map<String, dynamic>;
+            final f = Map<String, dynamic>.from(folderFiles.first as Map);
             folderId = f['id'] as String;
             folderLink = f['webViewLink'] as String?;
           }
@@ -166,7 +166,7 @@ class GoogleWorkspaceService {
     if (folderRes.statusCode != 200 && folderRes.statusCode != 201) {
       throw StateError('Failed to create Drive folder (${folderRes.statusCode}): ${folderRes.body}');
     }
-    final folderData = jsonDecode(folderRes.body) as Map<String, dynamic>;
+    final folderData = Map<String, dynamic>.from(jsonDecode(folderRes.body) as Map);
     final folderId = folderData['id'] as String;
 
     // STEP 1.5: Create Standard Structured Subfolders in Drive
@@ -192,7 +192,7 @@ class GoogleWorkspaceService {
     if (sheetRes.statusCode != 200 && sheetRes.statusCode != 201) {
       throw StateError('Failed to create Spreadsheet (${sheetRes.statusCode}): ${sheetRes.body}');
     }
-    final sheetData = jsonDecode(sheetRes.body) as Map<String, dynamic>;
+    final sheetData = Map<String, dynamic>.from(jsonDecode(sheetRes.body) as Map);
     final spreadsheetId = sheetData['spreadsheetId'] as String;
     final spreadsheetUrl = sheetData['spreadsheetUrl'] as String?;
 
@@ -300,10 +300,10 @@ class GoogleWorkspaceService {
 
       if (res.statusCode != 200) return;
 
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
       final sheets = (body['sheets'] as List?) ?? [];
       final existingTitles = sheets
-          .map((s) => (s['properties'] as Map<String, dynamic>?)?['title'] as String?)
+          .map((s) => s is Map && s['properties'] is Map ? (Map<String, dynamic>.from(s['properties'] as Map)['title'] as String?) : null)
           .whereType<String>()
           .toSet();
 
@@ -321,7 +321,7 @@ class GoogleWorkspaceService {
               })
           .toList();
 
-      final addRes = await http.post(
+      final batchRes = await http.post(
         Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -330,36 +330,34 @@ class GoogleWorkspaceService {
         body: jsonEncode({'requests': addSheetRequests}),
       ).timeout(const Duration(seconds: 20));
 
-      if (addRes.statusCode != 200 && addRes.statusCode != 201) return;
+      if (batchRes.statusCode != 200 && batchRes.statusCode != 201) return;
 
-      // 2. Initialize headers for newly added sheets
-      final headerData = <Map<String, dynamic>>[];
-      for (final tab in missingTabs) {
-        final headers = SheetSchema.getHeaders(tab);
+      // 2. Initialize headers for newly added tabs
+      final valueData = <Map<String, dynamic>>[];
+      for (final title in missingTabs) {
+        final headers = SheetSchema.getHeaders(title);
         final endCol = SheetSchema.getColLetter(headers.length);
-        headerData.add({
-          'range': '$tab!A1:${endCol}1',
+        valueData.add({
+          'range': '$title!A1:${endCol}1',
           'values': [headers],
         });
       }
 
-      if (headerData.isNotEmpty) {
-        await http.post(
-          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'valueInputOption': 'USER_ENTERED',
-            'data': headerData,
-          }),
-        ).timeout(const Duration(seconds: 20));
-      }
+      await http.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'valueInputOption': 'USER_ENTERED',
+          'data': valueData,
+        }),
+      ).timeout(const Duration(seconds: 20));
     } catch (_) {}
   }
 
-  /// Ensures a single tab exists with appropriate headers.
+  /// Ensures a specific sheet tab exists and initializes its headers.
   Future<void> ensureTabExists(String accessToken, String spreadsheetId, String tabName) async {
     try {
       final addRes = await http.post(
@@ -421,13 +419,15 @@ class GoogleWorkspaceService {
         return fallbackMap;
       }
 
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
       final valueRanges = (body['valueRanges'] as List?) ?? [];
 
       final resultMap = <String, List<Map<String, dynamic>>>{};
       for (int i = 0; i < tabNames.length && i < valueRanges.length; i++) {
         final tabName = tabNames[i];
-        final vr = valueRanges[i] as Map<String, dynamic>;
+        final vrRaw = valueRanges[i];
+        if (vrRaw is! Map) continue;
+        final vr = Map<String, dynamic>.from(vrRaw);
         final values = (vr['values'] as List?) ?? [];
         final list = <Map<String, dynamic>>[];
         for (final row in values) {
@@ -458,7 +458,7 @@ class GoogleWorkspaceService {
       }
 
       if (res.statusCode != 200) return [];
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
       final values = (body['values'] as List?) ?? [];
 
       final list = <Map<String, dynamic>>[];
@@ -489,7 +489,7 @@ class GoogleWorkspaceService {
 
     int targetRow = 2;
     if (res.statusCode == 200) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
       final values = (body['values'] as List?) ?? [];
       final index = values.indexWhere((r) => r is List && r.isNotEmpty && r[0].toString() == id);
       if (index >= 0) {
@@ -588,7 +588,7 @@ class GoogleWorkspaceService {
       ).timeout(const Duration(seconds: 15));
 
       if (listRes.statusCode == 200) {
-        final body = jsonDecode(listRes.body) as Map<String, dynamic>;
+        final body = Map<String, dynamic>.from(jsonDecode(listRes.body) as Map);
         final files = (body['files'] as List?) ?? [];
         for (final f in files) {
           if (f is Map) {
@@ -618,7 +618,7 @@ class GoogleWorkspaceService {
           ).timeout(const Duration(seconds: 15));
 
           if (createRes.statusCode == 200 || createRes.statusCode == 201) {
-            final data = jsonDecode(createRes.body) as Map<String, dynamic>;
+            final data = Map<String, dynamic>.from(jsonDecode(createRes.body) as Map);
             folderMap[subfolderName] = data['id'] as String;
           }
         }
@@ -746,7 +746,7 @@ class GoogleWorkspaceService {
       ).timeout(const Duration(seconds: 40));
 
       if (uploadRes.statusCode == 200 || uploadRes.statusCode == 201) {
-        final data = jsonDecode(uploadRes.body) as Map<String, dynamic>;
+        final data = Map<String, dynamic>.from(jsonDecode(uploadRes.body) as Map);
         return data['webViewLink'] as String? ?? 'https://drive.google.com/file/d/${data['id']}/view';
       }
     } catch (_) {}

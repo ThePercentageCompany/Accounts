@@ -149,7 +149,7 @@ class GoogleSession extends ChangeNotifier {
         headers: {'Authorization': 'Bearer $accessToken'},
       ).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
         final name = (data['name'] as String?)?.trim();
         final picture = (data['picture'] as String?)?.trim();
         if (name != null && name.isNotEmpty) {
@@ -177,7 +177,7 @@ class GoogleSession extends ChangeNotifier {
 
       final wsRaw = prefs.getString(_cachedWorkspaceKey);
       if (wsRaw != null && wsRaw.isNotEmpty) {
-        final ws = WorkspaceConfig.fromJson(jsonDecode(wsRaw) as Map<String, dynamic>);
+        final ws = WorkspaceConfig.fromJson(Map<String, dynamic>.from(jsonDecode(wsRaw) as Map));
         // Never auto-restore offline/local demo sessions — always require Google Sign-In
         if (ws.spreadsheetId != 'local_demo_workspace' && ws.spreadsheetId.isNotEmpty) {
           workspace = ws;

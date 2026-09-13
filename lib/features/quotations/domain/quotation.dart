@@ -103,7 +103,8 @@ class Quotation {
         customer: Customer.fromJson(Map<String, dynamic>.from(json['customer'] as Map? ?? {})),
         company: Company.fromJson(Map<String, dynamic>.from(json['company'] as Map? ?? {})),
         items: (json['items'] as List<dynamic>? ?? [])
-            .map((e) => LineItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .whereType<Map>()
+            .map((e) => LineItem.fromJson(Map<String, dynamic>.from(e)))
             .toList(),
         discount: json['discount'] as String? ?? '0.00',
         taxRate: json['taxRate'] as String? ?? '5.00',
@@ -111,7 +112,7 @@ class Quotation {
         notes: json['notes'] as String? ?? '',
         terms: json['terms'] as String? ?? '',
         convertedInvoiceId: json['convertedInvoiceId'] as String? ?? '',
-        version: json['version'] as int? ?? 0,
+        version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
         driveUrl: json['driveUrl'] as String? ?? '',
         issuedAt: json['issuedAt'] as String? ?? '',
       );
