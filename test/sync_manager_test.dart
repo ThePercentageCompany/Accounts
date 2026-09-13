@@ -179,7 +179,7 @@ void main() {
       };
 
       final row = SheetSchema.recordToRow('Invoices', invoice);
-      expect(row[14], contains('1.25x Usage-based service @ 100.00'));
+      expect(row[14], contains('1.25x Usage-based service @ 100.00 = 125.00'));
       expect(row[15], contains('pay_1 | 50.00 | 2026-09-13 | Bank | TXN-1'));
       expect(row[15], contains('||'));
 

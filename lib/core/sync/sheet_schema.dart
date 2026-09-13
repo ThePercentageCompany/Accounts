@@ -390,7 +390,13 @@ class SheetSchema {
               subtotal += qty * rate;
               final desc = item['description']?.toString() ?? '';
               final quantityText = qty.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
-              itemsStrList.add('${quantityText}x $desc @ ${rate.toStringAsFixed(2)}');
+              // Persist the calculated line amount in the readable Sheets
+              // summary. It remains derived from quantity and rate in the
+              // app, so the stored total cannot become inconsistent.
+              final amount = qty * rate;
+              itemsStrList.add(
+                '${quantityText}x $desc @ ${rate.toStringAsFixed(2)} = ${amount.toStringAsFixed(2)}',
+              );
             }
           }
         }
@@ -806,12 +812,16 @@ class SheetSchema {
         if (row.length > 7) record['taxRate'] = row[7]?.toString() ?? '0';
         if (row.length > 8) record['discount'] = row[8]?.toString() ?? '0.00';
 
-        // Parse items from human-readable cell (e.g. "1x Item Name @ 500.00 | 2x Other @ 100.00")
+        // New rows include the line amount (e.g. "1x Item Name @ 500.00 =
+        // 500.00"). The amount part is optional for existing Sheets rows.
         final itemsList = <Map<String, dynamic>>[];
         if (row.length > 14 && row[14]?.toString().isNotEmpty == true) {
           final itemsRaw = row[14].toString().split(' | ');
           for (final raw in itemsRaw) {
-            final match = RegExp(r'^(\d+(?:\.\d+)?)\s*x\s*(.*?)\s*@\s*(\d+(?:\.\d+)?)$').firstMatch(raw.trim());
+            final match = RegExp(
+              r'^(\d+(?:\.\d+)?)\s*x\s*(.*?)\s*@\s*(\d+(?:\.\d+)?)(?:\s*=\s*\d+(?:\.\d+)?)?$',
+              dotAll: true,
+            ).firstMatch(raw.trim());
             if (match != null) {
               itemsList.add({
                 'quantity': match.group(1) ?? '1',
