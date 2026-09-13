@@ -517,6 +517,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   String termsAndConditions =
       '1. Payment is due within 30 days from the invoice date.\n2. Please include the invoice number in your payment.\n3. Thank you for your business!';
   String invoiceNotes = '';
+  String documentDiscount = '0.00';
   int _mobileTab = 0; // 0 = Edit Form, 1 = Live Preview
 
   @override
@@ -540,6 +541,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     if (invoice.notes.isNotEmpty) {
       invoiceNotes = invoice.notes;
     }
+    documentDiscount = invoice.discount.isNotEmpty ? invoice.discount : '0.00';
 
     rows = invoice.items
         .map((x) => {
@@ -628,6 +630,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
           .toList(),
       notes: invoiceNotes,
       terms: paymentTerms,
+      discount: documentDiscount,
     );
   }
 
@@ -853,17 +856,25 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 // Left Form Column (60% width)
                                 Expanded(
                                   flex: 6,
-                                  child: ListView(
-                                    physics: const BouncingScrollPhysics(),
-                                    padding: const EdgeInsets.fromLTRB(24, 8, 16, 32),
+                                  child: Column(
                                     children: [
-                                      _buildInvoiceInformationCard(context, isDark, state),
-                                      const SizedBox(height: 18),
-                                      _buildInvoiceItemsCard(context, isDark),
-                                      const SizedBox(height: 18),
-                                      _buildTermsAndTotalsCard(context, isDark, totals),
-                                      const SizedBox(height: 24),
-                                      _buildBottomActionsBar(context, isDark, state),
+                                      Expanded(
+                                        child: ListView(
+                                          physics: const BouncingScrollPhysics(),
+                                          padding: const EdgeInsets.fromLTRB(24, 8, 16, 16),
+                                          children: [
+                                            _buildInvoiceInformationCard(context, isDark, state),
+                                            const SizedBox(height: 18),
+                                            _buildInvoiceItemsCard(context, isDark),
+                                            const SizedBox(height: 18),
+                                            _buildTermsAndTotalsCard(context, isDark, totals),
+                                          ],
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(24, 8, 16, 24),
+                                        child: _buildBottomActionsBar(context, isDark, state),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1675,11 +1686,32 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
 
           final totalsCol = Column(
             children: [
+              TextFormField(
+                initialValue: documentDiscount,
+                decoration: const InputDecoration(labelText: 'Document Discount (AED)', prefixIcon: Icon(CupertinoIcons.minus_circle)),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) => changed(() => documentDiscount = value),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: const ['0', '5', '7', '15'].contains((double.tryParse(invoice.taxRate) ?? 5).toStringAsFixed(0))
+                    ? (double.tryParse(invoice.taxRate) ?? 5).toStringAsFixed(0)
+                    : '5',
+                decoration: const InputDecoration(labelText: 'VAT Rate'),
+                items: const [
+                  DropdownMenuItem(value: '0', child: Text('0% / Exempt')),
+                  DropdownMenuItem(value: '5', child: Text('5% VAT')),
+                  DropdownMenuItem(value: '7', child: Text('7% VAT')),
+                  DropdownMenuItem(value: '15', child: Text('15% VAT')),
+                ],
+                onChanged: (value) => changed(() => invoice = invoice.copyWith(taxRate: value ?? '5')),
+              ),
+              const SizedBox(height: 16),
               _buildSummaryRow('Subtotal', subtotalVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
               _buildSummaryRow('Discount (AED)', discountVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('VAT 5%', vatVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow('VAT ${invoice.taxRate}%', vatVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 14),
 
               // Highlighted Total Row

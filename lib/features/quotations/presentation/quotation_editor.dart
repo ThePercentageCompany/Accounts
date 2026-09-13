@@ -1354,11 +1354,32 @@ class _QuotationEditorState extends State<QuotationEditor> {
 
           final totalsCol = Column(
             children: [
+              TextFormField(
+                initialValue: _discount,
+                decoration: const InputDecoration(labelText: 'Document Discount (AED)', prefixIcon: Icon(CupertinoIcons.minus_circle)),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) => _markDirty(() => _discount = value),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: const ['0', '5', '7', '15'].contains((double.tryParse(_taxRate) ?? 5).toStringAsFixed(0))
+                    ? (double.tryParse(_taxRate) ?? 5).toStringAsFixed(0)
+                    : '5',
+                decoration: const InputDecoration(labelText: 'VAT Rate'),
+                items: const [
+                  DropdownMenuItem(value: '0', child: Text('0% / Exempt')),
+                  DropdownMenuItem(value: '5', child: Text('5% VAT')),
+                  DropdownMenuItem(value: '7', child: Text('7% VAT')),
+                  DropdownMenuItem(value: '15', child: Text('15% VAT')),
+                ],
+                onChanged: (value) => _markDirty(() => _taxRate = value ?? '5'),
+              ),
+              const SizedBox(height: 16),
               _buildSummaryRow('Subtotal', subtotalVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
               _buildSummaryRow('Discount (AED)', discountVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('VAT 5%', vatVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow('VAT $_taxRate%', vatVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 14),
 
               // Highlighted Total Row
