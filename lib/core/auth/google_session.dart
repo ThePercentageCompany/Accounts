@@ -127,9 +127,8 @@ class GoogleSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Handles Google Identity sign-in exactly once. Scope authorization is
-  /// intentionally silent here; interactive permission is initiated only from
-  /// the user-visible Continue action in [authorize].
+  /// Handles Google Identity sign-in exactly once, then requests the Sheets
+  /// and Drive permissions in that same sign-in flow.
   Future<void> _handleIdentitySignIn(GoogleSignInAccount account) async {
     if (_identityHandling != null) return _identityHandling!;
     final task = () async {
@@ -145,7 +144,10 @@ class GoogleSession extends ChangeNotifier {
           _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
           await _loadOrDiscoverWorkspace();
         } else {
-          authorized = false;
+          // The identity selection was user initiated, so continue directly
+          // into the single required OAuth permission flow. The guards on
+          // [authorize] ensure this cannot open competing prompts.
+          await authorize();
         }
       } catch (_) {
         authorized = false;
