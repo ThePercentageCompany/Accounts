@@ -67,6 +67,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(find.text('Save as Draft'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Save as Draft'), findsOneWidget);
     expect(find.text('Preview'), findsOneWidget);
     expect(find.text('Save & Send'), findsOneWidget);

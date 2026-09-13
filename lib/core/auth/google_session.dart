@@ -68,6 +68,30 @@ class GoogleSession extends ChangeNotifier {
 
   String? get effectivePhotoUrl => user?.photoUrl ?? cachedPhotoUrl;
 
+  bool get isEmployee => workspace?.isEmployee == true;
+  String? get currentEmployeeRole => workspace?.employeeRole;
+  String? get currentEmployeeId => workspace?.employeeId;
+  String? get currentEmployeeName => workspace?.employeeName ?? effectiveDisplayName;
+  List<String>? get allowedSections => workspace?.allowedSections;
+
+  /// Checks whether a given section/tab title is permitted for the active session.
+  bool isSectionAllowed(String sectionTitle) {
+    if (!isEmployee) return true; // Company owner/admin has unrestricted access
+    final allowed = allowedSections;
+    if (allowed == null || allowed.isEmpty) return true;
+    final normalized = sectionTitle.toLowerCase().trim();
+    return allowed.any((s) => s.toLowerCase().trim() == normalized);
+  }
+
+  /// Pairs the current Google user session with an employee invitation QR or JSON payload.
+  Future<void> pairWithEmployeeInvite(String inviteCodeOrJson) async {
+    final config = WorkspaceConfig.fromInvitePayload(inviteCodeOrJson);
+    if (config == null || config.spreadsheetId.isEmpty) {
+      throw StateError('Invalid employee invitation code or QR data.');
+    }
+    await setWorkspace(config);
+  }
+
   static const _cachedEmailKey = 'tpc_cached_user_email';
   static const _cachedNameKey = 'tpc_cached_user_name';
   static const _cachedPhotoKey = 'tpc_cached_user_photo';

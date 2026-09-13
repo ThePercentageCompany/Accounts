@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/qr_code.dart';
+import '../../../main.dart';
 import '../../billing/domain/totals.dart';
 import '../../billing/presentation/billing_cubit.dart';
 import '../../billing/presentation/editors.dart';
@@ -979,6 +982,264 @@ class _OfficeScreenState extends State<OfficeScreen> {
     if (approved == true) await run('employeeDelete', {'id': employee['id']});
   }
 
+  Future<void> showEmployeeAccessAndQr(Map<String, dynamic> employee) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cubit = context.read<OfficeCubit>();
+    final ws = session.workspace;
+    final spreadsheetId = ws?.spreadsheetId ?? '';
+    final driveFolderId = ws?.driveFolderId ?? '';
+    final companyName = ws?.companyName ?? 'The Percentage Company';
+
+    var selectedRole = employee['systemRole']?.toString() ?? 'Staff';
+    final allSections = [
+      'Dashboard',
+      'Invoices',
+      'Quotations',
+      'Income & Expenses',
+      'Capital & Equity',
+      'Fixed Assets',
+      'Balance Sheet',
+      'Customers',
+      'Employees',
+      'Payroll',
+      'Reports',
+      'Settings',
+      'Office & Attendance',
+    ];
+
+    List<String> getPresetSections(String role) {
+      switch (role) {
+        case 'Admin':
+          return List<String>.from(allSections);
+        case 'Accountant':
+          return [
+            'Dashboard',
+            'Invoices',
+            'Quotations',
+            'Income & Expenses',
+            'Capital & Equity',
+            'Fixed Assets',
+            'Balance Sheet',
+            'Customers',
+            'Reports',
+          ];
+        case 'Sales':
+          return ['Dashboard', 'Invoices', 'Quotations', 'Customers'];
+        case 'HR & Payroll':
+          return ['Dashboard', 'Employees', 'Payroll', 'Office & Attendance', 'Reports'];
+        case 'Staff':
+          return ['Dashboard', 'Office & Attendance'];
+        default:
+          return employee['allowedSections'] is List
+              ? List<String>.from(employee['allowedSections'] as List)
+              : ['Dashboard', 'Office & Attendance'];
+      }
+    }
+
+    var selectedSections = getPresetSections(selectedRole);
+    final googleEmailCtrl = TextEditingController(
+      text: employee['googleEmail']?.toString() ?? employee['email']?.toString() ?? '',
+    );
+    bool copied = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final payload = jsonEncode({
+            'type': 'tpc_employee_invite',
+            'companyName': companyName,
+            'spreadsheetId': spreadsheetId,
+            'driveFolderId': driveFolderId,
+            'employeeId': employee['id'] ?? '',
+            'employeeCode': employee['code'] ?? '',
+            'employeeName': employee['name'] ?? '',
+            'employeeEmail': googleEmailCtrl.text.trim(),
+            'employeeRole': selectedRole,
+            'allowedSections': selectedSections,
+          });
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.pastelIndigoBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(CupertinoIcons.qrcode_viewfinder, color: AppTheme.pastelIndigo, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Access & QR Login • ${employee['name']}',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Role: $selectedRole (${selectedSections.length} sections assigned)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 580,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Section 1: Role Presets
+                    DropdownButtonFormField<String>(
+                      value: const ['Admin', 'Accountant', 'Sales', 'HR & Payroll', 'Staff', 'Custom'].contains(selectedRole)
+                          ? selectedRole
+                          : 'Custom',
+                      decoration: const InputDecoration(
+                        labelText: 'Employee Role Preset',
+                        prefixIcon: Icon(CupertinoIcons.shield_lefthalf_fill, size: 18),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Admin', child: Text('Admin / Director (Full Access)')),
+                        DropdownMenuItem(value: 'Accountant', child: Text('Accountant (Finance, Assets, Balance Sheet, Reports)')),
+                        DropdownMenuItem(value: 'Sales', child: Text('Sales & Invoicing (Invoices, Quotations, Customers)')),
+                        DropdownMenuItem(value: 'HR & Payroll', child: Text('HR & Payroll Manager (Staff, Attendance, Payroll)')),
+                        DropdownMenuItem(value: 'Staff', child: Text('General Staff (Attendance Only)')),
+                        DropdownMenuItem(value: 'Custom', child: Text('Custom Permissions (Select Sections Below)')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setModalState(() {
+                            selectedRole = v;
+                            if (v != 'Custom') {
+                              selectedSections = getPresetSections(v);
+                            }
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Section 2: Google Email Binding
+                    TextFormField(
+                      controller: googleEmailCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Authorized Google Email (for login)',
+                        hintText: 'employee@gmail.com',
+                        prefixIcon: Icon(CupertinoIcons.mail, size: 18),
+                      ),
+                      onChanged: (_) => setModalState(() {}),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Section 3: Allowed Sections Checklist
+                    const Text(
+                      'Assigned Sections (UI/UX Visibility):',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final sec in allSections)
+                          FilterChip(
+                            label: Text(sec, style: const TextStyle(fontSize: 12)),
+                            selected: selectedSections.contains(sec),
+                            selectedColor: AppTheme.pastelIndigo.withValues(alpha: 0.2),
+                            checkmarkColor: AppTheme.pastelIndigo,
+                            onSelected: (selected) {
+                              setModalState(() {
+                                selectedRole = 'Custom';
+                                if (selected) {
+                                  if (!selectedSections.contains(sec)) selectedSections.add(sec);
+                                } else {
+                                  selectedSections.remove(sec);
+                                }
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 12),
+
+                    // Section 4: Rendered QR Code
+                    Center(
+                      child: Column(
+                        children: [
+                          QrImageView(
+                            data: payload,
+                            size: 190,
+                            foregroundColor: const Color(0xFF0F172A),
+                            backgroundColor: Colors.white,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Scan with mobile camera / app to link Google Account to company data.',
+                            style: TextStyle(fontSize: 11.5, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Copy Invite Code / Payload Button
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: payload));
+                        setModalState(() => copied = true);
+                        Future.delayed(const Duration(seconds: 3), () {
+                          if (dialogCtx.mounted) setModalState(() => copied = false);
+                        });
+                      },
+                      icon: Icon(copied ? CupertinoIcons.checkmark_alt : CupertinoIcons.doc_on_clipboard, size: 16, color: copied ? AppTheme.pastelMint : null),
+                      label: Text(copied ? 'Invite Code Copied to Clipboard!' : 'Copy Onboarding Invite Code', style: TextStyle(color: copied ? AppTheme.pastelMint : null, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Close')),
+              FilledButton.icon(
+                onPressed: () async {
+                  final updated = {
+                    ...employee,
+                    'systemRole': selectedRole,
+                    'allowedSections': selectedSections,
+                    'googleEmail': googleEmailCtrl.text.trim(),
+                  };
+                  await cubit.run('employeeSave', updated);
+                  if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                },
+                icon: const Icon(CupertinoIcons.checkmark, size: 16),
+                label: const Text('Save Permissions'),
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelIndigo),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> attendance(Map<String, dynamic> employee, Map<String, dynamic>? old) async {
     final cubit = context.read<OfficeCubit>();
     var selectedDate = DateTime.tryParse(old?['date']?.toString() ?? day) ?? DateTime.now();
@@ -1611,6 +1872,21 @@ class _OfficeScreenState extends State<OfficeScreen> {
                                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ),
+                                  if ((e['systemRole']?.toString() ?? '').isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.pastelIndigo.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: AppTheme.pastelIndigo.withValues(alpha: 0.4), width: 0.8),
+                                      ),
+                                      child: Text(
+                                        e['systemRole'].toString().toUpperCase(),
+                                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.pastelIndigo),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 3),
@@ -1677,6 +1953,16 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        OutlinedButton.icon(
+                          onPressed: () => showEmployeeAccessAndQr(e),
+                          icon: const Icon(CupertinoIcons.qrcode_viewfinder, size: 15, color: AppTheme.pastelIndigo),
+                          label: const Text('Access & QR Login', style: TextStyle(color: AppTheme.pastelIndigo, fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppTheme.pastelIndigo),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
                         TextButton.icon(
                           onPressed: () => employee(e),
                           icon: const Icon(CupertinoIcons.pencil, size: 15),

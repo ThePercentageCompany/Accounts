@@ -184,6 +184,11 @@ class SheetSchema {
           'Passport Number',
           'Visa Expiry',
           'Last Employment Date',
+          'System Role',
+          'Allowed Sections',
+          'Google Email',
+          'Created By',
+          'Updated By',
         ];
 
       case 'Attendance':
@@ -564,6 +569,10 @@ class SheetSchema {
         final basic = double.tryParse(record['basic']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
         final allowances = double.tryParse(record['allowances']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
         final totalSalary = basic + allowances;
+        final allowedSections = record['allowedSections'];
+        final allowedSectionsStr = allowedSections is List
+            ? allowedSections.join(', ')
+            : (allowedSections?.toString() ?? '');
 
         return [
           record['id']?.toString() ?? '',
@@ -588,6 +597,11 @@ class SheetSchema {
           record['passport']?.toString() ?? '',
           record['visaExpiry']?.toString() ?? '',
           record['endDate']?.toString() ?? '',
+          record['systemRole']?.toString() ?? 'Staff',
+          allowedSectionsStr,
+          record['googleEmail']?.toString() ?? record['email']?.toString() ?? '',
+          record['createdBy']?.toString() ?? '',
+          record['updatedBy']?.toString() ?? '',
         ];
 
       case 'Attendance':
@@ -1059,6 +1073,13 @@ class SheetSchema {
         if (row.length > 19) record['passport'] = row[19]?.toString() ?? '';
         if (row.length > 20) record['visaExpiry'] = row[20]?.toString() ?? '';
         if (row.length > 21) record['endDate'] = row[21]?.toString() ?? '';
+        if (row.length > 22) record['systemRole'] = row[22]?.toString() ?? 'Staff';
+        if (row.length > 23 && row[23]?.toString().isNotEmpty == true) {
+          record['allowedSections'] = row[23].toString().split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        }
+        if (row.length > 24) record['googleEmail'] = row[24]?.toString() ?? '';
+        if (row.length > 25) record['createdBy'] = row[25]?.toString() ?? '';
+        if (row.length > 26) record['updatedBy'] = row[26]?.toString() ?? '';
         break;
 
       case 'Attendance':

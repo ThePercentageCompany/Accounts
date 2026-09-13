@@ -17,6 +17,13 @@ class WorkspaceConfig {
   final String companyName;
   final String? spreadsheetUrl;
   final String? folderUrl;
+  final String? employeeId;
+  final String? employeeCode;
+  final String? employeeName;
+  final String? employeeEmail;
+  final String? employeeRole;
+  final List<String>? allowedSections;
+  final bool isEmployee;
 
   const WorkspaceConfig({
     required this.spreadsheetId,
@@ -24,6 +31,13 @@ class WorkspaceConfig {
     required this.companyName,
     this.spreadsheetUrl,
     this.folderUrl,
+    this.employeeId,
+    this.employeeCode,
+    this.employeeName,
+    this.employeeEmail,
+    this.employeeRole,
+    this.allowedSections,
+    this.isEmployee = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -32,15 +46,69 @@ class WorkspaceConfig {
         'companyName': companyName,
         'spreadsheetUrl': spreadsheetUrl,
         'folderUrl': folderUrl,
+        if (employeeId != null) 'employeeId': employeeId,
+        if (employeeCode != null) 'employeeCode': employeeCode,
+        if (employeeName != null) 'employeeName': employeeName,
+        if (employeeEmail != null) 'employeeEmail': employeeEmail,
+        if (employeeRole != null) 'employeeRole': employeeRole,
+        if (allowedSections != null) 'allowedSections': allowedSections,
+        'isEmployee': isEmployee,
       };
 
   factory WorkspaceConfig.fromJson(Map<String, dynamic> json) => WorkspaceConfig(
-        spreadsheetId: json['spreadsheetId'] as String,
-        driveFolderId: json['driveFolderId'] as String,
-        companyName: json['companyName'] as String,
+        spreadsheetId: json['spreadsheetId'] as String? ?? '',
+        driveFolderId: json['driveFolderId'] as String? ?? '',
+        companyName: json['companyName'] as String? ?? 'The Percentage Company',
         spreadsheetUrl: json['spreadsheetUrl'] as String?,
         folderUrl: json['folderUrl'] as String?,
+        employeeId: json['employeeId'] as String?,
+        employeeCode: json['employeeCode'] as String?,
+        employeeName: json['employeeName'] as String?,
+        employeeEmail: json['employeeEmail'] as String?,
+        employeeRole: json['employeeRole'] as String?,
+        allowedSections: (json['allowedSections'] as List?)?.map((e) => e.toString()).toList(),
+        isEmployee: json['isEmployee'] == true,
       );
+
+  String toInvitePayload() {
+    return jsonEncode({
+      'type': 'tpc_employee_invite',
+      'companyName': companyName,
+      'spreadsheetId': spreadsheetId,
+      'driveFolderId': driveFolderId,
+      'employeeId': employeeId ?? '',
+      'employeeCode': employeeCode ?? '',
+      'employeeName': employeeName ?? '',
+      'employeeEmail': employeeEmail ?? '',
+      'employeeRole': employeeRole ?? 'Staff',
+      'allowedSections': allowedSections ?? const ['Dashboard', 'Office & Attendance'],
+    });
+  }
+
+  static WorkspaceConfig? fromInvitePayload(String raw) {
+    try {
+      var cleaned = raw.trim();
+      if (cleaned.startsWith('TPC_INVITE:')) {
+        cleaned = cleaned.substring('TPC_INVITE:'.length).trim();
+      }
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic> && decoded['spreadsheetId'] != null) {
+        return WorkspaceConfig(
+          spreadsheetId: decoded['spreadsheetId'] as String? ?? '',
+          driveFolderId: decoded['driveFolderId'] as String? ?? '',
+          companyName: decoded['companyName'] as String? ?? 'The Percentage Company',
+          employeeId: decoded['employeeId'] as String?,
+          employeeCode: decoded['employeeCode'] as String?,
+          employeeName: decoded['employeeName'] as String?,
+          employeeEmail: decoded['employeeEmail'] as String?,
+          employeeRole: decoded['employeeRole'] as String? ?? 'Staff',
+          allowedSections: (decoded['allowedSections'] as List?)?.map((e) => e.toString()).toList(),
+          isEmployee: true,
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
 }
 
 class GoogleWorkspaceService {

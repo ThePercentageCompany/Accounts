@@ -88,6 +88,17 @@ class HybridOfficeRepository implements OfficeRepository {
   Future<Map<String, dynamic>> command(String action, [Map<String, dynamic>? payload]) async {
     final sid = _spreadsheetId;
     final d = Map<String, dynamic>.from(payload ?? {});
+    final authorName = session.currentEmployeeName;
+    final authorId = session.currentEmployeeId ?? session.effectiveEmail;
+    final nowIso = DateTime.now().toIso8601String();
+    if (action != 'officeLoad') {
+      d['createdBy'] ??= authorName;
+      d['createdById'] ??= authorId;
+      d['createdAt'] ??= nowIso;
+      d['updatedBy'] = authorName;
+      d['updatedById'] = authorId;
+      d['updatedAt'] = nowIso;
+    }
 
     // ── officeLoad ────────────────────────────────────────────────────────────
     if (action == 'officeLoad') {

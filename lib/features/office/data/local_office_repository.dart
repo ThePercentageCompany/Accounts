@@ -24,6 +24,11 @@ class LocalOfficeRepository implements OfficeRepository {
    if(action=='officeLoad'){
      return root;
    }
+   final nowIso = DateTime.now().toIso8601String();
+   d['createdBy'] ??= 'Local User';
+   d['createdAt'] ??= nowIso;
+   d['updatedBy'] = 'Local User';
+   d['updatedAt'] = nowIso;
   var key='',record=<String,dynamic>{};
   Map<String,dynamic>? find(String k,String id){for(final r in list(k)){if(r['id']==id)return r;}return null;}
   void version(Map<String,dynamic>? old){if((old?['version']??0)!=(d['version']??0))throw StateError('Record changed. Refresh and reopen.');}

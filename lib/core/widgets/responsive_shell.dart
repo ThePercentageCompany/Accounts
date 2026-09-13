@@ -144,6 +144,15 @@ class ResponsiveShell extends StatefulWidget {
 class _ResponsiveShellState extends State<ResponsiveShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  List<MapEntry<int, NavDestinationItem>> get _allowedDestinations {
+    final list = appNavDestinations
+        .asMap()
+        .entries
+        .where((e) => widget.session.isSectionAllowed(e.value.title))
+        .toList();
+    return list.isNotEmpty ? list : [appNavDestinations.asMap().entries.first];
+  }
+
   void _showQuickSearchDialog() {
     showDialog<void>(
       context: context,
@@ -152,9 +161,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final matches = appNavDestinations
-                .asMap()
-                .entries
+            final matches = _allowedDestinations
                 .where((e) => e.value.title.toLowerCase().contains(searchQuery.toLowerCase()))
                 .toList();
 
@@ -1150,7 +1157,29 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             ),
           ),
 
-          const SizedBox(width: 16),
+          // Employee Role Badge
+          if (widget.session.isEmployee) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 0.8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.person_crop_circle_badge_checkmark, size: 14, color: Color(0xFF10B981)),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.session.currentEmployeeRole ?? 'Staff'} Role',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF10B981)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+          ],
 
           // User Profile Dropdown Pill
           InkWell(
@@ -1293,17 +1322,19 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                itemCount: appNavDestinations.length,
+                itemCount: _allowedDestinations.length,
                 itemBuilder: (context, index) {
-                  final item = appNavDestinations[index];
-                  final isSelected = widget.selectedIndex == index;
+                  final entry = _allowedDestinations[index];
+                  final item = entry.value;
+                  final itemIndex = entry.key;
+                  final isSelected = widget.selectedIndex == itemIndex;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 3),
                     child: InkWell(
                       onTap: () {
                         if (isDrawer) Navigator.pop(context);
-                        widget.onIndexChanged(index);
+                        widget.onIndexChanged(itemIndex);
                       },
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
@@ -1477,17 +1508,19 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
-                itemCount: appNavDestinations.length,
+                itemCount: _allowedDestinations.length,
                 itemBuilder: (context, index) {
-                  final item = appNavDestinations[index];
-                  final isSelected = widget.selectedIndex == index;
+                  final entry = _allowedDestinations[index];
+                  final item = entry.value;
+                  final itemIndex = entry.key;
+                  final isSelected = widget.selectedIndex == itemIndex;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
                     child: Tooltip(
                       message: item.title,
                       child: InkWell(
-                        onTap: () => widget.onIndexChanged(index),
+                        onTap: () => widget.onIndexChanged(itemIndex),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           width: 44,
