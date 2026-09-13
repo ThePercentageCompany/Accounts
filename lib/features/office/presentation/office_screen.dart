@@ -1141,7 +1141,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
                   'Staff directory, contracts, visa tracking and salaries.',
                   'Daily attendance, clocking and approved overtime hours.',
                   'Monthly payroll calculation, salary slips and approvals.',
-                  'Manage company cash flow, client receipts, supplier bills, expenses, and capital.',
+                  'Manage company cash flow, client receipts, supplier bills, and expenses.',
                 ][page];
 
                 Widget? actionButton;
@@ -1813,7 +1813,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
     final allCount = allMonthEntries.length;
     final incomeCount = allMonthEntries.where((e) => e['kind'] == 'income').length;
     final expenseCount = allMonthEntries.where((e) => e['kind'] == 'expense').length;
-    final capitalCount = allMonthEntries.where((e) => e['kind'] == 'capital').length;
     final unpaidCount = allMonthEntries.where((e) => e['status'] == 'unpaid').length;
 
     final availableCategories = allMonthEntries
@@ -1830,8 +1829,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
       entries = entries.where((e) => e['kind'] == 'income').toList();
     } else if (financeTab == 'expense') {
       entries = entries.where((e) => e['kind'] == 'expense').toList();
-    } else if (financeTab == 'capital') {
-      entries = entries.where((e) => e['kind'] == 'capital').toList();
     } else if (financeTab == 'unpaid') {
       entries = entries.where((e) => e['status'] == 'unpaid').toList();
     }
@@ -1911,19 +1908,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
                           label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Add Expense', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppTheme.zohoRed,
-                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => finance(null, 'capital'),
-                          icon: const Icon(CupertinoIcons.briefcase_fill, size: 13),
-                          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Add Capital', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF8B5CF6),
                             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                           ),
@@ -2024,16 +2008,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
                   label: const Text('Add Expense'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.zohoRed,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () => finance(null, 'capital'),
-                  icon: const Icon(CupertinoIcons.briefcase_fill, size: 16),
-                  label: const Text('Add Capital / Investment'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B5CF6),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
                   ),
@@ -2271,8 +2245,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 _buildFinanceFilterTab('income', 'Income', incomeCount, isDark, accentColor: AppTheme.zohoGreen),
                 const SizedBox(width: 4),
                 _buildFinanceFilterTab('expense', 'Expenses', expenseCount, isDark, accentColor: AppTheme.zohoRed),
-                const SizedBox(width: 4),
-                _buildFinanceFilterTab('capital', 'Capital / Investment', capitalCount, isDark, accentColor: const Color(0xFF8B5CF6)),
                 const SizedBox(width: 4),
                 _buildFinanceFilterTab('unpaid', 'Unpaid Bills', unpaidCount, isDark, accentColor: const Color(0xFFF59E0B)),
               ],
