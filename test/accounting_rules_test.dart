@@ -2,9 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/features/billing/domain/models.dart';
 import 'package:tpc_invoice/features/office/domain/office_repository.dart';
 import 'package:tpc_invoice/features/office/domain/office_rules.dart';
+import 'package:tpc_invoice/core/sync/sheet_schema.dart';
 
 void main() {
   group('Double-Entry Accounting & Depreciation Rules Tests', () {
+    test('journal lines and balanced totals survive a Sheets round trip', () {
+      final journal = createCapitalJournal(
+        transactionId: 'cap-1', shareholderName: 'Amina', date: '2026-09-13',
+        transactionType: 'capitalContribution', contributionType: 'bank',
+        amountCents: 250000,
+      );
+      final row = SheetSchema.recordToRow('Journals', journal);
+      expect(row[16], contains('bank_account | Bank Account | Asset | 2500.00 | 0.00'));
+      final restored = SheetSchema.rowToRecord('Journals', row);
+      expect(restored['lines'], hasLength(2));
+      expect(restored['totalDebitCents'], 250000);
+      expect(restored['totalCreditCents'], 250000);
+      expect(restored['isBalanced'], isTrue);
+      expect(restored['sourceType'], 'capital');
+    });
     test('calculateDepreciation accurately calculates monthly and annual straight-line depreciation', () {
       // Cost: AED 5,000 (500,000 cents), Residual: AED 500 (50,000 cents), Useful Life: 36 months (3 years)
       final dep = calculateDepreciation(

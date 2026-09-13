@@ -10,7 +10,23 @@ void main(){
   expect(result['allowancesCents'],60000);
   expect(result['grossCents'],372000);
   expect(result['deductionsCents'],17000);
- expect(result['netCents'],355000);expect(result['missingDays'],0);
+  expect(result['netCents'],355000);expect(result['missingDays'],0);
+ });
+ test('Paid leave and vacation do not reduce salary, but unpaid leave does', () {
+  final result = calculatePayroll(
+   {'basic': '3000', 'allowances': '0'},
+   [
+    {'status': 'paidLeave', 'overtimeHours': '0'},
+    {'status': 'vacation', 'overtimeHours': '0'},
+    {'status': 'halfDayPaidLeave', 'overtimeHours': '0'},
+    {'status': 'fullDayUnpaidLeave', 'overtimeHours': '0'},
+    {'status': 'halfDayUnpaidLeave', 'overtimeHours': '0'},
+   ],
+   {'divisor': '30', 'baseDays': '30', 'scheduledDays': '5', 'overtimeRate': '0', 'bonus': '0', 'deductions': '0'},
+  );
+  expect(result['absentDays'], 1.5);
+  expect(result['absenceCents'], 15000);
+  expect(result['netCents'], 285000);
  });
  test('Payroll components remain correct after a Sheets round trip', () {
   final calculated = calculatePayroll(

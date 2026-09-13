@@ -2,6 +2,28 @@ import '../../billing/domain/totals.dart';
 import '../../billing/domain/models.dart';
 import 'office_repository.dart';
 
+const attendanceStatuses = <String>{
+  'present', 'absent', 'halfDay', 'paidLeave', 'unpaidLeave', 'sickLeave',
+  'vacation', 'halfDayPaidLeave', 'halfDayUnpaidLeave',
+  'fullDayPaidLeave', 'fullDayUnpaidLeave', 'off', 'holiday',
+};
+
+double unpaidAttendanceDays(String status) {
+  switch (status) {
+    case 'absent':
+    case 'unpaidLeave':
+    case 'fullDayUnpaidLeave':
+      return 1;
+    case 'halfDay': // legacy half-day records remain an unpaid half day.
+    case 'halfDayUnpaidLeave':
+      return 0.5;
+    default:
+      return 0;
+  }
+}
+
+bool attendanceAllowsOvertime(String status) => status == 'present' || status == 'halfDay';
+
 Map<String, dynamic> calculatePayroll(
   Map<String, dynamic> employee,
   List<Map<String, dynamic>> rows,
@@ -24,12 +46,9 @@ Map<String, dynamic> calculatePayroll(
   }
   final counted = rows.where((r) => !['off', 'holiday'].contains(r['status'])).length;
   final absent = rows.fold<double>(
-      0,
-      (n, r) =>
-          n +
-          (['absent', 'unpaidLeave'].contains(r['status'])
-              ? 1.0
-              : (r['status'] == 'halfDay' ? 0.5 : 0.0)));
+    0,
+    (total, row) => total + unpaidAttendanceDays(row['status']?.toString() ?? ''),
+  );
   // Prorate basic salary and allowances separately. Keeping each component
   // in cents makes the payslip, Sheets row, and net calculation agree.
   final basic = (monthlyBasic * days / divisor).round();

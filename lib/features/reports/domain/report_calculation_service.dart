@@ -488,18 +488,15 @@ class ReportCalculationService {
     required ReportFilter filter,
   }) {
     final List<Map<String, dynamic>> entries = [];
-    int runningBalanceCents = 0;
 
     void addEntry(String date, String accountName, String description, int debit, int credit) {
       if (!_isDateInRange(date, filter.startDate, filter.endDate)) return;
-      runningBalanceCents += (debit - credit);
       entries.add({
         'date': date,
         'accountName': accountName,
         'description': description,
         'debitCents': debit,
         'creditCents': credit,
-        'balanceCents': runningBalanceCents,
       });
     }
 
@@ -544,7 +541,9 @@ class ReportCalculationService {
 
     // 3. Payroll
     for (final p in office.payroll) {
-      final date = p['date']?.toString() ?? '';
+      final date = p['paidDate']?.toString().isNotEmpty == true
+          ? p['paidDate'].toString()
+          : '${p['month']?.toString() ?? ''}-01';
       final net = (p['netCents'] as num?)?.toInt() ?? 0;
       final acc = (p['account']?.toString() ?? 'Bank').toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account';
       if (p['status'] == 'paid') {
@@ -589,8 +588,22 @@ class ReportCalculationService {
       }
     }
 
-    // Sort by date ascending
-    entries.sort((a, b) => (a['date']?.toString() ?? '').compareTo(b['date']?.toString() ?? ''));
+    // A ledger balance belongs to an individual account, never to the whole
+    // chart of accounts. Sort first, then carry each account's own balance.
+    entries.sort((a, b) {
+      final dateOrder = (a['date']?.toString() ?? '').compareTo(b['date']?.toString() ?? '');
+      if (dateOrder != 0) return dateOrder;
+      return (a['accountName']?.toString() ?? '').compareTo(b['accountName']?.toString() ?? '');
+    });
+    final balances = <String, int>{};
+    for (final entry in entries) {
+      final account = entry['accountName']?.toString() ?? '';
+      final next = (balances[account] ?? 0) +
+          ((entry['debitCents'] as num?)?.toInt() ?? 0) -
+          ((entry['creditCents'] as num?)?.toInt() ?? 0);
+      balances[account] = next;
+      entry['balanceCents'] = next;
+    }
     return entries;
   }
 }

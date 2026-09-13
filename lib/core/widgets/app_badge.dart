@@ -33,23 +33,23 @@ class AppBadge extends StatelessWidget {
         icon: CupertinoIcons.checkmark_alt_circle_fill,
         isSmall: isSmall,
       );
-    } else if (s == 'unpaid' || s == 'draft' || s == 'halfday' || s == 'half day' || s == 'pending') {
+    } else if (s == 'unpaid' || s == 'draft' || s == 'halfday' || s == 'half day' || s == 'halfdaypaidleave' || s == 'halfdayunpaidleave' || s == 'pending') {
       return AppBadge(
-        label: (s == 'halfday' ? 'Half Day' : status).toUpperCase(),
+        label: (s == 'halfday' ? 'Half Day' : status).replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m.group(1)} ${m.group(2)}').toUpperCase(),
         variant: BadgeVariant.warning,
         icon: CupertinoIcons.clock_fill,
         isSmall: isSmall,
       );
-    } else if (s == 'overdue' || s == 'void' || s == 'absent' || s == 'unpaidleave' || s == 'unpaid leave') {
+    } else if (s == 'overdue' || s == 'void' || s == 'absent' || s == 'unpaidleave' || s == 'unpaid leave' || s == 'fulldayunpaidleave') {
       return AppBadge(
         label: (s == 'unpaidleave' ? 'Unpaid Leave' : status).toUpperCase(),
         variant: BadgeVariant.danger,
         icon: CupertinoIcons.exclamationmark_circle_fill,
         isSmall: isSmall,
       );
-    } else if (s == 'paidleave' || s == 'paid leave' || s == 'sickleave' || s == 'sick leave') {
+    } else if (s == 'paidleave' || s == 'paid leave' || s == 'sickleave' || s == 'sick leave' || s == 'vacation' || s == 'fulldaypaidleave') {
       return AppBadge(
-        label: (s == 'paidleave' ? 'Paid Leave' : s == 'sickleave' ? 'Sick Leave' : status).toUpperCase(),
+        label: (s == 'paidleave' ? 'Paid Leave' : s == 'sickleave' ? 'Sick Leave' : status.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m.group(1)} ${m.group(2)}')).toUpperCase(),
         variant: BadgeVariant.info,
         icon: CupertinoIcons.bandage_fill,
         isSmall: isSmall,

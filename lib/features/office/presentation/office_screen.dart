@@ -28,6 +28,10 @@ class InputSpec {
   const InputSpec(this.key, this.label, {this.options, this.required = false, this.icon});
 }
 
+String _optionLabel(String value) => value
+    .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match.group(1)} ${match.group(2)}')
+    .replaceFirstMapped(RegExp(r'^.'), (match) => match.group(0)!.toUpperCase());
+
 Future<Map<String, dynamic>?> officeForm(
   BuildContext context,
   String title,
@@ -58,7 +62,7 @@ Future<Map<String, dynamic>?> officeForm(
                             decoration: InputDecoration(labelText: f.label, prefixIcon: f.icon != null ? Icon(f.icon, size: 18) : null),
                             isExpanded: true,
                             items: [
-                              for (final o in f.options!) DropdownMenuItem(value: o, child: Text(o)),
+                              for (final o in f.options!) DropdownMenuItem(value: o, child: Text(_optionLabel(o))),
                             ],
                             onChanged: (v) => values[f.key] = v,
                           )
@@ -981,7 +985,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
       'Attendance: ${employee['name']} / $day',
       old ?? {'employeeId': employee['id'], 'date': day, 'status': 'present', 'checkIn': '', 'checkOut': '', 'overtimeHours': '0', 'notes': '', 'version': 0},
       const [
-        InputSpec('status', 'Attendance Status', options: ['present', 'absent', 'halfDay', 'paidLeave', 'unpaidLeave', 'sickLeave', 'off', 'holiday'], icon: CupertinoIcons.checkmark_alt_circle),
+        InputSpec('status', 'Attendance Status', options: [
+          'present', 'absent', 'halfDay', 'paidLeave', 'unpaidLeave',
+          'sickLeave', 'vacation', 'halfDayPaidLeave', 'halfDayUnpaidLeave',
+          'fullDayPaidLeave', 'fullDayUnpaidLeave', 'off', 'holiday',
+        ], icon: CupertinoIcons.checkmark_alt_circle),
         InputSpec('checkIn', 'Check-in (HH:MM)', icon: CupertinoIcons.arrow_down_right_circle),
         InputSpec('checkOut', 'Check-out (HH:MM)', icon: CupertinoIcons.arrow_up_left_circle),
         InputSpec('overtimeHours', 'Approved Overtime Hours', required: true, icon: CupertinoIcons.stopwatch),

@@ -42,8 +42,8 @@ class LocalOfficeRepository implements OfficeRepository {
    if(list('payroll').any((p)=>p['employee']['id']==d['employeeId']&&p['month']==d['date'].toString().substring(0,7)&&p['status']!='draft'))throw StateError('Attendance is locked by approved payroll.');
    final employee=find('employees',d['employeeId'])!;
    if(d['date'].toString().compareTo(employee['joinDate'])<0||(employee['endDate']!=''&&d['date'].toString().compareTo(employee['endDate'])>0))throw StateError('Date outside employment.');
-   if(scaled(d['overtimeHours'].toString(),2)>2400)throw StateError('Overtime exceeds 24 hours.');
-   record={...d,'id':id,'version':(d['version'] as int)+1};
+   final status=d['status']?.toString()??'present';if(!attendanceStatuses.contains(status))throw StateError('Select a valid attendance status.');final ot=scaled(d['overtimeHours'].toString(),2);if(ot>2400)throw StateError('Overtime exceeds 24 hours.');if(ot>0&&!attendanceAllowsOvertime(status))throw StateError('Overtime can only be recorded for Present or Half Day attendance.');
+   record={...d,'status':status,'overtimeHours':(ot/100).toStringAsFixed(2),'id':id,'version':(d['version'] as int)+1};
   }else if(action=='payrollGenerate'){
    key='payroll';final id='${d['employeeId']}_${d['month']}';final old=find(key,id);version(old);
    if(old!=null&&old['status']!='draft')throw StateError('Payroll already approved.');

@@ -189,8 +189,14 @@ class HybridOfficeRepository implements OfficeRepository {
           (employee['endDate'] != '' && date.compareTo(employee['endDate']) > 0)) {
         throw StateError('Date outside employment.');
       }
-      if (scaled(d['overtimeHours'].toString(), 2) > 2400) {
+      final status = d['status']?.toString() ?? 'present';
+      if (!attendanceStatuses.contains(status)) throw StateError('Select a valid attendance status.');
+      final overtimeCentiHours = scaled(d['overtimeHours'].toString(), 2);
+      if (overtimeCentiHours > 2400) {
         throw StateError('Overtime exceeds 24 hours.');
+      }
+      if (overtimeCentiHours > 0 && !attendanceAllowsOvertime(status)) {
+        throw StateError('Overtime can only be recorded for Present or Half Day attendance.');
       }
 
       final payroll = await _sync.loadCachedRecords(sid, 'Payroll');
@@ -207,7 +213,13 @@ class HybridOfficeRepository implements OfficeRepository {
         throw StateError('Record changed. Refresh and reopen.');
       }
 
-      final record = {...d, 'id': id, 'version': ((d['version'] as int?) ?? 0) + 1};
+      final record = {
+        ...d,
+        'status': status,
+        'overtimeHours': (overtimeCentiHours / 100).toStringAsFixed(2),
+        'id': id,
+        'version': ((d['version'] as int?) ?? 0) + 1,
+      };
       await _upsert('Attendance', id, record);
       _scheduleBackgroundSync();
       return record;

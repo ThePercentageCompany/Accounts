@@ -318,6 +318,13 @@ class SheetSchema {
           'Amount AED',
           'Notes',
           'Version',
+          'Source Type',
+          'Source ID',
+          'Total Debit AED',
+          'Total Credit AED',
+          'Balanced',
+          'Status',
+          'Journal Lines (Account ID | Name | Group | Debit AED | Credit AED)',
         ];
 
       case 'Settings':
@@ -765,20 +772,35 @@ class SheetSchema {
         ];
 
       case 'Journals':
-        final amountCents = (record['amountCents'] as num?)?.toDouble() ?? 0.0;
-        final amountAed = amountCents != 0 ? amountCents / 100.0 : (double.tryParse(record['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0);
+        final lines = (record['lines'] as List? ?? const []).whereType<Map>();
+        final totalDebitCents = (record['totalDebitCents'] as num?)?.toInt() ??
+            lines.fold<int>(0, (sum, line) => sum + ((line['debitCents'] as num?)?.toInt() ?? 0));
+        final totalCreditCents = (record['totalCreditCents'] as num?)?.toInt() ??
+            lines.fold<int>(0, (sum, line) => sum + ((line['creditCents'] as num?)?.toInt() ?? 0));
+        final lineText = lines.map((line) {
+          final debit = ((line['debitCents'] as num?)?.toDouble() ?? 0) / 100.0;
+          final credit = ((line['creditCents'] as num?)?.toDouble() ?? 0) / 100.0;
+          return '${line['accountId'] ?? ''} | ${line['accountName'] ?? ''} | ${line['accountGroup'] ?? ''} | ${debit.toStringAsFixed(2)} | ${credit.toStringAsFixed(2)}';
+        }).join('\n');
 
         return [
           record['id']?.toString() ?? '',
           record['date']?.toString() ?? '',
-          record['entryNumber']?.toString() ?? record['ref']?.toString() ?? '',
+          record['journalNumber']?.toString() ?? record['entryNumber']?.toString() ?? record['ref']?.toString() ?? '',
           record['description']?.toString() ?? '',
-          (record['type']?.toString() ?? 'general').toUpperCase(),
-          record['debitAccount']?.toString() ?? '',
-          record['creditAccount']?.toString() ?? '',
-          amountAed.toStringAsFixed(2),
+          (record['sourceType']?.toString() ?? record['type']?.toString() ?? 'general').toUpperCase(),
+          '',
+          '',
+          (totalDebitCents / 100.0).toStringAsFixed(2),
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
+          record['sourceType']?.toString() ?? record['type']?.toString() ?? 'general',
+          record['sourceId']?.toString() ?? '',
+          (totalDebitCents / 100.0).toStringAsFixed(2),
+          (totalCreditCents / 100.0).toStringAsFixed(2),
+          (record['isBalanced'] == true || totalDebitCents == totalCreditCents).toString(),
+          record['status']?.toString() ?? 'posted',
+          lineText,
         ];
 
       case 'Settings':
@@ -1268,6 +1290,32 @@ class SheetSchema {
         }
         if (row.length > 8) record['notes'] = row[8]?.toString() ?? '';
         if (row.length > 9) record['version'] = int.tryParse(row[9]?.toString() ?? '0') ?? 0;
+        if (row.length > 10) record['sourceType'] = row[10]?.toString() ?? record['type'] ?? 'general';
+        if (row.length > 11) record['sourceId'] = row[11]?.toString() ?? '';
+        if (row.length > 12) record['totalDebitCents'] = ((double.tryParse(row[12]?.toString().replaceAll(',', '') ?? '0') ?? 0) * 100).round();
+        if (row.length > 13) record['totalCreditCents'] = ((double.tryParse(row[13]?.toString().replaceAll(',', '') ?? '0') ?? 0) * 100).round();
+        if (row.length > 14) record['isBalanced'] = row[14]?.toString().toLowerCase() == 'true';
+        if (row.length > 15) record['status'] = row[15]?.toString().toLowerCase() ?? 'posted';
+        final lines = <Map<String, dynamic>>[];
+        if (row.length > 16 && row[16]?.toString().trim().isNotEmpty == true) {
+          for (final rawLine in row[16].toString().split('\n')) {
+            final fields = rawLine.split(' | ').map((field) => field.trim()).toList();
+            if (fields.length < 5) continue;
+            final debit = double.tryParse(fields[3].replaceAll(',', '')) ?? 0;
+            final credit = double.tryParse(fields[4].replaceAll(',', '')) ?? 0;
+            lines.add({
+              'accountId': fields[0], 'accountName': fields[1], 'accountGroup': fields[2],
+              'debitCents': (debit * 100).round(), 'creditCents': (credit * 100).round(),
+            });
+          }
+        }
+        record['lines'] = lines;
+        record['journalNumber'] = record['entryNumber'] ?? record['ref'] ?? '';
+        if (lines.isNotEmpty) {
+          record['totalDebitCents'] = lines.fold<int>(0, (sum, line) => sum + (line['debitCents'] as int));
+          record['totalCreditCents'] = lines.fold<int>(0, (sum, line) => sum + (line['creditCents'] as int));
+          record['isBalanced'] = record['totalDebitCents'] == record['totalCreditCents'];
+        }
         break;
 
       case 'Settings':
