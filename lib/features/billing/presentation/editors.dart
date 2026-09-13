@@ -696,7 +696,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         });
         if (!archived && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invoice issued. PDF archive saved to Drive.')),
+            const SnackBar(content: Text('Invoice issued, but its Drive PDF could not be uploaded.')),
           );
         }
       }

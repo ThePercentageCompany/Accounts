@@ -357,6 +357,19 @@ class _QuotationEditorState extends State<QuotationEditor> {
     final issued = await cubit.issue(q);
 
     if (issued != null && mounted) {
+      // An issued quotation is a business document, so archive its generated
+      // PDF automatically. The archive operation also writes its Drive URL
+      // back to the Quotations row in Google Sheets.
+      if (!cubit.repository.isDemo) {
+        try {
+          final bytes = await PdfQuotationDocumentService().render(issued);
+          await cubit.archive(issued, bytes);
+        } catch (_) {
+          // The quotation row remains safely queued for Sheets; a failed PDF
+          // upload must not roll back issuance.
+        }
+      }
+      if (!mounted) return;
       setState(() => _dirty = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Quotation ${issued.number} issued successfully!')),
