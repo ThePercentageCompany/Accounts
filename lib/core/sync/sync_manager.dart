@@ -265,6 +265,7 @@ class SyncManager extends ChangeNotifier {
 
   bool _isBackgroundSyncing = false;
   bool get isBackgroundSyncing => _isBackgroundSyncing;
+  bool _syncRequestedWhileRunning = false;
 
   // --- SYNC ENGINE ---
 
@@ -411,7 +412,12 @@ class SyncManager extends ChangeNotifier {
     required String spreadsheetId,
     void Function()? onDataRefreshed,
   }) async {
-    if (_isBackgroundSyncing) return;
+    // A CRUD operation may arrive while an earlier pass is uploading. Keep the
+    // UI non-blocking, but guarantee a follow-up pass once that upload ends.
+    if (_isBackgroundSyncing) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
     _isBackgroundSyncing = true;
     _status = SyncStatus.syncing;
     notifyListeners();
@@ -450,6 +456,14 @@ class SyncManager extends ChangeNotifier {
     } finally {
       _isBackgroundSyncing = false;
       notifyListeners();
+      if (_syncRequestedWhileRunning) {
+        _syncRequestedWhileRunning = false;
+        Future.microtask(() => triggerBackgroundSync(
+              token: token,
+              spreadsheetId: spreadsheetId,
+              onDataRefreshed: onDataRefreshed,
+            ));
+      }
     }
   }
 

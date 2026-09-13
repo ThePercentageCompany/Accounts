@@ -158,6 +158,39 @@ void main() {
       expect(reconstructed['amountCents'], 250000);
     });
 
+    test('Invoices preserve fractional quantities and every payment through a Sheets round trip', () {
+      final invoice = {
+        'id': 'inv_payment_1',
+        'number': 'INV-2026-000001',
+        'date': '2026-09-13',
+        'dueDate': '2026-09-20',
+        'customer': {'id': 'c1', 'name': 'Acme'},
+        'items': [
+          {'description': 'Usage-based service', 'quantity': '1.250', 'rate': '100.00'},
+        ],
+        'discount': '0.00',
+        'taxRate': '5.00',
+        'status': 'issued',
+        'payments': [
+          {'id': 'pay_1', 'cents': 5000, 'date': '2026-09-13', 'account': 'Bank', 'reference': 'TXN-1'},
+          {'id': 'pay_2', 'cents': 2500, 'date': '2026-09-14', 'account': 'Cash', 'reference': 'Receipt 2'},
+        ],
+        'version': 2,
+      };
+
+      final row = SheetSchema.recordToRow('Invoices', invoice);
+      expect(row[14], contains('1.25x Usage-based service @ 100.00'));
+      expect(row[15], contains('pay_1 | 50.00 | 2026-09-13 | Bank | TXN-1'));
+      expect(row[15], contains('||'));
+
+      final restored = SheetSchema.rowToRecord('Invoices', row);
+      expect(restored['items'][0]['quantity'], '1.25');
+      expect(restored['payments'], hasLength(2));
+      expect(restored['payments'][0]['id'], 'pay_1');
+      expect(restored['payments'][0]['cents'], 5000);
+      expect(restored['payments'][1]['account'], 'Cash');
+    });
+
     test('Shareholders and Capital Transactions format financial data cleanly', () {
       final shareholder = {
         'id': 'sh_101',

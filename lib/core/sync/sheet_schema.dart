@@ -437,7 +437,7 @@ class SheetSchema {
           paidAmount.toStringAsFixed(2),
           balanceDue.toStringAsFixed(2),
           itemsStrList.join(' | '),
-          paymentsStrList.join(' | '),
+          paymentsStrList.join(' || '),
           record['notes']?.toString() ?? '',
           record['terms']?.toString() ?? '',
           record['driveUrl']?.toString() ?? '',
@@ -831,7 +831,7 @@ class SheetSchema {
 
         final paymentsList = <Map<String, dynamic>>[];
         if (row.length > 15 && row[15]?.toString().isNotEmpty == true) {
-          for (final raw in row[15].toString().split(' | ')) {
+          for (final raw in row[15].toString().split(' || ')) {
             final fields = raw.split(' | ').map((value) => value.trim()).toList();
             // Current structured readable format: ID | AED amount | date | account | reference.
             if (fields.length >= 4) {

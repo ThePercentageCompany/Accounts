@@ -238,6 +238,15 @@ class GoogleDirectBillingRepository implements BillingRepository {
     final current = await _findInvoice(invoice.id) ?? invoice;
     if (current.status != 'issued') throw StateError('Only issued invoices accept payments.');
     if (current.payments.any((x) => x.id == payment.id)) return current;
+    if (payment.id.trim().isEmpty || payment.cents <= 0) {
+      throw StateError('Payment amount must be greater than zero.');
+    }
+    if (DateTime.tryParse(payment.date) == null) {
+      throw StateError('Use a valid payment date (YYYY-MM-DD).');
+    }
+    if (payment.account != 'Bank' && payment.account != 'Cash') {
+      throw StateError('Select Bank or Cash as the receiving account.');
+    }
 
     final changed = current.copyWith(
       payments: [...current.payments, payment],
