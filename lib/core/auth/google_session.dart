@@ -14,6 +14,19 @@ const googleScopes = [
   'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
+bool _isIgnorableAuthError(Object e) {
+  final msg = e.toString().toLowerCase();
+  return msg.contains('aborterror') ||
+      msg.contains('aborted') ||
+      msg.contains('signal is aborted') ||
+      msg.contains('canceled') ||
+      msg.contains('cancelled') ||
+      msg.contains('dismissed') ||
+      msg.contains('interrupted') ||
+      msg.contains('popup_closed') ||
+      msg.contains('closed by user');
+}
+
 class GoogleSession extends ChangeNotifier {
   GoogleSignInAccount? user;
   String? cachedEmail;
@@ -26,6 +39,7 @@ class GoogleSession extends ChangeNotifier {
   bool isOffline = false;
   WorkspaceConfig? workspace;
   String? error;
+  bool _initialized = false;
 
   final GoogleWorkspaceService workspaceService = GoogleWorkspaceService();
   final SyncManager syncManager = SyncManager.instance;
@@ -57,6 +71,9 @@ class GoogleSession extends ChangeNotifier {
   static const defaultClientId = '110697421185-klclvve50ibedrqjc830doqrenp44hif.apps.googleusercontent.com';
 
   Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
     await syncManager.initialize();
     await _loadCachedSession();
 
@@ -112,11 +129,10 @@ class GoogleSession extends ChangeNotifier {
         notifyListeners();
       }
     }, onError: (Object e) {
-      final msg = e.toString();
-      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
-        error = msg;
+      if (!_isIgnorableAuthError(e)) {
+        error = e.toString();
+        notifyListeners();
       }
-      notifyListeners();
     });
 
     try {
@@ -315,6 +331,12 @@ class GoogleSession extends ChangeNotifier {
       error = null;
       isAuthorizing = true;
       notifyListeners();
+      if (kIsWeb) {
+        if (user != null) {
+          await authorize();
+        }
+        return;
+      }
       final account = await GoogleSignIn.instance.authenticate();
       user = account;
       isOffline = false;
@@ -341,9 +363,8 @@ class GoogleSession extends ChangeNotifier {
       }
       authorized = false;
     } catch (e) {
-      final msg = e.toString();
-      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
-        error = msg;
+      if (!_isIgnorableAuthError(e)) {
+        error = e.toString();
       }
     } finally {
       isAuthorizing = false;
@@ -370,9 +391,8 @@ class GoogleSession extends ChangeNotifier {
         await _loadOrDiscoverWorkspace();
       }
     } catch (e) {
-      final msg = e.toString();
-      if (!msg.contains('AbortError') && !msg.contains('aborted') && !msg.contains('signal is aborted')) {
-        error = msg;
+      if (!_isIgnorableAuthError(e)) {
+        error = e.toString();
       }
     } finally {
       isAuthorizing = false;

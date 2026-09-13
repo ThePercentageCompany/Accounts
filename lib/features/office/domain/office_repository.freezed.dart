@@ -11,7 +11,6 @@ part of 'office_repository.dart';
 
 // dart format off
 T _$identity<T>(T value) => value;
-
 /// @nodoc
 mixin _$OfficeData {
 
@@ -22,8 +21,6 @@ mixin _$OfficeData {
 @pragma('vm:prefer-inline')
 $OfficeDataCopyWith<OfficeData> get copyWith => _$OfficeDataCopyWithImpl<OfficeData>(this as OfficeData, _$identity);
 
-  /// Serializes this OfficeData to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -31,7 +28,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is OfficeData&&const DeepCollectionEquality().equals(other.employees, employees)&&const DeepCollectionEquality().equals(other.attendance, attendance)&&const DeepCollectionEquality().equals(other.payroll, payroll)&&const DeepCollectionEquality().equals(other.entries, entries)&&const DeepCollectionEquality().equals(other.shareholders, shareholders)&&const DeepCollectionEquality().equals(other.capitalTransactions, capitalTransactions)&&const DeepCollectionEquality().equals(other.shareholderLoans, shareholderLoans)&&const DeepCollectionEquality().equals(other.assets, assets)&&const DeepCollectionEquality().equals(other.journals, journals));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(employees),const DeepCollectionEquality().hash(attendance),const DeepCollectionEquality().hash(payroll),const DeepCollectionEquality().hash(entries),const DeepCollectionEquality().hash(shareholders),const DeepCollectionEquality().hash(capitalTransactions),const DeepCollectionEquality().hash(shareholderLoans),const DeepCollectionEquality().hash(assets),const DeepCollectionEquality().hash(journals));
 
@@ -214,11 +211,11 @@ return $default(_that.employees,_that.attendance,_that.payroll,_that.entries,_th
 }
 
 /// @nodoc
-@JsonSerializable()
+
 
 class _OfficeData implements OfficeData {
   const _OfficeData({final  List<Map<String, dynamic>> employees = const [], final  List<Map<String, dynamic>> attendance = const [], final  List<Map<String, dynamic>> payroll = const [], final  List<Map<String, dynamic>> entries = const [], final  List<Map<String, dynamic>> shareholders = const [], final  List<Map<String, dynamic>> capitalTransactions = const [], final  List<Map<String, dynamic>> shareholderLoans = const [], final  List<Map<String, dynamic>> assets = const [], final  List<Map<String, dynamic>> journals = const []}): _employees = employees,_attendance = attendance,_payroll = payroll,_entries = entries,_shareholders = shareholders,_capitalTransactions = capitalTransactions,_shareholderLoans = shareholderLoans,_assets = assets,_journals = journals;
-  factory _OfficeData.fromJson(Map<String, dynamic> json) => _$OfficeDataFromJson(json);
+  
 
  final  List<Map<String, dynamic>> _employees;
 @override@JsonKey() List<Map<String, dynamic>> get employees {
@@ -290,17 +287,14 @@ class _OfficeData implements OfficeData {
 @pragma('vm:prefer-inline')
 _$OfficeDataCopyWith<_OfficeData> get copyWith => __$OfficeDataCopyWithImpl<_OfficeData>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$OfficeDataToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is _OfficeData&&const DeepCollectionEquality().equals(other._employees, _employees)&&const DeepCollectionEquality().equals(other._attendance, _attendance)&&const DeepCollectionEquality().equals(other._payroll, _payroll)&&const DeepCollectionEquality().equals(other._entries, _entries)&&const DeepCollectionEquality().equals(other._shareholders, _shareholders)&&const DeepCollectionEquality().equals(other._capitalTransactions, _capitalTransactions)&&const DeepCollectionEquality().equals(other._shareholderLoans, _shareholderLoans)&&const DeepCollectionEquality().equals(other._assets, _assets)&&const DeepCollectionEquality().equals(other._journals, _journals));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_employees),const DeepCollectionEquality().hash(_attendance),const DeepCollectionEquality().hash(_payroll),const DeepCollectionEquality().hash(_entries),const DeepCollectionEquality().hash(_shareholders),const DeepCollectionEquality().hash(_capitalTransactions),const DeepCollectionEquality().hash(_shareholderLoans),const DeepCollectionEquality().hash(_assets),const DeepCollectionEquality().hash(_journals));
 

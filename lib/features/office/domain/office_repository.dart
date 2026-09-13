@@ -1,6 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 part 'office_repository.freezed.dart';
-part 'office_repository.g.dart';
 @freezed
 abstract class OfficeData with _$OfficeData {
   const factory OfficeData({

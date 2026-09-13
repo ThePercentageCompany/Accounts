@@ -4,6 +4,7 @@ part 'models.g.dart';
 
 @freezed
 abstract class Customer with _$Customer {
+  const Customer._();
   const factory Customer({required String id, required String name,
     @Default('') String email, @Default('') String phone,
     @Default('') String address, @Default('') String trn,
@@ -17,10 +18,21 @@ abstract class Customer with _$Customer {
     trn: json['trn']?.toString() ?? '',
     version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
   );
+  @override
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'email': email,
+    'phone': phone,
+    'address': address,
+    'trn': trn,
+    'version': version,
+  };
 }
 
 @freezed
 abstract class Company with _$Company {
+  const Company._();
   const factory Company({
     @Default('The Percentage FZ LLC') String name,
     @Default('Dubai U.A.E') String address,
@@ -58,10 +70,29 @@ abstract class Company with _$Company {
         .toList(),
     version: (json['version'] as num?)?.toInt() ?? int.tryParse(json['version']?.toString() ?? '0') ?? 0,
   );
+  @override
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'address': address,
+    'phone': phone,
+    'email': email,
+    'trn': trn,
+    'prefix': prefix,
+    'accountHolder': accountHolder,
+    'bank': bank,
+    'accountNumber': accountNumber,
+    'iban': iban,
+    'notes': notes,
+    'terms': terms,
+    'logo': logo,
+    'shareholders': shareholders,
+    'version': version,
+  };
 }
 
 @freezed
 abstract class LineItem with _$LineItem {
+  const LineItem._();
   const factory LineItem({required String description,
     @Default('1') String quantity, @Default('0.00') String rate}) = _LineItem;
   factory LineItem.fromJson(Map<String, dynamic> json) => LineItem(
@@ -69,10 +100,17 @@ abstract class LineItem with _$LineItem {
     quantity: json['quantity']?.toString() ?? '1',
     rate: json['rate']?.toString() ?? '0.00',
   );
+  @override
+  Map<String, dynamic> toJson() => {
+    'description': description,
+    'quantity': quantity,
+    'rate': rate,
+  };
 }
 
 @freezed
 abstract class Payment with _$Payment {
+  const Payment._();
   const factory Payment({required String id, required int cents,
     required String date, @Default('Bank') String account, @Default('') String reference}) = _Payment;
   factory Payment.fromJson(Map<String, dynamic> json) => Payment(
@@ -82,10 +120,19 @@ abstract class Payment with _$Payment {
     account: json['account']?.toString() ?? 'Bank',
     reference: json['reference']?.toString() ?? '',
   );
+  @override
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'cents': cents,
+    'date': date,
+    'account': account,
+    'reference': reference,
+  };
 }
 
 @freezed
 abstract class Invoice with _$Invoice {
+  const Invoice._();
   const factory Invoice({required String id, required String date,
     required Customer customer, required Company company,
     @Default([]) List<LineItem> items,
@@ -138,10 +185,30 @@ abstract class Invoice with _$Invoice {
       issuedAt: json['issuedAt']?.toString() ?? '',
     );
   }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'date': date,
+    'customer': customer.toJson(),
+    'company': company.toJson(),
+    'items': items.map((e) => e.toJson()).toList(),
+    'discount': discount,
+    'taxRate': taxRate,
+    'number': number,
+    'status': status,
+    'dueDate': dueDate,
+    'notes': notes,
+    'terms': terms,
+    'payments': payments.map((e) => e.toJson()).toList(),
+    'version': version,
+    'driveUrl': driveUrl,
+    'archivedVersion': archivedVersion,
+    'issuedAt': issuedAt,
+  };
 }
 
 @freezed
 abstract class BillingData with _$BillingData {
+  const BillingData._();
   const factory BillingData({@Default(Company()) Company company,
     @Default([]) List<Customer> customers,
     @Default([]) List<Invoice> invoices}) = _BillingData;
@@ -168,4 +235,9 @@ abstract class BillingData with _$BillingData {
           : const [],
     );
   }
+  Map<String, dynamic> toJson() => {
+    'company': company.toJson(),
+    'customers': customers.map((e) => e.toJson()).toList(),
+    'invoices': invoices.map((e) => e.toJson()).toList(),
+  };
 }

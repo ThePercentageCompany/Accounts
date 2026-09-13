@@ -214,8 +214,8 @@ return $default(_that.id,_that.name,_that.email,_that.phone,_that.address,_that.
 /// @nodoc
 @JsonSerializable()
 
-class _Customer implements Customer {
-  const _Customer({required this.id, required this.name, this.email = '', this.phone = '', this.address = '', this.trn = '', this.version = 0});
+class _Customer extends Customer {
+  const _Customer({required this.id, required this.name, this.email = '', this.phone = '', this.address = '', this.trn = '', this.version = 0}): super._();
   factory _Customer.fromJson(Map<String, dynamic> json) => _$CustomerFromJson(json);
 
 @override final  String id;
@@ -503,8 +503,8 @@ return $default(_that.name,_that.address,_that.phone,_that.email,_that.trn,_that
 /// @nodoc
 @JsonSerializable()
 
-class _Company implements Company {
-  const _Company({this.name = 'The Percentage FZ LLC', this.address = 'Dubai U.A.E', this.phone = '+971 56 331 9030', this.email = 'thepercentagecompany1@gmail.com', this.trn = '', this.prefix = 'TPC', this.accountHolder = 'The Percentage FZ LLC', this.bank = 'Mashreq Bank', this.accountNumber = '019102062841', this.iban = '', this.notes = 'Thanks for your business.', this.terms = 'Due on Receipt', this.logo = '', final  List<Map<String, dynamic>> shareholders = const [], this.version = 0}): _shareholders = shareholders;
+class _Company extends Company {
+  const _Company({this.name = 'The Percentage FZ LLC', this.address = 'Dubai U.A.E', this.phone = '+971 56 331 9030', this.email = 'thepercentagecompany1@gmail.com', this.trn = '', this.prefix = 'TPC', this.accountHolder = 'The Percentage FZ LLC', this.bank = 'Mashreq Bank', this.accountNumber = '019102062841', this.iban = '', this.notes = 'Thanks for your business.', this.terms = 'Due on Receipt', this.logo = '', final  List<Map<String, dynamic>> shareholders = const [], this.version = 0}): _shareholders = shareholders,super._();
   factory _Company.fromJson(Map<String, dynamic> json) => _$CompanyFromJson(json);
 
 @override@JsonKey() final  String name;
@@ -802,8 +802,8 @@ return $default(_that.description,_that.quantity,_that.rate);case _:
 /// @nodoc
 @JsonSerializable()
 
-class _LineItem implements LineItem {
-  const _LineItem({required this.description, this.quantity = '1', this.rate = '0.00'});
+class _LineItem extends LineItem {
+  const _LineItem({required this.description, this.quantity = '1', this.rate = '0.00'}): super._();
   factory _LineItem.fromJson(Map<String, dynamic> json) => _$LineItemFromJson(json);
 
 @override final  String description;
@@ -1073,8 +1073,8 @@ return $default(_that.id,_that.cents,_that.date,_that.account,_that.reference);c
 /// @nodoc
 @JsonSerializable()
 
-class _Payment implements Payment {
-  const _Payment({required this.id, required this.cents, required this.date, this.account = 'Bank', this.reference = ''});
+class _Payment extends Payment {
+  const _Payment({required this.id, required this.cents, required this.date, this.account = 'Bank', this.reference = ''}): super._();
   factory _Payment.fromJson(Map<String, dynamic> json) => _$PaymentFromJson(json);
 
 @override final  String id;
@@ -1147,7 +1147,6 @@ as String,
 
 }
 
-
 /// @nodoc
 mixin _$Invoice {
 
@@ -1158,8 +1157,6 @@ mixin _$Invoice {
 @pragma('vm:prefer-inline')
 $InvoiceCopyWith<Invoice> get copyWith => _$InvoiceCopyWithImpl<Invoice>(this as Invoice, _$identity);
 
-  /// Serializes this Invoice to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -1167,7 +1164,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is Invoice&&(identical(other.id, id) || other.id == id)&&(identical(other.date, date) || other.date == date)&&(identical(other.customer, customer) || other.customer == customer)&&(identical(other.company, company) || other.company == company)&&const DeepCollectionEquality().equals(other.items, items)&&(identical(other.discount, discount) || other.discount == discount)&&(identical(other.taxRate, taxRate) || other.taxRate == taxRate)&&(identical(other.number, number) || other.number == number)&&(identical(other.status, status) || other.status == status)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&const DeepCollectionEquality().equals(other.payments, payments)&&(identical(other.version, version) || other.version == version)&&(identical(other.driveUrl, driveUrl) || other.driveUrl == driveUrl)&&(identical(other.archivedVersion, archivedVersion) || other.archivedVersion == archivedVersion)&&(identical(other.issuedAt, issuedAt) || other.issuedAt == issuedAt));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,id,date,customer,company,const DeepCollectionEquality().hash(items),discount,taxRate,number,status,dueDate,notes,terms,const DeepCollectionEquality().hash(payments),version,driveUrl,archivedVersion,issuedAt);
 
@@ -1376,11 +1373,11 @@ return $default(_that.id,_that.date,_that.customer,_that.company,_that.items,_th
 }
 
 /// @nodoc
-@JsonSerializable()
 
-class _Invoice implements Invoice {
-  const _Invoice({required this.id, required this.date, required this.customer, required this.company, final  List<LineItem> items = const [], this.discount = '0.00', this.taxRate = '0', this.number = '', this.status = 'draft', this.dueDate = '', this.notes = '', this.terms = 'Due on Receipt', final  List<Payment> payments = const [], this.version = 0, this.driveUrl = '', this.archivedVersion = 0, this.issuedAt = ''}): _items = items,_payments = payments;
-  factory _Invoice.fromJson(Map<String, dynamic> json) => _$InvoiceFromJson(json);
+
+class _Invoice extends Invoice {
+  const _Invoice({required this.id, required this.date, required this.customer, required this.company, final  List<LineItem> items = const [], this.discount = '0.00', this.taxRate = '0', this.number = '', this.status = 'draft', this.dueDate = '', this.notes = '', this.terms = 'Due on Receipt', final  List<Payment> payments = const [], this.version = 0, this.driveUrl = '', this.archivedVersion = 0, this.issuedAt = ''}): _items = items,_payments = payments,super._();
+  
 
 @override final  String id;
 @override final  String date;
@@ -1418,17 +1415,14 @@ class _Invoice implements Invoice {
 @pragma('vm:prefer-inline')
 _$InvoiceCopyWith<_Invoice> get copyWith => __$InvoiceCopyWithImpl<_Invoice>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$InvoiceToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is _Invoice&&(identical(other.id, id) || other.id == id)&&(identical(other.date, date) || other.date == date)&&(identical(other.customer, customer) || other.customer == customer)&&(identical(other.company, company) || other.company == company)&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.discount, discount) || other.discount == discount)&&(identical(other.taxRate, taxRate) || other.taxRate == taxRate)&&(identical(other.number, number) || other.number == number)&&(identical(other.status, status) || other.status == status)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.terms, terms) || other.terms == terms)&&const DeepCollectionEquality().equals(other._payments, _payments)&&(identical(other.version, version) || other.version == version)&&(identical(other.driveUrl, driveUrl) || other.driveUrl == driveUrl)&&(identical(other.archivedVersion, archivedVersion) || other.archivedVersion == archivedVersion)&&(identical(other.issuedAt, issuedAt) || other.issuedAt == issuedAt));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,id,date,customer,company,const DeepCollectionEquality().hash(_items),discount,taxRate,number,status,dueDate,notes,terms,const DeepCollectionEquality().hash(_payments),version,driveUrl,archivedVersion,issuedAt);
 
@@ -1506,7 +1500,6 @@ $CompanyCopyWith<$Res> get company {
 }
 }
 
-
 /// @nodoc
 mixin _$BillingData {
 
@@ -1517,8 +1510,6 @@ mixin _$BillingData {
 @pragma('vm:prefer-inline')
 $BillingDataCopyWith<BillingData> get copyWith => _$BillingDataCopyWithImpl<BillingData>(this as BillingData, _$identity);
 
-  /// Serializes this BillingData to a JSON map.
-  Map<String, dynamic> toJson();
 
 
 @override
@@ -1526,7 +1517,7 @@ bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is BillingData&&(identical(other.company, company) || other.company == company)&&const DeepCollectionEquality().equals(other.customers, customers)&&const DeepCollectionEquality().equals(other.invoices, invoices));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,company,const DeepCollectionEquality().hash(customers),const DeepCollectionEquality().hash(invoices));
 
@@ -1712,11 +1703,11 @@ return $default(_that.company,_that.customers,_that.invoices);case _:
 }
 
 /// @nodoc
-@JsonSerializable()
 
-class _BillingData implements BillingData {
-  const _BillingData({this.company = const Company(), final  List<Customer> customers = const [], final  List<Invoice> invoices = const []}): _customers = customers,_invoices = invoices;
-  factory _BillingData.fromJson(Map<String, dynamic> json) => _$BillingDataFromJson(json);
+
+class _BillingData extends BillingData {
+  const _BillingData({this.company = const Company(), final  List<Customer> customers = const [], final  List<Invoice> invoices = const []}): _customers = customers,_invoices = invoices,super._();
+  
 
 @override@JsonKey() final  Company company;
  final  List<Customer> _customers;
@@ -1740,17 +1731,14 @@ class _BillingData implements BillingData {
 @pragma('vm:prefer-inline')
 _$BillingDataCopyWith<_BillingData> get copyWith => __$BillingDataCopyWithImpl<_BillingData>(this, _$identity);
 
-@override
-Map<String, dynamic> toJson() {
-  return _$BillingDataToJson(this, );
-}
+
 
 @override
 bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is _BillingData&&(identical(other.company, company) || other.company == company)&&const DeepCollectionEquality().equals(other._customers, _customers)&&const DeepCollectionEquality().equals(other._invoices, _invoices));
 }
 
-@JsonKey(includeFromJson: false, includeToJson: false)
+
 @override
 int get hashCode => Object.hash(runtimeType,company,const DeepCollectionEquality().hash(_customers),const DeepCollectionEquality().hash(_invoices));
 
