@@ -310,31 +310,30 @@ class GoogleWorkspaceService {
       final requiredTabs = SheetSchema.allTabs;
       final missingTabs = requiredTabs.where((t) => !existingTitles.contains(t)).toList();
 
-      if (missingTabs.isEmpty) return;
+      // 1. Add missing sheets via batchUpdate.
+      if (missingTabs.isNotEmpty) {
+        final addSheetRequests = missingTabs
+            .map((title) => {
+                  'addSheet': {
+                    'properties': {'title': title},
+                  }
+                })
+            .toList();
+        final batchRes = await http.post(
+          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'requests': addSheetRequests}),
+        ).timeout(const Duration(seconds: 20));
+        if (batchRes.statusCode != 200 && batchRes.statusCode != 201) return;
+      }
 
-      // 1. Add missing sheets via batchUpdate
-      final addSheetRequests = missingTabs
-          .map((title) => {
-                'addSheet': {
-                  'properties': {'title': title},
-                }
-              })
-          .toList();
-
-      final batchRes = await http.post(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'requests': addSheetRequests}),
-      ).timeout(const Duration(seconds: 20));
-
-      if (batchRes.statusCode != 200 && batchRes.statusCode != 201) return;
-
-      // 2. Initialize headers for newly added tabs
+      // 2. Re-apply the owned header row on every tab. This is a safe schema
+      // migration for existing workspaces and exposes newly-added link columns.
       final valueData = <Map<String, dynamic>>[];
-      for (final title in missingTabs) {
+      for (final title in requiredTabs) {
         final headers = SheetSchema.getHeaders(title);
         final endCol = SheetSchema.getColLetter(headers.length);
         valueData.add({

@@ -147,15 +147,19 @@ class _OverviewTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Company Equity Summary', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Overview of shareholder capital, agreed equity, and liabilities',
-                      style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B), fontSize: 13)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Company Equity Summary', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text('Overview of shareholder capital, agreed equity, and liabilities',
+                        style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B), fontSize: 13),
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
+              const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () => _showAddContributionModal(context),
                 icon: const Icon(Icons.add, size: 18),
@@ -406,7 +410,10 @@ class _ShareholdersTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Shareholder Registry', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Expanded(
+                child: Text('Shareholder Registry', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () => _showAddShareholderModal(context),
                 icon: const Icon(Icons.person_add_alt_1, size: 18),
@@ -544,7 +551,10 @@ class _ContributionsTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Capital Contributions & Withdrawals', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Expanded(
+                child: Text('Capital Contributions & Withdrawals', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () => _showAddContributionModal(context),
                 icon: const Icon(Icons.add, size: 18),
@@ -702,7 +712,10 @@ class _LoansTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Shareholder Loans Ledger', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Expanded(
+                child: Text('Shareholder Loans Ledger', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () => _showAddLoanModal(context),
                 icon: const Icon(Icons.add, size: 18),
@@ -808,97 +821,139 @@ class _LoansTab extends StatelessWidget {
 }
 
 void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? shareholder}) {
+  final cubit = context.read<OfficeCubit>();
   final nameCtrl = TextEditingController(text: shareholder?['name'] ?? '');
   final roleCtrl = TextEditingController(text: shareholder?['role'] ?? 'Partner & Shareholder');
-  final pctCtrl = TextEditingController(
-    text: (shareholder?['ownershipPercentage'] ?? shareholder?['sharesPercent'] ?? '').toString(),
-  );
-  final capitalCtrl = TextEditingController(
-    text: (shareholder?['agreedCapital'] ?? shareholder?['investedAmount'] ?? '').toString(),
-  );
+  final pctVal = shareholder?['ownershipPercentage'] ?? shareholder?['sharesPercent'] ?? '50.0';
+  final pctCtrl = TextEditingController(text: pctVal.toString());
+  final capVal = shareholder?['agreedCapital'] ?? shareholder?['investedAmount'] ?? (shareholder?['agreedCapitalCents'] != null ? ((shareholder!['agreedCapitalCents'] as num) / 100.0).toStringAsFixed(2) : '50000.00');
+  final capitalCtrl = TextEditingController(text: capVal.toString());
   final emailCtrl = TextEditingController(text: shareholder?['email'] ?? '');
   final phoneCtrl = TextEditingController(text: shareholder?['phone'] ?? '');
   final notesCtrl = TextEditingController(text: shareholder?['notes'] ?? '');
+  String? validationError;
+  bool isSaving = false;
 
   showDialog(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(shareholder == null ? 'Add Shareholder' : 'Edit Shareholder'),
-      content: SizedBox(
-        width: 450,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Full Name *', hintText: 'e.g. Irshad Ahamed'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: roleCtrl,
-                decoration: const InputDecoration(labelText: 'Role / Title', hintText: 'e.g. Managing Partner'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pctCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Ownership Percentage (%) *', hintText: 'e.g. 60.0'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: capitalCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Agreed Capital (AED) *', hintText: 'e.g. 60000.00'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email Address', hintText: 'partner@example.com'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone Number', hintText: '+971 50 123 4567'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                decoration: const InputDecoration(labelText: 'Notes', hintText: 'Partner role or details'),
-              ),
-            ],
+    builder: (ctx) => StatefulBuilder(
+      builder: (modalCtx, setModalState) => AlertDialog(
+        title: Text(shareholder == null ? 'Add New Shareholder' : 'Edit Shareholder'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (validationError != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            validationError!,
+                            style: TextStyle(color: Colors.red.shade800, fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Full Name *', hintText: 'e.g. Partner Name', prefixIcon: Icon(Icons.person_outline, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: roleCtrl,
+                  decoration: const InputDecoration(labelText: 'Role / Title', hintText: 'e.g. Managing Partner', prefixIcon: Icon(Icons.badge_outlined, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: pctCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Ownership Percentage (%) *', hintText: 'e.g. 50.0', prefixIcon: Icon(Icons.percent, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: capitalCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Agreed Capital (AED) *', hintText: 'e.g. 50000.00', prefixIcon: Icon(Icons.payments_outlined, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email Address', hintText: 'partner@example.com', prefixIcon: Icon(Icons.email_outlined, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone Number', hintText: '+971 50 123 4567', prefixIcon: Icon(Icons.phone_outlined, size: 20)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  decoration: const InputDecoration(labelText: 'Notes', hintText: 'Partner role or details', prefixIcon: Icon(Icons.notes_outlined, size: 20)),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () async {
-            if (nameCtrl.text.trim().isEmpty) return;
-            final pct = double.tryParse(pctCtrl.text.trim().replaceAll(',', '')) ?? 0.0;
-            final cap = double.tryParse(capitalCtrl.text.trim().replaceAll(',', '')) ?? 0.0;
+        actions: [
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: isSaving ? null : () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) {
+                setModalState(() => validationError = 'Please enter the shareholder full name.');
+                return;
+              }
+              final pct = double.tryParse(pctCtrl.text.replaceAll('%', '').replaceAll(',', '').trim()) ?? 0.0;
+              final cap = double.tryParse(capitalCtrl.text.replaceAll('AED', '').replaceAll(',', '').trim()) ?? 0.0;
 
-            final payload = {
-              if (shareholder != null) 'id': shareholder['id'],
-              if (shareholder != null) 'version': shareholder['version'] ?? 0,
-              'name': nameCtrl.text.trim(),
-              'role': roleCtrl.text.trim().isNotEmpty ? roleCtrl.text.trim() : 'Partner & Shareholder',
-              'ownershipPercentage': pct,
-              'sharesPercent': pct.toStringAsFixed(2),
-              'agreedCapital': cap,
-              'agreedCapitalCents': (cap * 100).round(),
-              'investedAmount': cap.toStringAsFixed(2),
-              'email': emailCtrl.text.trim(),
-              'phone': phoneCtrl.text.trim(),
-              'notes': notesCtrl.text.trim(),
-              'status': 'active',
-            };
-            final ok = await context.read<OfficeCubit>().run('shareholderSave', payload);
-            if (context.mounted) {
-              Navigator.pop(ctx);
-              if (ok) {
+              setModalState(() {
+                isSaving = true;
+                validationError = null;
+              });
+
+              final payload = {
+                if (shareholder != null) 'id': shareholder['id'],
+                if (shareholder != null) 'version': shareholder['version'] ?? 0,
+                'name': name,
+                'role': roleCtrl.text.trim().isNotEmpty ? roleCtrl.text.trim() : 'Partner & Shareholder',
+                'ownershipPercentage': pct,
+                'sharesPercent': pct.toStringAsFixed(2),
+                'agreedCapital': cap,
+                'agreedCapitalCents': (cap * 100).round(),
+                'investedAmount': cap.toStringAsFixed(2),
+                'email': emailCtrl.text.trim(),
+                'phone': phoneCtrl.text.trim(),
+                'notes': notesCtrl.text.trim(),
+                'status': 'active',
+              };
+
+              final ok = await cubit.run('shareholderSave', payload);
+              if (!ok) {
+                setModalState(() {
+                  isSaving = false;
+                  validationError = cubit.state.error ?? 'Failed to save shareholder. Please try again.';
+                });
+                return;
+              }
+              if (context.mounted) {
+                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(shareholder == null ? 'Shareholder added successfully.' : 'Shareholder updated successfully.'),
@@ -906,58 +961,64 @@ void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? share
                   ),
                 );
               }
-            }
-          },
-          child: const Text('Save Shareholder'),
-        ),
-      ],
+            },
+            child: isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Save Shareholder'),
+          ),
+        ],
+      ),
     ),
   );
 }
 
+String _normalizeTransactionDate(String input) {
+  final text = input.trim();
+  if (text.isEmpty) return DateTime.now().toIso8601String().substring(0, 10);
+  if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) return text;
+  final ddmmyyyy = RegExp(r'^(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})$').firstMatch(text);
+  if (ddmmyyyy != null) {
+    final day = ddmmyyyy.group(1)!.padLeft(2, '0');
+    final month = ddmmyyyy.group(2)!.padLeft(2, '0');
+    final year = ddmmyyyy.group(3)!;
+    return '$year-$month-$day';
+  }
+  final parsed = DateTime.tryParse(text);
+  if (parsed != null) {
+    return parsed.toIso8601String().substring(0, 10);
+  }
+  return DateTime.now().toIso8601String().substring(0, 10);
+}
+
 void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? transaction}) {
-  final office = context.read<OfficeCubit>().state.data;
-  final shareholders = office.shareholders;
-  if (shareholders.isEmpty) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('No Shareholders Found'),
-        content: const Text('Please register at least one shareholder in the Shareholders tab before adding capital contributions.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showAddShareholderModal(context);
-            },
-            child: const Text('Add Shareholder First'),
-          ),
-        ],
-      ),
-    );
-    return;
+  final cubit = context.read<OfficeCubit>();
+  final office = cubit.state.data;
+  final List<Map<String, dynamic>> shareholders = [
+    ...office.shareholders,
+  ];
+
+  String selectedShareholderId = transaction?['shareholderId'] ?? (shareholders.isNotEmpty ? shareholders.first['id'] as String : '__new__');
+  if (selectedShareholderId != '__new__' && !shareholders.any((s) => s['id'] == selectedShareholderId)) {
+    selectedShareholderId = shareholders.isNotEmpty ? shareholders.first['id'] as String : '__new__';
   }
 
-  String selectedShareholderId = transaction?['shareholderId'] ?? shareholders.first['id'] as String;
-  if (!shareholders.any((s) => s['id'] == selectedShareholderId)) {
-    selectedShareholderId = shareholders.first['id'] as String;
-  }
   String selectedType = transaction?['transactionType'] ?? transaction?['type'] ?? 'capitalContribution';
   String selectedContributionType = transaction?['contributionType'] ?? 'bank';
   final amountVal = transaction?['amount'] ?? (transaction?['amountCents'] != null ? ((transaction!['amountCents'] as num) / 100.0).toStringAsFixed(2) : '');
   final amountCtrl = TextEditingController(text: amountVal.toString());
+  final newShareholderNameCtrl = TextEditingController(text: transaction?['shareholderName'] ?? '');
   final assetNameCtrl = TextEditingController(text: transaction?['assetName'] ?? '');
   final refCtrl = TextEditingController(text: transaction?['reference'] ?? '');
   final notesCtrl = TextEditingController(text: transaction?['notes'] ?? '');
   final dateCtrl = TextEditingController(text: transaction?['date'] ?? DateTime.now().toIso8601String().substring(0, 10));
   String? validationError;
+  bool isSaving = false;
 
   showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(transaction == null ? 'Add Capital Transaction' : 'Edit Capital Transaction'),
+      builder: (modalCtx, setModalState) => AlertDialog(
+        title: Text(transaction == null ? 'Record Capital Contribution' : 'Edit Capital Transaction'),
         content: SizedBox(
           width: 480,
           child: SingleChildScrollView(
@@ -989,13 +1050,29 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                     ),
                   ),
                 ],
-                DropdownButtonFormField<String>(
-                  initialValue: selectedShareholderId,
-                  decoration: const InputDecoration(labelText: 'Shareholder *', prefixIcon: Icon(Icons.person_outline, size: 20)),
-                  items: shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))).toList(),
-                  onChanged: (v) => setState(() => selectedShareholderId = v!),
-                ),
-                const SizedBox(height: 12),
+                if (shareholders.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedShareholderId,
+                    decoration: const InputDecoration(labelText: 'Shareholder *', prefixIcon: Icon(Icons.person_outline, size: 20)),
+                    items: [
+                      ...shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))),
+                      const DropdownMenuItem(value: '__new__', child: Text('+ Add New Shareholder...')),
+                    ],
+                    onChanged: (v) => setModalState(() => selectedShareholderId = v!),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (shareholders.isEmpty || selectedShareholderId == '__new__') ...[
+                  TextField(
+                    controller: newShareholderNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Shareholder Full Name *',
+                      hintText: 'e.g. Partner Name',
+                      prefixIcon: Icon(Icons.person_add_outlined, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<String>(
                   initialValue: selectedType,
                   decoration: const InputDecoration(labelText: 'Transaction Type *', prefixIcon: Icon(Icons.category_outlined, size: 20)),
@@ -1004,7 +1081,7 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                     DropdownMenuItem(value: 'additionalCapital', child: Text('Additional Paid-in Capital')),
                     DropdownMenuItem(value: 'capitalWithdrawal', child: Text('Capital Withdrawal')),
                   ],
-                  onChanged: (v) => setState(() => selectedType = v!),
+                  onChanged: (v) => setModalState(() => selectedType = v!),
                 ),
                 const SizedBox(height: 12),
                 if (selectedType != 'capitalWithdrawal') ...[
@@ -1016,7 +1093,7 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                       DropdownMenuItem(value: 'cash', child: Text('Cash (Cash in Hand)')),
                       DropdownMenuItem(value: 'asset', child: Text('Physical Asset Contribution')),
                     ],
-                    onChanged: (v) => setState(() => selectedContributionType = v!),
+                    onChanged: (v) => setModalState(() => selectedContributionType = v!),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -1025,7 +1102,7 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                     controller: assetNameCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Contributed Asset Name *',
-                      hintText: 'e.g. MacBook Pro 16", Office Van',
+                      hintText: 'e.g. MacBook Pro 16", Office Equipment',
                       prefixIcon: Icon(Icons.devices_outlined, size: 20),
                     ),
                   ),
@@ -1060,7 +1137,7 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                           lastDate: DateTime(2100),
                         );
                         if (picked != null) {
-                          setState(() {
+                          setModalState(() {
                             dateCtrl.text = picked.toIso8601String().substring(0, 10);
                           });
                         }
@@ -1091,34 +1168,80 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () async {
-              final amt = double.tryParse(amountCtrl.text.trim().replaceAll(',', '')) ?? 0.0;
+            onPressed: isSaving ? null : () async {
+              final amt = double.tryParse(amountCtrl.text.replaceAll('AED', '').replaceAll('aed', '').replaceAll(',', '').trim()) ?? 0.0;
               if (amt <= 0) {
-                setState(() => validationError = 'Please enter a valid amount greater than 0 AED.');
+                setModalState(() => validationError = 'Please enter a valid amount greater than 0 AED.');
                 return;
               }
 
-              final dateStr = dateCtrl.text.trim();
-              if (dateStr.isEmpty || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateStr)) {
-                setState(() => validationError = 'Please enter a valid transaction date (YYYY-MM-DD).');
-                return;
-              }
+              final dateStr = _normalizeTransactionDate(dateCtrl.text);
 
               if (selectedContributionType == 'asset' && selectedType != 'capitalWithdrawal' && assetNameCtrl.text.trim().isEmpty) {
-                setState(() => validationError = 'Please enter the name of the contributed asset.');
+                setModalState(() => validationError = 'Please enter the name of the contributed asset.');
                 return;
               }
 
-              setState(() => validationError = null);
+              String shareholderId = selectedShareholderId;
+              String shareholderName = '';
 
-              final sh = shareholders.firstWhere((s) => s['id'] == selectedShareholderId);
+              if (selectedShareholderId == '__new__' || shareholders.isEmpty) {
+                final newName = newShareholderNameCtrl.text.trim();
+                if (newName.isEmpty) {
+                  setModalState(() => validationError = 'Please enter the shareholder full name.');
+                  return;
+                }
+                shareholderName = newName;
+                shareholderId = 'SHR_${DateTime.now().millisecondsSinceEpoch}';
+              } else {
+                final found = shareholders.firstWhere((s) => s['id'] == selectedShareholderId, orElse: () => {'id': selectedShareholderId, 'name': 'Shareholder'});
+                shareholderName = found['name']?.toString() ?? 'Shareholder';
+              }
+
+              setModalState(() {
+                isSaving = true;
+                validationError = null;
+              });
+
+              final List<MapEntry<String, Map<String, dynamic>?>> commands = [];
+
+              if (selectedShareholderId == '__new__' || shareholders.isEmpty) {
+                commands.add(MapEntry('shareholderSave', {
+                  'id': shareholderId,
+                  'name': shareholderName,
+                  'role': 'Partner & Shareholder',
+                  'ownershipPercentage': 100.0,
+                  'sharesPercent': '100.00',
+                  'agreedCapital': amt,
+                  'agreedCapitalCents': (amt * 100).round(),
+                  'status': 'active',
+                }));
+              }
+
+              if (transaction == null && selectedContributionType == 'asset' && selectedType != 'capitalWithdrawal') {
+                commands.add(MapEntry('assetSave', {
+                  'name': assetNameCtrl.text.trim().isNotEmpty ? assetNameCtrl.text.trim() : 'Contributed Asset',
+                  'category': 'Computers & IT Equipment',
+                  'acquisitionType': 'shareholderContribution',
+                  'purchaseDate': dateStr,
+                  'cost': amt,
+                  'costCents': (amt * 100).round(),
+                  'shareholderId': shareholderId,
+                  'shareholderName': shareholderName,
+                  'status': 'active',
+                  'usefulLifeYears': 3,
+                  'usefulLifeMonths': 36,
+                  'skipJournal': true,
+                }));
+              }
+
               final payload = {
                 if (transaction != null) 'id': transaction['id'],
                 if (transaction != null) 'version': transaction['version'] ?? 0,
-                'shareholderId': selectedShareholderId,
-                'shareholderName': sh['name'],
+                'shareholderId': shareholderId,
+                'shareholderName': shareholderName,
                 'date': dateStr,
                 'transactionType': selectedType,
                 'type': selectedType,
@@ -1133,33 +1256,19 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                 'status': 'posted',
               };
 
-              final cubit = context.read<OfficeCubit>();
-              final List<MapEntry<String, Map<String, dynamic>?>> commands = [];
-
-              // If it's a new asset contribution, also register in Assets with skipJournal: true
-              if (transaction == null && selectedContributionType == 'asset' && selectedType != 'capitalWithdrawal') {
-                commands.add(MapEntry('assetSave', {
-                  'name': assetNameCtrl.text.trim().isNotEmpty ? assetNameCtrl.text.trim() : 'Contributed Asset',
-                  'category': 'Computers & IT Equipment',
-                  'acquisitionType': 'shareholderContribution',
-                  'purchaseDate': dateStr,
-                  'cost': amt,
-                  'costCents': (amt * 100).round(),
-                  'shareholderId': selectedShareholderId,
-                  'shareholderName': sh['name'],
-                  'status': 'active',
-                  'usefulLifeYears': 3,
-                  'usefulLifeMonths': 36,
-                  'skipJournal': true,
-                }));
-              }
-
               commands.add(MapEntry('capitalTransactionSave', payload));
 
-              final success = await cubit.runBatch(commands);
-              if (context.mounted) {
-                Navigator.pop(ctx);
-                if (success) {
+              try {
+                final success = await cubit.runBatch(commands);
+                if (!success) {
+                  setModalState(() {
+                    isSaving = false;
+                    validationError = cubit.state.error ?? 'Failed to save capital transaction. Please try again.';
+                  });
+                  return;
+                }
+                if (context.mounted) {
+                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(transaction == null ? 'Capital transaction recorded successfully.' : 'Capital transaction updated successfully.'),
@@ -1167,9 +1276,16 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
                     ),
                   );
                 }
+              } catch (e) {
+                setModalState(() {
+                  isSaving = false;
+                  validationError = e.toString();
+                });
               }
             },
-            child: Text(transaction == null ? 'Save Transaction' : 'Update Transaction'),
+            child: isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text(transaction == null ? 'Save Transaction' : 'Update Transaction'),
           ),
         ],
       ),
@@ -1178,49 +1294,35 @@ void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? tran
 }
 
 void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
-  final office = context.read<OfficeCubit>().state.data;
-  final shareholders = office.shareholders;
-  if (shareholders.isEmpty) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('No Shareholders Found'),
-        content: const Text('Please register at least one shareholder in the Shareholders tab before recording shareholder loans.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showAddShareholderModal(context);
-            },
-            child: const Text('Add Shareholder First'),
-          ),
-        ],
-      ),
-    );
-    return;
+  final cubit = context.read<OfficeCubit>();
+  final office = cubit.state.data;
+  final List<Map<String, dynamic>> shareholders = [
+    ...office.shareholders,
+  ];
+
+  String selectedShareholderId = loan?['shareholderId'] ?? (shareholders.isNotEmpty ? shareholders.first['id'] as String : '__new__');
+  if (selectedShareholderId != '__new__' && !shareholders.any((s) => s['id'] == selectedShareholderId)) {
+    selectedShareholderId = shareholders.isNotEmpty ? shareholders.first['id'] as String : '__new__';
   }
 
-  String selectedShareholderId = loan?['shareholderId'] ?? shareholders.first['id'] as String;
-  if (!shareholders.any((s) => s['id'] == selectedShareholderId)) {
-    selectedShareholderId = shareholders.first['id'] as String;
-  }
   String selectedType = loan?['type'] ?? 'loanReceived';
   String selectedAccount = loan?['paymentAccount'] ?? loan?['account'] ?? 'Bank';
   final amountVal = loan?['amount'] ?? loan?['principalAmount'] ?? (loan?['amountCents'] != null ? ((loan!['amountCents'] as num) / 100.0).toStringAsFixed(2) : '');
   final amountCtrl = TextEditingController(text: amountVal.toString());
+  final newShareholderNameCtrl = TextEditingController(text: loan?['shareholderName'] ?? '');
   final refCtrl = TextEditingController(text: loan?['reference'] ?? '');
   final notesCtrl = TextEditingController(text: loan?['notes'] ?? '');
   final dateCtrl = TextEditingController(text: loan?['date'] ?? DateTime.now().toIso8601String().substring(0, 10));
   String? validationError;
+  bool isSaving = false;
 
   showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
+      builder: (modalCtx, setModalState) => AlertDialog(
         title: Text(loan == null ? 'Record Shareholder Loan / Repayment' : 'Edit Shareholder Loan'),
         content: SizedBox(
-          width: 450,
+          width: 480,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1249,31 +1351,47 @@ void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
                     ),
                   ),
                 ],
-                DropdownButtonFormField<String>(
-                  initialValue: selectedShareholderId,
-                  decoration: const InputDecoration(labelText: 'Shareholder *', prefixIcon: Icon(Icons.person_outline, size: 20)),
-                  items: shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))).toList(),
-                  onChanged: (v) => setState(() => selectedShareholderId = v!),
-                ),
-                const SizedBox(height: 12),
+                if (shareholders.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedShareholderId,
+                    decoration: const InputDecoration(labelText: 'Shareholder *', prefixIcon: Icon(Icons.person_outline, size: 20)),
+                    items: [
+                      ...shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))),
+                      const DropdownMenuItem(value: '__new__', child: Text('+ Add New Shareholder...')),
+                    ],
+                    onChanged: (v) => setModalState(() => selectedShareholderId = v!),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (shareholders.isEmpty || selectedShareholderId == '__new__') ...[
+                  TextField(
+                    controller: newShareholderNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Shareholder Full Name *',
+                      hintText: 'e.g. Partner Name',
+                      prefixIcon: Icon(Icons.person_add_outlined, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<String>(
                   initialValue: selectedType,
-                  decoration: const InputDecoration(labelText: 'Action *', prefixIcon: Icon(Icons.swap_horiz_outlined, size: 20)),
+                  decoration: const InputDecoration(labelText: 'Loan Action *', prefixIcon: Icon(Icons.category_outlined, size: 20)),
                   items: const [
-                    DropdownMenuItem(value: 'loanReceived', child: Text('Loan Received (From Partner to Company)')),
-                    DropdownMenuItem(value: 'loanRepayment', child: Text('Loan Repayment (From Company to Partner)')),
+                    DropdownMenuItem(value: 'loanReceived', child: Text('Loan Received (From Shareholder to Company)')),
+                    DropdownMenuItem(value: 'loanRepayment', child: Text('Loan Repayment (Company Repaying Shareholder)')),
                   ],
-                  onChanged: (v) => setState(() => selectedType = v!),
+                  onChanged: (v) => setModalState(() => selectedType = v!),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: selectedAccount,
-                  decoration: const InputDecoration(labelText: 'Account *', prefixIcon: Icon(Icons.account_balance_outlined, size: 20)),
+                  decoration: const InputDecoration(labelText: 'Payment Account *', prefixIcon: Icon(Icons.account_balance_outlined, size: 20)),
                   items: const [
                     DropdownMenuItem(value: 'Bank', child: Text('Bank Account')),
                     DropdownMenuItem(value: 'Cash', child: Text('Cash in Hand')),
                   ],
-                  onChanged: (v) => setState(() => selectedAccount = v!),
+                  onChanged: (v) => setModalState(() => selectedAccount = v!),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1305,7 +1423,7 @@ void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
                           lastDate: DateTime(2100),
                         );
                         if (picked != null) {
-                          setState(() {
+                          setModalState(() {
                             dateCtrl.text = picked.toIso8601String().substring(0, 10);
                           });
                         }
@@ -1334,29 +1452,58 @@ void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () async {
-              final amt = double.tryParse(amountCtrl.text.trim().replaceAll(',', '')) ?? 0.0;
+            onPressed: isSaving ? null : () async {
+              final amt = double.tryParse(amountCtrl.text.replaceAll('AED', '').replaceAll('aed', '').replaceAll(',', '').trim()) ?? 0.0;
               if (amt <= 0) {
-                setState(() => validationError = 'Please enter a valid amount greater than 0 AED.');
+                setModalState(() => validationError = 'Please enter a valid amount greater than 0 AED.');
                 return;
               }
 
-              final dateStr = dateCtrl.text.trim();
-              if (dateStr.isEmpty || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateStr)) {
-                setState(() => validationError = 'Please enter a valid date (YYYY-MM-DD).');
-                return;
+              final dateStr = _normalizeTransactionDate(dateCtrl.text);
+
+              String shareholderId = selectedShareholderId;
+              String shareholderName = '';
+
+              if (selectedShareholderId == '__new__' || shareholders.isEmpty) {
+                final newName = newShareholderNameCtrl.text.trim();
+                if (newName.isEmpty) {
+                  setModalState(() => validationError = 'Please enter the shareholder full name.');
+                  return;
+                }
+                shareholderName = newName;
+                shareholderId = 'SHR_${DateTime.now().millisecondsSinceEpoch}';
+              } else {
+                final found = shareholders.firstWhere((s) => s['id'] == selectedShareholderId, orElse: () => {'id': selectedShareholderId, 'name': 'Shareholder'});
+                shareholderName = found['name']?.toString() ?? 'Shareholder';
               }
 
-              setState(() => validationError = null);
+              setModalState(() {
+                isSaving = true;
+                validationError = null;
+              });
 
-              final sh = shareholders.firstWhere((s) => s['id'] == selectedShareholderId);
+              final List<MapEntry<String, Map<String, dynamic>?>> commands = [];
+
+              if (selectedShareholderId == '__new__' || shareholders.isEmpty) {
+                commands.add(MapEntry('shareholderSave', {
+                  'id': shareholderId,
+                  'name': shareholderName,
+                  'role': 'Partner & Shareholder',
+                  'ownershipPercentage': 100.0,
+                  'sharesPercent': '100.00',
+                  'agreedCapital': 0.0,
+                  'agreedCapitalCents': 0,
+                  'status': 'active',
+                }));
+              }
+
               final payload = {
                 if (loan != null) 'id': loan['id'],
                 if (loan != null) 'version': loan['version'] ?? 0,
-                'shareholderId': selectedShareholderId,
-                'shareholderName': sh['name'],
+                'shareholderId': shareholderId,
+                'shareholderName': shareholderName,
                 'date': dateStr,
                 'type': selectedType,
                 'amount': amt,
@@ -1369,10 +1516,19 @@ void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
                 'status': 'posted',
               };
 
-              final success = await context.read<OfficeCubit>().run('shareholderLoanSave', payload);
-              if (context.mounted) {
-                Navigator.pop(ctx);
-                if (success) {
+              commands.add(MapEntry('shareholderLoanSave', payload));
+
+              try {
+                final success = await cubit.runBatch(commands);
+                if (!success) {
+                  setModalState(() {
+                    isSaving = false;
+                    validationError = cubit.state.error ?? 'Failed to save shareholder loan. Please try again.';
+                  });
+                  return;
+                }
+                if (context.mounted) {
+                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(loan == null ? 'Shareholder loan recorded successfully.' : 'Shareholder loan updated.'),
@@ -1380,9 +1536,16 @@ void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
                     ),
                   );
                 }
+              } catch (e) {
+                setModalState(() {
+                  isSaving = false;
+                  validationError = e.toString();
+                });
               }
             },
-            child: Text(loan == null ? 'Save Loan Entry' : 'Update Loan Entry'),
+            child: isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Save Loan Entry'),
           ),
         ],
       ),

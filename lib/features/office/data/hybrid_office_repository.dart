@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
 import '../../../core/sync/sync_manager.dart';
+import '../../../core/sync/sheet_schema.dart';
 import '../../billing/domain/models.dart';
 import '../../billing/domain/totals.dart';
 import '../domain/office_repository.dart';
@@ -587,6 +588,48 @@ class HybridOfficeRepository implements OfficeRepository {
     }
 
     // ── officeUploadDocument ──────────────────────────────────────────────────
+    if (action == 'documentUpload') {
+      if (!_hasCloudWorkspace || _driveFolderId.isEmpty) {
+        throw StateError('Document upload requires a connected Google Drive workspace.');
+      }
+      final table = d['table']?.toString() ?? '';
+      final id = d['id']?.toString() ?? '';
+      final documentId = d['documentId']?.toString() ?? '';
+      final name = d['name']?.toString() ?? '';
+      if (!SheetSchema.dataTabsToSync.contains(table) || id.isEmpty || documentId.isEmpty || name.isEmpty) {
+        throw StateError('Choose a valid record and document before uploading.');
+      }
+      final records = await _sync.loadCachedRecords(sid, table);
+      final current = records.where((record) => record['id']?.toString() == id).firstOrNull;
+      if (current == null) throw StateError('Record not found. Save it before attaching a file.');
+      if ((current['version'] ?? 0) != (d['version'] ?? 0)) {
+        throw StateError('Record changed. Refresh and try again.');
+      }
+      final documents = (current['documents'] as List? ?? []).whereType<Map>().toList();
+      if (documents.any((doc) => doc['id']?.toString() == documentId)) return current;
+
+      final token = await session.tryGetToken();
+      if (token == null) throw StateError('Document upload requires an active Google connection.');
+      final bytes = base64Decode(d['bytes']?.toString() ?? d['base64']?.toString() ?? '');
+      if (bytes.isEmpty || bytes.length > 5000000) throw StateError('Select a file up to 5 MB.');
+      final extension = (d['extension']?.toString() ?? name.split('.').last).toLowerCase();
+      final mimeType = extension == 'pdf'
+          ? 'application/pdf'
+          : (extension == 'png' ? 'image/png' : (extension == 'jpg' || extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+      final subfolder = table == 'Payroll' || table == 'Employees' || table == 'Attendance'
+          ? 'Payroll'
+          : (table == 'Invoices' ? 'Invoices' : (table == 'Quotations' ? 'Quotations' : 'Assets'));
+      final link = await _service.uploadDriveFile(token, _driveFolderId, name, bytes, mimeType: mimeType, subfolder: subfolder);
+      if (link.isEmpty) throw StateError('Google Drive upload failed. Please retry.');
+
+      final updated = Map<String, dynamic>.from(current)
+        ..['documents'] = [...documents, {'id': documentId, 'name': name, 'url': link}]
+        ..['version'] = ((current['version'] as num?)?.toInt() ?? 0) + 1;
+      await _upsert(table, id, updated);
+      _scheduleBackgroundSync();
+      return updated;
+    }
+
     if (action == 'officeUploadDocument') {
       if (!_hasCloudWorkspace) {
         throw StateError('Document upload to Google Drive requires a connected Google workspace.');

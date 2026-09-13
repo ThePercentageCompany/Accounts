@@ -7,23 +7,23 @@ import '../../billing/domain/models.dart';
 // Single-device demo. Connected mode validates all writes in Apps Script.
 class LocalOfficeRepository implements OfficeRepository {
  @override bool get isDemo=>true;
- @override Future<Map<String,dynamic>> command(String action,[Map<String,dynamic>? payload])async{
-  final prefs=await SharedPreferences.getInstance();
-  final root=Map<String,dynamic>.from(jsonDecode(prefs.getString('tpc_office_demo_v2')??'{"employees":[],"attendance":[],"payroll":[],"entries":[]}'));
-  List<Map<String,dynamic>> list(String k)=>(root[k] as List).map((x)=>Map<String,dynamic>.from(x as Map)).toList();
-  final d=Map<String,dynamic>.from(payload??{});
-  if(action=='officeLoad'){
-    root.putIfAbsent('employees', () => []);
-    root.putIfAbsent('attendance', () => []);
-    root.putIfAbsent('payroll', () => []);
-    root.putIfAbsent('entries', () => []);
-    root.putIfAbsent('shareholders', () => []);
-    root.putIfAbsent('capitalTransactions', () => []);
-    root.putIfAbsent('shareholderLoans', () => []);
-    root.putIfAbsent('assets', () => []);
-    root.putIfAbsent('journals', () => []);
-    return root;
-  }
+  @override Future<Map<String,dynamic>> command(String action,[Map<String,dynamic>? payload])async{
+   final prefs=await SharedPreferences.getInstance();
+   final root=Map<String,dynamic>.from(jsonDecode(prefs.getString('tpc_office_demo_v2')??'{}'));
+   root.putIfAbsent('employees', () => []);
+   root.putIfAbsent('attendance', () => []);
+   root.putIfAbsent('payroll', () => []);
+   root.putIfAbsent('entries', () => []);
+   root.putIfAbsent('shareholders', () => []);
+   root.putIfAbsent('capitalTransactions', () => []);
+   root.putIfAbsent('shareholderLoans', () => []);
+   root.putIfAbsent('assets', () => []);
+   root.putIfAbsent('journals', () => []);
+   List<Map<String,dynamic>> list(String k)=>((root[k] as List?) ?? const []).whereType<Map>().map((x)=>Map<String,dynamic>.from(x)).toList();
+   final d=Map<String,dynamic>.from(payload??{});
+   if(action=='officeLoad'){
+     return root;
+   }
   var key='',record=<String,dynamic>{};
   Map<String,dynamic>? find(String k,String id){for(final r in list(k)){if(r['id']==id)return r;}return null;}
   void version(Map<String,dynamic>? old){if((old?['version']??0)!=(d['version']??0))throw StateError('Record changed. Refresh and reopen.');}
@@ -71,8 +71,8 @@ class LocalOfficeRepository implements OfficeRepository {
    record.addAll({'status':action=='financePay'?'paid':'void','paidDate':d['paidDate']??'','account':d['account']??record['account'],'version':(record['version'] as int)+1});
   }else if(action=='shareholderSave'){
    key='shareholders';final id=d['id']??'SHR_${DateTime.now().millisecondsSinceEpoch}';
-   final old=find(key,id);if(old!=null)version(old);
-   record={...d,'id':id,'version':((d['version'] as int?)??0)+1};
+   final old=find(key,id);if(old!=null&&d['version']!=null)version(old);
+   record={...d,'id':id,'version':((d['version'] as int?)??(old?['version'] as int? ?? 0))+1};
   }else if(action=='shareholderDelete'){
    key='shareholders';final id=d['id'] as String;
    root[key]=list(key).where((x)=>x['id']!=id).toList();
@@ -80,7 +80,7 @@ class LocalOfficeRepository implements OfficeRepository {
    return {'id':id};
   }else if(action=='capitalTransactionSave'){
    key='capitalTransactions';final id=d['id']??'CAP_${DateTime.now().millisecondsSinceEpoch}';
-   final old=find(key,id);if(old!=null)version(old);
+   final old=find(key,id);if(old!=null&&d['version']!=null)version(old);
    final amountCents = (d['amountCents'] as num?)?.toInt() ??
        ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    if(amountCents<=0)throw StateError('Contribution amount must be greater than zero.');
@@ -121,7 +121,7 @@ class LocalOfficeRepository implements OfficeRepository {
    return {'id':id};
   }else if(action=='shareholderLoanSave'){
    key='shareholderLoans';final id=d['id']??'LOAN_${DateTime.now().millisecondsSinceEpoch}';
-   final old=find(key,id);if(old!=null)version(old);
+   final old=find(key,id);if(old!=null&&d['version']!=null)version(old);
    final amountCents = (d['amountCents'] as num?)?.toInt() ??
        ((double.tryParse(d['amount']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    if(amountCents<=0)throw StateError('Loan amount must be greater than zero.');
@@ -159,7 +159,7 @@ class LocalOfficeRepository implements OfficeRepository {
    return {'id':id};
   }else if(action=='assetSave'){
    key='assets';final id=d['id']??'AST_${DateTime.now().millisecondsSinceEpoch}';
-   final old=find(key,id);if(old!=null)version(old);
+   final old=find(key,id);if(old!=null&&d['version']!=null)version(old);
    final costCents = (d['costCents'] as num?)?.toInt() ??
        ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
    final accDepCents=(d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;

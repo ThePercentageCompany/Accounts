@@ -51,6 +51,31 @@ class SheetSchema {
     return result;
   }
 
+  /// Stores attachment URLs as individual newline-delimited Drive links.  This
+  /// keeps Sheets readable while preserving enough information to rebuild the
+  /// in-app attachment list after a refresh.
+  static String attachmentLinks(Map<String, dynamic> record) {
+    final docs = record['documents'];
+    if (docs is! List) return '';
+    return docs
+        .whereType<Map>()
+        .map((doc) => doc['url']?.toString() ?? '')
+        .where((url) => url.isNotEmpty)
+        .join('\n');
+  }
+
+  static List<Map<String, dynamic>> attachmentsFromCell(dynamic value) {
+    final urls = (value?.toString() ?? '')
+        .split(RegExp(r'[\n,]'))
+        .map((url) => url.trim())
+        .where((url) => url.startsWith('http://') || url.startsWith('https://'))
+        .toList();
+    return [
+      for (var i = 0; i < urls.length; i++)
+        {'id': 'drive_$i', 'name': 'Attachment ${i + 1}', 'url': urls[i]},
+    ];
+  }
+
   /// Returns the human-readable column headers for a specific sheet tab (without JSON Payload).
   static List<String> getHeaders(String tabName) {
     switch (tabName) {
@@ -132,6 +157,7 @@ class SheetSchema {
           'Reference / Doc #',
           'Notes',
           'Version',
+          'Attachment Drive Links',
         ];
 
       case 'Employees':
@@ -151,6 +177,7 @@ class SheetSchema {
           'IBAN / Bank Account',
           'Notes',
           'Version',
+          'Attachment Drive Links',
         ];
 
       case 'Attendance':
@@ -182,6 +209,7 @@ class SheetSchema {
           'Paid Date',
           'Payment Account',
           'Version',
+          'Drive Payslip Link',
         ];
 
       case 'Shareholders':
@@ -282,6 +310,7 @@ class SheetSchema {
           'Default Payment Terms',
           'Default Notes',
           'Version',
+          'Company Logo Drive Link',
         ];
 
       case 'Invoice Register':
@@ -483,6 +512,7 @@ class SheetSchema {
           record['invoiceRef']?.toString() ?? record['reference']?.toString() ?? '',
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
+          attachmentLinks(record),
         ];
 
       case 'Employees':
@@ -506,6 +536,7 @@ class SheetSchema {
           record['iban']?.toString() ?? '',
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
+          attachmentLinks(record),
         ];
 
       case 'Attendance':
@@ -552,6 +583,7 @@ class SheetSchema {
           record['paidDate']?.toString() ?? '',
           record['account']?.toString() ?? 'Bank',
           record['version'] ?? 0,
+          record['driveUrl']?.toString() ?? '',
         ];
 
       case 'Shareholders':
@@ -711,6 +743,7 @@ class SheetSchema {
           terms,
           notes,
           version,
+          map['logoDriveUrl']?.toString() ?? '',
         ];
 
       default:
@@ -867,6 +900,7 @@ class SheetSchema {
         }
         if (row.length > 15) record['notes'] = row[15]?.toString() ?? '';
         if (row.length > 16) record['version'] = int.tryParse(row[16]?.toString() ?? '0') ?? 0;
+        if (row.length > 17) record['documents'] = attachmentsFromCell(row[17]);
         break;
 
       case 'Employees':
@@ -883,6 +917,7 @@ class SheetSchema {
         if (row.length > 12) record['iban'] = row[12]?.toString() ?? '';
         if (row.length > 13) record['notes'] = row[13]?.toString() ?? '';
         if (row.length > 14) record['version'] = int.tryParse(row[14]?.toString() ?? '0') ?? 0;
+        if (row.length > 15) record['documents'] = attachmentsFromCell(row[15]);
         break;
 
       case 'Attendance':
@@ -933,6 +968,7 @@ class SheetSchema {
         if (row.length > 12) record['paidDate'] = row[12]?.toString() ?? '';
         if (row.length > 13) record['account'] = row[13]?.toString() ?? 'Bank';
         if (row.length > 14) record['version'] = int.tryParse(row[14]?.toString() ?? '0') ?? 0;
+        if (row.length > 15) record['driveUrl'] = row[15]?.toString() ?? '';
         record['employee'] = {'id': record['employeeId'], 'name': record['employeeName']};
         break;
 
@@ -1089,6 +1125,7 @@ class SheetSchema {
         if (row.length > 11) valueMap['terms'] = row[11]?.toString() ?? '';
         if (row.length > 12) valueMap['notes'] = row[12]?.toString() ?? '';
         if (row.length > 13) valueMap['version'] = int.tryParse(row[13]?.toString() ?? '0') ?? 0;
+        if (row.length > 14) valueMap['logoDriveUrl'] = row[14]?.toString() ?? '';
         return {'id': key, 'value': valueMap};
 
       default:

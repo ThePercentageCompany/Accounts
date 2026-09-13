@@ -137,7 +137,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
             final bytes = base64Decode(raw);
             final ext = mime.contains('jpeg') || mime.contains('jpg') ? 'jpg' : 'png';
             final cleanName = company.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            await _service.uploadImageFile(
+            final logoLink = await _service.uploadImageFile(
               token,
               _driveFolderId,
               '${cleanName.isNotEmpty ? cleanName : "company"}_logo.$ext',
@@ -145,6 +145,19 @@ class GoogleDirectBillingRepository implements BillingRepository {
               mimeType: mime,
               subfolder: 'Assets',
             );
+            if (logoLink.isNotEmpty) {
+              final value = Map<String, dynamic>.from(updated.toJson())
+                ..['logoDriveUrl'] = logoLink;
+              final logoPayload = {'id': 'company', 'value': value};
+              await _sync.upsertCachedRecord(_spreadsheetId, 'Settings', 'company', logoPayload);
+              await _sync.enqueueOperation(
+                spreadsheetId: _spreadsheetId,
+                tabName: 'Settings',
+                recordId: 'company',
+                action: 'upsert',
+                data: logoPayload,
+              );
+            }
           }
         } catch (_) {}
       });

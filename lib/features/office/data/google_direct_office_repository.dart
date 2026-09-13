@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
 import '../../../core/sync/sync_manager.dart';
+import '../../../core/sync/sheet_schema.dart';
 import '../../billing/domain/models.dart';
 import '../../billing/domain/totals.dart';
 import '../domain/office_repository.dart';
@@ -672,6 +673,60 @@ class GoogleDirectOfficeRepository implements OfficeRepository {
       final fileName = 'Financial_Report_$month.pdf';
       final link = await _service.uploadPdfFile(token, _driveFolderId, fileName, bytes, subfolder: 'Reports');
       return {'url': link};
+    }
+
+    // Upload a supporting document, persist its Drive URL on its parent record,
+    // and queue the parent-row update so the link is never lost on refresh.
+    if (action == 'documentUpload') {
+      final table = d['table'] as String? ?? '';
+      if (!SheetSchema.dataTabsToSync.contains(table)) {
+        throw StateError('Unsupported document table: $table');
+      }
+      if (_driveFolderId.isEmpty) {
+        throw StateError('No Google Drive folder is linked. Complete workspace setup first.');
+      }
+      final id = d['id']?.toString() ?? '';
+      final documentId = d['documentId']?.toString() ?? '';
+      final name = d['name']?.toString() ?? '';
+      if (id.isEmpty || documentId.isEmpty || name.isEmpty) {
+        throw StateError('Document id, record id, and file name are required.');
+      }
+      final records = await _sync.loadCachedRecords(spreadsheetId, table);
+      final current = records.where((record) => record['id']?.toString() == id).firstOrNull;
+      if (current == null) throw StateError('Record not found. Save it before attaching a file.');
+      if ((current['version'] ?? 0) != (d['version'] ?? 0)) {
+        throw StateError('Record changed. Refresh and try again.');
+      }
+      final existingDocuments = (current['documents'] as List? ?? []).whereType<Map>().toList();
+      if (existingDocuments.any((doc) => doc['id']?.toString() == documentId)) return current;
+
+      final token = await session.tryGetToken();
+      if (token == null) throw StateError('Document upload requires an active Google connection.');
+      final bytes = base64Decode(d['bytes']?.toString() ?? d['base64']?.toString() ?? '');
+      if (bytes.isEmpty || bytes.length > 5000000) throw StateError('Select a file up to 5 MB.');
+      final extension = (d['extension']?.toString() ?? name.split('.').last).toLowerCase();
+      final mimeType = extension == 'pdf'
+          ? 'application/pdf'
+          : (extension == 'png' ? 'image/png' : (extension == 'jpg' || extension == 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+      final subfolder = table == 'Payroll' || table == 'Employees' || table == 'Attendance'
+          ? 'Payroll'
+          : (table == 'Invoices' ? 'Invoices' : (table == 'Quotations' ? 'Quotations' : 'Assets'));
+      final link = await _service.uploadDriveFile(token, _driveFolderId, name, bytes, mimeType: mimeType, subfolder: subfolder);
+      if (link.isEmpty) throw StateError('Google Drive upload failed. Please retry.');
+
+      final updated = Map<String, dynamic>.from(current)
+        ..['documents'] = [...existingDocuments, {'id': documentId, 'name': name, 'url': link}]
+        ..['version'] = ((current['version'] as num?)?.toInt() ?? 0) + 1;
+      await _sync.upsertCachedRecord(spreadsheetId, table, id, updated);
+      await _sync.enqueueOperation(
+        spreadsheetId: spreadsheetId,
+        tabName: table,
+        recordId: id,
+        action: 'upsert',
+        data: updated,
+      );
+      _scheduleBackgroundSync();
+      return updated;
     }
 
     if (action == 'officeUploadDocument') {
