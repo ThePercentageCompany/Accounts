@@ -389,7 +389,8 @@ class SheetSchema {
               final rate = double.tryParse(item['rate']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
               subtotal += qty * rate;
               final desc = item['description']?.toString() ?? '';
-              itemsStrList.add('${qty.toStringAsFixed(0)}x $desc @ ${rate.toStringAsFixed(2)}');
+              final quantityText = qty.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
+              itemsStrList.add('${quantityText}x $desc @ ${rate.toStringAsFixed(2)}');
             }
           }
         }
@@ -408,9 +409,13 @@ class SheetSchema {
               final cents = (p['cents'] as num?)?.toDouble() ?? 0.0;
               final aed = cents / 100.0;
               paidAmount += aed;
+              final paymentId = p['id']?.toString() ?? '';
               final dt = p['date']?.toString() ?? '';
               final acc = p['account']?.toString() ?? 'Bank';
-              paymentsStrList.add('${aed.toStringAsFixed(2)} AED on $dt via $acc');
+              final reference = p['reference']?.toString() ?? '';
+              // Dedicated fields within a readable cell retain the payment's
+              // stable ID, amount, date, account, and reference on reload.
+              paymentsStrList.add('$paymentId | ${aed.toStringAsFixed(2)} | $dt | $acc | $reference');
             }
           }
         }
@@ -455,7 +460,8 @@ class SheetSchema {
               final rate = double.tryParse(item['rate']?.toString().replaceAll(',', '') ?? '0') ?? 0.0;
               subtotal += qty * rate;
               final desc = item['description']?.toString() ?? '';
-              itemsStrList.add('${qty.toStringAsFixed(0)}x $desc @ ${rate.toStringAsFixed(2)}');
+              final quantityText = qty.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
+              itemsStrList.add('${quantityText}x $desc @ ${rate.toStringAsFixed(2)}');
             }
           }
         }
@@ -796,7 +802,6 @@ class SheetSchema {
         final custId = row.length > 5 ? row[5]?.toString() ?? '' : '';
         record['customer'] = {'id': custId, 'name': custName, 'email': '', 'phone': '', 'address': '', 'trn': ''};
         record['company'] = defaultCompanyMap();
-        record['payments'] = <Map<String, dynamic>>[];
         if (row.length > 6) record['status'] = row[6]?.toString().toLowerCase() ?? 'draft';
         if (row.length > 7) record['taxRate'] = row[7]?.toString() ?? '0';
         if (row.length > 8) record['discount'] = row[8]?.toString() ?? '0.00';
@@ -823,6 +828,42 @@ class SheetSchema {
           }
         }
         record['items'] = itemsList;
+
+        final paymentsList = <Map<String, dynamic>>[];
+        if (row.length > 15 && row[15]?.toString().isNotEmpty == true) {
+          for (final raw in row[15].toString().split(' | ')) {
+            final fields = raw.split(' | ').map((value) => value.trim()).toList();
+            // Current structured readable format: ID | AED amount | date | account | reference.
+            if (fields.length >= 4) {
+              final aed = double.tryParse(fields[1].replaceAll('AED', '').trim());
+              if (aed != null && aed > 0) {
+                paymentsList.add({
+                  'id': fields[0].isEmpty ? 'payment_${id}_${paymentsList.length}' : fields[0],
+                  'cents': (aed * 100).round(),
+                  'date': fields[2],
+                  'account': fields[3].isEmpty ? 'Bank' : fields[3],
+                  'reference': fields.length > 4 ? fields.sublist(4).join(' | ') : '',
+                });
+              }
+              continue;
+            }
+            // Legacy format: "125.00 AED on 2026-09-13 via Bank".
+            final legacy = RegExp(r'^(\d+(?:\.\d+)?)\s*AED\s*on\s*(\d{4}-\d{2}-\d{2})\s*via\s*(.+)$').firstMatch(raw.trim());
+            if (legacy != null) {
+              final aed = double.tryParse(legacy.group(1) ?? '');
+              if (aed != null && aed > 0) {
+                paymentsList.add({
+                  'id': 'payment_${id}_${paymentsList.length}',
+                  'cents': (aed * 100).round(),
+                  'date': legacy.group(2) ?? '',
+                  'account': legacy.group(3) ?? 'Bank',
+                  'reference': '',
+                });
+              }
+            }
+          }
+        }
+        record['payments'] = paymentsList;
 
         if (row.length > 16) record['notes'] = row[16]?.toString() ?? '';
         if (row.length > 17) record['terms'] = row[17]?.toString() ?? '';
