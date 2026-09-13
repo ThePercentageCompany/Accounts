@@ -999,6 +999,47 @@ class _OfficeScreenState extends State<OfficeScreen> {
     if (result != null) await run('attendanceSave', result);
   }
 
+  /// Dedicated entry point for the Attendance module. Existing records can
+  /// still be edited from each employee card; this makes adding a new daily
+  /// mark explicit and discoverable.
+  Future<void> addAttendance() async {
+    final employees = context.read<OfficeCubit>().state.data.employees;
+    if (employees.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add an employee before marking attendance.')));
+      return;
+    }
+    final employeeId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Mark Attendance • $day'),
+        content: SizedBox(
+          width: 420,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: employees.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final employee = employees[index];
+              return ListTile(
+                leading: const Icon(CupertinoIcons.person_circle),
+                title: Text(employee['name']?.toString() ?? 'Employee'),
+                subtitle: Text(employee['code']?.toString() ?? ''),
+                onTap: () => Navigator.pop(dialogContext, employee['id']?.toString()),
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel'))],
+      ),
+    );
+    if (employeeId == null || !mounted) return;
+    final employee = employees.firstWhere((item) => item['id']?.toString() == employeeId);
+    final existing = context.read<OfficeCubit>().state.data.attendance
+        .where((item) => item['employeeId']?.toString() == employeeId && item['date']?.toString() == day)
+        .firstOrNull;
+    await attendance(employee, existing);
+  }
+
   Future<void> payroll(Map<String, dynamic> employee, [Map<String, dynamic>? old]) async {
     final result = await officeForm(
       context,
@@ -1150,6 +1191,17 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     onPressed: () => employee(),
                     icon: const Icon(CupertinoIcons.person_add_solid, size: 16),
                     label: const Text('Add Employee'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.zohoBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                    ),
+                  );
+                } else if (page == 1) {
+                  actionButton = FilledButton.icon(
+                    onPressed: addAttendance,
+                    icon: const Icon(CupertinoIcons.checkmark_alt_circle_fill, size: 16),
+                    label: const Text('Mark Attendance'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.zohoBlue,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
