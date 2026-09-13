@@ -980,23 +980,118 @@ class _OfficeScreenState extends State<OfficeScreen> {
   }
 
   Future<void> attendance(Map<String, dynamic> employee, Map<String, dynamic>? old) async {
-    final result = await officeForm(
-      context,
-      'Attendance: ${employee['name']} / $day',
-      old ?? {'employeeId': employee['id'], 'date': day, 'status': 'present', 'checkIn': '', 'checkOut': '', 'overtimeHours': '0', 'notes': '', 'version': 0},
-      const [
-        InputSpec('status', 'Attendance Status', options: [
-          'present', 'absent', 'halfDay', 'paidLeave', 'unpaidLeave',
-          'sickLeave', 'vacation', 'halfDayPaidLeave', 'halfDayUnpaidLeave',
-          'fullDayPaidLeave', 'fullDayUnpaidLeave', 'off', 'holiday',
-        ], icon: CupertinoIcons.checkmark_alt_circle),
-        InputSpec('checkIn', 'Check-in (HH:MM)', icon: CupertinoIcons.arrow_down_right_circle),
-        InputSpec('checkOut', 'Check-out (HH:MM)', icon: CupertinoIcons.arrow_up_left_circle),
-        InputSpec('overtimeHours', 'Approved Overtime Hours', required: true, icon: CupertinoIcons.stopwatch),
-        InputSpec('notes', 'Notes', icon: CupertinoIcons.text_quote),
-      ],
+    final cubit = context.read<OfficeCubit>();
+    var selectedDate = DateTime.tryParse(old?['date']?.toString() ?? day) ?? DateTime.now();
+    var status = old?['status']?.toString() ?? 'present';
+    final checkIn = TextEditingController(text: old?['checkIn']?.toString() ?? '');
+    final checkOut = TextEditingController(text: old?['checkOut']?.toString() ?? '');
+    final overtime = TextEditingController(text: old?['overtimeHours']?.toString() ?? '0');
+    final notes = TextEditingController(text: old?['notes']?.toString() ?? '');
+    final now = TimeOfDay.now();
+    String formatTime(TimeOfDay time) => '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    TimeOfDay? parseTime(String value) {
+      final parts = value.trim().split(':');
+      if (parts.length != 2) return null;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+      return TimeOfDay(hour: hour, minute: minute);
+    }
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> chooseTime(TextEditingController controller, {required bool isCheckIn}) async {
+            final current = parseTime(controller.text) ?? (isCheckIn ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
+            final chosen = await showTimePicker(context: dialogContext, initialTime: current);
+            if (chosen != null) setDialogState(() => controller.text = formatTime(chosen));
+          }
+          Future<void> chooseDate() async {
+            final chosen = await showDatePicker(
+              context: dialogContext,
+              initialDate: selectedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(DateTime.now().year + 5),
+            );
+            if (chosen != null) setDialogState(() => selectedDate = chosen);
+          }
+          final works = attendanceAllowsOvertime(status);
+          return AlertDialog(
+            title: Text('Mark Attendance • ${employee['name']}'),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: chooseDate,
+                      icon: const Icon(CupertinoIcons.calendar),
+                      label: Text(DateFormat('EEE, dd MMM yyyy').format(selectedDate)),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: status,
+                      decoration: const InputDecoration(labelText: 'Attendance Status'),
+                      items: [
+                        'present', 'absent', 'halfDay', 'paidLeave', 'unpaidLeave', 'sickLeave',
+                        'vacation', 'halfDayPaidLeave', 'halfDayUnpaidLeave', 'fullDayPaidLeave',
+                        'fullDayUnpaidLeave', 'off', 'holiday',
+                      ].map((value) => DropdownMenuItem(value: value, child: Text(_optionLabel(value)))).toList(),
+                      onChanged: (value) => setDialogState(() {
+                        status = value ?? 'present';
+                        if (status == 'present' && checkIn.text.isEmpty) checkIn.text = formatTime(now);
+                        if (status == 'present' && checkOut.text.isEmpty) checkOut.text = formatTime(now);
+                        if (!attendanceAllowsOvertime(status)) overtime.text = '0';
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    if (works) ...[
+                      Row(children: [
+                        Expanded(child: TextFormField(controller: checkIn, readOnly: true, onTap: () => chooseTime(checkIn, isCheckIn: true), decoration: const InputDecoration(labelText: 'Check-in time', suffixIcon: Icon(CupertinoIcons.clock)))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextFormField(controller: checkOut, readOnly: true, onTap: () => chooseTime(checkOut, isCheckIn: false), decoration: const InputDecoration(labelText: 'Check-out time', suffixIcon: Icon(CupertinoIcons.clock)))),
+                      ]),
+                      const SizedBox(height: 12),
+                      TextFormField(controller: overtime, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Approved OT hours', hintText: '0.00', prefixIcon: Icon(CupertinoIcons.stopwatch))),
+                    ] else
+                      const Text('Check-in, check-out, and OT are not required for this leave/day status.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: notes, maxLines: 2, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () async {
+                  final date = DateFormat('yyyy-MM-dd').format(selectedDate);
+                  final ot = double.tryParse(overtime.text.trim()) ?? -1;
+                  if (ot < 0 || ot > 24) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('OT hours must be between 0 and 24.')));
+                    return;
+                  }
+                  final ok = await cubit.run('attendanceSave', {
+                    'employeeId': employee['id'], 'date': date, 'status': status,
+                    'checkIn': works ? checkIn.text : '', 'checkOut': works ? checkOut.text : '',
+                    'overtimeHours': works ? overtime.text : '0', 'notes': notes.text.trim(),
+                    'version': old?['version'] ?? 0,
+                  });
+                  if (dialogContext.mounted && ok) Navigator.pop(dialogContext, true);
+                  if (dialogContext.mounted && !ok) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(cubit.state.error ?? 'Could not save attendance.')));
+                },
+                child: const Text('Save Attendance'),
+              ),
+            ],
+          );
+        },
+      ),
     );
-    if (result != null) await run('attendanceSave', result);
+    checkIn.dispose(); checkOut.dispose(); overtime.dispose(); notes.dispose();
+    if (saved == true && mounted) setState(() => day = DateFormat('yyyy-MM-dd').format(selectedDate));
   }
 
   /// Dedicated entry point for the Attendance module. Existing records can
@@ -1033,7 +1128,8 @@ class _OfficeScreenState extends State<OfficeScreen> {
       ),
     );
     if (employeeId == null || !mounted) return;
-    final employee = employees.firstWhere((item) => item['id']?.toString() == employeeId);
+    final employee = employees.where((item) => item['id']?.toString() == employeeId).firstOrNull;
+    if (employee == null) return;
     final existing = context.read<OfficeCubit>().state.data.attendance
         .where((item) => item['employeeId']?.toString() == employeeId && item['date']?.toString() == day)
         .firstOrNull;
