@@ -93,6 +93,15 @@ class HybridBillingRepository implements BillingRepository {
   Future<BillingData> load() async {
     final sid = _spreadsheetId;
 
+    // Connected workspaces are cloud-authoritative. Refresh the cache before
+    // constructing screen state; local storage remains the instant fallback.
+    if (_hasCloudWorkspace) {
+      final token = await session.tryGetToken();
+      if (token != null) {
+        await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+      }
+    }
+
     // Load from SyncManager tab cache for instant response
     var cachedCustomers = await _sync.loadCachedRecords(sid, 'Customers');
     var cachedInvoices = await _sync.loadCachedRecords(sid, 'Invoices');

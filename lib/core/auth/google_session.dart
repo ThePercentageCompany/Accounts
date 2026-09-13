@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -40,6 +41,7 @@ class GoogleSession extends ChangeNotifier {
   WorkspaceConfig? workspace;
   String? error;
   bool _initialized = false;
+  Timer? _automaticSyncTimer;
 
   final GoogleWorkspaceService workspaceService = GoogleWorkspaceService();
   final SyncManager syncManager = SyncManager.instance;
@@ -295,10 +297,25 @@ class GoogleSession extends ChangeNotifier {
           );
         }
       } catch (_) {}
+      _startAutomaticSync();
+    } else {
+      _automaticSyncTimer?.cancel();
+      _automaticSyncTimer = null;
     }
   }
 
+  /// Keeps the cloud cache fresh even when the user has not edited a record.
+  /// Mutations still trigger an immediate sync through their repositories.
+  void _startAutomaticSync() {
+    _automaticSyncTimer?.cancel();
+    _automaticSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      syncNow();
+    });
+  }
+
   Future<void> clearWorkspace() async {
+    _automaticSyncTimer?.cancel();
+    _automaticSyncTimer = null;
     final email = effectiveEmail;
     await GoogleWorkspaceService.clearSavedWorkspace(email);
     final prefs = await SharedPreferences.getInstance();
@@ -464,6 +481,8 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _automaticSyncTimer?.cancel();
+    _automaticSyncTimer = null;
     user = null;
     _inMemoryAccessToken = null;
     authorized = false;

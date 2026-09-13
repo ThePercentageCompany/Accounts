@@ -417,8 +417,10 @@ class SyncManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Push all offline pending mutations
-      await syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
+      // 1. Push all local mutations before reading remote data. Never overwrite
+      // a pending local edit with an older cloud row after a failed upload.
+      final pushed = await syncPendingChanges(token: token, spreadsheetId: spreadsheetId);
+      if (!pushed) return;
 
       // 2. Fetch all latest remote tabs in a single batch request
       final tabs = SheetSchema.dataTabsToSync;
@@ -426,10 +428,10 @@ class SyncManager extends ChangeNotifier {
 
       bool hasData = false;
       for (final entry in batchData.entries) {
-        if (entry.value.isNotEmpty) {
-          await saveCachedRecords(spreadsheetId, entry.key, entry.value);
-          hasData = true;
-        }
+        // An empty tab is meaningful: it may be a cloud-side deletion and
+        // must clear the cache rather than leaving stale records visible.
+        await saveCachedRecords(spreadsheetId, entry.key, entry.value);
+        hasData = hasData || entry.value.isNotEmpty;
       }
 
       // Mirror remote data into local storage so local databases are always populated
@@ -464,13 +466,13 @@ class SyncManager extends ChangeNotifier {
             billingMap = Map<String, dynamic>.from(jsonDecode(existingBillingRaw) as Map);
           } catch (_) {}
         }
-        if (batchData.containsKey('Invoices') && batchData['Invoices']!.isNotEmpty) {
+        if (batchData.containsKey('Invoices')) {
           billingMap['invoices'] = batchData['Invoices'];
         }
-        if (batchData.containsKey('Customers') && batchData['Customers']!.isNotEmpty) {
+        if (batchData.containsKey('Customers')) {
           billingMap['customers'] = batchData['Customers'];
         }
-        if (batchData.containsKey('Settings') && batchData['Settings']!.isNotEmpty) {
+        if (batchData.containsKey('Settings')) {
           final settings = batchData['Settings']!;
           for (final s in settings) {
             if (s['id'] == 'company') {
@@ -487,7 +489,7 @@ class SyncManager extends ChangeNotifier {
       }
 
       // Mirror Quotations
-      if (batchData.containsKey('Quotations') && batchData['Quotations']!.isNotEmpty) {
+      if (batchData.containsKey('Quotations')) {
         await prefs.setString('tpc_quotations_v1', jsonEncode(batchData['Quotations']));
       }
 
@@ -514,7 +516,7 @@ class SyncManager extends ChangeNotifier {
 
       bool hasOfficeUpdate = false;
       for (final entry in officeKeyMap.entries) {
-        if (batchData.containsKey(entry.key) && batchData[entry.key]!.isNotEmpty) {
+        if (batchData.containsKey(entry.key)) {
           officeMap[entry.value] = batchData[entry.key];
           hasOfficeUpdate = true;
         }

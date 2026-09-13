@@ -91,6 +91,12 @@ class HybridOfficeRepository implements OfficeRepository {
 
     // ── officeLoad ────────────────────────────────────────────────────────────
     if (action == 'officeLoad') {
+      if (_hasCloudWorkspace) {
+        final token = await session.tryGetToken();
+        if (token != null) {
+          await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+        }
+      }
       // Seed cache from legacy local storage if needed
       await _seedCacheFromLocalStorage(sid);
 
@@ -452,35 +458,76 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── assetSave ─────────────────────────────────────────────────────────────
     if (action == 'assetSave') {
       final id = d['id'] as String? ?? 'AST_${DateTime.now().millisecondsSinceEpoch}';
-      final costCents = (d['costCents'] as num?)?.toInt() ??
-          ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round();
+      final name = d['name']?.toString().trim() ?? '';
+      final code = d['code']?.toString().trim() ?? '';
+      final purchaseDate = d['purchaseDate']?.toString() ?? '';
+      if (name.isEmpty || code.isEmpty) throw StateError('Asset name and asset code are required.');
+      if (DateTime.tryParse(purchaseDate) == null) throw StateError('Use a valid purchase date (YYYY-MM-DD).');
+      final costCents = d.containsKey('cost')
+          ? ((double.tryParse(d['cost']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round()
+          : ((d['costCents'] as num?)?.toInt() ?? 0);
+      if (costCents <= 0) throw StateError('Asset cost must be greater than zero.');
+      final residualValueCents = d.containsKey('residualValue')
+          ? ((double.tryParse(d['residualValue']?.toString().replaceAll(',', '') ?? '0') ?? 0.0) * 100).round()
+          : ((d['residualValueCents'] as num?)?.toInt() ?? 0);
+      if (residualValueCents < 0 || residualValueCents > costCents) {
+        throw StateError('Residual value must be between zero and the asset cost.');
+      }
+      final usefulLifeMonths = (d['usefulLifeMonths'] as num?)?.toInt() ?? 36;
+      if (usefulLifeMonths < 1 || usefulLifeMonths > 1200) throw StateError('Useful life must be between 1 and 1,200 months.');
       final accDepCents = (d['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
-      final bookValueCents = (costCents - accDepCents).clamp(0, costCents);
+      if (accDepCents < 0 || accDepCents > costCents - residualValueCents) throw StateError('Invalid accumulated depreciation.');
+      final bookValueCents = (costCents - accDepCents).clamp(residualValueCents, costCents);
 
       final assets = await _sync.loadCachedRecords(sid, 'Assets');
       final old = assets.where((x) => x['id'] == id).firstOrNull;
+      if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) throw StateError('Record changed. Refresh and try again.');
+      if (assets.any((asset) => asset['id'] != id && asset['code']?.toString().toLowerCase() == code.toLowerCase())) {
+        throw StateError('Asset code already exists.');
+      }
+      final acquisitionType = d['acquisitionType']?.toString() ?? 'companyPurchase';
+      if (!const {'companyPurchase', 'shareholderContribution', 'openingBalance'}.contains(acquisitionType)) {
+        throw StateError('Invalid acquisition type.');
+      }
+      if (acquisitionType == 'shareholderContribution' && (d['shareholderId']?.toString().isEmpty ?? true)) {
+        throw StateError('Select the shareholder who contributed this asset.');
+      }
 
-      if (old == null && d['skipJournal'] != true) {
+      String? journalId;
+      final oldJournals = await _sync.loadCachedRecords(sid, 'Journals');
+      for (final journal in oldJournals.where((j) => j['sourceType'] == 'asset_purchase' && j['sourceId'] == id)) {
+        await _delete('Journals', journal['id'] as String);
+      }
+
+      if (d['skipJournal'] != true) {
         final journal = createAssetPurchaseJournal(
           assetId: id,
-          assetName: d['name'] ?? 'Asset',
+          assetName: name,
           category: d['category'] ?? 'Fixed Assets',
-          date: d['purchaseDate'] ?? DateTime.now().toIso8601String().substring(0, 10),
-          acquisitionType: d['acquisitionType'] ?? 'companyPurchase',
+          date: purchaseDate,
+          acquisitionType: acquisitionType,
           costCents: costCents,
           paymentAccount: d['paymentAccount'] ?? 'Bank',
           shareholderName: d['shareholderName'],
         );
         await _upsert('Journals', journal['id'] as String, journal);
+        journalId = journal['id'] as String;
       }
 
       final record = {
         ...d,
         'id': id,
+        'name': name,
+        'code': code,
+        'purchaseDate': purchaseDate,
         'costCents': costCents,
         'cost': (costCents / 100.0).toStringAsFixed(2),
+        'residualValueCents': residualValueCents,
+        'residualValue': (residualValueCents / 100.0).toStringAsFixed(2),
+        'usefulLifeMonths': usefulLifeMonths,
         'accumulatedDepreciationCents': accDepCents,
         'bookValueCents': bookValueCents,
+        if (journalId != null) 'journalId': journalId,
         'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
       };
       await _upsert('Assets', id, record);
@@ -491,6 +538,10 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── assetDelete ───────────────────────────────────────────────────────────
     if (action == 'assetDelete') {
       final id = d['id'] as String;
+      final journals = await _sync.loadCachedRecords(sid, 'Journals');
+      for (final journal in journals.where((j) => j['sourceId'] == id && (j['sourceType'] == 'asset_purchase' || j['sourceType'] == 'depreciation'))) {
+        await _delete('Journals', journal['id'] as String);
+      }
       await _delete('Assets', id);
       _scheduleBackgroundSync();
       return {'id': id};
@@ -500,10 +551,12 @@ class HybridOfficeRepository implements OfficeRepository {
     if (action == 'runDepreciation') {
       final assets = await _sync.loadCachedRecords(sid, 'Assets');
       final today = DateTime.now().toIso8601String().substring(0, 10);
+      final month = today.substring(0, 7);
       var count = 0;
 
       for (final a in assets) {
         if (a['status'] == 'active') {
+          if (a['lastDepreciationMonth'] == month) continue;
           final cost = (a['costCents'] as num?)?.toInt() ?? 0;
           final residual = scaled((a['residualValue'] ?? 0).toString(), 2);
           final months = (a['usefulLifeMonths'] as num?)?.toInt() ?? 36;
@@ -528,6 +581,7 @@ class HybridOfficeRepository implements OfficeRepository {
               'accumulatedDepreciation': newAccDep / 100.0,
               'bookValueCents': newBookVal,
               'bookValue': newBookVal / 100.0,
+              'lastDepreciationMonth': month,
               'version': ((a['version'] as int?) ?? 0) + 1,
             };
             await _upsert('Assets', a['id'] as String, updated);

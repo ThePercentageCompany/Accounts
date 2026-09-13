@@ -82,6 +82,12 @@ class HybridQuotationRepository implements QuotationRepository {
   @override
   Future<List<Quotation>> load() async {
     final sid = _spreadsheetId;
+    if (_hasCloudWorkspace) {
+      final token = await session.tryGetToken();
+      if (token != null) {
+        await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+      }
+    }
     var cached = await _sync.loadCachedRecords(sid, 'Quotations');
 
     // Cold start: seed cache from legacy local storage key

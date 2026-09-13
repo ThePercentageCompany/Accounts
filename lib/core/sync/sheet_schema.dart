@@ -278,6 +278,7 @@ class SheetSchema {
           'Location / Status',
           'Notes',
           'Version',
+          'Last Depreciation Month',
         ];
 
       case 'Journals':
@@ -691,6 +692,7 @@ class SheetSchema {
           record['status']?.toString() ?? 'Active',
           record['notes']?.toString() ?? '',
           record['version'] ?? 0,
+          record['lastDepreciationMonth']?.toString() ?? '',
         ];
 
       case 'Journals':
@@ -1088,6 +1090,7 @@ class SheetSchema {
         if (row.length > 10) record['status'] = row[10]?.toString() ?? 'Active';
         if (row.length > 11) record['notes'] = row[11]?.toString() ?? '';
         if (row.length > 12) record['version'] = int.tryParse(row[12]?.toString() ?? '0') ?? 0;
+        if (row.length > 13) record['lastDepreciationMonth'] = row[13]?.toString() ?? '';
         break;
 
       case 'Journals':

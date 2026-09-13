@@ -654,10 +654,30 @@ void _showAddAssetModal(BuildContext context, {Map<String, dynamic>? asset}) {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameCtrl.text.trim();
               final cost = double.tryParse(costCtrl.text.trim()) ?? 0.0;
-              if (name.isEmpty || cost <= 0) return;
+              final usefulLifeMonths = int.tryParse(usefulMonthsCtrl.text.trim()) ?? 0;
+              final residualValue = double.tryParse(residualCtrl.text.trim()) ?? 0.0;
+              final date = DateTime.tryParse(dateCtrl.text.trim());
+              String? validationError;
+              if (name.isEmpty || codeCtrl.text.trim().isEmpty) {
+                validationError = 'Asset name and asset code are required.';
+              } else if (cost <= 0) {
+                validationError = 'Enter an asset cost greater than zero.';
+              } else if (date == null) {
+                validationError = 'Use a valid purchase date (YYYY-MM-DD).';
+              } else if (usefulLifeMonths < 1 || usefulLifeMonths > 1200) {
+                validationError = 'Useful life must be between 1 and 1,200 months.';
+              } else if (residualValue < 0 || residualValue > cost) {
+                validationError = 'Residual value must be between zero and the asset cost.';
+              } else if (selectedAcquisitionType == 'shareholderContribution' && selectedShareholderId == null) {
+                validationError = 'Select the shareholder who contributed this asset.';
+              }
+              if (validationError != null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(validationError)));
+                return;
+              }
 
               String? shName;
               if (selectedShareholderId != null) {
@@ -683,8 +703,8 @@ void _showAddAssetModal(BuildContext context, {Map<String, dynamic>? asset}) {
                 'shareholderName': shName ?? '',
                 'cost': cost,
                 'purchaseDate': dateCtrl.text.trim(),
-                'usefulLifeMonths': int.tryParse(usefulMonthsCtrl.text.trim()) ?? 36,
-                'residualValue': double.tryParse(residualCtrl.text.trim()) ?? 0.0,
+                'usefulLifeMonths': usefulLifeMonths,
+                'residualValue': residualValue,
                 'location': locationCtrl.text.trim(),
                 'assignedEmployeeId': selectedEmployeeId ?? '',
                 'assignedEmployeeName': empName ?? '',
@@ -693,8 +713,19 @@ void _showAddAssetModal(BuildContext context, {Map<String, dynamic>? asset}) {
                 'status': asset?['status'] ?? 'active',
               };
 
-              context.read<OfficeCubit>().run('assetSave', payload);
-              Navigator.pop(ctx);
+              final cubit = context.read<OfficeCubit>();
+              final saved = await cubit.run('assetSave', payload);
+              if (!context.mounted) return;
+              if (saved) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(asset == null ? 'Asset added successfully.' : 'Asset updated successfully.')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(cubit.state.error ?? 'Could not save the asset.')),
+                );
+              }
             },
             child: const Text('Save Asset'),
           ),
