@@ -100,7 +100,9 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
       );
 
       if (mounted) {
-        await widget.session.setWorkspace(config);
+        // This is the single case where a local-to-cloud migration is wanted:
+        // the workspace was created moments ago and has no remote history.
+        await widget.session.setWorkspace(config, migrateLocalData: true);
       }
     } catch (e) {
       if (mounted) {

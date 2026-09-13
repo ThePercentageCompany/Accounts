@@ -256,12 +256,11 @@ class GoogleSession extends ChangeNotifier {
         final tokenStr = await token();
         final discovered = await workspaceService.findExistingWorkspace(tokenStr);
         if (discovered != null) {
+          // A discovered workspace can contain newer records from another
+          // device.  Pull it first; SyncManager safely flushes any queued
+          // local mutations before it refreshes the local cache.
           await setWorkspace(discovered);
           isOffline = false;
-          await syncManager.migrateAndSyncLocalDataToCloud(
-            token: tokenStr,
-            spreadsheetId: discovered.spreadsheetId,
-          );
         } else {
           workspace = null;
         }
@@ -279,7 +278,15 @@ class GoogleSession extends ChangeNotifier {
     }
   }
 
-  Future<void> setWorkspace(WorkspaceConfig config) async {
+  /// Activates a workspace and refreshes its local cache from Sheets.
+  ///
+  /// [migrateLocalData] is reserved for a workspace that has just been
+  /// provisioned. Reconnecting to an existing workspace must pull first so
+  /// an old local cache never overwrites newer cloud data.
+  Future<void> setWorkspace(
+    WorkspaceConfig config, {
+    bool migrateLocalData = false,
+  }) async {
     workspace = config;
     final email = effectiveEmail;
     await GoogleWorkspaceService.saveWorkspace(email, config);
@@ -287,16 +294,25 @@ class GoogleSession extends ChangeNotifier {
     await prefs.setString(_cachedWorkspaceKey, jsonEncode(config.toJson()));
     notifyListeners();
 
-    // If connected to a real cloud workspace, automatically migrate any local offline data and sync
+    // A normal sign-in/reconnect flushes pending offline edits and then pulls
+    // every Sheet tab into the local cache. This makes the app current before
+    // its feature screens load, without requiring a manual refresh.
     if (config.spreadsheetId.isNotEmpty && config.spreadsheetId != 'local_demo_workspace') {
       try {
         final tok = await tryGetToken();
         if (tok != null) {
           isOffline = false;
-          await syncManager.migrateAndSyncLocalDataToCloud(
-            spreadsheetId: config.spreadsheetId,
-            token: tok,
-          );
+          if (migrateLocalData) {
+            await syncManager.migrateAndSyncLocalDataToCloud(
+              spreadsheetId: config.spreadsheetId,
+              token: tok,
+            );
+          } else {
+            await syncManager.triggerBackgroundSync(
+              token: tok,
+              spreadsheetId: config.spreadsheetId,
+            );
+          }
         }
       } catch (_) {}
       _startAutomaticSync();
