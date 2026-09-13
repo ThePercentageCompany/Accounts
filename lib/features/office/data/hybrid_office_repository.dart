@@ -353,6 +353,12 @@ class HybridOfficeRepository implements OfficeRepository {
       final amountCents = scaled(d['amount'].toString(), 2);
       if (amountCents <= 0) throw StateError('Contribution amount must be greater than zero.');
 
+      final txs = await _sync.loadCachedRecords(sid, 'CapitalTransactions');
+      final old = txs.where((x) => x['id'] == id).firstOrNull;
+      if (old != null && old['journalId'] != null) {
+        await _delete('Journals', old['journalId'] as String);
+      }
+
       final journal = createCapitalJournal(
         transactionId: id,
         shareholderName: d['shareholderName'] ?? 'Shareholder',
@@ -361,7 +367,7 @@ class HybridOfficeRepository implements OfficeRepository {
         contributionType: d['contributionType'] ?? 'bank',
         amountCents: amountCents,
         assetName: d['assetName'],
-        accountName: d['bankAccountId'] ?? 'Bank Account',
+        accountName: d['bankAccountId'] ?? (d['account'] ?? 'Bank Account'),
       );
       await _upsert('Journals', journal['id'] as String, journal);
 
@@ -371,7 +377,7 @@ class HybridOfficeRepository implements OfficeRepository {
         'amountCents': amountCents,
         'amount': (amountCents / 100.0).toStringAsFixed(2),
         'journalId': journal['id'],
-        'version': ((d['version'] as int?) ?? 0) + 1,
+        'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
       };
       await _upsert('CapitalTransactions', id, record);
       _scheduleBackgroundSync();
@@ -397,13 +403,19 @@ class HybridOfficeRepository implements OfficeRepository {
       final amountCents = scaled(d['amount'].toString(), 2);
       if (amountCents <= 0) throw StateError('Loan amount must be greater than zero.');
 
+      final loans = await _sync.loadCachedRecords(sid, 'ShareholderLoans');
+      final old = loans.where((x) => x['id'] == id).firstOrNull;
+      if (old != null && old['journalId'] != null) {
+        await _delete('Journals', old['journalId'] as String);
+      }
+
       final journal = createShareholderLoanJournal(
         loanId: id,
         shareholderName: d['shareholderName'] ?? 'Shareholder',
         date: d['date'] ?? DateTime.now().toIso8601String().substring(0, 10),
         type: d['type'] ?? 'loanReceived',
         amountCents: amountCents,
-        paymentAccount: d['paymentAccount'] ?? 'Bank',
+        paymentAccount: d['paymentAccount'] ?? (d['account'] ?? 'Bank'),
       );
       await _upsert('Journals', journal['id'] as String, journal);
 
@@ -414,7 +426,7 @@ class HybridOfficeRepository implements OfficeRepository {
         'amount': (amountCents / 100.0).toStringAsFixed(2),
         'principalAmount': (amountCents / 100.0).toStringAsFixed(2),
         'journalId': journal['id'],
-        'version': ((d['version'] as int?) ?? 0) + 1,
+        'version': ((d['version'] as int?) ?? (old?['version'] ?? 0)) + 1,
       };
       await _upsert('ShareholderLoans', id, record);
       _scheduleBackgroundSync();

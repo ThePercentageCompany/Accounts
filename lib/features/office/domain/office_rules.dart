@@ -244,7 +244,7 @@ Map<String, dynamic> createDepreciationJournal({
   };
 }
 
-/// Generates complete Balance Sheet Report
+/// Generates complete Balance Sheet Report following 100% standard accounting principles
 Map<String, dynamic> calculateBalanceSheet(
   List<Invoice> invoices,
   OfficeData office,
@@ -254,7 +254,6 @@ Map<String, dynamic> calculateBalanceSheet(
   var accountsPayable = 0, payrollPayable = 0;
   var totalOriginalAssetCost = 0, totalAccumulatedDepreciation = 0;
   var operatingIncome = 0, operatingExpenses = 0, depreciationExpense = 0;
-  var totalShareholderEquity = 0;
 
   void flow(String account, int cents) {
     if (account.toLowerCase() == 'cash') {
@@ -264,7 +263,7 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // 1. Invoices & Payments (Operating Income & Accounts Receivable)
+  // 1. Invoices & Customer Payments (Revenue & Accounts Receivable)
   for (final inv in invoices) {
     if (inv.status == 'issued') {
       accountsReceivable += Totals.of(inv).balance;
@@ -275,11 +274,13 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // 2. Operational Entries (Bills, Operating Expenses, Other Income, and Finance Capital)
+  // 2. Operational Entries (Bills, Expenses, Other Income, and Finance Capital)
+  var financeCapitalCents = 0;
   for (final e in office.entries) {
     final amount = (e['amountCents'] as num?)?.toInt() ?? 0;
     if (e['status'] == 'unpaid') {
       accountsPayable += amount;
+      operatingExpenses += amount; // Accrual matching
     }
     if (e['status'] == 'paid') {
       final account = e['account'] as String? ?? 'Bank';
@@ -287,7 +288,7 @@ Map<String, dynamic> calculateBalanceSheet(
         operatingIncome += amount;
         flow(account, amount);
       } else if (e['kind'] == 'capital') {
-        totalShareholderEquity += amount;
+        financeCapitalCents += amount;
         flow(account, amount);
       } else if (e['kind'] == 'expense') {
         operatingExpenses += amount;
@@ -296,10 +297,13 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // 3. Payroll (Salaries Expense & Payable)
+  // 3. Payroll (Salaries Expense & Accrued Payable)
   for (final p in office.payroll) {
     final amount = (p['netCents'] as num?)?.toInt() ?? 0;
-    if (p['status'] == 'approved') payrollPayable += amount;
+    if (p['status'] == 'approved') {
+      payrollPayable += amount;
+      operatingExpenses += amount; // Accrual matching
+    }
     if (p['status'] == 'paid') {
       operatingExpenses += amount;
       flow(p['account'] as String? ?? 'Bank', -amount);
@@ -312,7 +316,7 @@ Map<String, dynamic> calculateBalanceSheet(
     final amount = (cap['amountCents'] as num?)?.toInt() ?? 0;
     final type = cap['transactionType'] as String? ?? 'capitalContribution';
     final contribType = cap['contributionType'] as String? ?? 'bank';
-    final account = cap['bankAccountId'] as String? ?? 'Bank';
+    final account = cap['bankAccountId'] as String? ?? (cap['account'] as String? ?? 'Bank');
 
     if (contribType.toLowerCase() != 'asset') {
       if (type == 'capitalWithdrawal') {
@@ -329,7 +333,7 @@ Map<String, dynamic> calculateBalanceSheet(
     if (loan['status'] == 'void') continue;
     final amount = (loan['amountCents'] as num?)?.toInt() ?? 0;
     final type = loan['type'] as String? ?? 'loanReceived';
-    final account = loan['paymentAccount'] as String? ?? 'Bank';
+    final account = loan['paymentAccount'] as String? ?? (loan['account'] as String? ?? 'Bank');
 
     if (type == 'loanReceived') {
       totalShareholderLoans += amount;
@@ -361,17 +365,18 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // 7. Shareholder Equity per partner
+  // 7. Shareholder Equity per partner & total paid-in capital
   final List<Map<String, dynamic>> shareholderEquityRows = [];
-
-  // Build map of contributions
   final Map<String, int> partnerCashContributed = {};
   final Map<String, int> partnerAssetContributed = {};
+  final Map<String, String> knownPartnerNames = {};
 
   for (final cap in office.capitalTransactions) {
     if (cap['status'] == 'void') continue;
     final amount = (cap['amountCents'] as num?)?.toInt() ?? 0;
     final sId = cap['shareholderId'] as String? ?? '';
+    final sName = cap['shareholderName'] as String? ?? 'Shareholder';
+    if (sId.isNotEmpty) knownPartnerNames[sId] = sName;
     final type = cap['transactionType'] as String? ?? 'capitalContribution';
     final cType = cap['contributionType'] as String? ?? 'bank';
 
@@ -384,10 +389,12 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // Also include direct shareholder contributed assets
+  // Include direct shareholder contributed assets
   for (final a in office.assets) {
     if (a['acquisitionType'] == 'shareholderContribution' && a['status'] != 'void') {
       final sId = a['shareholderId'] as String? ?? '';
+      final sName = a['shareholderName'] as String? ?? 'Shareholder';
+      if (sId.isNotEmpty) knownPartnerNames[sId] = sName;
       final cost = (a['costCents'] as num?)?.toInt() ?? 0;
       if (sId.isNotEmpty && !(partnerAssetContributed[sId]?.toString().contains(cost.toString()) ?? false)) {
         partnerAssetContributed[sId] = (partnerAssetContributed[sId] ?? 0) + cost;
@@ -395,26 +402,83 @@ Map<String, dynamic> calculateBalanceSheet(
     }
   }
 
-  // Combine shareholders from company profile or office.shareholders
+  // Combine shareholders from office.shareholders or companyShareholders
   final allShareholders = (office.shareholders.isNotEmpty ? office.shareholders : companyShareholders);
+  final processedIds = <String>{};
+  var totalAgreedCapitalCents = 0;
+  var totalPaidInCashCapitalCents = 0;
+  var totalAssetContributionsCents = 0;
+
   for (final sh in allShareholders) {
     final sId = sh['id'] as String? ?? '';
+    processedIds.add(sId);
     final name = sh['name'] as String? ?? 'Shareholder';
+    final agreed = scaled((sh['agreedCapital'] ?? sh['investedAmount'] ?? 0).toString(), 2);
+    totalAgreedCapitalCents += agreed;
+
     final cash = partnerCashContributed[sId] ?? scaled((sh['cashInvested'] ?? 0).toString(), 2);
     final assets = partnerAssetContributed[sId] ?? scaled((sh['assetContributions'] ?? 0).toString(), 2);
-    final total = cash + assets;
-    totalShareholderEquity += total;
+    final totalInvested = cash + assets;
+    final outstanding = (agreed - totalInvested).clamp(0, double.infinity).toInt();
+
+    totalPaidInCashCapitalCents += cash;
+    totalAssetContributionsCents += assets;
 
     shareholderEquityRows.add({
       'shareholderId': sId,
       'name': name,
+      'ownershipPercentage': (sh['ownershipPercentage'] ?? sh['sharesPercent'] as num?)?.toDouble() ??
+          double.tryParse((sh['ownershipPercentage'] ?? sh['sharesPercent'] ?? '0').toString()) ??
+          0.0,
+      'agreedCapitalCents': agreed,
       'cashInvestedCents': cash,
       'assetContributionCents': assets,
-      'totalInvestedCents': total,
-      'ownershipPercentage': (sh['ownershipPercentage'] as num?)?.toDouble() ?? 0.0,
+      'totalInvestedCents': totalInvested,
+      'outstandingCapitalCents': outstanding,
     });
   }
 
+  // Include any partners from transactions who weren't in registered list
+  for (final sId in partnerCashContributed.keys) {
+    if (!processedIds.contains(sId) && sId.isNotEmpty) {
+      processedIds.add(sId);
+      final name = knownPartnerNames[sId] ?? 'Shareholder ($sId)';
+      final cash = partnerCashContributed[sId] ?? 0;
+      final assets = partnerAssetContributed[sId] ?? 0;
+      final totalInvested = cash + assets;
+
+      totalPaidInCashCapitalCents += cash;
+      totalAssetContributionsCents += assets;
+
+      shareholderEquityRows.add({
+        'shareholderId': sId,
+        'name': name,
+        'ownershipPercentage': 0.0,
+        'agreedCapitalCents': totalInvested,
+        'cashInvestedCents': cash,
+        'assetContributionCents': assets,
+        'totalInvestedCents': totalInvested,
+        'outstandingCapitalCents': 0,
+      });
+    }
+  }
+
+  // Include unassigned finance capital if any
+  if (financeCapitalCents > 0) {
+    totalPaidInCashCapitalCents += financeCapitalCents;
+    shareholderEquityRows.add({
+      'shareholderId': 'general_capital',
+      'name': 'General Contributed Capital',
+      'ownershipPercentage': 0.0,
+      'agreedCapitalCents': financeCapitalCents,
+      'cashInvestedCents': financeCapitalCents,
+      'assetContributionCents': 0,
+      'totalInvestedCents': financeCapitalCents,
+      'outstandingCapitalCents': 0,
+    });
+  }
+
+  final totalShareholderEquity = totalPaidInCashCapitalCents + totalAssetContributionsCents;
   final currentYearNetProfit = operatingIncome - operatingExpenses - depreciationExpense;
 
   // Assets
@@ -450,10 +514,18 @@ Map<String, dynamic> calculateBalanceSheet(
       {'name': 'Payroll Due Payable', 'amountCents': payrollPayable},
       {'name': 'Shareholder Loans Payable', 'amountCents': totalShareholderLoans},
     ],
+    'accountsPayableCents': accountsPayable,
+    'payrollPayableCents': payrollPayable,
+    'shareholderLoansPayableCents': totalShareholderLoans,
     'totalLiabilitiesCents': totalLiabilities,
 
     'shareholderEquityRows': shareholderEquityRows,
+    'totalAgreedCapitalCents': totalAgreedCapitalCents,
+    'totalPaidInCashCapitalCents': totalPaidInCashCapitalCents,
+    'totalAssetContributionsCents': totalAssetContributionsCents,
     'totalShareholderEquityCents': totalShareholderEquity,
+    'outstandingCapitalCents': (totalAgreedCapitalCents - totalShareholderEquity).clamp(0, double.infinity).toInt(),
+    
     'currentYearNetProfitCents': currentYearNetProfit,
     'operatingIncomeCents': operatingIncome,
     'operatingExpensesCents': operatingExpenses,
@@ -504,7 +576,7 @@ Map<String, dynamic> calculateTrialBalance(List<Invoice> invoices, OfficeData of
   for (final e in office.entries) {
     final amount = (e['amountCents'] as num?)?.toInt() ?? 0;
     if (e['status'] == 'unpaid') {
-      record('operating_expenses', 'Operating Expenses', 'Expense', amount, 0);
+      record('operating_expenses', 'Operating Expenses - ${(e['category'] ?? 'General')}', 'Expense', amount, 0);
       record('accounts_payable', 'Accounts Payable', 'Liability', 0, amount);
     } else if (e['status'] == 'paid') {
       final accId = (e['account'] as String? ?? 'Bank').toLowerCase() == 'cash' ? 'cash_in_hand' : 'bank_account';
@@ -590,6 +662,9 @@ Map<String, dynamic> calculateTrialBalance(List<Invoice> invoices, OfficeData of
       final accName = payAcc.toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account';
       record('fixed_assets_$cat', '$cat - ${(a['name'] ?? '')}', 'Asset', cost, 0);
       record(accId, accName, 'Asset', 0, cost);
+    } else if (acqType == 'shareholderContribution') {
+      record('fixed_assets_$cat', '$cat - ${(a['name'] ?? '')}', 'Asset', cost, 0);
+      record('shareholder_capital', 'Shareholder Capital (${a['shareholderName'] ?? 'Partner'})', 'Equity', 0, cost);
     }
 
     if (accDep > 0) {

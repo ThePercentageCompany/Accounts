@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/features/billing/data/local_repository.dart';
 import 'package:tpc_invoice/features/billing/domain/models.dart';
 import 'package:tpc_invoice/features/billing/presentation/billing_cubit.dart';
+import 'package:tpc_invoice/core/auth/google_session.dart';
+import 'package:tpc_invoice/features/quotations/data/hybrid_quotation_repository.dart';
 import 'package:tpc_invoice/features/quotations/data/local_quotation_repository.dart';
 import 'package:tpc_invoice/features/quotations/data/quotation_pdf.dart';
 import 'package:tpc_invoice/features/quotations/domain/quotation.dart';
@@ -154,5 +156,44 @@ void main() {
     final convertedQuote = updatedQuotes.firstWhere((x) => x.id == 'q_convert_1');
     expect(convertedQuote.status, 'converted');
     expect(convertedQuote.convertedInvoiceId, invoice.id);
+  });
+
+  test('HybridQuotationRepository creates, sanitizes, issues, and queues quotation for sync', () async {
+    final session = GoogleSession();
+    final repo = HybridQuotationRepository(session);
+
+    // 1. Create a draft with unformatted numbers
+    const draft = Quotation(
+      id: 'q_hybrid_1',
+      date: '2026-09-13',
+      validUntil: '2026-10-13',
+      customer: sampleCustomer,
+      company: sampleCompany,
+      items: [
+        LineItem(description: 'Enterprise Accounting Cloud Setup', quantity: '1', rate: '12000.00'),
+      ],
+      discount: '500.00',
+      taxRate: '5.00',
+    );
+
+    final saved = await repo.save(draft);
+    expect(saved.id, 'q_hybrid_1');
+    expect(saved.version, 1);
+    expect(saved.status, 'draft');
+
+    final loaded = await repo.load();
+    expect(loaded.length, 1);
+    expect(loaded.first.id, 'q_hybrid_1');
+
+    // 2. Issue the quotation
+    final issued = await repo.issue(saved);
+    expect(issued.number, startsWith('QT-TPC-'));
+    expect(issued.status, 'sent');
+    expect(issued.issuedAt, isNotEmpty);
+
+    // Verify it persists in loaded list
+    final afterIssue = await repo.load();
+    expect(afterIssue.first.status, 'sent');
+    expect(afterIssue.first.number, startsWith('QT-TPC-'));
   });
 }

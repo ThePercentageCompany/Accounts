@@ -86,6 +86,11 @@ class _BalanceSheetView extends StatelessWidget {
     final liabilities = (bs['liabilities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final shareholderRows = (bs['shareholderEquityRows'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final currentProfit = bs['currentYearNetProfitCents'] as int? ?? 0;
+    final totalAgreed = bs['totalAgreedCapitalCents'] as int? ?? 0;
+    final totalPaidInCash = bs['totalPaidInCashCapitalCents'] as int? ?? 0;
+    final totalAssetContrib = bs['totalAssetContributionsCents'] as int? ?? 0;
+    final totalShareholderEquity = bs['totalShareholderEquityCents'] as int? ?? 0;
+    final outstandingCapital = bs['outstandingCapitalCents'] as int? ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -182,25 +187,52 @@ class _BalanceSheetView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              // EQUITY SECTION
+              // EQUITY SECTION (WITH COMPREHENSIVE CAPITAL BREAKDOWN)
               _SectionContainer(
-                title: '3. EQUITY',
+                title: '3. EQUITY (CAPITAL & RETAINED EARNINGS)',
                 color: const Color(0xFF10B981),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Shareholder Capital & Contributed Equity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
+                    const Text('Contributed Capital Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
+                    const SizedBox(height: 8),
+                    _ReportRow(name: 'Total Agreed Capital (Nominal)', amountCents: totalAgreed),
+                    _ReportRow(name: 'Paid-in Cash & Bank Contributions', amountCents: totalPaidInCash),
+                    _ReportRow(name: 'Contributed Hardware & Physical Assets', amountCents: totalAssetContrib),
+                    _ReportRow(name: 'Outstanding Capital Commitment', amountCents: outstandingCapital),
+                    const SizedBox(height: 4),
+                    _SubtotalRow(title: 'Total Contributed Equity', amountCents: totalShareholderEquity),
+                    const Divider(height: 24),
+                    const Text('Shareholder Equity Breakdown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
                     const SizedBox(height: 8),
                     if (shareholderRows.isEmpty)
                       const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: Text('No shareholders registered', style: TextStyle(color: Colors.grey, fontSize: 13)))
                     else
-                      ...shareholderRows.map((s) => _ReportRow(
-                            name: '${s['name']} (${s['ownershipPercentage']}%)',
-                            amountCents: s['totalInvestedCents'] ?? 0,
-                          )),
-                    const SizedBox(height: 4),
-                    _SubtotalRow(title: 'Total Shareholder Capital', amountCents: bs['totalShareholderEquityCents'] ?? 0),
-                    const SizedBox(height: 12),
+                      ...shareholderRows.map((s) {
+                        final name = s['name'] as String? ?? 'Partner';
+                        final pct = s['ownershipPercentage'] ?? 0.0;
+                        final cash = s['cashInvestedCents'] as int? ?? 0;
+                        final assets = s['assetContributionCents'] as int? ?? 0;
+                        final total = s['totalInvestedCents'] as int? ?? 0;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('$name ($pct%)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155))),
+                                  Text('Cash: ${currency(cash)} • Assets: ${currency(assets)}', style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                                ],
+                              ),
+                              Text(currency(total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        );
+                      }),
+                    const Divider(height: 24),
                     const Text('Retained Earnings & Profit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981))),
                     const SizedBox(height: 8),
                     _ReportRow(name: 'Current Period Operating Net Profit', amountCents: currentProfit, isProfit: true),

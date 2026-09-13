@@ -809,7 +809,7 @@ class SheetSchema {
         if (row.length > 12 && row[12]?.toString().isNotEmpty == true) {
           final itemsRaw = row[12].toString().split(' | ');
           for (final raw in itemsRaw) {
-            final match = RegExp(r'^(\d+(?:\.\d+)?)\s*x\s*(.*?)\s*@\s*(\d+(?:\.\d+)?)$').firstMatch(raw.trim());
+            final match = RegExp(r'^(\d+(?:\.\d+)?)\s*x\s*(.*?)\s*@\s*(\d+(?:\.\d+)?)$', dotAll: true).firstMatch(raw.trim());
             if (match != null) {
               qItemsList.add({
                 'quantity': match.group(1) ?? '1',

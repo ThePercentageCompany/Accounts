@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
 import '../../../core/sync/sync_manager.dart';
+import '../../billing/domain/models.dart';
 import '../domain/quotation.dart';
 import '../domain/quotation_repository.dart';
 
@@ -109,8 +110,10 @@ class HybridQuotationRepository implements QuotationRepository {
 
   @override
   Future<Quotation> save(Quotation quotation) async {
-    QuotationTotals.of(quotation);
-    final updated = quotation.copyWith(version: quotation.version + 1);
+    // Sanitize line items & numbers to prevent calculation errors
+    final sanitized = _sanitize(quotation);
+    QuotationTotals.of(sanitized);
+    final updated = sanitized.copyWith(version: sanitized.version + 1);
     await _upsert(updated.id, updated.toJson());
     _scheduleBackgroundSync();
     return updated;
@@ -119,24 +122,52 @@ class HybridQuotationRepository implements QuotationRepository {
   @override
   Future<Quotation> issue(Quotation quotation) async {
     final all = await load();
-    final current = all.where((x) => x.id == quotation.id).firstOrNull ?? quotation;
-    if (current.number.isNotEmpty) return current;
+    final sanitized = _sanitize(quotation);
 
-    final prefix = quotation.company.prefix.isNotEmpty ? quotation.company.prefix : 'TPC';
-    final year = DateTime.now().year;
-    final seq = all.where((x) => x.number.isNotEmpty).length + 1;
-    final generatedNumber = 'QT-$prefix-$year-${seq.toString().padLeft(6, '0')}';
+    // Determine sequential number if this is a draft or placeholder number
+    String num = sanitized.number;
+    final isOfficial = num.isNotEmpty && !num.endsWith('-001') && sanitized.status != 'draft';
 
-    final issued = current.copyWith(
-      number: generatedNumber,
-      status: current.status == 'draft' ? 'sent' : current.status,
-      issuedAt: DateTime.now().toUtc().toIso8601String(),
-      version: current.version + 1,
+    if (!isOfficial) {
+      final prefix = sanitized.company.prefix.isNotEmpty ? sanitized.company.prefix : 'TPC';
+      final year = DateTime.now().year;
+      final seq = all.where((x) => x.number.isNotEmpty && x.status != 'draft').length + 1;
+      num = 'QT-$prefix-$year-${seq.toString().padLeft(6, '0')}';
+    }
+
+    final issued = sanitized.copyWith(
+      number: num,
+      status: sanitized.status == 'draft' ? 'sent' : sanitized.status,
+      issuedAt: sanitized.issuedAt.isNotEmpty ? sanitized.issuedAt : DateTime.now().toUtc().toIso8601String(),
+      version: sanitized.version + 1,
     );
     QuotationTotals.of(issued);
     await _upsert(issued.id, issued.toJson());
     _scheduleBackgroundSync();
     return issued;
+  }
+
+  Quotation _sanitize(Quotation q) {
+    String cleanNum(String? val, {int decimals = 2, String fallback = '0.00'}) {
+      if (val == null || val.trim().isEmpty) return fallback;
+      final c = val.replaceAll(',', '').replaceAll('%', '').trim();
+      final d = double.tryParse(c);
+      if (d == null || d.isNaN || d.isInfinite || d < 0) return fallback;
+      return d.toStringAsFixed(decimals);
+    }
+
+    final cleanItems = q.items.map((item) {
+      final desc = item.description.trim().isNotEmpty ? item.description.trim() : 'Service item';
+      final qty = cleanNum(item.quantity, decimals: 3, fallback: '1.000');
+      final rate = cleanNum(item.rate, decimals: 2, fallback: '0.00');
+      return item.copyWith(description: desc, quantity: qty, rate: rate);
+    }).toList();
+
+    return q.copyWith(
+      items: cleanItems.isEmpty ? [const LineItem(description: 'Service item', quantity: '1.000', rate: '0.00')] : cleanItems,
+      discount: cleanNum(q.discount, decimals: 2, fallback: '0.00'),
+      taxRate: cleanNum(q.taxRate, decimals: 2, fallback: '5.00'),
+    );
   }
 
   @override

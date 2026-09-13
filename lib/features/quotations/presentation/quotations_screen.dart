@@ -39,14 +39,6 @@ class _QuotationsViewState extends State<QuotationsView> {
   ];
 
   Future<void> _openEditor([Quotation? quotation]) async {
-    final billing = context.read<BillingCubit>().state.data;
-    if (billing.customers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one customer before creating a quotation.')),
-      );
-      return;
-    }
-
     final cubit = context.read<QuotationCubit>();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(

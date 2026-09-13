@@ -449,7 +449,7 @@ class GoogleWorkspaceService {
   /// Reads all records from a sheet tab.
   Future<List<Map<String, dynamic>>> readTabRecords(String accessToken, String spreadsheetId, String sheetName) async {
     try {
-      final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z');
+      final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:Z')}');
       var res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 400 || res.statusCode == 404) {
@@ -479,7 +479,7 @@ class GoogleWorkspaceService {
   /// Inserts or updates a record by ID in a sheet tab with human-readable column fields.
   Future<void> upsertTabRecord(String accessToken, String spreadsheetId, String sheetName, String id, Map<String, dynamic> record) async {
     // Read existing IDs
-    final getUrl = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:A');
+    final getUrl = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:A')}');
     var res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
 
     if (res.statusCode == 400 || res.statusCode == 404) {
@@ -503,7 +503,7 @@ class GoogleWorkspaceService {
     final endCol = SheetSchema.getColLetter(rowValues.length);
 
     final putUrl = Uri.parse(
-      'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A$targetRow:$endCol$targetRow?valueInputOption=USER_ENTERED',
+      'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A$targetRow:$endCol$targetRow')}?valueInputOption=USER_ENTERED',
     );
 
     var putRes = await http.put(
@@ -544,7 +544,7 @@ class GoogleWorkspaceService {
 
     // Clear range
     final clearRes = await http.post(
-      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:Z:clear'),
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:Z')}:clear'),
       headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
     ).timeout(const Duration(seconds: 15));
 

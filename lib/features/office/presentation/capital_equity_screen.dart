@@ -641,9 +641,23 @@ class _ContributionsTab extends StatelessWidget {
                             color: isWithdrawal ? Colors.red : (isFinanceSource ? const Color(0xFF8B5CF6) : Colors.green),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          tooltip: 'Edit Contribution',
+                          onPressed: () {
+                            if (isFinanceSource) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Finance entries can be edited from the Finance screen.')),
+                              );
+                            } else {
+                              _showAddContributionModal(context, transaction: tx);
+                            }
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                          tooltip: 'Delete Contribution',
                           onPressed: () => _confirmDelete(context, 'Contribution', () {
                             if (isFinanceSource) {
                               context.read<OfficeCubit>().run('financeDelete', {'id': tx['id']});
@@ -761,9 +775,15 @@ class _LoansTab extends StatelessWidget {
                             color: isRepayment ? Colors.blue : Colors.orange,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          tooltip: 'Edit Loan Entry',
+                          onPressed: () => _showAddLoanModal(context, loan: l),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                          tooltip: 'Delete Loan Entry',
                           onPressed: () => _confirmDelete(context, 'Loan Entry', () {
                             context.read<OfficeCubit>().run('shareholderLoanDelete', {'id': l['id']});
                           }),
@@ -877,7 +897,7 @@ void _showAddShareholderModal(BuildContext context, {Map<String, dynamic>? share
   );
 }
 
-void _showAddContributionModal(BuildContext context) {
+void _showAddContributionModal(BuildContext context, {Map<String, dynamic>? transaction}) {
   final office = context.read<OfficeCubit>().state.data;
   final shareholders = office.shareholders;
   if (shareholders.isEmpty) {
@@ -885,20 +905,24 @@ void _showAddContributionModal(BuildContext context) {
     return;
   }
 
-  String selectedShareholderId = shareholders.first['id'] as String;
-  String selectedType = 'capitalContribution'; // capitalContribution, additionalCapital, capitalWithdrawal
-  String selectedContributionType = 'bank'; // bank, cash, asset
-  final amountCtrl = TextEditingController();
-  final assetNameCtrl = TextEditingController();
-  final refCtrl = TextEditingController();
-  final notesCtrl = TextEditingController();
-  final dateCtrl = TextEditingController(text: DateTime.now().toIso8601String().substring(0, 10));
+  String selectedShareholderId = transaction?['shareholderId'] ?? shareholders.first['id'] as String;
+  if (!shareholders.any((s) => s['id'] == selectedShareholderId)) {
+    selectedShareholderId = shareholders.first['id'] as String;
+  }
+  String selectedType = transaction?['transactionType'] ?? transaction?['type'] ?? 'capitalContribution';
+  String selectedContributionType = transaction?['contributionType'] ?? 'bank';
+  final amountVal = transaction?['amount'] ?? (transaction?['amountCents'] != null ? ((transaction!['amountCents'] as num) / 100.0).toStringAsFixed(2) : '');
+  final amountCtrl = TextEditingController(text: amountVal.toString());
+  final assetNameCtrl = TextEditingController(text: transaction?['assetName'] ?? '');
+  final refCtrl = TextEditingController(text: transaction?['reference'] ?? '');
+  final notesCtrl = TextEditingController(text: transaction?['notes'] ?? '');
+  final dateCtrl = TextEditingController(text: transaction?['date'] ?? DateTime.now().toIso8601String().substring(0, 10));
 
   showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Add Capital Transaction'),
+        title: Text(transaction == null ? 'Add Capital Transaction' : 'Edit Capital Transaction'),
         content: SizedBox(
           width: 480,
           child: SingleChildScrollView(
@@ -907,14 +931,14 @@ void _showAddContributionModal(BuildContext context) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedShareholderId,
+                  initialValue: selectedShareholderId,
                   decoration: const InputDecoration(labelText: 'Shareholder *'),
                   items: shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))).toList(),
                   onChanged: (v) => setState(() => selectedShareholderId = v!),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   decoration: const InputDecoration(labelText: 'Transaction Type *'),
                   items: const [
                     DropdownMenuItem(value: 'capitalContribution', child: Text('Capital Contribution')),
@@ -926,7 +950,7 @@ void _showAddContributionModal(BuildContext context) {
                 const SizedBox(height: 12),
                 if (selectedType != 'capitalWithdrawal') ...[
                   DropdownButtonFormField<String>(
-                    value: selectedContributionType,
+                    initialValue: selectedContributionType,
                     decoration: const InputDecoration(labelText: 'Contribution Method *'),
                     items: const [
                       DropdownMenuItem(value: 'bank', child: Text('Bank Transfer (Bank Account)')),
@@ -977,6 +1001,8 @@ void _showAddContributionModal(BuildContext context) {
 
               final sh = shareholders.firstWhere((s) => s['id'] == selectedShareholderId);
               final payload = {
+                if (transaction != null) 'id': transaction['id'],
+                if (transaction != null) 'version': transaction['version'] ?? 0,
                 'shareholderId': selectedShareholderId,
                 'shareholderName': sh['name'],
                 'date': dateCtrl.text.trim(),
@@ -993,8 +1019,8 @@ void _showAddContributionModal(BuildContext context) {
                 'status': 'posted',
               };
 
-              // If it's an asset contribution, also register in Assets
-              if (selectedContributionType == 'asset' && selectedType != 'capitalWithdrawal') {
+              // If it's a new asset contribution, also register in Assets
+              if (transaction == null && selectedContributionType == 'asset' && selectedType != 'capitalWithdrawal') {
                 context.read<OfficeCubit>().run('assetSave', {
                   'name': assetNameCtrl.text.trim().isNotEmpty ? assetNameCtrl.text.trim() : 'Contributed Asset',
                   'category': 'Computers & IT Equipment',
@@ -1013,7 +1039,7 @@ void _showAddContributionModal(BuildContext context) {
               context.read<OfficeCubit>().run('capitalTransactionSave', payload);
               Navigator.pop(ctx);
             },
-            child: const Text('Save Transaction'),
+            child: Text(transaction == null ? 'Save Transaction' : 'Update Transaction'),
           ),
         ],
       ),
@@ -1021,7 +1047,7 @@ void _showAddContributionModal(BuildContext context) {
   );
 }
 
-void _showAddLoanModal(BuildContext context) {
+void _showAddLoanModal(BuildContext context, {Map<String, dynamic>? loan}) {
   final office = context.read<OfficeCubit>().state.data;
   final shareholders = office.shareholders;
   if (shareholders.isEmpty) {
@@ -1029,19 +1055,23 @@ void _showAddLoanModal(BuildContext context) {
     return;
   }
 
-  String selectedShareholderId = shareholders.first['id'] as String;
-  String selectedType = 'loanReceived'; // loanReceived, loanRepayment
-  String selectedAccount = 'Bank';
-  final amountCtrl = TextEditingController();
-  final refCtrl = TextEditingController();
-  final notesCtrl = TextEditingController();
-  final dateCtrl = TextEditingController(text: DateTime.now().toIso8601String().substring(0, 10));
+  String selectedShareholderId = loan?['shareholderId'] ?? shareholders.first['id'] as String;
+  if (!shareholders.any((s) => s['id'] == selectedShareholderId)) {
+    selectedShareholderId = shareholders.first['id'] as String;
+  }
+  String selectedType = loan?['type'] ?? 'loanReceived';
+  String selectedAccount = loan?['paymentAccount'] ?? loan?['account'] ?? 'Bank';
+  final amountVal = loan?['amount'] ?? loan?['principalAmount'] ?? (loan?['amountCents'] != null ? ((loan!['amountCents'] as num) / 100.0).toStringAsFixed(2) : '');
+  final amountCtrl = TextEditingController(text: amountVal.toString());
+  final refCtrl = TextEditingController(text: loan?['reference'] ?? '');
+  final notesCtrl = TextEditingController(text: loan?['notes'] ?? '');
+  final dateCtrl = TextEditingController(text: loan?['date'] ?? DateTime.now().toIso8601String().substring(0, 10));
 
   showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
-        title: const Text('Record Shareholder Loan / Repayment'),
+        title: Text(loan == null ? 'Record Shareholder Loan / Repayment' : 'Edit Shareholder Loan'),
         content: SizedBox(
           width: 450,
           child: SingleChildScrollView(
@@ -1049,14 +1079,14 @@ void _showAddLoanModal(BuildContext context) {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedShareholderId,
+                  initialValue: selectedShareholderId,
                   decoration: const InputDecoration(labelText: 'Shareholder *'),
                   items: shareholders.map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String))).toList(),
                   onChanged: (v) => setState(() => selectedShareholderId = v!),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   decoration: const InputDecoration(labelText: 'Action *'),
                   items: const [
                     DropdownMenuItem(value: 'loanReceived', child: Text('Loan Received (From Partner to Company)')),
@@ -1066,7 +1096,7 @@ void _showAddLoanModal(BuildContext context) {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedAccount,
+                  initialValue: selectedAccount,
                   decoration: const InputDecoration(labelText: 'Account *'),
                   items: const [
                     DropdownMenuItem(value: 'Bank', child: Text('Bank Account')),
@@ -1108,6 +1138,8 @@ void _showAddLoanModal(BuildContext context) {
 
               final sh = shareholders.firstWhere((s) => s['id'] == selectedShareholderId);
               final payload = {
+                if (loan != null) 'id': loan['id'],
+                if (loan != null) 'version': loan['version'] ?? 0,
                 'shareholderId': selectedShareholderId,
                 'shareholderName': sh['name'],
                 'date': dateCtrl.text.trim(),
@@ -1125,7 +1157,7 @@ void _showAddLoanModal(BuildContext context) {
               context.read<OfficeCubit>().run('shareholderLoanSave', payload);
               Navigator.pop(ctx);
             },
-            child: const Text('Save Loan Entry'),
+            child: Text(loan == null ? 'Save Loan Entry' : 'Update Loan Entry'),
           ),
         ],
       ),

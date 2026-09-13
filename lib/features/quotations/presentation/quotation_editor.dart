@@ -85,7 +85,7 @@ class _QuotationEditorState extends State<QuotationEditor> {
           .toList();
     } else {
       _id = const Uuid().v4();
-      _number = 'QT-${now.year}-${now.month.toString().padLeft(2, '0')}-001';
+      _number = '';
       _date = todayStr;
       _validUntil = expiryStr;
       _status = 'draft';
@@ -166,13 +166,28 @@ class _QuotationEditorState extends State<QuotationEditor> {
     });
   }
 
+  String _cleanNum(String? val, {int decimals = 2, String fallback = '0.00'}) {
+    if (val == null || val.trim().isEmpty) return fallback;
+    final clean = val.replaceAll(',', '').replaceAll('%', '').trim();
+    final d = double.tryParse(clean);
+    if (d == null || d.isNaN || d.isInfinite || d < 0) return fallback;
+    return d.toStringAsFixed(decimals);
+  }
+
   Quotation _buildQuotation() {
     final lineItems = _rows
-        .map((x) => LineItem(
-              description: x['description'] ?? '',
-              quantity: x['quantity'] ?? '1',
-              rate: x['rate'] ?? '0.00',
-            ))
+        .map((x) {
+          final desc = (x['description'] ?? '').trim().isNotEmpty
+              ? (x['description'] ?? '').trim()
+              : 'Service item';
+          final qty = _cleanNum(x['quantity'], decimals: 3, fallback: '1.000');
+          final rate = _cleanNum(x['rate'], decimals: 2, fallback: '0.00');
+          return LineItem(
+            description: desc,
+            quantity: qty,
+            rate: rate,
+          );
+        })
         .toList();
 
     return Quotation(
@@ -182,9 +197,11 @@ class _QuotationEditorState extends State<QuotationEditor> {
       validUntil: _validUntil,
       customer: _customer ?? const Customer(id: '', name: 'Customer'),
       company: _company,
-      items: lineItems,
-      discount: _discount,
-      taxRate: _taxRate,
+      items: lineItems.isEmpty
+          ? [const LineItem(description: 'Service item', quantity: '1.000', rate: '0.00')]
+          : lineItems,
+      discount: _cleanNum(_discount, decimals: 2, fallback: '0.00'),
+      taxRate: _cleanNum(_taxRate, decimals: 2, fallback: '5.00'),
       status: _status,
       notes: _notes,
       terms: _terms,
@@ -289,6 +306,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
         const SnackBar(content: Text('Quotation saved as draft.')),
       );
       Navigator.of(context).pop();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(cubit.state.error ?? 'Could not save quotation.')),
+      );
     }
   }
 
@@ -341,6 +362,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
         SnackBar(content: Text('Quotation ${issued.number} issued successfully!')),
       );
       Navigator.of(context).pop();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(cubit.state.error ?? 'Could not issue quotation.')),
+      );
     }
   }
 

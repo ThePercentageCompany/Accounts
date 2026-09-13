@@ -170,6 +170,10 @@ void main() {
       // 2. Shareholder Capital verification
       // Total Invested = Cash (AED 50,000) + Laptop (AED 6,000) = AED 56,000
       expect(bs['totalShareholderEquityCents'], 5600000);
+      expect(bs['totalAgreedCapitalCents'], 10000000); // AED 100,000
+      expect(bs['totalPaidInCashCapitalCents'], 5000000); // AED 50,000
+      expect(bs['totalAssetContributionsCents'], 600000); // AED 6,000
+      expect(bs['outstandingCapitalCents'], 4400000); // AED 44,000
 
       // 3. Equity = Capital (56,000) + Net Profit (7,000) = AED 63,000
       expect(bs['totalEquityCents'], 6300000);
@@ -178,6 +182,94 @@ void main() {
       expect(bs['totalAssetsCents'], 6300000);
 
       // 5. Balance Sheet Equality verification
+      expect(bs['isBalanced'], isTrue);
+      expect(bs['totalAssetsCents'], bs['totalLiabilitiesAndEquityCents']);
+    });
+
+    test('calculateBalanceSheet handles multi-partner equity allocation and accruals correctly', () {
+      final office = OfficeData(
+        shareholders: const [
+          {'id': 'SHR-1', 'name': 'Partner A', 'ownershipPercentage': 60.0, 'agreedCapital': 60000.0},
+          {'id': 'SHR-2', 'name': 'Partner B', 'ownershipPercentage': 40.0, 'agreedCapital': 40000.0},
+        ],
+        capitalTransactions: const [
+          {
+            'id': 'CAP-1',
+            'shareholderId': 'SHR-1',
+            'shareholderName': 'Partner A',
+            'transactionType': 'capitalContribution',
+            'contributionType': 'bank',
+            'amountCents': 6000000, // AED 60,000
+            'bankAccountId': 'Bank',
+            'status': 'posted',
+          },
+          {
+            'id': 'CAP-2',
+            'shareholderId': 'SHR-2',
+            'shareholderName': 'Partner B',
+            'transactionType': 'capitalContribution',
+            'contributionType': 'bank',
+            'amountCents': 2000000, // AED 20,000
+            'bankAccountId': 'Bank',
+            'status': 'posted',
+          },
+        ],
+        assets: const [
+          {
+            'id': 'AST-1',
+            'name': 'Server Equipment',
+            'acquisitionType': 'shareholderContribution',
+            'shareholderId': 'SHR-2',
+            'costCents': 2000000, // AED 20,000
+            'accumulatedDepreciationCents': 0,
+            'status': 'active',
+          }
+        ],
+        entries: const [
+          {
+            'id': 'BILL-1',
+            'kind': 'expense',
+            'category': 'Telecom',
+            'amountCents': 50000, // AED 500 unpaid bill
+            'status': 'unpaid',
+          }
+        ],
+        payroll: const [
+          {
+            'id': 'PAY-1',
+            'employeeName': 'Dev 1',
+            'netCents': 150000, // AED 1,500 approved unpaid payroll
+            'status': 'approved',
+          }
+        ],
+      );
+
+      final bs = calculateBalanceSheet([], office, office.shareholders);
+
+      // Verify capital totals
+      expect(bs['totalAgreedCapitalCents'], 10000000); // 100,000 AED
+      expect(bs['totalPaidInCashCapitalCents'], 8000000); // 80,000 AED
+      expect(bs['totalAssetContributionsCents'], 2000000); // 20,000 AED
+      expect(bs['totalShareholderEquityCents'], 10000000); // 100,000 AED fully invested
+      expect(bs['outstandingCapitalCents'], 0);
+
+      // Verify partner breakdowns
+      final partners = (bs['shareholderEquityRows'] as List).cast<Map<String, dynamic>>();
+      expect(partners.length, 2);
+      expect(partners[0]['name'], 'Partner A');
+      expect(partners[0]['cashInvestedCents'], 6000000);
+      expect(partners[0]['outstandingCapitalCents'], 0);
+      expect(partners[1]['name'], 'Partner B');
+      expect(partners[1]['cashInvestedCents'], 2000000);
+      expect(partners[1]['assetContributionCents'], 2000000);
+      expect(partners[1]['outstandingCapitalCents'], 0);
+
+      // Verify Liabilities (Accounts Payable 500 + Payroll Payable 1,500 = 2,000 AED)
+      expect(bs['accountsPayableCents'], 50000);
+      expect(bs['payrollPayableCents'], 150000);
+      expect(bs['totalLiabilitiesCents'], 200000);
+
+      // Verify Assets = Liabilities + Equity
       expect(bs['isBalanced'], isTrue);
       expect(bs['totalAssetsCents'], bs['totalLiabilitiesAndEquityCents']);
     });
