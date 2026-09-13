@@ -1620,6 +1620,39 @@ class _OfficeScreenState extends State<OfficeScreen> {
 
     return Column(
       children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.zohoBlueBgDark : const Color(0xFFEBF3FC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isDark ? AppTheme.zohoBlue : const Color(0xFFBFDBFE)),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Daily Attendance', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  Text('Selected date: $day • Record present, leave, vacation, or OT.',
+                      style: TextStyle(fontSize: 12, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary)),
+                ],
+              ),
+              FilledButton.icon(
+                onPressed: addAttendance,
+                icon: const Icon(CupertinoIcons.checkmark_alt_circle_fill, size: 16),
+                label: const Text('Mark Attendance'),
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.zohoBlue),
+              ),
+            ],
+          ),
+        ),
         if (employees.isEmpty)
           const EmptyState(
             icon: CupertinoIcons.person_2,

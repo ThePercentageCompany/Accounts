@@ -106,6 +106,13 @@ const List<NavDestinationItem> appNavDestinations = [
     section: 'SYSTEM',
     pastelColor: Color(0xFF94A3B8),
   ),
+  NavDestinationItem(
+    title: 'Office & Attendance',
+    icon: CupertinoIcons.person_3,
+    selectedIcon: CupertinoIcons.person_3_fill,
+    section: 'PEOPLE',
+    pastelColor: Color(0xFFF59E0B),
+  ),
 ];
 
 class ResponsiveShell extends StatefulWidget {

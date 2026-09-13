@@ -243,6 +243,9 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
           case 11:
             body = CompanyEditor(company: billingState.data.company);
             break;
+          case 12:
+            body = const OfficeScreen(key: ValueKey('office-attendance'), initialPage: 1);
+            break;
           default:
             body = DashboardView(
               onNewInvoice: () => openEditor(),
@@ -461,4 +464,3 @@ class GoogleLogin extends StatelessWidget {
     );
   }
 }
-
