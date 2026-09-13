@@ -42,6 +42,8 @@ class GoogleSession extends ChangeNotifier {
   String? error;
   bool _initialized = false;
   Timer? _automaticSyncTimer;
+  Future<void>? _identityHandling;
+  Future<void>? _authorizationHandling;
 
   final GoogleWorkspaceService workspaceService = GoogleWorkspaceService();
   final SyncManager syncManager = SyncManager.instance;
@@ -88,35 +90,7 @@ class GoogleSession extends ChangeNotifier {
 
     GoogleSignIn.instance.authenticationEvents.listen((event) async {
       if (event is GoogleSignInAuthenticationEventSignIn) {
-        user = event.user;
-        error = null;
-        isOffline = false;
-        await _saveUserToCache(user!.email, user!.displayName ?? '', photoUrl: user!.photoUrl);
-        try {
-          final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
-          if (auth != null && auth.accessToken.isNotEmpty) {
-            _inMemoryAccessToken = auth.accessToken;
-            authorized = true;
-            _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
-            await _loadOrDiscoverWorkspace();
-          } else {
-            // Attempt auto authorization of scopes
-            try {
-              final authNew = await user!.authorizationClient.authorizeScopes(googleScopes);
-              if (authNew.accessToken.isNotEmpty) {
-                _inMemoryAccessToken = authNew.accessToken;
-                authorized = true;
-                _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
-                await _loadOrDiscoverWorkspace();
-              }
-            } catch (_) {
-              // Browser popup policy may require a direct user tap; UI will show 1-click proceed button
-            }
-          }
-        } catch (_) {
-          authorized = false;
-        }
-        notifyListeners();
+        await _handleIdentitySignIn(event.user);
       }
       if (event is GoogleSignInAuthenticationEventSignOut) {
         user = null;
@@ -138,17 +112,10 @@ class GoogleSession extends ChangeNotifier {
     });
 
     try {
+      // The authentication event listener completes identity restoration. Do
+      // not request scopes here: doing so after the web account chooser opens
+      // a second Google account chooser.
       await GoogleSignIn.instance.attemptLightweightAuthentication();
-      if (user != null) {
-        isOffline = false;
-        final auth = await user!.authorizationClient.authorizationForScopes(googleScopes);
-        if (auth != null && auth.accessToken.isNotEmpty) {
-          _inMemoryAccessToken = auth.accessToken;
-          authorized = true;
-          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
-          await _loadOrDiscoverWorkspace();
-        }
-      }
     } catch (_) {
       // If network fails during initial lightweight auth, use cached session
       if (cachedEmail != null && workspace != null) {
@@ -158,6 +125,39 @@ class GoogleSession extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Handles Google Identity sign-in exactly once. Scope authorization is
+  /// intentionally silent here; interactive permission is initiated only from
+  /// the user-visible Continue action in [authorize].
+  Future<void> _handleIdentitySignIn(GoogleSignInAccount account) async {
+    if (_identityHandling != null) return _identityHandling!;
+    final task = () async {
+      user = account;
+      error = null;
+      isOffline = false;
+      await _saveUserToCache(account.email, account.displayName ?? '', photoUrl: account.photoUrl);
+      try {
+        final auth = await account.authorizationClient.authorizationForScopes(googleScopes);
+        if (auth != null && auth.accessToken.isNotEmpty) {
+          _inMemoryAccessToken = auth.accessToken;
+          authorized = true;
+          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
+          await _loadOrDiscoverWorkspace();
+        } else {
+          authorized = false;
+        }
+      } catch (_) {
+        authorized = false;
+      }
+      notifyListeners();
+    }();
+    _identityHandling = task;
+    try {
+      await task;
+    } finally {
+      _identityHandling = null;
+    }
   }
 
   Future<void> _fetchUserProfileIfAvailable(String accessToken) async {
@@ -349,36 +349,14 @@ class GoogleSession extends ChangeNotifier {
       isAuthorizing = true;
       notifyListeners();
       if (kIsWeb) {
-        if (user != null) {
-          await authorize();
-        }
+        // The Google Identity web button owns the account chooser and emits a
+        // sign-in event. Calling authorize here would cause a second prompt.
+        if (user != null) await authorize();
         return;
       }
-      final account = await GoogleSignIn.instance.authenticate();
-      user = account;
-      isOffline = false;
-      await _saveUserToCache(user!.email, user!.displayName ?? '', photoUrl: user!.photoUrl);
-      
-      try {
-        final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
-        if (auth.accessToken.isNotEmpty) {
-          _inMemoryAccessToken = auth.accessToken;
-          authorized = true;
-          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
-          await _loadOrDiscoverWorkspace();
-          return;
-        }
-      } catch (_) {
-        final check = await user!.authorizationClient.authorizationForScopes(googleScopes);
-        if (check != null && check.accessToken.isNotEmpty) {
-          _inMemoryAccessToken = check.accessToken;
-          authorized = true;
-          _fetchUserProfileIfAvailable(_inMemoryAccessToken!);
-          await _loadOrDiscoverWorkspace();
-          return;
-        }
-      }
-      authorized = false;
+      // authenticate() emits the same event handled above.  Do not run a
+      // second, competing authorizeScopes flow from this method.
+      await GoogleSignIn.instance.authenticate();
     } catch (e) {
       if (!_isIgnorableAuthError(e)) {
         error = e.toString();
@@ -390,11 +368,13 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<void> authorize() async {
+    if (_authorizationHandling != null) return _authorizationHandling!;
     if (user == null) {
       await signIn();
       return;
     }
-    try {
+    final task = () async {
+      try {
       error = null;
       isAuthorizing = true;
       notifyListeners();
@@ -411,9 +391,16 @@ class GoogleSession extends ChangeNotifier {
       if (!_isIgnorableAuthError(e)) {
         error = e.toString();
       }
+      } finally {
+        isAuthorizing = false;
+        notifyListeners();
+      }
+    }();
+    _authorizationHandling = task;
+    try {
+      await task;
     } finally {
-      isAuthorizing = false;
-      notifyListeners();
+      _authorizationHandling = null;
     }
   }
 
