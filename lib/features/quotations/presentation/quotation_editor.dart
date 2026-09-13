@@ -55,7 +55,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
 
     final now = DateTime.now();
     final todayStr = now.toIso8601String().substring(0, 10);
-    final expiryStr = now.add(const Duration(days: 30)).toIso8601String().substring(0, 10);
+    final expiryStr =
+        now.add(const Duration(days: 30)).toIso8601String().substring(0, 10);
 
     if (old != null) {
       _id = old.id;
@@ -94,7 +95,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
       _discount = '0.00';
       _taxRate = '5.00';
       _notes = 'This quotation is valid for 30 days from issue date.';
-      _terms = '1. 50% advance upon confirmation, 50% on project delivery.\n2. Please confirm your acceptance by signing or replying via email.\n3. Thank you for your business!';
+      _terms =
+          '1. 50% advance upon confirmation, 50% on project delivery.\n2. Please confirm your acceptance by signing or replying via email.\n3. Thank you for your business!';
       _version = 0;
       _convertedInvoiceId = '';
       _issuedAt = '';
@@ -102,7 +104,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
       _rows = [
         {
           'key': const Uuid().v4(),
-          'description': 'Website Redesign & UI/UX\nComplete modern accounting UI design and frontend implementation',
+          'description':
+              'Website Redesign & UI/UX\nComplete modern accounting UI design and frontend implementation',
           'quantity': '1',
           'rate': '5000.00',
           'discount': '0.00',
@@ -110,7 +113,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
         },
         {
           'key': const Uuid().v4(),
-          'description': 'Cloud Integration & Sync Setup\nOffline-first synchronization with Google Workspace and secure drive backups',
+          'description':
+              'Cloud Integration & Sync Setup\nOffline-first synchronization with Google Workspace and secure drive backups',
           'quantity': '1',
           'rate': '2500.00',
           'discount': '0.00',
@@ -175,20 +179,18 @@ class _QuotationEditorState extends State<QuotationEditor> {
   }
 
   Quotation _buildQuotation() {
-    final lineItems = _rows
-        .map((x) {
-          final desc = (x['description'] ?? '').trim().isNotEmpty
-              ? (x['description'] ?? '').trim()
-              : 'Service item';
-          final qty = _cleanNum(x['quantity'], decimals: 3, fallback: '1.000');
-          final rate = _cleanNum(x['rate'], decimals: 2, fallback: '0.00');
-          return LineItem(
-            description: desc,
-            quantity: qty,
-            rate: rate,
-          );
-        })
-        .toList();
+    final lineItems = _rows.map((x) {
+      final desc = (x['description'] ?? '').trim().isNotEmpty
+          ? (x['description'] ?? '').trim()
+          : 'Service item';
+      final qty = _cleanNum(x['quantity'], decimals: 3, fallback: '1.000');
+      final rate = _cleanNum(x['rate'], decimals: 2, fallback: '0.00');
+      return LineItem(
+        description: desc,
+        quantity: qty,
+        rate: rate,
+      );
+    }).toList();
 
     return Quotation(
       id: _id,
@@ -198,7 +200,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
       customer: _customer ?? const Customer(id: '', name: 'Customer'),
       company: _company,
       items: lineItems.isEmpty
-          ? [const LineItem(description: 'Service item', quantity: '1.000', rate: '0.00')]
+          ? [
+              const LineItem(
+                  description: 'Service item', quantity: '1.000', rate: '0.00')
+            ]
           : lineItems,
       discount: _cleanNum(_discount, decimals: 2, fallback: '0.00'),
       taxRate: _cleanNum(_taxRate, decimals: 2, fallback: '5.00'),
@@ -225,7 +230,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
   Future<void> _previewPdfDialog() async {
     if (_customer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select or create a customer first.')),
+        const SnackBar(
+            content: Text('Please select or create a customer first.')),
       );
       return;
     }
@@ -240,8 +246,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
           clipBehavior: Clip.antiAlias,
           child: SizedBox(
             width: 850,
@@ -250,7 +258,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
               appBar: AppBar(
                 title: Text(
                   'Quotation Preview - ${q.number.isNotEmpty ? q.number : "(Draft)"}',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 actions: [
                   IconButton(
@@ -266,7 +275,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
                 canChangeOrientation: false,
                 canChangePageFormat: false,
                 initialPageFormat: PdfPageFormat.a4,
-                pdfFileName: 'Quotation_${q.number.isNotEmpty ? q.number : "Draft"}.pdf',
+                pdfFileName:
+                    'Quotation_${q.number.isNotEmpty ? q.number : "Draft"}.pdf',
               ),
             ),
           ),
@@ -284,7 +294,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
   Future<void> _saveDraft() async {
     if (_customer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select or create a customer first.')),
+        const SnackBar(
+            content: Text('Please select or create a customer first.')),
       );
       return;
     }
@@ -308,7 +319,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
       Navigator.of(context).pop();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(cubit.state.error ?? 'Could not save quotation.')),
+        SnackBar(
+            content: Text(cubit.state.error ?? 'Could not save quotation.')),
       );
     }
   }
@@ -316,7 +328,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
   Future<void> _issueQuotation() async {
     if (_customer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select or create a customer first.')),
+        const SnackBar(
+            content: Text('Please select or create a customer first.')),
       );
       return;
     }
@@ -331,18 +344,23 @@ class _QuotationEditorState extends State<QuotationEditor> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
         title: const Text('Issue & Send Quotation?'),
         content: const Text(
           'An official sequential quotation number will be registered and marked as Sent for client approval.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep editing')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.zohoBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppTheme.buttonRadiusVal)),
             ),
             child: const Text('Issue & Send'),
           ),
@@ -372,12 +390,14 @@ class _QuotationEditorState extends State<QuotationEditor> {
       if (!mounted) return;
       setState(() => _dirty = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Quotation ${issued.number} issued successfully!')),
+        SnackBar(
+            content: Text('Quotation ${issued.number} issued successfully!')),
       );
       Navigator.of(context).pop();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(cubit.state.error ?? 'Could not issue quotation.')),
+        SnackBar(
+            content: Text(cubit.state.error ?? 'Could not issue quotation.')),
       );
     }
   }
@@ -388,14 +408,18 @@ class _QuotationEditorState extends State<QuotationEditor> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Delete Quotation?'),
-        content: Text('Are you sure you want to permanently delete quotation ${_number.isNotEmpty ? _number : "(Draft)"}?'),
+        content: Text(
+            'Are you sure you want to permanently delete quotation ${_number.isNotEmpty ? _number : "(Draft)"}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.pastelRose,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100)),
             ),
             child: const Text('Delete'),
           ),
@@ -440,16 +464,22 @@ class _QuotationEditorState extends State<QuotationEditor> {
         final leave = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal)),
             title: const Text('Discard Unsaved Changes?'),
-            content: const Text('You have unsaved edits in this quotation. Are you sure you want to discard them?'),
+            content: const Text(
+                'You have unsaved edits in this quotation. Are you sure you want to discard them?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Keep editing')),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.zohoRed,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadiusVal)),
                 ),
                 child: const Text('Discard'),
               ),
@@ -475,12 +505,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
               // Mobile Tab Switcher (Form vs Live Preview)
               if (!isDesktop) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFE2E8F0),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadiusVal),
                     ),
                     child: Row(
                       children: [
@@ -492,7 +526,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _mobileTab == 0
-                                    ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                    ? (isDark
+                                        ? const Color(0xFF0F172A)
+                                        : Colors.white)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -501,10 +537,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                   'Edit Quotation Form',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: _mobileTab == 0 ? FontWeight.w700 : FontWeight.w500,
+                                    fontWeight: _mobileTab == 0
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
                                     color: _mobileTab == 0
-                                        ? (isDark ? Colors.white : AppTheme.zohoBlue)
-                                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                        ? (isDark
+                                            ? Colors.white
+                                            : AppTheme.zohoBlue)
+                                        : (isDark
+                                            ? const Color(0xFF94A3B8)
+                                            : const Color(0xFF64748B)),
                                   ),
                                 ),
                               ),
@@ -519,7 +561,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _mobileTab == 1
-                                    ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                    ? (isDark
+                                        ? const Color(0xFF0F172A)
+                                        : Colors.white)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -528,10 +572,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                   'Live Preview',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: _mobileTab == 1 ? FontWeight.w700 : FontWeight.w500,
+                                    fontWeight: _mobileTab == 1
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
                                     color: _mobileTab == 1
-                                        ? (isDark ? Colors.white : AppTheme.zohoBlue)
-                                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                        ? (isDark
+                                            ? Colors.white
+                                            : AppTheme.zohoBlue)
+                                        : (isDark
+                                            ? const Color(0xFF94A3B8)
+                                            : const Color(0xFF64748B)),
                                   ),
                                 ),
                               ),
@@ -557,13 +607,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               flex: 6,
                               child: ListView(
                                 physics: const BouncingScrollPhysics(),
-                                padding: const EdgeInsets.fromLTRB(24, 8, 16, 32),
+                                padding:
+                                    const EdgeInsets.fromLTRB(24, 8, 16, 32),
                                 children: [
-                                  _buildQuotationInformationCard(context, isDark, customers),
+                                  _buildQuotationInformationCard(
+                                      context, isDark, customers),
                                   const SizedBox(height: 18),
                                   _buildQuotationItemsCard(context, isDark),
                                   const SizedBox(height: 18),
-                                  _buildTermsAndTotalsCard(context, isDark, totals),
+                                  _buildTermsAndTotalsCard(
+                                      context, isDark, totals),
                                   const SizedBox(height: 24),
                                   _buildBottomActionsBar(context, isDark),
                                 ],
@@ -575,9 +628,11 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               flex: 4,
                               child: ListView(
                                 physics: const BouncingScrollPhysics(),
-                                padding: const EdgeInsets.fromLTRB(8, 8, 24, 32),
+                                padding:
+                                    const EdgeInsets.fromLTRB(8, 8, 24, 32),
                                 children: [
-                                  _buildLivePreviewCard(context, isDark, totals),
+                                  _buildLivePreviewCard(
+                                      context, isDark, totals),
                                 ],
                               ),
                             ),
@@ -587,13 +642,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                           // Mobile Form View
                           ? ListView(
                               physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                               children: [
-                                _buildQuotationInformationCard(context, isDark, customers),
+                                _buildQuotationInformationCard(
+                                    context, isDark, customers),
                                 const SizedBox(height: 16),
                                 _buildQuotationItemsCard(context, isDark),
                                 const SizedBox(height: 16),
-                                _buildTermsAndTotalsCard(context, isDark, totals),
+                                _buildTermsAndTotalsCard(
+                                    context, isDark, totals),
                                 const SizedBox(height: 20),
                                 _buildBottomActionsBar(context, isDark),
                                 const SizedBox(height: 24),
@@ -602,7 +660,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
                           // Mobile Preview View
                           : ListView(
                               physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                               children: [
                                 _buildLivePreviewCard(context, isDark, totals),
                                 const SizedBox(height: 24),
@@ -621,18 +680,22 @@ class _QuotationEditorState extends State<QuotationEditor> {
   // 1. Top Header & Breadcrumbs Bar
   // -------------------------------------------------------------
   Widget _buildTopBar(BuildContext context, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    return LayoutBuilder(builder: (context, constraints) {
+      final isCompact = constraints.maxWidth < 560;
+      return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24, vertical: isCompact ? 10 : 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Title and Breadcrumb
-          Column(
+          Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.quotation == null ? 'Create Quotation' : 'Edit Quotation',
+                widget.quotation == null
+                    ? 'Create Quotation'
+                    : 'Edit Quotation',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -640,6 +703,7 @@ class _QuotationEditorState extends State<QuotationEditor> {
                   letterSpacing: -0.5,
                 ),
               ),
+              if (!isCompact) ...[
               const SizedBox(height: 3),
               Row(
                 children: [
@@ -649,7 +713,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       'Home',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -659,7 +725,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       '>',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                   ),
@@ -669,7 +737,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       'Quotations',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -679,12 +749,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       '>',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                   ),
                   Text(
-                    widget.quotation == null ? 'Create Quotation' : 'Edit Quotation',
+                    widget.quotation == null
+                        ? 'Create Quotation'
+                        : 'Edit Quotation',
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
@@ -693,8 +767,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                   ),
                 ],
               ),
+              ],
             ],
-          ),
+          )),
 
           // Top Action Buttons
           Row(
@@ -703,18 +778,24 @@ class _QuotationEditorState extends State<QuotationEditor> {
               if (widget.quotation != null) ...[
                 TextButton.icon(
                   onPressed: _deleteQuotation,
-                  icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
-                  label: const Text('Delete Quotation', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                  icon: const Icon(CupertinoIcons.trash,
+                      size: 15, color: AppTheme.pastelRose),
+                  label: isCompact
+                      ? const SizedBox.shrink()
+                      : const Text('Delete Quotation', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 12)),
                 ),
                 const SizedBox(width: 8),
               ],
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(CupertinoIcons.arrow_left, size: 14),
-                label: const Text('Back'),
+                label: isCompact ? const SizedBox.shrink() : const Text('Back'),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 10 : 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadiusVal)),
                 ),
               ),
             ],
@@ -722,12 +803,14 @@ class _QuotationEditorState extends State<QuotationEditor> {
         ],
       ),
     );
+    });
   }
 
   // -------------------------------------------------------------
   // 2. Quotation Information Card
   // -------------------------------------------------------------
-  Widget _buildQuotationInformationCard(BuildContext context, bool isDark, List<Customer> customers) {
+  Widget _buildQuotationInformationCard(
+      BuildContext context, bool isDark, List<Customer> customers) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: AppTheme.zohoCardDecoration(isDark),
@@ -751,7 +834,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final customerCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Customer *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Customer *',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: _customer?.id,
@@ -774,7 +859,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
                         });
                       }
                     },
-                    validator: (v) => v == null ? 'Please select a customer' : null,
+                    validator: (v) =>
+                        v == null ? 'Please select a customer' : null,
                   ),
                   const SizedBox(height: 4),
                   Align(
@@ -783,16 +869,21 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       onPressed: () async {
                         await editCustomer(context);
                         if (context.mounted) {
-                          final latest = context.read<BillingCubit>().state.data.customers;
+                          final latest =
+                              context.read<BillingCubit>().state.data.customers;
                           if (latest.isNotEmpty) {
                             _markDirty(() => _customer = latest.last);
                           }
                         }
                       },
-                      icon: const Icon(CupertinoIcons.plus, size: 13, color: AppTheme.zohoBlue),
+                      icon: const Icon(CupertinoIcons.plus,
+                          size: 13, color: AppTheme.zohoBlue),
                       label: const Text(
                         'Add New',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppTheme.zohoBlue),
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.zohoBlue),
                       ),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
@@ -806,7 +897,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final referenceCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Reference (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Reference (Optional)',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
                     initialValue: _reference,
@@ -823,7 +916,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final quoteNumCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Quotation Number *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Quotation Number *',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
                     initialValue: _number.isNotEmpty ? _number : 'QT-2024-001',
@@ -831,7 +926,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       hintText: 'QT-2024-001',
                     ),
                     onChanged: (v) => _markDirty(() => _number = v),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                 ],
               );
@@ -839,18 +935,26 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final validityTermsCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Validity Terms', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Validity Terms',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: _validityTerms,
                     isExpanded: true,
                     decoration: const InputDecoration(),
                     items: const [
-                      DropdownMenuItem(value: '30 Days', child: Text('30 Days')),
-                      DropdownMenuItem(value: '15 Days', child: Text('15 Days')),
-                      DropdownMenuItem(value: '45 Days', child: Text('45 Days')),
-                      DropdownMenuItem(value: '60 Days', child: Text('60 Days')),
-                      DropdownMenuItem(value: 'Due on Receipt', child: Text('Due on Receipt')),
+                      DropdownMenuItem(
+                          value: '30 Days', child: Text('30 Days')),
+                      DropdownMenuItem(
+                          value: '15 Days', child: Text('15 Days')),
+                      DropdownMenuItem(
+                          value: '45 Days', child: Text('45 Days')),
+                      DropdownMenuItem(
+                          value: '60 Days', child: Text('60 Days')),
+                      DropdownMenuItem(
+                          value: 'Due on Receipt',
+                          child: Text('Due on Receipt')),
                       DropdownMenuItem(value: 'Custom', child: Text('Custom')),
                     ],
                     onChanged: (v) {
@@ -880,18 +984,35 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final currencyCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Currency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Currency',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: _currency,
                     isExpanded: true,
                     decoration: const InputDecoration(),
                     items: const [
-                      DropdownMenuItem(value: 'AED - UAE Dirham (د.إ)', child: Text('AED - UAE Dirham (د.إ)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'USD - US Dollar (\$)', child: Text('USD - US Dollar (\$)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'THB - Thai Baht (฿)', child: Text('THB - Thai Baht (฿)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'EUR - Euro (€)', child: Text('EUR - Euro (€)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'GBP - British Pound (£)', child: Text('GBP - British Pound (£)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'AED - UAE Dirham (د.إ)',
+                          child: Text('AED - UAE Dirham (د.إ)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'USD - US Dollar (\$)',
+                          child: Text('USD - US Dollar (\$)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'THB - Thai Baht (฿)',
+                          child: Text('THB - Thai Baht (฿)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'EUR - Euro (€)',
+                          child: Text('EUR - Euro (€)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'GBP - British Pound (£)',
+                          child: Text('GBP - British Pound (£)',
+                              overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged: (v) {
                       if (v != null) _markDirty(() => _currency = v);
@@ -911,7 +1032,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
                     isRequired: true,
                     validator: (v) => v == null || v.isEmpty
                         ? 'Required'
-                        : validateDate(v) ?? (v.compareTo(_date) < 0 ? 'Must be on or after quote date' : null),
+                        : validateDate(v) ??
+                            (v.compareTo(_date) < 0
+                                ? 'Must be on or after quote date'
+                                : null),
                   ),
                 ],
               );
@@ -919,7 +1043,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
               final notesCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Notes (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Notes (Optional)',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
                     initialValue: _notes,
@@ -1020,7 +1146,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                 '${_rows.length} item${_rows.length > 1 ? 's' : ''}',
                 style: TextStyle(
                   fontSize: 12.5,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
                 ),
               ),
             ],
@@ -1040,10 +1168,15 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+                          color: isDark
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.cardRadiusVal),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
                             width: 0.8,
                           ),
                         ),
@@ -1056,13 +1189,17 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                   width: 22,
                                   height: 22,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.zohoBlue.withValues(alpha: 0.15),
+                                    color: AppTheme.zohoBlue
+                                        .withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Center(
                                     child: Text(
                                       '${n + 1}',
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.zohoBlue),
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.zohoBlue),
                                     ),
                                   ),
                                 ),
@@ -1074,14 +1211,17 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                       labelText: 'Service / Scope of Work',
                                       hintText: 'e.g. Website Redesign',
                                     ),
-                                    onChanged: (v) => _markDirty(() => _rows[n]['description'] = v),
+                                    onChanged: (v) => _markDirty(
+                                        () => _rows[n]['description'] = v),
                                   ),
                                 ),
                                 if (_rows.length > 1) ...[
                                   const SizedBox(width: 6),
                                   IconButton(
-                                    icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 18),
-                                    onPressed: () => _markDirty(() => _rows.removeAt(n)),
+                                    icon: const Icon(CupertinoIcons.trash,
+                                        color: AppTheme.zohoRed, size: 18),
+                                    onPressed: () =>
+                                        _markDirty(() => _rows.removeAt(n)),
                                   ),
                                 ],
                               ],
@@ -1093,9 +1233,13 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                   flex: 2,
                                   child: TextFormField(
                                     initialValue: _rows[n]['quantity'],
-                                    decoration: const InputDecoration(labelText: 'Qty'),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    onChanged: (v) => _markDirty(() => _rows[n]['quantity'] = v),
+                                    decoration:
+                                        const InputDecoration(labelText: 'Qty'),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    onChanged: (v) => _markDirty(
+                                        () => _rows[n]['quantity'] = v),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -1103,9 +1247,13 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                   flex: 3,
                                   child: TextFormField(
                                     initialValue: _rows[n]['rate'],
-                                    decoration: const InputDecoration(labelText: 'Unit Price'),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    onChanged: (v) => _markDirty(() => _rows[n]['rate'] = v),
+                                    decoration: const InputDecoration(
+                                        labelText: 'Unit Price'),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    onChanged: (v) =>
+                                        _markDirty(() => _rows[n]['rate'] = v),
                                   ),
                                 ),
                               ],
@@ -1114,10 +1262,17 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Amount (AED):', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                                const Text('Amount (AED):',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12.5)),
                                 Text(
-                                  _computeRowAmount(_rows[n]).toStringAsFixed(2),
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.zohoBlue),
+                                  _computeRowAmount(_rows[n])
+                                      .toStringAsFixed(2),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: AppTheme.zohoBlue),
                                 ),
                               ],
                             ),
@@ -1147,7 +1302,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                   // Header Row
                   TableRow(
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     children: [
@@ -1173,7 +1330,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
                             ),
                           ),
                         ),
@@ -1184,64 +1343,92 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             maxLines: 2,
                             decoration: const InputDecoration(
                               hintText: 'Service scope\nDetailed description',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
-                            onChanged: (v) => _markDirty(() => _rows[n]['description'] = v),
+                            onChanged: (v) =>
+                                _markDirty(() => _rows[n]['description'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: _rows[n]['quantity'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.center,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => _markDirty(() => _rows[n]['quantity'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                _markDirty(() => _rows[n]['quantity'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: _rows[n]['rate'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.right,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => _markDirty(() => _rows[n]['rate'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                _markDirty(() => _rows[n]['rate'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: _rows[n]['discount'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.right,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => _markDirty(() => _rows[n]['discount'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                _markDirty(() => _rows[n]['discount'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: DropdownButtonFormField<String>(
                             initialValue: _rows[n]['vat'] ?? '5',
                             isExpanded: true,
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 8),
                             ),
                             items: const [
-                              DropdownMenuItem(value: '5', child: Text('5%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: '0', child: Text('0%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: '7', child: Text('7%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'exempt', child: Text('Exempt', style: TextStyle(fontSize: 11))),
+                              DropdownMenuItem(
+                                  value: '5',
+                                  child: Text('5%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: '0',
+                                  child: Text('0%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: '7',
+                                  child: Text('7%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: 'exempt',
+                                  child: Text('Exempt',
+                                      style: TextStyle(fontSize: 11))),
                             ],
                             onChanged: (v) => _markDirty(() {
                               _rows[n]['vat'] = v ?? '5';
@@ -1254,21 +1441,27 @@ class _QuotationEditorState extends State<QuotationEditor> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 8),
                           child: Text(
                             _computeRowAmount(_rows[n]).toStringAsFixed(2),
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 16),
+                          icon: const Icon(CupertinoIcons.trash,
+                              color: AppTheme.zohoRed, size: 16),
                           tooltip: 'Delete item',
-                          onPressed: _rows.length > 1 ? () => _markDirty(() => _rows.removeAt(n)) : null,
+                          onPressed: _rows.length > 1
+                              ? () => _markDirty(() => _rows.removeAt(n))
+                              : null,
                         ),
                       ],
                     ),
@@ -1285,7 +1478,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
             label: const Text('+ Add Item'),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.zohoBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppTheme.buttonRadiusVal)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
@@ -1311,7 +1506,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
   // -------------------------------------------------------------
   // 4. Terms & Conditions and Totals Summary Card
   // -------------------------------------------------------------
-  Widget _buildTermsAndTotalsCard(BuildContext context, bool isDark, QuotationTotals? totals) {
+  Widget _buildTermsAndTotalsCard(
+      BuildContext context, bool isDark, QuotationTotals? totals) {
     final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
     final discountVal = totals != null ? (totals.discount / 100.0) : 0.0;
     final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
@@ -1345,7 +1541,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                 style: TextStyle(
                   fontSize: 12.5,
                   height: 1.4,
-                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                  color: isDark
+                      ? const Color(0xFFCBD5E1)
+                      : const Color(0xFF334155),
                 ),
                 onChanged: (v) => _markDirty(() => _terms = v),
               ),
@@ -1356,13 +1554,21 @@ class _QuotationEditorState extends State<QuotationEditor> {
             children: [
               TextFormField(
                 initialValue: _discount,
-                decoration: const InputDecoration(labelText: 'Document Discount (AED)', prefixIcon: Icon(CupertinoIcons.minus_circle)),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                    labelText: 'Document Discount (AED)',
+                    prefixIcon: Icon(CupertinoIcons.minus_circle)),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (value) => _markDirty(() => _discount = value),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                initialValue: const ['0', '5', '7', '15'].contains((double.tryParse(_taxRate) ?? 5).toStringAsFixed(0))
+                initialValue: const [
+                  '0',
+                  '5',
+                  '7',
+                  '15'
+                ].contains((double.tryParse(_taxRate) ?? 5).toStringAsFixed(0))
                     ? (double.tryParse(_taxRate) ?? 5).toStringAsFixed(0)
                     : '5',
                 decoration: const InputDecoration(labelText: 'VAT Rate'),
@@ -1375,18 +1581,24 @@ class _QuotationEditorState extends State<QuotationEditor> {
                 onChanged: (value) => _markDirty(() => _taxRate = value ?? '5'),
               ),
               const SizedBox(height: 16),
-              _buildSummaryRow('Subtotal', subtotalVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'Subtotal', subtotalVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('Discount (AED)', discountVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'Discount (AED)', discountVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('VAT $_taxRate%', vatVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'VAT $_taxRate%', vatVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 14),
 
               // Highlighted Total Row
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.zohoBlueBgDark : const Color(0xFFEBF3FC),
+                  color: isDark
+                      ? AppTheme.zohoBlueBgDark
+                      : const Color(0xFFEBF3FC),
                   borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
                   border: Border.all(
                     color: isDark ? AppTheme.zohoBlue : const Color(0xFFBFDBFE),
@@ -1409,7 +1621,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        color: isDark ? const Color(0xFF60A5FA) : AppTheme.zohoBlue,
+                        color: isDark
+                            ? const Color(0xFF60A5FA)
+                            : AppTheme.zohoBlue,
                         letterSpacing: -0.3,
                       ),
                     ),
@@ -1448,13 +1662,18 @@ class _QuotationEditorState extends State<QuotationEditor> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 13,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
           ),
         ),
+        const SizedBox(width: 12),
         Text(
           amount,
           style: TextStyle(
@@ -1471,61 +1690,83 @@ class _QuotationEditorState extends State<QuotationEditor> {
   // 5. Bottom Form Actions Bar
   // -------------------------------------------------------------
   Widget _buildBottomActionsBar(BuildContext context, bool isDark) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Save as Draft
-        OutlinedButton(
-          onPressed: _saveDraft,
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-          ),
-          child: const Text('Save as Draft'),
-        ),
-
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Preview Button
-            OutlinedButton.icon(
-              onPressed: _previewPdfDialog,
-              icon: const Icon(CupertinoIcons.eye, size: 15),
-              label: const Text('Preview'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            // Save & Send Button
-            FilledButton.icon(
-              onPressed: _issueQuotation,
-              icon: const Icon(CupertinoIcons.paperplane_fill, size: 15),
-              label: const Text('Save & Send'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.zohoBlue,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-              ),
-            ),
-          ],
-        ),
-      ],
+    final draft = OutlinedButton(
+      onPressed: _saveDraft,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+      child: const Text('Save as Draft'),
     );
+    final preview = OutlinedButton.icon(
+      onPressed: _previewPdfDialog,
+      icon: const Icon(CupertinoIcons.eye, size: 15),
+      label: const Text('Preview'),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+    );
+    final send = FilledButton.icon(
+      onPressed: _issueQuotation,
+      icon: const Icon(CupertinoIcons.paperplane_fill, size: 15),
+      label: const Text('Save & Send'),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppTheme.zohoBlue,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+    );
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 520) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            draft,
+            const SizedBox(height: 10),
+            preview,
+            const SizedBox(height: 10),
+            send
+          ],
+        );
+      }
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Save as Draft
+          draft,
+
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Preview Button
+              preview,
+              const SizedBox(width: 10),
+
+              // Save & Send Button
+              send,
+            ],
+          ),
+        ],
+      );
+    });
   }
 
   // -------------------------------------------------------------
   // 6. Right Column: Real-Time Live Quotation Preview Card
   // -------------------------------------------------------------
-  Widget _buildLivePreviewCard(BuildContext context, bool isDark, QuotationTotals? totals) {
+  Widget _buildLivePreviewCard(
+      BuildContext context, bool isDark, QuotationTotals? totals) {
     final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
     final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
     final totalVal = totals != null ? (totals.total / 100.0) : 0.0;
 
     final company = _company;
-    final customer = _customer ?? const Customer(id: '', name: 'Creative Solutions LLC');
+    final customer =
+        _customer ?? const Customer(id: '', name: 'Creative Solutions LLC');
 
     return Container(
       decoration: AppTheme.zohoCardDecoration(isDark),
@@ -1554,8 +1795,11 @@ class _QuotationEditorState extends State<QuotationEditor> {
                   icon: const Icon(CupertinoIcons.arrow_down_to_line, size: 14),
                   label: const Text('Download PDF'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.buttonRadiusVal)),
                   ),
                 ),
               ],
@@ -1601,7 +1845,8 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Center(
-                                child: Icon(CupertinoIcons.building_2_fill, color: AppTheme.zohoBlue, size: 24),
+                                child: Icon(CupertinoIcons.building_2_fill,
+                                    color: AppTheme.zohoBlue, size: 24),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -1610,18 +1855,42 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    company.name.isNotEmpty ? company.name : 'ABC Service LLC',
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    company.name.isNotEmpty
+                                        ? company.name
+                                        : 'ABC Service LLC',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A)),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    company.address.isNotEmpty ? company.address : 'Dubai, United Arab Emirates',
-                                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                    company.address.isNotEmpty
+                                        ? company.address
+                                        : 'Dubai, United Arab Emirates',
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        color: Color(0xFF64748B)),
                                   ),
                                   if (company.trn.isNotEmpty)
-                                    Text('TRN: ${company.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                                  Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                                  Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                    Text('TRN: ${company.trn}',
+                                        style: const TextStyle(
+                                            fontSize: 10.5,
+                                            color: Color(0xFF64748B))),
+                                  Text(
+                                      company.email.isNotEmpty
+                                          ? company.email
+                                          : 'info@abcservice.ae',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          color: Color(0xFF64748B))),
+                                  Text(
+                                      company.phone.isNotEmpty
+                                          ? company.phone
+                                          : '+971 50 123 4567',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          color: Color(0xFF64748B))),
                                 ],
                               ),
                             ),
@@ -1645,10 +1914,17 @@ class _QuotationEditorState extends State<QuotationEditor> {
                           const SizedBox(height: 4),
                           Text(
                             'Quote No: ${_number.isNotEmpty ? _number : "QT-2024-001"}',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155)),
                           ),
-                          Text('Date: $_date', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                          Text('Valid Until: $_validUntil', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                          Text('Date: $_date',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF64748B))),
+                          Text('Valid Until: $_validUntil',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF64748B))),
                         ],
                       ),
                     ],
@@ -1661,23 +1937,38 @@ class _QuotationEditorState extends State<QuotationEditor> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFF1F5F9), width: 0.8),
+                      border: Border.all(
+                          color: const Color(0xFFF1F5F9), width: 0.8),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Quotation For:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
+                        const Text('Quotation For:',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF64748B))),
                         const SizedBox(height: 2),
                         Text(
-                          customer.name.isNotEmpty ? customer.name : 'Creative Solutions LLC',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                          customer.name.isNotEmpty
+                              ? customer.name
+                              : 'Creative Solutions LLC',
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A)),
                         ),
                         Text(
-                          customer.address.isNotEmpty ? customer.address : 'Office 101, Business Bay, Dubai, UAE',
-                          style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569)),
+                          customer.address.isNotEmpty
+                              ? customer.address
+                              : 'Office 101, Business Bay, Dubai, UAE',
+                          style: const TextStyle(
+                              fontSize: 10.5, color: Color(0xFF475569)),
                         ),
                         if (customer.trn.isNotEmpty)
-                          Text('TRN: ${customer.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569))),
+                          Text('TRN: ${customer.trn}',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF475569))),
                       ],
                     ),
                   ),
@@ -1698,14 +1989,18 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       TableRow(
                         decoration: const BoxDecoration(
                           color: Color(0xFFF8FAFC),
-                          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 0.8)),
+                          border: Border(
+                              bottom: BorderSide(
+                                  color: Color(0xFFE2E8F0), width: 0.8)),
                         ),
                         children: [
                           _buildPreviewHeader('#'),
                           _buildPreviewHeader('Description'),
                           _buildPreviewHeader('Qty', align: TextAlign.center),
-                          _buildPreviewHeader('Unit Price\n(AED)', align: TextAlign.right),
-                          _buildPreviewHeader('Amount\n(AED)', align: TextAlign.right),
+                          _buildPreviewHeader('Unit Price\n(AED)',
+                              align: TextAlign.right),
+                          _buildPreviewHeader('Amount\n(AED)',
+                              align: TextAlign.right),
                         ],
                       ),
 
@@ -1713,18 +2008,29 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       for (int n = 0; n < _rows.length; n++)
                         TableRow(
                           decoration: const BoxDecoration(
-                            border: Border(bottom: BorderSide(color: Color(0xFFF8FAFC), width: 0.8)),
+                            border: Border(
+                                bottom: BorderSide(
+                                    color: Color(0xFFF8FAFC), width: 0.8)),
                           ),
                           children: [
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Text('${n + 1}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                              child: Text('${n + 1}',
+                                  style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: Color(0xFF64748B))),
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 2),
                               child: Text(
-                                _rows[n]['description']?.isNotEmpty == true ? _rows[n]['description']! : 'Service item',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                _rows[n]['description']?.isNotEmpty == true
+                                    ? _rows[n]['description']!
+                                    : 'Service item',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A)),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1734,15 +2040,19 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               child: Text(
                                 _rows[n]['quantity'] ?? '1',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF334155)),
                               ),
                             ),
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               child: Text(
-                                (double.tryParse(_rows[n]['rate'] ?? '0') ?? 0.0).toStringAsFixed(2),
+                                (double.tryParse(_rows[n]['rate'] ?? '0') ??
+                                        0.0)
+                                    .toStringAsFixed(2),
                                 textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF334155)),
                               ),
                             ),
                             Padding(
@@ -1750,7 +2060,10 @@ class _QuotationEditorState extends State<QuotationEditor> {
                               child: Text(
                                 _computeRowAmount(_rows[n]).toStringAsFixed(2),
                                 textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A)),
                               ),
                             ),
                           ],
@@ -1766,12 +2079,15 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       constraints: const BoxConstraints(maxWidth: 240),
                       child: Column(
                         children: [
-                          _buildPreviewSummaryRow('Subtotal', 'AED ${subtotalVal.toStringAsFixed(2)}'),
+                          _buildPreviewSummaryRow('Subtotal',
+                              'AED ${subtotalVal.toStringAsFixed(2)}'),
                           const SizedBox(height: 4),
-                          _buildPreviewSummaryRow('VAT 5%', 'AED ${vatVal.toStringAsFixed(2)}'),
+                          _buildPreviewSummaryRow('VAT $_taxRate%',
+                              'AED ${vatVal.toStringAsFixed(2)}'),
                           const SizedBox(height: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEBF3FC),
                               borderRadius: BorderRadius.circular(4),
@@ -1779,12 +2095,19 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Total', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                const Text('Total',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A))),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
                                     'AED ${totalVal.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: AppTheme.zohoBlue),
+                                    style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppTheme.zohoBlue),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -1798,11 +2121,16 @@ class _QuotationEditorState extends State<QuotationEditor> {
                   const SizedBox(height: 16),
 
                   // Terms in Preview
-                  const Text('Terms & Conditions:', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF475569))),
+                  const Text('Terms & Conditions:',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569))),
                   const SizedBox(height: 2),
                   Text(
                     _terms,
-                    style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
+                    style: const TextStyle(
+                        fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
                   ),
                   const SizedBox(height: 18),
 
@@ -1819,7 +2147,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             color: Color(0xFF0F172A),
                           ),
                         ),
-                        Text('For your business', style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B))),
+                        Text('For your business',
+                            style: TextStyle(
+                                fontSize: 9.5, color: Color(0xFF64748B))),
                       ],
                     ),
                   ),
@@ -1842,25 +2172,40 @@ class _QuotationEditorState extends State<QuotationEditor> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(CupertinoIcons.phone, size: 10, color: Color(0xFF64748B)),
+                          const Icon(CupertinoIcons.phone,
+                              size: 10, color: Color(0xFF64748B)),
                           const SizedBox(width: 4),
-                          Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text(
+                              company.phone.isNotEmpty
+                                  ? company.phone
+                                  : '+971 50 123 4567',
+                              style: const TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(CupertinoIcons.mail, size: 10, color: Color(0xFF64748B)),
+                          const Icon(CupertinoIcons.mail,
+                              size: 10, color: Color(0xFF64748B)),
                           const SizedBox(width: 4),
-                          Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text(
+                              company.email.isNotEmpty
+                                  ? company.email
+                                  : 'info@abcservice.ae',
+                              style: const TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(CupertinoIcons.globe, size: 10, color: Color(0xFF64748B)),
+                          Icon(CupertinoIcons.globe,
+                              size: 10, color: Color(0xFF64748B)),
                           SizedBox(width: 4),
-                          Text('www.thepercentage.ae', style: TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text('www.thepercentage.ae',
+                              style: TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                     ],
@@ -1893,8 +2238,13 @@ class _QuotationEditorState extends State<QuotationEditor> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-        Text(amount, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+        Text(title,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+        Text(amount,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F172A))),
       ],
     );
   }

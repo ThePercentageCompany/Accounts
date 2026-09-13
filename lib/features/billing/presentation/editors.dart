@@ -15,12 +15,16 @@ import 'billing_cubit.dart';
 import 'screens.dart';
 
 String? validateDate(String? value) {
-  if (value == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return 'Use YYYY-MM-DD';
+  if (value == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value))
+    return 'Use YYYY-MM-DD';
   final date = DateTime.tryParse(value);
-  return date == null || date.toIso8601String().substring(0, 10) != value ? 'Enter a valid date' : null;
+  return date == null || date.toIso8601String().substring(0, 10) != value
+      ? 'Enter a valid date'
+      : null;
 }
 
-String? requiredText(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
+String? requiredText(String? value) =>
+    value == null || value.trim().isEmpty ? 'Required' : null;
 
 Widget field(
   String label,
@@ -66,11 +70,21 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                field('Customer / Company Name', data['name'], (v) => data['name'] = v, required: true, max: 200, prefixIcon: CupertinoIcons.building_2_fill),
-                field('Email Address', data['email'], (v) => data['email'] = v, max: 200, prefixIcon: CupertinoIcons.mail),
-                field('Phone Number', data['phone'], (v) => data['phone'] = v, max: 80, prefixIcon: CupertinoIcons.phone),
-                field('Billing Address', data['address'], (v) => data['address'] = v, lines: 2, prefixIcon: CupertinoIcons.location_solid),
-                field('TRN / Tax Registration (optional)', data['trn'], (v) => data['trn'] = v, max: 80, prefixIcon: CupertinoIcons.tag),
+                field('Customer / Company Name', data['name'],
+                    (v) => data['name'] = v,
+                    required: true,
+                    max: 200,
+                    prefixIcon: CupertinoIcons.building_2_fill),
+                field('Email Address', data['email'], (v) => data['email'] = v,
+                    max: 200, prefixIcon: CupertinoIcons.mail),
+                field('Phone Number', data['phone'], (v) => data['phone'] = v,
+                    max: 80, prefixIcon: CupertinoIcons.phone),
+                field('Billing Address', data['address'],
+                    (v) => data['address'] = v,
+                    lines: 2, prefixIcon: CupertinoIcons.location_solid),
+                field('TRN / Tax Registration (optional)', data['trn'],
+                    (v) => data['trn'] = v,
+                    max: 80, prefixIcon: CupertinoIcons.tag),
               ],
             ),
           ),
@@ -80,11 +94,14 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
         if (old != null)
           TextButton.icon(
             onPressed: () async {
-              final invoiceCount = cubit.state.data.invoices.where((i) => i.customer.id == old.id).length;
+              final invoiceCount = cubit.state.data.invoices
+                  .where((i) => i.customer.id == old.id)
+                  .length;
               final confirm = await showDialog<bool>(
                 context: ctx,
                 builder: (deleteCtx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   title: const Text('Delete Customer?'),
                   content: Text(
                     invoiceCount > 0
@@ -92,10 +109,13 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
                         : 'Are you sure you want to permanently delete customer "${old.name}"?',
                   ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(deleteCtx, false), child: const Text('Cancel')),
+                    TextButton(
+                        onPressed: () => Navigator.pop(deleteCtx, false),
+                        child: const Text('Cancel')),
                     FilledButton(
                       onPressed: () => Navigator.pop(deleteCtx, true),
-                      style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.pastelRose),
                       child: const Text('Delete Customer'),
                     ),
                   ],
@@ -111,17 +131,23 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
                 }
               }
             },
-            icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
-            label: const Text('Delete', style: TextStyle(color: AppTheme.pastelRose)),
+            icon: const Icon(CupertinoIcons.trash,
+                size: 15, color: AppTheme.pastelRose),
+            label: const Text('Delete',
+                style: TextStyle(color: AppTheme.pastelRose)),
           ),
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
             if (form.currentState!.validate()) {
               Navigator.pop(ctx, Customer.fromJson(data));
             }
           },
-          style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100))),
+          style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.pastelBlue,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100))),
           child: const Text('Save Customer'),
         ),
       ],
@@ -131,7 +157,8 @@ Future<void> editCustomer(BuildContext context, [Customer? old]) async {
   if (result != null) {
     final ok = await cubit.saveCustomer(result);
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cubit.state.error ?? 'Save failed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(cubit.state.error ?? 'Save failed')));
     }
   }
 }
@@ -166,13 +193,22 @@ class _CompanyEditorState extends State<CompanyEditor> {
       if (bytes == null || bytes.length > 1024 * 1024) {
         throw const FormatException('Choose a PNG or JPG logo under 1 MB.');
       }
-      final png = bytes.length > 8 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71;
+      final png = bytes.length > 8 &&
+          bytes[0] == 137 &&
+          bytes[1] == 80 &&
+          bytes[2] == 78 &&
+          bytes[3] == 71;
       final jpg = bytes.length > 3 && bytes[0] == 255 && bytes[1] == 216;
-      if (!png && !jpg) throw const FormatException('Use a valid PNG or JPEG image.');
+      if (!png && !jpg)
+        throw const FormatException('Use a valid PNG or JPEG image.');
       final mimeType = png ? 'image/png' : 'image/jpeg';
-      if (mounted) setState(() => data['logo'] = 'data:$mimeType;base64,${base64Encode(bytes)}');
+      if (mounted)
+        setState(() =>
+            data['logo'] = 'data:$mimeType;base64,${base64Encode(bytes)}');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -198,12 +234,17 @@ class _CompanyEditorState extends State<CompanyEditor> {
                     children: [
                       const Text(
                         'Company Settings',
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6),
                       ),
                       Text(
                         'Configure your branding, company profile, and bank details for invoices.',
                         style: TextStyle(
-                          color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                          color: isDark
+                              ? AppTheme.iosDarkTextSecondary
+                              : AppTheme.iosLightTextSecondary,
                           fontSize: 14,
                           letterSpacing: -0.1,
                         ),
@@ -216,33 +257,46 @@ class _CompanyEditorState extends State<CompanyEditor> {
                   Card(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
+                      side: BorderSide(
+                          color: isDark
+                              ? const Color(0x20FFFFFF)
+                              : const Color(0x10000000),
+                          width: 0.8),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Company Branding & Logo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: -0.2)),
+                          const Text('Company Branding & Logo',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  letterSpacing: -0.2)),
                           const SizedBox(height: 14),
                           LayoutBuilder(
                             builder: (context, constraints) {
                               final isSmall = constraints.maxWidth < 460;
-                              final logoBytes = companyLogoBytes(data['logo']?.toString() ?? '');
+                              final logoBytes = companyLogoBytes(
+                                  data['logo']?.toString() ?? '');
                               final logoBox = Container(
                                 width: isSmall ? 110 : 130,
                                 height: isSmall ? 60 : 70,
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+                                  color: isDark
+                                      ? const Color(0xFF2C2C2E)
+                                      : const Color(0xFFE5E5EA),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: logoBytes != null
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.memory(logoBytes, fit: BoxFit.contain),
+                                        child: Image.memory(logoBytes,
+                                            fit: BoxFit.contain),
                                       )
                                     : const Center(
-                                        child: Icon(CupertinoIcons.photo, color: Colors.grey, size: 28),
+                                        child: Icon(CupertinoIcons.photo,
+                                            color: Colors.grey, size: 28),
                                       ),
                               );
 
@@ -255,22 +309,35 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                     children: [
                                       FilledButton.tonalIcon(
                                         onPressed: state.busy ? null : pickLogo,
-                                        icon: const Icon(CupertinoIcons.cloud_upload, size: 16),
-                                        label: Text(logoBytes == null ? 'Upload Logo' : 'Replace Logo'),
+                                        icon: const Icon(
+                                            CupertinoIcons.cloud_upload,
+                                            size: 16),
+                                        label: Text(logoBytes == null
+                                            ? 'Upload Logo'
+                                            : 'Replace Logo'),
                                         style: FilledButton.styleFrom(
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(100)),
                                         ),
                                       ),
                                       if (logoBytes != null)
                                         TextButton.icon(
                                           onPressed: () {
                                             setState(() => data['logo'] = '');
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Logo removed. Save Company Settings to sync the change.')),
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                  content: Text(
+                                                      'Logo removed. Save Company Settings to sync the change.')),
                                             );
                                           },
-                                          icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
-                                          label: const Text('Remove', style: TextStyle(color: AppTheme.pastelRose)),
+                                          icon: const Icon(CupertinoIcons.trash,
+                                              size: 15,
+                                              color: AppTheme.pastelRose),
+                                          label: const Text('Remove',
+                                              style: TextStyle(
+                                                  color: AppTheme.pastelRose)),
                                         ),
                                     ],
                                   ),
@@ -279,7 +346,9 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                     'PNG or JPG, up to 1 MB. Saved to Google Drive and linked in Settings when you save.',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
+                                      color: isDark
+                                          ? AppTheme.iosDarkTextSecondary
+                                          : AppTheme.iosLightTextSecondary,
                                     ),
                                   ),
                                 ],
@@ -315,21 +384,48 @@ class _CompanyEditorState extends State<CompanyEditor> {
                   Card(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
+                      side: BorderSide(
+                          color: isDark
+                              ? const Color(0x20FFFFFF)
+                              : const Color(0x10000000),
+                          width: 0.8),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Business Profile', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: -0.2)),
+                          const Text('Business Profile',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  letterSpacing: -0.2)),
                           const SizedBox(height: 16),
-                          field('Company Name', data['name'], (v) => data['name'] = v, required: true, prefixIcon: CupertinoIcons.building_2_fill),
-                          field('Invoice Prefix (e.g. TPC, INV)', data['prefix'], (v) => data['prefix'] = v, required: true, validator: (v) => RegExp(r'^[A-Z0-9]{1,12}$').hasMatch(v ?? '') ? null : 'Use 1-12 uppercase letters or digits', prefixIcon: CupertinoIcons.tag),
-                          field('TRN / Tax Registration Number', data['trn'], (v) => data['trn'] = v, prefixIcon: CupertinoIcons.doc_text),
-                          field('Email Address', data['email'], (v) => data['email'] = v, prefixIcon: CupertinoIcons.mail),
-                          field('Phone Number', data['phone'], (v) => data['phone'] = v, prefixIcon: CupertinoIcons.phone),
-                          field('Company Address', data['address'], (v) => data['address'] = v, lines: 2, prefixIcon: CupertinoIcons.location_solid),
+                          field('Company Name', data['name'],
+                              (v) => data['name'] = v,
+                              required: true,
+                              prefixIcon: CupertinoIcons.building_2_fill),
+                          field('Invoice Prefix (e.g. TPC, INV)',
+                              data['prefix'], (v) => data['prefix'] = v,
+                              required: true,
+                              validator: (v) =>
+                                  RegExp(r'^[A-Z0-9]{1,12}$').hasMatch(v ?? '')
+                                      ? null
+                                      : 'Use 1-12 uppercase letters or digits',
+                              prefixIcon: CupertinoIcons.tag),
+                          field('TRN / Tax Registration Number', data['trn'],
+                              (v) => data['trn'] = v,
+                              prefixIcon: CupertinoIcons.doc_text),
+                          field('Email Address', data['email'],
+                              (v) => data['email'] = v,
+                              prefixIcon: CupertinoIcons.mail),
+                          field('Phone Number', data['phone'],
+                              (v) => data['phone'] = v,
+                              prefixIcon: CupertinoIcons.phone),
+                          field('Company Address', data['address'],
+                              (v) => data['address'] = v,
+                              lines: 2,
+                              prefixIcon: CupertinoIcons.location_solid),
                         ],
                       ),
                     ),
@@ -340,21 +436,42 @@ class _CompanyEditorState extends State<CompanyEditor> {
                   Card(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: isDark ? const Color(0x20FFFFFF) : const Color(0x10000000), width: 0.8),
+                      side: BorderSide(
+                          color: isDark
+                              ? const Color(0x20FFFFFF)
+                              : const Color(0x10000000),
+                          width: 0.8),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Bank & Payment Information', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: -0.2)),
+                          const Text('Bank & Payment Information',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  letterSpacing: -0.2)),
                           const SizedBox(height: 16),
-                          field('Account Holder Name', data['accountHolder'], (v) => data['accountHolder'] = v, prefixIcon: CupertinoIcons.person),
-                          field('Bank Name', data['bank'], (v) => data['bank'] = v, prefixIcon: CupertinoIcons.building_2_fill),
-                          field('Account Number', data['accountNumber'], (v) => data['accountNumber'] = v, prefixIcon: CupertinoIcons.number),
-                          field('IBAN', data['iban'], (v) => data['iban'] = v, prefixIcon: CupertinoIcons.creditcard),
-                          field('Default Payment Terms', data['terms'], (v) => data['terms'] = v, lines: 2, prefixIcon: CupertinoIcons.doc_plaintext),
-                          field('Default Notes', data['notes'], (v) => data['notes'] = v, lines: 2, prefixIcon: CupertinoIcons.text_badge_checkmark),
+                          field('Account Holder Name', data['accountHolder'],
+                              (v) => data['accountHolder'] = v,
+                              prefixIcon: CupertinoIcons.person),
+                          field('Bank Name', data['bank'],
+                              (v) => data['bank'] = v,
+                              prefixIcon: CupertinoIcons.building_2_fill),
+                          field('Account Number', data['accountNumber'],
+                              (v) => data['accountNumber'] = v,
+                              prefixIcon: CupertinoIcons.number),
+                          field('IBAN', data['iban'], (v) => data['iban'] = v,
+                              prefixIcon: CupertinoIcons.creditcard),
+                          field('Default Payment Terms', data['terms'],
+                              (v) => data['terms'] = v,
+                              lines: 2,
+                              prefixIcon: CupertinoIcons.doc_plaintext),
+                          field('Default Notes', data['notes'],
+                              (v) => data['notes'] = v,
+                              lines: 2,
+                              prefixIcon: CupertinoIcons.text_badge_checkmark),
                         ],
                       ),
                     ),
@@ -367,20 +484,27 @@ class _CompanyEditorState extends State<CompanyEditor> {
                         : () async {
                             if (!form.currentState!.validate()) return;
                             final cubit = context.read<BillingCubit>();
-                            final ok = await cubit.run(() => cubit.repository.saveCompany(Company.fromJson(data)));
+                            final ok = await cubit.run(() => cubit.repository
+                                .saveCompany(Company.fromJson(data)));
                             if (ok) {
                               data = cubit.state.data.company.toJson();
                               if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Company settings saved.')));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('Company settings saved.')));
                               }
                             }
                           },
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.pastelBlue,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100)),
                     ),
-                    child: const Text('Save Company Settings', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    child: const Text('Save Company Settings',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
                   const SizedBox(height: 24),
 
@@ -389,16 +513,21 @@ class _CompanyEditorState extends State<CompanyEditor> {
                     builder: (context) {
                       GoogleSession? session;
                       try {
-                        session = Provider.of<GoogleSession>(context, listen: false);
+                        session =
+                            Provider.of<GoogleSession>(context, listen: false);
                       } catch (_) {}
 
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                          color: isDark
+                              ? const Color(0xFF1E293B).withValues(alpha: 0.5)
+                              : const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
                             width: 0.8,
                           ),
                         ),
@@ -408,10 +537,14 @@ class _CompanyEditorState extends State<CompanyEditor> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                color: const Color(0xFFEF4444)
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 20),
+                              child: const Icon(
+                                  CupertinoIcons.square_arrow_right,
+                                  color: Color(0xFFEF4444),
+                                  size: 20),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -420,14 +553,19 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                 children: [
                                   const Text(
                                     'Current Session',
-                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13.5),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    session?.effectiveEmail ?? 'Local Demo Workspace',
+                                    session?.effectiveEmail ??
+                                        'Local Demo Workspace',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
                                     ),
                                   ),
                                 ],
@@ -438,12 +576,18 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                 final confirmed = await showDialog<bool>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(16)),
                                     title: const Row(
                                       children: [
-                                        Icon(CupertinoIcons.square_arrow_right, color: Color(0xFFEF4444), size: 22),
+                                        Icon(CupertinoIcons.square_arrow_right,
+                                            color: Color(0xFFEF4444), size: 22),
                                         SizedBox(width: 10),
-                                        Text('Log Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                        Text('Log Out',
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                     content: const Text(
@@ -452,17 +596,26 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                     ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, false),
-                                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.w600)),
                                       ),
                                       FilledButton(
                                         style: FilledButton.styleFrom(
-                                          backgroundColor: const Color(0xFFEF4444),
+                                          backgroundColor:
+                                              const Color(0xFFEF4444),
                                           foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
                                         ),
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        child: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Log Out',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
@@ -470,15 +623,25 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                 if (confirmed == true && session != null) {
                                   await session.signOut();
                                   if (context.mounted) {
-                                    Navigator.of(context).popUntil((route) => route.isFirst);
+                                    Navigator.of(context)
+                                        .popUntil((route) => route.isFirst);
                                   }
                                 }
                               },
-                              icon: const Icon(CupertinoIcons.square_arrow_right, size: 14, color: Color(0xFFEF4444)),
-                              label: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700, fontSize: 12.5)),
+                              icon: const Icon(
+                                  CupertinoIcons.square_arrow_right,
+                                  size: 14,
+                                  color: Color(0xFFEF4444)),
+                              label: const Text('Log Out',
+                                  style: TextStyle(
+                                      color: Color(0xFFEF4444),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12.5)),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Color(0xFFEF4444), width: 0.8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                side: const BorderSide(
+                                    color: Color(0xFFEF4444), width: 0.8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
                               ),
                             ),
                           ],
@@ -528,7 +691,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         Invoice(
           id: const Uuid().v4(),
           date: today(),
-          customer: data.customers.isNotEmpty ? data.customers.first : const Customer(id: '', name: 'Customer'),
+          customer: data.customers.isNotEmpty
+              ? data.customers.first
+              : const Customer(id: '', name: 'Customer'),
           company: data.company,
           notes: data.company.notes,
           terms: data.company.terms,
@@ -557,7 +722,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     if (rows.isEmpty) {
       rows.add({
         'key': const Uuid().v4(),
-        'description': 'Website Development\nCustom website design and development',
+        'description':
+            'Website Development\nCustom website design and development',
         'quantity': '1',
         'rate': '5000.00',
         'discount': '0.00',
@@ -657,7 +823,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     try {
       Totals.of(current());
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
       return;
     }
 
@@ -670,12 +837,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             'A unique sequential invoice number will be assigned. Items, prices and customer details will then be locked.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep editing')),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(
                 backgroundColor: AppTheme.zohoBlue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.buttonRadiusVal)),
               ),
               child: const Text('Issue & Send'),
             ),
@@ -693,7 +864,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
 
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cubit.state.error ?? 'Save failed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(cubit.state.error ?? 'Save failed')));
       return;
     }
 
@@ -701,24 +873,29 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     if (issue) {
       if (!cubit.repository.isDemo) {
         final archived = await cubit.run(() async {
-          final bytes = await context.read<InvoiceDocumentService>().render(invoice);
+          final bytes =
+              await context.read<InvoiceDocumentService>().render(invoice);
           await cubit.repository.archive(invoice, bytes);
         });
         if (!archived && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invoice issued, but its Drive PDF could not be uploaded.')),
+            const SnackBar(
+                content: Text(
+                    'Invoice issued, but its Drive PDF could not be uploaded.')),
           );
         }
       }
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
-            builder: (_) => BlocProvider.value(value: cubit, child: InvoiceDetail(id: invoice.id)),
+            builder: (_) => BlocProvider.value(
+                value: cubit, child: InvoiceDetail(id: invoice.id)),
           ),
         );
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invoice saved as draft.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invoice saved as draft.')));
     }
   }
 
@@ -743,14 +920,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Discard Unsaved Changes?'),
-                content: const Text('You have unsaved edits in this invoice. Are you sure you want to discard them?'),
+                content: const Text(
+                    'You have unsaved edits in this invoice. Are you sure you want to discard them?'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep editing')),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Keep editing')),
                   FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.zohoRed,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.buttonRadiusVal)),
                     ),
                     child: const Text('Discard'),
                   ),
@@ -765,7 +947,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             }
           },
           child: Scaffold(
-            backgroundColor: isDark ? AppTheme.zohoDarkBg : AppTheme.zohoLightBg,
+            backgroundColor:
+                isDark ? AppTheme.zohoDarkBg : AppTheme.zohoLightBg,
             body: SafeArea(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -776,12 +959,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   // Mobile Tab Switcher (Form vs Live Preview)
                   if (!isDesktop) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 8),
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                          borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFE2E8F0),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.buttonRadiusVal),
                         ),
                         child: Row(
                           children: [
@@ -790,10 +977,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 onTap: () => setState(() => _mobileTab = 0),
                                 borderRadius: BorderRadius.circular(6),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
                                   decoration: BoxDecoration(
                                     color: _mobileTab == 0
-                                        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                        ? (isDark
+                                            ? const Color(0xFF0F172A)
+                                            : Colors.white)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -802,10 +992,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                       'Edit Invoice Form',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        fontWeight: _mobileTab == 0 ? FontWeight.w700 : FontWeight.w500,
+                                        fontWeight: _mobileTab == 0
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
                                         color: _mobileTab == 0
-                                            ? (isDark ? Colors.white : AppTheme.zohoBlue)
-                                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                            ? (isDark
+                                                ? Colors.white
+                                                : AppTheme.zohoBlue)
+                                            : (isDark
+                                                ? const Color(0xFF94A3B8)
+                                                : const Color(0xFF64748B)),
                                       ),
                                     ),
                                   ),
@@ -817,10 +1013,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 onTap: () => setState(() => _mobileTab = 1),
                                 borderRadius: BorderRadius.circular(6),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
                                   decoration: BoxDecoration(
                                     color: _mobileTab == 1
-                                        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                                        ? (isDark
+                                            ? const Color(0xFF0F172A)
+                                            : Colors.white)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -829,10 +1028,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                       'Live Preview',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        fontWeight: _mobileTab == 1 ? FontWeight.w700 : FontWeight.w500,
+                                        fontWeight: _mobileTab == 1
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
                                         color: _mobileTab == 1
-                                            ? (isDark ? Colors.white : AppTheme.zohoBlue)
-                                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                            ? (isDark
+                                                ? Colors.white
+                                                : AppTheme.zohoBlue)
+                                            : (isDark
+                                                ? const Color(0xFF94A3B8)
+                                                : const Color(0xFF64748B)),
                                       ),
                                     ),
                                   ),
@@ -860,20 +1065,27 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                     children: [
                                       Expanded(
                                         child: ListView(
-                                          physics: const BouncingScrollPhysics(),
-                                          padding: const EdgeInsets.fromLTRB(24, 8, 16, 16),
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          padding: const EdgeInsets.fromLTRB(
+                                              24, 8, 16, 16),
                                           children: [
-                                            _buildInvoiceInformationCard(context, isDark, state),
+                                            _buildInvoiceInformationCard(
+                                                context, isDark, state),
                                             const SizedBox(height: 18),
-                                            _buildInvoiceItemsCard(context, isDark),
+                                            _buildInvoiceItemsCard(
+                                                context, isDark),
                                             const SizedBox(height: 18),
-                                            _buildTermsAndTotalsCard(context, isDark, totals),
+                                            _buildTermsAndTotalsCard(
+                                                context, isDark, totals),
                                           ],
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsets.fromLTRB(24, 8, 16, 24),
-                                        child: _buildBottomActionsBar(context, isDark, state),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            24, 8, 16, 24),
+                                        child: _buildBottomActionsBar(
+                                            context, isDark, state),
                                       ),
                                     ],
                                   ),
@@ -884,9 +1096,11 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   flex: 4,
                                   child: ListView(
                                     physics: const BouncingScrollPhysics(),
-                                    padding: const EdgeInsets.fromLTRB(8, 8, 24, 32),
+                                    padding:
+                                        const EdgeInsets.fromLTRB(8, 8, 24, 32),
                                     children: [
-                                      _buildLivePreviewCard(context, isDark, totals),
+                                      _buildLivePreviewCard(
+                                          context, isDark, totals),
                                     ],
                                   ),
                                 ),
@@ -896,24 +1110,30 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                               // Mobile Form View
                               ? ListView(
                                   physics: const BouncingScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
                                   children: [
-                                    _buildInvoiceInformationCard(context, isDark, state),
+                                    _buildInvoiceInformationCard(
+                                        context, isDark, state),
                                     const SizedBox(height: 16),
                                     _buildInvoiceItemsCard(context, isDark),
                                     const SizedBox(height: 16),
-                                    _buildTermsAndTotalsCard(context, isDark, totals),
+                                    _buildTermsAndTotalsCard(
+                                        context, isDark, totals),
                                     const SizedBox(height: 20),
-                                    _buildBottomActionsBar(context, isDark, state),
+                                    _buildBottomActionsBar(
+                                        context, isDark, state),
                                     const SizedBox(height: 24),
                                   ],
                                 )
                               // Mobile Preview View
                               : ListView(
                                   physics: const BouncingScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
                                   children: [
-                                    _buildLivePreviewCard(context, isDark, totals),
+                                    _buildLivePreviewCard(
+                                        context, isDark, totals),
                                     const SizedBox(height: 24),
                                   ],
                                 )),
@@ -932,14 +1152,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   // 1. Top Header & Breadcrumbs Bar
   // -------------------------------------------------------------
   Widget _buildTopBar(BuildContext context, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    return LayoutBuilder(builder: (context, constraints) {
+      final isCompact = constraints.maxWidth < 560;
+      return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24, vertical: isCompact ? 10 : 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Title and Breadcrumb
-          Column(
+          Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -951,6 +1173,7 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   letterSpacing: -0.5,
                 ),
               ),
+              if (!isCompact) ...[
               const SizedBox(height: 3),
               Row(
                 children: [
@@ -960,7 +1183,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       'Home',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -970,7 +1195,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       '>',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                   ),
@@ -980,7 +1207,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       'Invoices',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                   ),
@@ -990,7 +1219,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       '>',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                   ),
@@ -1004,8 +1235,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   ),
                 ],
               ),
+              ],
             ],
-          ),
+          )),
 
           // Top Action Buttons
           Row(
@@ -1018,14 +1250,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
                         title: const Text('Delete Draft Invoice?'),
-                        content: Text('Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
+                        content: Text(
+                            'Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel')),
                           FilledButton(
                             onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(backgroundColor: AppTheme.pastelRose),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.pastelRose),
                             child: const Text('Delete Draft'),
                           ),
                         ],
@@ -1036,24 +1273,31 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       final ok = await cubit.deleteDraft(invoice.id);
                       if (ok && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Draft invoice deleted.')),
+                          const SnackBar(
+                              content: Text('Draft invoice deleted.')),
                         );
                         Navigator.of(context).pop();
                       }
                     }
                   },
-                  icon: const Icon(CupertinoIcons.trash, size: 15, color: AppTheme.pastelRose),
-                  label: const Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                  icon: const Icon(CupertinoIcons.trash,
+                      size: 15, color: AppTheme.pastelRose),
+                  label: isCompact
+                      ? const SizedBox.shrink()
+                      : const Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 12)),
                 ),
                 const SizedBox(width: 8),
               ],
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(CupertinoIcons.arrow_left, size: 14),
-                label: const Text('Back'),
+                label: isCompact ? const SizedBox.shrink() : const Text('Back'),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 10 : 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.buttonRadiusVal)),
                 ),
               ),
             ],
@@ -1061,12 +1305,14 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
         ],
       ),
     );
+    });
   }
 
   // -------------------------------------------------------------
   // 2. Invoice Information Card
   // -------------------------------------------------------------
-  Widget _buildInvoiceInformationCard(BuildContext context, bool isDark, BillingState state) {
+  Widget _buildInvoiceInformationCard(
+      BuildContext context, bool isDark, BillingState state) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: AppTheme.zohoCardDecoration(isDark),
@@ -1090,12 +1336,17 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final customerCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Customer *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Customer *',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    initialValue: state.data.customers.any((c) => c.id == invoice.customer.id)
+                    initialValue: state.data.customers
+                            .any((c) => c.id == invoice.customer.id)
                         ? invoice.customer.id
-                        : (state.data.customers.isNotEmpty ? state.data.customers.first.id : null),
+                        : (state.data.customers.isNotEmpty
+                            ? state.data.customers.first.id
+                            : null),
                     decoration: const InputDecoration(
                       prefixIcon: Icon(CupertinoIcons.person, size: 18),
                       hintText: 'Select Customer',
@@ -1112,7 +1363,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       if (id != null) {
                         changed(() {
                           invoice = invoice.copyWith(
-                            customer: state.data.customers.firstWhere((c) => c.id == id),
+                            customer: state.data.customers
+                                .firstWhere((c) => c.id == id),
                           );
                         });
                       }
@@ -1123,10 +1375,14 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
                       onPressed: () => editCustomer(context),
-                      icon: const Icon(CupertinoIcons.plus, size: 13, color: AppTheme.zohoBlue),
+                      icon: const Icon(CupertinoIcons.plus,
+                          size: 13, color: AppTheme.zohoBlue),
                       label: const Text(
                         'Add New',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppTheme.zohoBlue),
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.zohoBlue),
                       ),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
@@ -1140,7 +1396,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final referenceCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Reference (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Reference (Optional)',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
                     initialValue: reference,
@@ -1157,14 +1415,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final invoiceNumCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Invoice Number *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Invoice Number *',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
-                    initialValue: invoice.number.isNotEmpty ? invoice.number : 'INV-2024-0001',
+                    initialValue: invoice.number.isNotEmpty
+                        ? invoice.number
+                        : 'INV-2024-0001',
                     decoration: const InputDecoration(
                       hintText: 'INV-2024-0001',
                     ),
-                    onChanged: (v) => changed(() => invoice = invoice.copyWith(number: v)),
+                    onChanged: (v) =>
+                        changed(() => invoice = invoice.copyWith(number: v)),
                   ),
                 ],
               );
@@ -1172,7 +1435,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final paymentTermsCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Payment Terms', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Payment Terms',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: paymentTerms,
@@ -1180,7 +1445,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     decoration: const InputDecoration(),
                     items: const [
                       DropdownMenuItem(value: 'Net 30', child: Text('Net 30')),
-                      DropdownMenuItem(value: 'Due on Receipt', child: Text('Due on Receipt')),
+                      DropdownMenuItem(
+                          value: 'Due on Receipt',
+                          child: Text('Due on Receipt')),
                       DropdownMenuItem(value: 'Net 15', child: Text('Net 15')),
                       DropdownMenuItem(value: 'Net 45', child: Text('Net 45')),
                       DropdownMenuItem(value: 'Net 60', child: Text('Net 60')),
@@ -1213,18 +1480,35 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final currencyCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Currency', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Currency',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: currency,
                     isExpanded: true,
                     decoration: const InputDecoration(),
                     items: const [
-                      DropdownMenuItem(value: 'AED - UAE Dirham (د.إ)', child: Text('AED - UAE Dirham (د.إ)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'USD - US Dollar (\$)', child: Text('USD - US Dollar (\$)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'THB - Thai Baht (฿)', child: Text('THB - Thai Baht (฿)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'EUR - Euro (€)', child: Text('EUR - Euro (€)', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'GBP - British Pound (£)', child: Text('GBP - British Pound (£)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'AED - UAE Dirham (د.إ)',
+                          child: Text('AED - UAE Dirham (د.إ)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'USD - US Dollar (\$)',
+                          child: Text('USD - US Dollar (\$)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'THB - Thai Baht (฿)',
+                          child: Text('THB - Thai Baht (฿)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'EUR - Euro (€)',
+                          child: Text('EUR - Euro (€)',
+                              overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                          value: 'GBP - British Pound (£)',
+                          child: Text('GBP - British Pound (£)',
+                              overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged: (v) {
                       if (v != null) changed(() => currency = v);
@@ -1240,10 +1524,14 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   DatePickerField(
                     label: 'Due Date *',
                     value: invoice.dueDate,
-                    onChanged: (v) => changed(() => invoice = invoice.copyWith(dueDate: v)),
+                    onChanged: (v) =>
+                        changed(() => invoice = invoice.copyWith(dueDate: v)),
                     validator: (v) => v == null || v.isEmpty
                         ? null
-                        : validateDate(v) ?? (v.compareTo(invoice.date) < 0 ? 'Must be on or after invoice date' : null),
+                        : validateDate(v) ??
+                            (v.compareTo(invoice.date) < 0
+                                ? 'Must be on or after invoice date'
+                                : null),
                   ),
                 ],
               );
@@ -1251,7 +1539,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
               final notesCol = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Notes (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text('Notes (Optional)',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   TextFormField(
                     initialValue: invoiceNotes,
@@ -1352,7 +1642,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                 '${rows.length} item${rows.length > 1 ? 's' : ''}',
                 style: TextStyle(
                   fontSize: 12.5,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF64748B),
                 ),
               ),
             ],
@@ -1372,10 +1664,15 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(AppTheme.cardRadiusVal),
+                          color: isDark
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.cardRadiusVal),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
                             width: 0.8,
                           ),
                         ),
@@ -1388,13 +1685,17 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   width: 22,
                                   height: 22,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.zohoBlue.withValues(alpha: 0.15),
+                                    color: AppTheme.zohoBlue
+                                        .withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Center(
                                     child: Text(
                                       '${n + 1}',
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.zohoBlue),
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.zohoBlue),
                                     ),
                                   ),
                                 ),
@@ -1406,14 +1707,17 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                       labelText: 'Service / Description',
                                       hintText: 'e.g. Website Development',
                                     ),
-                                    onChanged: (v) => changed(() => rows[n]['description'] = v),
+                                    onChanged: (v) => changed(
+                                        () => rows[n]['description'] = v),
                                   ),
                                 ),
                                 if (rows.length > 1) ...[
                                   const SizedBox(width: 6),
                                   IconButton(
-                                    icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 18),
-                                    onPressed: () => changed(() => rows.removeAt(n)),
+                                    icon: const Icon(CupertinoIcons.trash,
+                                        color: AppTheme.zohoRed, size: 18),
+                                    onPressed: () =>
+                                        changed(() => rows.removeAt(n)),
                                   ),
                                 ],
                               ],
@@ -1425,9 +1729,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   flex: 2,
                                   child: TextFormField(
                                     initialValue: rows[n]['quantity'],
-                                    decoration: const InputDecoration(labelText: 'Qty'),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    onChanged: (v) => changed(() => rows[n]['quantity'] = v),
+                                    decoration:
+                                        const InputDecoration(labelText: 'Qty'),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    onChanged: (v) =>
+                                        changed(() => rows[n]['quantity'] = v),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -1435,9 +1743,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                   flex: 3,
                                   child: TextFormField(
                                     initialValue: rows[n]['rate'],
-                                    decoration: const InputDecoration(labelText: 'Unit Price'),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    onChanged: (v) => changed(() => rows[n]['rate'] = v),
+                                    decoration: const InputDecoration(
+                                        labelText: 'Unit Price'),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    onChanged: (v) =>
+                                        changed(() => rows[n]['rate'] = v),
                                   ),
                                 ),
                               ],
@@ -1446,10 +1758,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Amount (AED):', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                                const Text('Amount (AED):',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12.5)),
                                 Text(
                                   _computeRowAmount(rows[n]).toStringAsFixed(2),
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.zohoBlue),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: AppTheme.zohoBlue),
                                 ),
                               ],
                             ),
@@ -1479,7 +1797,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   // Header Row
                   TableRow(
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     children: [
@@ -1505,7 +1825,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
                             ),
                           ),
                         ),
@@ -1515,65 +1837,94 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             initialValue: rows[n]['description'],
                             maxLines: 2,
                             decoration: const InputDecoration(
-                              hintText: 'Website Development\nCustom website design',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              hintText:
+                                  'Website Development\nCustom website design',
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
-                            onChanged: (v) => changed(() => rows[n]['description'] = v),
+                            onChanged: (v) =>
+                                changed(() => rows[n]['description'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: rows[n]['quantity'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.center,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => changed(() => rows[n]['quantity'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                changed(() => rows[n]['quantity'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: rows[n]['rate'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.right,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => changed(() => rows[n]['rate'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                changed(() => rows[n]['rate'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: TextFormField(
                             initialValue: rows[n]['discount'],
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
                             ),
                             style: const TextStyle(fontSize: 13),
                             textAlign: TextAlign.right,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            onChanged: (v) => changed(() => rows[n]['discount'] = v),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (v) =>
+                                changed(() => rows[n]['discount'] = v),
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 6),
                           child: DropdownButtonFormField<String>(
                             initialValue: rows[n]['vat'] ?? '5',
                             isExpanded: true,
                             decoration: const InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 8),
                             ),
                             items: const [
-                              DropdownMenuItem(value: '5', child: Text('5%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: '0', child: Text('0%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: '7', child: Text('7%', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'exempt', child: Text('Exempt', style: TextStyle(fontSize: 11))),
+                              DropdownMenuItem(
+                                  value: '5',
+                                  child: Text('5%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: '0',
+                                  child: Text('0%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: '7',
+                                  child: Text('7%',
+                                      style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                  value: 'exempt',
+                                  child: Text('Exempt',
+                                      style: TextStyle(fontSize: 11))),
                             ],
                             onChanged: (v) => changed(() {
                               rows[n]['vat'] = v ?? '5';
@@ -1586,21 +1937,27 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 8),
                           child: Text(
                             _computeRowAmount(rows[n]).toStringAsFixed(2),
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(CupertinoIcons.trash, color: AppTheme.zohoRed, size: 16),
+                          icon: const Icon(CupertinoIcons.trash,
+                              color: AppTheme.zohoRed, size: 16),
                           tooltip: 'Delete item',
-                          onPressed: rows.length > 1 ? () => changed(() => rows.removeAt(n)) : null,
+                          onPressed: rows.length > 1
+                              ? () => changed(() => rows.removeAt(n))
+                              : null,
                         ),
                       ],
                     ),
@@ -1617,7 +1974,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             label: const Text('+ Add Item'),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.zohoBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppTheme.buttonRadiusVal)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
@@ -1643,7 +2002,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   // -------------------------------------------------------------
   // 4. Terms & Conditions and Totals Summary Card
   // -------------------------------------------------------------
-  Widget _buildTermsAndTotalsCard(BuildContext context, bool isDark, Totals? totals) {
+  Widget _buildTermsAndTotalsCard(
+      BuildContext context, bool isDark, Totals? totals) {
     final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
     final discountVal = totals != null ? (totals.discount / 100.0) : 0.0;
     final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
@@ -1677,7 +2037,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                 style: TextStyle(
                   fontSize: 12.5,
                   height: 1.4,
-                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                  color: isDark
+                      ? const Color(0xFFCBD5E1)
+                      : const Color(0xFF334155),
                 ),
                 onChanged: (v) => changed(() => termsAndConditions = v),
               ),
@@ -1688,13 +2050,18 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
             children: [
               TextFormField(
                 initialValue: documentDiscount,
-                decoration: const InputDecoration(labelText: 'Document Discount (AED)', prefixIcon: Icon(CupertinoIcons.minus_circle)),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                    labelText: 'Document Discount (AED)',
+                    prefixIcon: Icon(CupertinoIcons.minus_circle)),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (value) => changed(() => documentDiscount = value),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                initialValue: const ['0', '5', '7', '15'].contains((double.tryParse(invoice.taxRate) ?? 5).toStringAsFixed(0))
+                initialValue: const ['0', '5', '7', '15'].contains(
+                        (double.tryParse(invoice.taxRate) ?? 5)
+                            .toStringAsFixed(0))
                     ? (double.tryParse(invoice.taxRate) ?? 5).toStringAsFixed(0)
                     : '5',
                 decoration: const InputDecoration(labelText: 'VAT Rate'),
@@ -1704,21 +2071,28 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   DropdownMenuItem(value: '7', child: Text('7% VAT')),
                   DropdownMenuItem(value: '15', child: Text('15% VAT')),
                 ],
-                onChanged: (value) => changed(() => invoice = invoice.copyWith(taxRate: value ?? '5')),
+                onChanged: (value) => changed(
+                    () => invoice = invoice.copyWith(taxRate: value ?? '5')),
               ),
               const SizedBox(height: 16),
-              _buildSummaryRow('Subtotal', subtotalVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'Subtotal', subtotalVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('Discount (AED)', discountVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'Discount (AED)', discountVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 8),
-              _buildSummaryRow('VAT ${invoice.taxRate}%', vatVal.toStringAsFixed(2), isDark),
+              _buildSummaryRow(
+                  'VAT ${invoice.taxRate}%', vatVal.toStringAsFixed(2), isDark),
               const SizedBox(height: 14),
 
               // Highlighted Total Row
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.zohoBlueBgDark : const Color(0xFFEBF3FC),
+                  color: isDark
+                      ? AppTheme.zohoBlueBgDark
+                      : const Color(0xFFEBF3FC),
                   borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal),
                   border: Border.all(
                     color: isDark ? AppTheme.zohoBlue : const Color(0xFFBFDBFE),
@@ -1741,7 +2115,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        color: isDark ? const Color(0xFF60A5FA) : AppTheme.zohoBlue,
+                        color: isDark
+                            ? const Color(0xFF60A5FA)
+                            : AppTheme.zohoBlue,
                         letterSpacing: -0.3,
                       ),
                     ),
@@ -1780,13 +2156,18 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 13,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
           ),
         ),
+        const SizedBox(width: 12),
         Text(
           amount,
           style: TextStyle(
@@ -1802,67 +2183,89 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   // -------------------------------------------------------------
   // 5. Bottom Form Actions Bar
   // -------------------------------------------------------------
-  Widget _buildBottomActionsBar(BuildContext context, bool isDark, BillingState state) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Save as Draft
-        OutlinedButton(
-          onPressed: state.busy ? null : () => save(issue: false),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-          ),
-          child: const Text('Save as Draft'),
-        ),
-
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Preview Button
-            OutlinedButton.icon(
-              onPressed: state.busy
-                  ? null
-                  : () async {
-                      if (!form.currentState!.validate()) return;
-                      try {
-                        await showPdf(context, current());
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                        }
-                      }
-                    },
-              icon: const Icon(CupertinoIcons.eye, size: 15),
-              label: const Text('Preview'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            // Save & Send Button
-            FilledButton.icon(
-              onPressed: state.busy ? null : () => save(issue: true),
-              icon: const Icon(CupertinoIcons.paperplane_fill, size: 15),
-              label: const Text('Save & Send'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.zohoBlue,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
-              ),
-            ),
-          ],
-        ),
-      ],
+  Widget _buildBottomActionsBar(
+      BuildContext context, bool isDark, BillingState state) {
+    final draft = OutlinedButton(
+      onPressed: state.busy ? null : () => save(issue: false),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+      child: const Text('Save as Draft'),
     );
+    final preview = OutlinedButton.icon(
+      onPressed: state.busy
+          ? null
+          : () async {
+              if (!form.currentState!.validate()) return;
+              try {
+                await showPdf(context, current());
+              } catch (e) {
+                if (context.mounted)
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            },
+      icon: const Icon(CupertinoIcons.eye, size: 15),
+      label: const Text('Preview'),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+    );
+    final send = FilledButton.icon(
+      onPressed: state.busy ? null : () => save(issue: true),
+      icon: const Icon(CupertinoIcons.paperplane_fill, size: 15),
+      label: const Text('Save & Send'),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppTheme.zohoBlue,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+      ),
+    );
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 520) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            draft,
+            const SizedBox(height: 10),
+            preview,
+            const SizedBox(height: 10),
+            send
+          ],
+        );
+      }
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Save as Draft
+          draft,
+
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Preview Button
+              preview,
+              const SizedBox(width: 10),
+
+              // Save & Send Button
+              send,
+            ],
+          ),
+        ],
+      );
+    });
   }
 
   // -------------------------------------------------------------
   // 6. Right Column: Real-Time Live Invoice Preview Card
   // -------------------------------------------------------------
-  Widget _buildLivePreviewCard(BuildContext context, bool isDark, Totals? totals) {
+  Widget _buildLivePreviewCard(
+      BuildContext context, bool isDark, Totals? totals) {
     final subtotalVal = totals != null ? (totals.subtotal / 100.0) : 0.0;
     final vatVal = totals != null ? (totals.tax / 100.0) : 0.0;
     final totalVal = totals != null ? (totals.total / 100.0) : 0.0;
@@ -1899,15 +2302,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       await showPdf(context, current());
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.toString())));
                       }
                     }
                   },
                   icon: const Icon(CupertinoIcons.arrow_down_to_line, size: 14),
                   label: const Text('Download PDF'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.buttonRadiusVal)),
                   ),
                 ),
               ],
@@ -1953,7 +2360,8 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Center(
-                                child: Icon(CupertinoIcons.building_2_fill, color: AppTheme.zohoBlue, size: 24),
+                                child: Icon(CupertinoIcons.building_2_fill,
+                                    color: AppTheme.zohoBlue, size: 24),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -1962,18 +2370,42 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    company.name.isNotEmpty ? company.name : 'ABC Service LLC',
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                                    company.name.isNotEmpty
+                                        ? company.name
+                                        : 'ABC Service LLC',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A)),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    company.address.isNotEmpty ? company.address : 'Dubai, United Arab Emirates',
-                                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                    company.address.isNotEmpty
+                                        ? company.address
+                                        : 'Dubai, United Arab Emirates',
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        color: Color(0xFF64748B)),
                                   ),
                                   if (company.trn.isNotEmpty)
-                                    Text('TRN: ${company.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                                  Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                                  Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                                    Text('TRN: ${company.trn}',
+                                        style: const TextStyle(
+                                            fontSize: 10.5,
+                                            color: Color(0xFF64748B))),
+                                  Text(
+                                      company.email.isNotEmpty
+                                          ? company.email
+                                          : 'info@abcservice.ae',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          color: Color(0xFF64748B))),
+                                  Text(
+                                      company.phone.isNotEmpty
+                                          ? company.phone
+                                          : '+971 50 123 4567',
+                                      style: const TextStyle(
+                                          fontSize: 10.5,
+                                          color: Color(0xFF64748B))),
                                 ],
                               ),
                             ),
@@ -1997,10 +2429,18 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                           const SizedBox(height: 4),
                           Text(
                             'Invoice No: ${invoice.number.isNotEmpty ? invoice.number : "INV-2024-0001"}',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155)),
                           ),
-                          Text('Date: ${invoice.date}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-                          Text('Due Date: ${invoice.dueDate.isNotEmpty ? invoice.dueDate : invoice.date}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                          Text('Date: ${invoice.date}',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF64748B))),
+                          Text(
+                              'Due Date: ${invoice.dueDate.isNotEmpty ? invoice.dueDate : invoice.date}',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF64748B))),
                         ],
                       ),
                     ],
@@ -2013,23 +2453,38 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFF1F5F9), width: 0.8),
+                      border: Border.all(
+                          color: const Color(0xFFF1F5F9), width: 0.8),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Bill To:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
+                        const Text('Bill To:',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF64748B))),
                         const SizedBox(height: 2),
                         Text(
-                          customer.name.isNotEmpty ? customer.name : 'Creative Solutions LLC',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                          customer.name.isNotEmpty
+                              ? customer.name
+                              : 'Creative Solutions LLC',
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A)),
                         ),
                         Text(
-                          customer.address.isNotEmpty ? customer.address : 'Office 101, Business Bay, Dubai, UAE',
-                          style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569)),
+                          customer.address.isNotEmpty
+                              ? customer.address
+                              : 'Office 101, Business Bay, Dubai, UAE',
+                          style: const TextStyle(
+                              fontSize: 10.5, color: Color(0xFF475569)),
                         ),
                         if (customer.trn.isNotEmpty)
-                          Text('TRN: ${customer.trn}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF475569))),
+                          Text('TRN: ${customer.trn}',
+                              style: const TextStyle(
+                                  fontSize: 10.5, color: Color(0xFF475569))),
                       ],
                     ),
                   ),
@@ -2050,14 +2505,18 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       TableRow(
                         decoration: const BoxDecoration(
                           color: Color(0xFFF8FAFC),
-                          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 0.8)),
+                          border: Border(
+                              bottom: BorderSide(
+                                  color: Color(0xFFE2E8F0), width: 0.8)),
                         ),
                         children: [
                           _buildPreviewHeader('#'),
                           _buildPreviewHeader('Description'),
                           _buildPreviewHeader('Qty', align: TextAlign.center),
-                          _buildPreviewHeader('Unit Price\n(AED)', align: TextAlign.right),
-                          _buildPreviewHeader('Amount\n(AED)', align: TextAlign.right),
+                          _buildPreviewHeader('Unit Price\n(AED)',
+                              align: TextAlign.right),
+                          _buildPreviewHeader('Amount\n(AED)',
+                              align: TextAlign.right),
                         ],
                       ),
 
@@ -2065,18 +2524,29 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       for (int n = 0; n < rows.length; n++)
                         TableRow(
                           decoration: const BoxDecoration(
-                            border: Border(bottom: BorderSide(color: Color(0xFFF8FAFC), width: 0.8)),
+                            border: Border(
+                                bottom: BorderSide(
+                                    color: Color(0xFFF8FAFC), width: 0.8)),
                           ),
                           children: [
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Text('${n + 1}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                              child: Text('${n + 1}',
+                                  style: const TextStyle(
+                                      fontSize: 10.5,
+                                      color: Color(0xFF64748B))),
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 2),
                               child: Text(
-                                rows[n]['description']?.isNotEmpty == true ? rows[n]['description']! : 'Service item',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                rows[n]['description']?.isNotEmpty == true
+                                    ? rows[n]['description']!
+                                    : 'Service item',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A)),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -2086,15 +2556,18 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                               child: Text(
                                 rows[n]['quantity'] ?? '1',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF334155)),
                               ),
                             ),
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               child: Text(
-                                (double.tryParse(rows[n]['rate'] ?? '0') ?? 0.0).toStringAsFixed(2),
+                                (double.tryParse(rows[n]['rate'] ?? '0') ?? 0.0)
+                                    .toStringAsFixed(2),
                                 textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF334155)),
                               ),
                             ),
                             Padding(
@@ -2102,7 +2575,10 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                               child: Text(
                                 _computeRowAmount(rows[n]).toStringAsFixed(2),
                                 textAlign: TextAlign.right,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A)),
                               ),
                             ),
                           ],
@@ -2118,12 +2594,15 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       constraints: const BoxConstraints(maxWidth: 240),
                       child: Column(
                         children: [
-                          _buildPreviewSummaryRow('Subtotal', 'AED ${subtotalVal.toStringAsFixed(2)}'),
+                          _buildPreviewSummaryRow('Subtotal',
+                              'AED ${subtotalVal.toStringAsFixed(2)}'),
                           const SizedBox(height: 4),
-                          _buildPreviewSummaryRow('VAT 5%', 'AED ${vatVal.toStringAsFixed(2)}'),
+                          _buildPreviewSummaryRow('VAT ${invoice.taxRate}%',
+                              'AED ${vatVal.toStringAsFixed(2)}'),
                           const SizedBox(height: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEBF3FC),
                               borderRadius: BorderRadius.circular(4),
@@ -2131,12 +2610,19 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Total', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                const Text('Total',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A))),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
                                     'AED ${totalVal.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: AppTheme.zohoBlue),
+                                    style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppTheme.zohoBlue),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -2150,11 +2636,16 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                   const SizedBox(height: 16),
 
                   // Terms in Preview
-                  const Text('Terms & Conditions:', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF475569))),
+                  const Text('Terms & Conditions:',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569))),
                   const SizedBox(height: 2),
                   Text(
                     termsAndConditions,
-                    style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
+                    style: const TextStyle(
+                        fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
                   ),
                   const SizedBox(height: 18),
 
@@ -2171,7 +2662,9 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                             color: Color(0xFF0F172A),
                           ),
                         ),
-                        Text('For your business', style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B))),
+                        Text('For your business',
+                            style: TextStyle(
+                                fontSize: 9.5, color: Color(0xFF64748B))),
                       ],
                     ),
                   ),
@@ -2194,25 +2687,40 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(CupertinoIcons.phone, size: 10, color: Color(0xFF64748B)),
+                          const Icon(CupertinoIcons.phone,
+                              size: 10, color: Color(0xFF64748B)),
                           const SizedBox(width: 4),
-                          Text(company.phone.isNotEmpty ? company.phone : '+971 50 123 4567', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text(
+                              company.phone.isNotEmpty
+                                  ? company.phone
+                                  : '+971 50 123 4567',
+                              style: const TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(CupertinoIcons.mail, size: 10, color: Color(0xFF64748B)),
+                          const Icon(CupertinoIcons.mail,
+                              size: 10, color: Color(0xFF64748B)),
                           const SizedBox(width: 4),
-                          Text(company.email.isNotEmpty ? company.email : 'info@abcservice.ae', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text(
+                              company.email.isNotEmpty
+                                  ? company.email
+                                  : 'info@abcservice.ae',
+                              style: const TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(CupertinoIcons.globe, size: 10, color: Color(0xFF64748B)),
+                          Icon(CupertinoIcons.globe,
+                              size: 10, color: Color(0xFF64748B)),
                           SizedBox(width: 4),
-                          Text('www.thepercentage.ae', style: TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                          Text('www.thepercentage.ae',
+                              style: TextStyle(
+                                  fontSize: 9, color: Color(0xFF64748B))),
                         ],
                       ),
                     ],
@@ -2245,8 +2753,13 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
-        Text(amount, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+        Text(title,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+        Text(amount,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F172A))),
       ],
     );
   }

@@ -46,4 +46,32 @@ void main() {
 
     await cubit.close();
   });
+
+  testWidgets('InvoiceEditor keeps its primary actions usable on a phone', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final cubit = BillingCubit(LocalRepository());
+    await cubit.refresh();
+
+    tester.view.physicalSize = const Size(390, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: cubit),
+          RepositoryProvider<InvoiceDocumentService>(create: (_) => PdfInvoiceDocumentService()),
+        ],
+        child: MaterialApp(theme: AppTheme.light(), home: const InvoiceEditor()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save as Draft'), findsOneWidget);
+    expect(find.text('Preview'), findsOneWidget);
+    expect(find.text('Save & Send'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await cubit.close();
+  });
 }
