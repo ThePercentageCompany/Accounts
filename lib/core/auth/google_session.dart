@@ -513,6 +513,7 @@ class GoogleSession extends ChangeNotifier {
     if (tok != null) {
       isOffline = false;
       await syncManager.triggerBackgroundSync(token: tok, spreadsheetId: workspace!.spreadsheetId);
+      await syncManager.waitForIdle();
     } else {
       isOffline = true;
       syncManager.markOffline();

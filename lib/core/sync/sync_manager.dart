@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/google_workspace_service.dart';
@@ -266,6 +267,14 @@ class SyncManager extends ChangeNotifier {
   bool _isBackgroundSyncing = false;
   bool get isBackgroundSyncing => _isBackgroundSyncing;
   bool _syncRequestedWhileRunning = false;
+
+  /// Lets feature startup wait for an already-running pull instead of reading
+  /// stale cached rows while another sync is replacing them.
+  Future<void> waitForIdle() async {
+    while (_isBackgroundSyncing) {
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+  }
 
   // --- SYNC ENGINE ---
 

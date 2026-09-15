@@ -944,6 +944,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           ],
         ),
         actions: [
+          _buildSyncButton(compact: true),
           IconButton(
             icon: const Icon(CupertinoIcons.search, size: 20),
             tooltip: 'Search',
@@ -1033,6 +1034,36 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // -------------------------------------------------------------
   // Top Header Bar
   // -------------------------------------------------------------
+  Widget _buildSyncButton({bool compact = false}) {
+    return AnimatedBuilder(
+      animation: widget.session.syncManager,
+      builder: (context, _) {
+        final manager = widget.session.syncManager;
+        final syncing = manager.isBackgroundSyncing;
+        final pending = manager.pendingCount;
+        final offline = widget.session.isOffline || manager.status.name == 'offline' || manager.status.name == 'error';
+        final color = offline ? const Color(0xFFF59E0B) : (pending > 0 ? const Color(0xFF2563EB) : const Color(0xFF10B981));
+        final label = syncing ? 'Syncing' : offline ? 'Offline' : pending > 0 ? '$pending pending' : 'Synced';
+        return Tooltip(
+          message: offline ? 'Offline - $pending changes waiting to sync' : '$label - tap to sync now',
+          child: InkWell(
+            onTap: syncing ? null : () => widget.onRefresh(),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: 7),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.28), width: 0.8)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                syncing ? SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: color)) : Icon(CupertinoIcons.arrow_2_circlepath, color: color, size: 17),
+                if (!compact) ...[const SizedBox(width: 6), Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700))],
+                if (compact && pending > 0) ...[const SizedBox(width: 3), Text('$pending', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800))],
+              ]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildTopHeader(BuildContext context, bool isDark) {
     final userName = widget.session.effectiveDisplayName;
     final companyName = widget.companyName.isNotEmpty
@@ -1116,6 +1147,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           ),
 
           const SizedBox(width: 16),
+
+          _buildSyncButton(),
+
+          const SizedBox(width: 12),
 
           // Notification Bell with Red Dot
           InkWell(
