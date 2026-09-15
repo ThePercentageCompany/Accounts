@@ -226,9 +226,13 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
         final companyName = billingState.data.company.name.isNotEmpty
             ? billingState.data.company.name
             : (session.workspace?.companyName ?? 'TPC Business');
+        final selectedDestination = appNavDestinations[navIndex];
+        final effectiveNavIndex = session.isSectionAllowed(selectedDestination.title)
+            ? navIndex
+            : 0;
 
         Widget body;
-        switch (navIndex) {
+        switch (effectiveNavIndex) {
           case 0:
             body = DashboardView(
               onNewInvoice: () => openEditor(),
@@ -279,8 +283,12 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
         }
 
         return ResponsiveShell(
-          selectedIndex: navIndex,
-          onIndexChanged: (idx) => setState(() => navIndex = idx),
+          selectedIndex: effectiveNavIndex,
+          onIndexChanged: (idx) {
+            if (session.isSectionAllowed(appNavDestinations[idx].title)) {
+              setState(() => navIndex = idx);
+            }
+          },
           onNewInvoice: () => openEditor(),
           onRefresh: () async {
             await billingCubit.refresh();

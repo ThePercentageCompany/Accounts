@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/form_validators.dart';
 import '../../core/widgets/brand_logo.dart';
 import '../../features/billing/domain/models.dart';
 import 'google_session.dart';
@@ -41,6 +42,11 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
   @override
   void initState() {
     super.initState();
+    final invite = widget.session.pendingEmployeeInvite;
+    if (invite != null && invite.isNotEmpty) {
+      _isEmployeeMode = true;
+      _inviteCodeController.text = invite;
+    }
     if (widget.session.user?.email != null) {
       _emailController.text = widget.session.user!.email;
     }
@@ -616,9 +622,35 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
     bool isDark = false,
     String? Function(String?)? validator,
   }) {
+    final normalized = label.toLowerCase();
+    final isEmail = normalized.contains('email');
+    final isPhone = normalized.contains('phone');
+    final isTrn = normalized.contains('trn');
+    final isCurrency = normalized == 'currency';
     return TextFormField(
       controller: controller,
-      validator: validator,
+      validator: validator ??
+          (isEmail
+              ? FormValidators.email
+              : isPhone
+                  ? FormValidators.phone
+                  : isTrn
+                      ? (value) => FormValidators.wholeNumber(value)
+                      : isCurrency
+                          ? (value) => RegExp(r'^[A-Z]{3}$').hasMatch(value?.trim() ?? '')
+                              ? null
+                              : 'Use a 3-letter currency code'
+                          : null),
+      keyboardType: isEmail
+          ? TextInputType.emailAddress
+          : isPhone || isTrn
+              ? TextInputType.phone
+              : TextInputType.text,
+      inputFormatters: isPhone
+          ? FormValidators.phoneInput
+          : isTrn
+              ? FormValidators.wholeNumberInput
+              : null,
       style: const TextStyle(fontSize: 13.5),
       decoration: InputDecoration(
         labelText: label,

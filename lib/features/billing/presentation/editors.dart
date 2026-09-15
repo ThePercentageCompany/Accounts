@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/auth/google_session.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/form_validators.dart';
 import '../../../core/widgets/date_field.dart';
 import '../domain/models.dart';
 import '../domain/invoice_document_service.dart';
@@ -36,7 +37,17 @@ Widget field(
   String? Function(String?)? validator,
   IconData? prefixIcon,
   String? hint,
-}) =>
+}) {
+  final normalized = label.toLowerCase();
+  final isEmail = normalized.contains('email');
+  final isPhone = normalized.contains('phone');
+  final isAmount = normalized.contains('amount') ||
+      normalized.contains('salary') ||
+      normalized.contains('rate');
+  final isWholeNumber = normalized.contains('account number') ||
+      normalized.contains('tax registration') ||
+      normalized.contains('trn');
+  return
     Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -48,10 +59,37 @@ Widget field(
         ),
         maxLines: lines,
         maxLength: max,
+        keyboardType: isEmail
+            ? TextInputType.emailAddress
+            : isPhone
+                ? TextInputType.phone
+            : isAmount
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : isWholeNumber
+                    ? TextInputType.number
+                    : TextInputType.text,
+        inputFormatters: isPhone
+            ? FormValidators.phoneInput
+            : isAmount
+                ? FormValidators.decimalInput
+                : isWholeNumber
+                    ? FormValidators.wholeNumberInput
+                : null,
         onChanged: changed,
-        validator: validator ?? (required ? requiredText : null),
+        validator: validator ??
+            (isEmail
+                ? (value) => FormValidators.email(value, required: required)
+                : isPhone
+                    ? (value) => FormValidators.phone(value, required: required)
+                    : isAmount
+                        ? (value) => FormValidators.amount(value, required: required)
+                        : isWholeNumber
+                            ? (value) => FormValidators.wholeNumber(value,
+                                required: required)
+                        : (required ? requiredText : null)),
       ),
     );
+}
 
 Future<void> editCustomer(BuildContext context, [Customer? old]) async {
   final cubit = context.read<BillingCubit>();

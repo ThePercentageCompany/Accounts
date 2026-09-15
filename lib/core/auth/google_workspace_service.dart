@@ -70,6 +70,26 @@ class WorkspaceConfig {
         isEmployee: json['isEmployee'] == true,
       );
 
+  WorkspaceConfig copyWith({
+    String? employeeName,
+    String? employeeEmail,
+    String? employeeRole,
+    List<String>? allowedSections,
+  }) => WorkspaceConfig(
+        spreadsheetId: spreadsheetId,
+        driveFolderId: driveFolderId,
+        companyName: companyName,
+        spreadsheetUrl: spreadsheetUrl,
+        folderUrl: folderUrl,
+        employeeId: employeeId,
+        employeeCode: employeeCode,
+        employeeName: employeeName ?? this.employeeName,
+        employeeEmail: employeeEmail ?? this.employeeEmail,
+        employeeRole: employeeRole ?? this.employeeRole,
+        allowedSections: allowedSections ?? this.allowedSections,
+        isEmployee: isEmployee,
+      );
+
   String toInvitePayload() {
     return jsonEncode({
       'type': 'tpc_employee_invite',
@@ -85,9 +105,29 @@ class WorkspaceConfig {
     });
   }
 
+  /// Minimal camera-scannable app link. The immutable employee ID is the
+  /// authority; role and permissions are always read from the Employees sheet.
+  String toInviteLink() {
+    final accessPayload = jsonEncode({
+      'type': 'tpc_employee_access',
+      'companyName': companyName,
+      'spreadsheetId': spreadsheetId,
+      'driveFolderId': driveFolderId,
+      'employeeId': employeeId ?? '',
+      'employeeCode': employeeCode ?? '',
+      'employeeRole': employeeRole ?? 'Staff',
+    });
+    return 'tpc://employee-login?invite=${Uri.encodeComponent(accessPayload)}';
+  }
+
   static WorkspaceConfig? fromInvitePayload(String raw) {
     try {
       var cleaned = raw.trim();
+      final uri = Uri.tryParse(cleaned);
+      final linkInvite = uri?.queryParameters['invite'];
+      if (linkInvite != null && linkInvite.isNotEmpty) {
+        cleaned = linkInvite;
+      }
       if (cleaned.startsWith('TPC_INVITE:')) {
         cleaned = cleaned.substring('TPC_INVITE:'.length).trim();
       }

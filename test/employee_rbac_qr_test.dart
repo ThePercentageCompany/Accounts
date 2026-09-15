@@ -68,6 +68,10 @@ void main() {
       expect(parsedPrefixed, isNotNull);
       expect(parsedPrefixed!.spreadsheetId, equals('sheet_abc_123'));
       expect(parsedPrefixed.employeeName, equals('Jane Doe'));
+
+      final parsedLink = WorkspaceConfig.fromInvitePayload(config.toInviteLink());
+      expect(parsedLink, isNotNull);
+      expect(parsedLink!.employeeId, equals('emp-007'));
     });
   });
 
@@ -112,6 +116,19 @@ void main() {
       expect(session.isSectionAllowed('Fixed Assets'), isFalse);
       expect(session.isSectionAllowed('Employees'), isFalse);
       expect(session.isSectionAllowed('Payroll'), isFalse);
+    });
+
+    test('Employee without assigned sections is restricted to dashboard', () {
+      final session = GoogleSession();
+      session.setWorkspace(const WorkspaceConfig(
+        spreadsheetId: 'sheet_1',
+        driveFolderId: 'folder_1',
+        companyName: 'Parent Corp',
+        isEmployee: true,
+      ));
+
+      expect(session.isSectionAllowed('Dashboard'), isTrue);
+      expect(session.isSectionAllowed('Invoices'), isFalse);
     });
   });
 

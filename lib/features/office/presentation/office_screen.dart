@@ -10,6 +10,8 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/form_validators.dart';
+import '../../../core/auth/google_workspace_service.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -89,10 +91,18 @@ Future<Map<String, dynamic>?> officeForm(
                                 f.key == 'notes' || f.key == 'adjustmentNote'
                                     ? 600
                                     : 150,
+                            keyboardType: _officeInputType(f.key),
+                            inputFormatters: _officeInputFormatters(f.key),
                             onChanged: (v) => values[f.key] = v,
                             validator: (v) {
                               if (f.required && (v == null || v.trim().isEmpty))
                                 return 'Required';
+                              if (f.key == 'email') {
+                                return FormValidators.email(v, required: f.required);
+                              }
+                              if (f.key == 'phone') {
+                                return FormValidators.phone(v, required: f.required);
+                              }
                               if ((v ?? '').isNotEmpty &&
                                   [
                                     'date',
@@ -119,11 +129,11 @@ Future<Map<String, dynamic>?> officeForm(
                                 'bonus',
                                 'deductions'
                               ].contains(f.key)) {
-                                try {
-                                  scaled(v ?? '', 2);
-                                } catch (e) {
-                                  return 'Enter a valid positive number';
-                                }
+                                return FormValidators.amount(v, required: f.required);
+                              }
+                              if (['divisor', 'baseDays', 'scheduledDays'].contains(f.key)) {
+                                return FormValidators.wholeNumber(v,
+                                    required: f.required, min: 1, max: 31);
                               }
                               return null;
                             },
@@ -151,6 +161,29 @@ Future<Map<String, dynamic>?> officeForm(
       ],
     ),
   );
+}
+
+TextInputType _officeInputType(String key) {
+  if (key == 'email') return TextInputType.emailAddress;
+  if (key == 'phone') return TextInputType.phone;
+  if (['basic', 'allowances', 'amount', 'overtimeHours', 'overtimeRate', 'bonus', 'deductions'].contains(key)) {
+    return const TextInputType.numberWithOptions(decimal: true);
+  }
+  if (['divisor', 'baseDays', 'scheduledDays'].contains(key)) {
+    return TextInputType.number;
+  }
+  return TextInputType.text;
+}
+
+List<TextInputFormatter>? _officeInputFormatters(String key) {
+  if (key == 'phone') return FormValidators.phoneInput;
+  if (['basic', 'allowances', 'amount', 'overtimeHours', 'overtimeRate', 'bonus', 'deductions'].contains(key)) {
+    return FormValidators.decimalInput;
+  }
+  if (['divisor', 'baseDays', 'scheduledDays'].contains(key)) {
+    return FormValidators.wholeNumberInput;
+  }
+  return null;
 }
 
 /// A dedicated, beautiful Zoho-styled transaction dialog for adding/editing Income & Expenses
@@ -1290,18 +1323,19 @@ class _OfficeScreenState extends State<OfficeScreen> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final payload = jsonEncode({
-            'type': 'tpc_employee_invite',
-            'companyName': companyName,
-            'spreadsheetId': spreadsheetId,
-            'driveFolderId': driveFolderId,
-            'employeeId': employee['id'] ?? '',
-            'employeeCode': employee['code'] ?? '',
-            'employeeName': employee['name'] ?? '',
-            'employeeEmail': googleEmailCtrl.text.trim(),
-            'employeeRole': selectedRole,
-            'allowedSections': selectedSections,
-          });
+          final invite = WorkspaceConfig(
+            companyName: companyName,
+            spreadsheetId: spreadsheetId,
+            driveFolderId: driveFolderId,
+            employeeId: employee['id']?.toString(),
+            employeeCode: employee['code']?.toString(),
+            employeeName: employee['name']?.toString(),
+            employeeEmail: googleEmailCtrl.text.trim(),
+            employeeRole: selectedRole,
+            allowedSections: selectedSections,
+            isEmployee: true,
+          );
+          final inviteLink = invite.toInviteLink();
 
           return AlertDialog(
             title: Row(
@@ -1456,14 +1490,14 @@ class _OfficeScreenState extends State<OfficeScreen> {
                       child: Column(
                         children: [
                           QrImageView(
-                            data: payload,
+                            data: inviteLink,
                             size: 190,
                             foregroundColor: const Color(0xFF0F172A),
                             backgroundColor: Colors.white,
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Scan with mobile camera / app to link Google Account to company data.',
+                            'Scan to open the employee login link. Access is verified live against the employee record.',
                             style: TextStyle(
                                 fontSize: 11.5,
                                 color: isDark
@@ -1479,7 +1513,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     // Copy Invite Code / Payload Button
                     OutlinedButton.icon(
                       onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: payload));
+                        await Clipboard.setData(ClipboardData(text: inviteLink));
                         setModalState(() => copied = true);
                         Future.delayed(const Duration(seconds: 3), () {
                           if (dialogCtx.mounted)
@@ -1494,8 +1528,8 @@ class _OfficeScreenState extends State<OfficeScreen> {
                           color: copied ? AppTheme.pastelMint : null),
                       label: Text(
                           copied
-                              ? 'Invite Code Copied to Clipboard!'
-                              : 'Copy Onboarding Invite Code',
+                              ? 'Employee Login Link Copied!'
+                              : 'Copy Employee Login Link',
                           style: TextStyle(
                               color: copied ? AppTheme.pastelMint : null,
                               fontWeight: FontWeight.w600)),

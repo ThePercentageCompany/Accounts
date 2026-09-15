@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +36,7 @@ class GoogleSession extends ChangeNotifier {
   String? cachedDisplayName;
   String? cachedPhotoUrl;
   String? _inMemoryAccessToken;
+  String? _pendingEmployeeInvite;
   bool authorized = false;
   bool isAuthorizing = false;
   bool isCheckingWorkspace = false;
@@ -75,12 +77,13 @@ class GoogleSession extends ChangeNotifier {
   String? get currentEmployeeId => workspace?.employeeId;
   String? get currentEmployeeName => workspace?.employeeName ?? effectiveDisplayName;
   List<String>? get allowedSections => workspace?.allowedSections;
+  String? get pendingEmployeeInvite => _pendingEmployeeInvite;
 
   /// Checks whether a given section/tab title is permitted for the active session.
   bool isSectionAllowed(String sectionTitle) {
     if (!isEmployee) return true; // Company owner/admin has unrestricted access
     final allowed = allowedSections;
-    if (allowed == null || allowed.isEmpty) return true;
+    if (allowed == null || allowed.isEmpty) return sectionTitle == 'Dashboard';
     final normalized = sectionTitle.toLowerCase().trim();
     return allowed.any((s) => s.toLowerCase().trim() == normalized);
   }
@@ -88,9 +91,13 @@ class GoogleSession extends ChangeNotifier {
   /// Pairs the current Google user session with an employee invitation QR or JSON payload.
   Future<void> pairWithEmployeeInvite(String inviteCodeOrJson) async {
     final config = WorkspaceConfig.fromInvitePayload(inviteCodeOrJson);
-    if (config == null || config.spreadsheetId.isEmpty) {
+    if (config == null || config.spreadsheetId.isEmpty || (config.employeeId ?? '').isEmpty) {
       throw StateError('Invalid employee invitation code or QR data.');
     }
+    if (user == null) {
+      throw StateError('Sign in with the employee\'s registered Google account before using this invite.');
+    }
+    _pendingEmployeeInvite = null;
     await setWorkspace(config);
   }
 
@@ -109,6 +116,11 @@ class GoogleSession extends ChangeNotifier {
           reason: 'Google access is no longer authorized. Please sign in again.',
         );
     await _loadCachedSession();
+    final launchInvite = WorkspaceConfig.fromInvitePayload(
+        WidgetsBinding.instance.platformDispatcher.defaultRouteName);
+    if (launchInvite != null) {
+      _pendingEmployeeInvite = launchInvite.toInvitePayload();
+    }
 
     const client = String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: defaultClientId);
     const server = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
@@ -345,6 +357,9 @@ class GoogleSession extends ChangeNotifier {
               spreadsheetId: config.spreadsheetId,
             );
           }
+          if (config.isEmployee) {
+            await _refreshEmployeeAccess(config);
+          }
         }
       } catch (e) {
         // Do not pretend a workspace is live when its initial cloud pull
@@ -359,6 +374,65 @@ class GoogleSession extends ChangeNotifier {
       _automaticSyncTimer?.cancel();
       _automaticSyncTimer = null;
     }
+  }
+
+  Future<void> _refreshEmployeeAccess(WorkspaceConfig config) async {
+    if (!config.isEmployee || config.spreadsheetId.isEmpty) return;
+    final employees =
+        await syncManager.loadCachedRecords(config.spreadsheetId, 'Employees');
+    final employeeId = config.employeeId?.trim() ?? '';
+    final employee = employees.cast<Map<String, dynamic>?>().firstWhere(
+          (record) => record?['id']?.toString() == employeeId,
+          orElse: () => null,
+        );
+    if (employee == null) {
+      await forceSignOut(
+        reason: 'This employee access code is no longer active. Contact your administrator.',
+      );
+      throw StateError('Employee access code is not active.');
+    }
+
+    if (employee['active'] == false ||
+        employee['active']?.toString().toLowerCase() == 'false') {
+      await forceSignOut(
+        reason: 'Your employee account has been disabled. Contact your administrator.',
+      );
+      throw StateError('Employee account is disabled.');
+    }
+
+    final configuredGoogleEmail = employee['googleEmail']?.toString().trim() ?? '';
+    final registeredEmail = (configuredGoogleEmail.isNotEmpty
+            ? configuredGoogleEmail
+            : employee['email']?.toString() ?? '')
+        .toLowerCase();
+    final signedInEmail = (user?.email ?? cachedEmail ?? '').trim().toLowerCase();
+    if (registeredEmail.isEmpty || signedInEmail.isEmpty || registeredEmail != signedInEmail) {
+      await forceSignOut(
+        reason: 'Use the Google account registered for this employee profile.',
+      );
+      throw StateError('The signed-in Google account is not assigned to this employee.');
+    }
+
+    final rawSections = employee['allowedSections'];
+    final sections = rawSections is List
+        ? rawSections.map((value) => value.toString().trim()).where((value) => value.isNotEmpty).toList()
+        : rawSections
+            .toString()
+            .split(',')
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toList();
+    final refreshed = config.copyWith(
+      employeeName: employee['name']?.toString(),
+      employeeEmail: registeredEmail,
+      employeeRole: employee['systemRole']?.toString() ?? 'Staff',
+      allowedSections: sections.isEmpty ? const ['Dashboard'] : sections,
+    );
+    workspace = refreshed;
+    await GoogleWorkspaceService.saveWorkspace(effectiveEmail, refreshed);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cachedWorkspaceKey, jsonEncode(refreshed.toJson()));
+    notifyListeners();
   }
 
   /// Keeps the cloud cache fresh even when the user has not edited a record.
@@ -540,6 +614,9 @@ class GoogleSession extends ChangeNotifier {
       isOffline = false;
       await syncManager.triggerBackgroundSync(token: tok, spreadsheetId: workspace!.spreadsheetId);
       await syncManager.waitForIdle();
+      if (workspace?.isEmployee == true) {
+        await _refreshEmployeeAccess(workspace!);
+      }
     } else {
       isOffline = true;
       syncManager.markOffline();

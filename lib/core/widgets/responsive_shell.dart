@@ -485,6 +485,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
       (index: 5, title: 'Fixed Assets', subtitle: 'Depreciation & equipment', icon: CupertinoIcons.cube_box_fill, color: const Color(0xFFEC4899)),
       (index: 6, title: 'Balance Sheet', subtitle: 'General ledger & trial balance', icon: CupertinoIcons.building_2_fill, color: const Color(0xFF06B6D4)),
     ];
+    final visibleAccountModules = accountModules
+        .where((module) => widget.session.isSectionAllowed(module.title))
+        .toList();
 
     showModalBottomSheet<void>(
       context: context,
@@ -525,7 +528,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                for (final mod in accountModules) ...[
+                for (final mod in visibleAccountModules) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: InkWell(
@@ -781,7 +784,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  for (final entry in sections.entries) ...[
+                  for (final entry in sections.entries)
+                    if (entry.value.any(
+                        (index) => widget.session.isSectionAllowed(appNavDestinations[index].title))) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 8, bottom: 8),
                       child: Text(
@@ -798,7 +803,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        for (final idx in entry.value)
+                        for (final idx in entry.value.where(
+                            (index) => widget.session.isSectionAllowed(
+                                appNavDestinations[index].title)))
                           _buildModuleGridCard(ctx, idx, isDark),
                       ],
                     ),
@@ -922,6 +929,23 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
 
     // Mobile layout
     final currentItem = appNavDestinations[widget.selectedIndex.clamp(0, appNavDestinations.length - 1)];
+    final directMobileItems = [0, 1, 2]
+        .where((index) => widget.session.isSectionAllowed(appNavDestinations[index].title))
+        .toList();
+    final hasAccountModules = [3, 4, 5, 6]
+        .any((index) => widget.session.isSectionAllowed(appNavDestinations[index].title));
+    final hasMoreModules = [7, 8, 9, 10, 11, 12]
+        .any((index) => widget.session.isSectionAllowed(appNavDestinations[index].title));
+    final mobileActions = <int>[...directMobileItems];
+    if (hasAccountModules) mobileActions.add(-1);
+    if (hasMoreModules) mobileActions.add(-2);
+    final selectedMobileIndex = directMobileItems.contains(widget.selectedIndex)
+        ? mobileActions.indexOf(widget.selectedIndex)
+        : widget.selectedIndex >= 3 && widget.selectedIndex <= 6 && hasAccountModules
+            ? mobileActions.indexOf(-1)
+            : hasMoreModules
+                ? mobileActions.indexOf(-2)
+                : 0;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -978,54 +1002,43 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
       ),
       drawer: Drawer(
         backgroundColor: const Color(0xFF0F172A),
-        child: _buildSidebar(context, true, isDrawer: true),
+        child: _buildSidebar(context, isDark, isDrawer: true),
       ),
       body: widget.child,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.selectedIndex < 3
-            ? widget.selectedIndex
-            : (widget.selectedIndex <= 6 ? 3 : 4),
+        selectedIndex: selectedMobileIndex,
         onDestinationSelected: (v) {
-          if (v == 0) {
-            widget.onIndexChanged(0);
-          } else if (v == 1) {
-            widget.onIndexChanged(1);
-          } else if (v == 2) {
-            widget.onIndexChanged(2);
-          } else if (v == 3) {
+          final action = mobileActions[v];
+          if (action >= 0) {
+            widget.onIndexChanged(action);
+          } else if (action == -1) {
             _showAccountsBottomSheet(context, isDark);
           } else {
             _showMoreBottomSheet(context, isDark);
           }
         },
         destinations: [
-          const NavigationDestination(
-            icon: Icon(CupertinoIcons.house_alt),
-            selectedIcon: Icon(CupertinoIcons.house_alt_fill),
-            label: 'Dashboard',
-          ),
-          const NavigationDestination(
-            icon: Icon(CupertinoIcons.doc_text),
-            selectedIcon: Icon(CupertinoIcons.doc_text_fill),
-            label: 'Invoices',
-          ),
-          const NavigationDestination(
-            icon: Icon(CupertinoIcons.doc_plaintext),
-            selectedIcon: Icon(CupertinoIcons.doc_on_clipboard_fill),
-            label: 'Quotations',
-          ),
-          NavigationDestination(
-            icon: const Icon(CupertinoIcons.briefcase),
-            selectedIcon: const Icon(CupertinoIcons.briefcase_fill),
-            label: (widget.selectedIndex >= 3 && widget.selectedIndex <= 6)
-                ? currentItem.title
-                : 'Accounts',
-          ),
-          NavigationDestination(
-            icon: const Icon(CupertinoIcons.square_grid_2x2),
-            selectedIcon: const Icon(CupertinoIcons.square_grid_2x2_fill),
-            label: widget.selectedIndex > 6 ? currentItem.title : 'More',
-          ),
+          for (final action in mobileActions)
+            if (action >= 0)
+              NavigationDestination(
+                icon: Icon(appNavDestinations[action].icon),
+                selectedIcon: Icon(appNavDestinations[action].selectedIcon),
+                label: appNavDestinations[action].title,
+              )
+            else if (action == -1)
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.briefcase),
+                selectedIcon: const Icon(CupertinoIcons.briefcase_fill),
+                label: (widget.selectedIndex >= 3 && widget.selectedIndex <= 6)
+                    ? currentItem.title
+                    : 'Accounts',
+              )
+            else
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.square_grid_2x2),
+                selectedIcon: const Icon(CupertinoIcons.square_grid_2x2_fill),
+                label: widget.selectedIndex > 6 ? currentItem.title : 'More',
+              ),
         ],
       ),
     );
@@ -1275,7 +1288,12 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // Sidebar (Dark Slate Navy matching Mockup)
   // -------------------------------------------------------------
   Widget _buildSidebar(BuildContext context, bool isDark, {bool isDrawer = false}) {
-    const sidebarBg = Color(0xFF0F172A);
+    final sidebarBg = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final selectedBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF);
+    final mutedText = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final primaryText = isDark ? Colors.white : const Color(0xFF0F172A);
+    final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
+    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
     final companyName = widget.companyName.isNotEmpty
         ? widget.companyName
         : (widget.session.workspace?.companyName ?? 'The Percentage Company');
@@ -1318,8 +1336,8 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       children: [
                         Text(
                           companyName,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: primaryText,
                             fontSize: 14.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.3,
@@ -1329,10 +1347,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (widget.isDemo)
-                          const Text(
+                          Text(
                             'Demo Workspace',
                             style: TextStyle(
-                              color: Color(0xFF94A3B8),
+                              color: mutedText,
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
@@ -1366,7 +1384,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9.5),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF1E293B) : Colors.transparent,
+                          color: isSelected ? selectedBg : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -1374,7 +1392,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                             Icon(
                               isSelected ? item.selectedIcon : item.icon,
                               size: 18,
-                              color: isSelected ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                              color: isSelected ? const Color(0xFF10B981) : mutedText,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1383,7 +1401,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                                 style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                                  color: isSelected ? primaryText : mutedText,
                                   letterSpacing: -0.2,
                                 ),
                               ),
@@ -1403,10 +1421,10 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: cardBg,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFF334155),
+                    color: borderColor,
                     width: 0.8,
                   ),
                 ),
@@ -1429,22 +1447,22 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
+                    Text(
                       'Good businesses\ngrow with clarity.',
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: primaryText,
                         height: 1.3,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Simple accounting\nfor a brighter tomorrow.',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w400,
-                        color: Color(0xFF94A3B8),
+                        color: mutedText,
                         height: 1.3,
                       ),
                     ),
@@ -1465,7 +1483,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                    color: cardBg.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: const Color(0xFFEF4444).withValues(alpha: 0.3),
@@ -1502,7 +1520,9 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
   // Compact Rail for Tablet
   // -------------------------------------------------------------
   Widget _buildCompactRail(BuildContext context, bool isDark) {
-    const sidebarBg = Color(0xFF0F172A);
+    final sidebarBg = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final selectedBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF);
+    final mutedText = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     final companyName = widget.companyName.isNotEmpty
         ? widget.companyName
         : (widget.session.workspace?.companyName ?? 'The Percentage Company');
@@ -1530,7 +1550,7 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
               ),
             ),
             const SizedBox(height: 16),
-            const Divider(color: Color(0xFF1E293B), height: 1),
+            Divider(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0), height: 1),
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
@@ -1552,14 +1572,14 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF1E293B) : Colors.transparent,
+                            color: isSelected ? selectedBg : Colors.transparent,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Center(
                             child: Icon(
                               isSelected ? item.selectedIcon : item.icon,
                               size: 19,
-                              color: isSelected ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                              color: isSelected ? const Color(0xFF10B981) : mutedText,
                             ),
                           ),
                         ),

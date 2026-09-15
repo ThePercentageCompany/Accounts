@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/form_validators.dart';
 import '../../../core/widgets/date_field.dart';
 import '../../billing/domain/models.dart';
 import '../../billing/presentation/billing_cubit.dart';
@@ -1238,6 +1239,11 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                     keyboardType:
                                         const TextInputType.numberWithOptions(
                                             decimal: true),
+                                    inputFormatters:
+                                        FormValidators.decimalInput,
+                                    validator: (value) =>
+                                        FormValidators.amount(value,
+                                            required: true),
                                     onChanged: (v) => _markDirty(
                                         () => _rows[n]['quantity'] = v),
                                   ),
@@ -1252,6 +1258,11 @@ class _QuotationEditorState extends State<QuotationEditor> {
                                     keyboardType:
                                         const TextInputType.numberWithOptions(
                                             decimal: true),
+                                    inputFormatters:
+                                        FormValidators.decimalInput,
+                                    validator: (value) =>
+                                        FormValidators.amount(value,
+                                            required: true),
                                     onChanged: (v) =>
                                         _markDirty(() => _rows[n]['rate'] = v),
                                   ),
@@ -1364,6 +1375,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             textAlign: TextAlign.center,
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
+                            inputFormatters: FormValidators.decimalInput,
+                            validator: (value) =>
+                                FormValidators.amount(value, required: true),
                             onChanged: (v) =>
                                 _markDirty(() => _rows[n]['quantity'] = v),
                           ),
@@ -1381,6 +1395,9 @@ class _QuotationEditorState extends State<QuotationEditor> {
                             textAlign: TextAlign.right,
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
+                            inputFormatters: FormValidators.decimalInput,
+                            validator: (value) =>
+                                FormValidators.amount(value, required: true),
                             onChanged: (v) =>
                                 _markDirty(() => _rows[n]['rate'] = v),
                           ),
