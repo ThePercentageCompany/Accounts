@@ -27,9 +27,9 @@ class _CapitalEquityScreenState extends State<CapitalEquityScreen> with SingleTi
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
 
     return BlocConsumer<OfficeCubit, OfficeState>(
       listener: (context, state) {
@@ -54,6 +54,8 @@ class _CapitalEquityScreenState extends State<CapitalEquityScreen> with SingleTi
             backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
             bottom: TabBar(
               controller: _tabController,
+              isScrollable: isCompact,
+              tabAlignment: isCompact ? TabAlignment.start : TabAlignment.fill,
               labelColor: const Color(0xFF2563EB),
               unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               indicatorColor: const Color(0xFF2563EB),

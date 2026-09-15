@@ -1,6 +1,7 @@
 import '../../billing/domain/models.dart';
 import '../../billing/domain/totals.dart';
 import '../../office/domain/office_repository.dart';
+import '../../office/domain/accounting_engine.dart';
 import 'report_models.dart';
 
 class ReportCalculationService {
@@ -24,78 +25,64 @@ class ReportCalculationService {
   }) {
     final Map<String, int> revenueByService = {};
     int totalRevenueCents = 0;
-
-    for (final inv in invoices) {
-      if (inv.status == 'issued' && _isDateInRange(inv.date, filter.startDate, filter.endDate)) {
-        final t = Totals.of(inv);
-        totalRevenueCents += t.total;
-        for (final item in inv.items) {
-          final title = item.description.isNotEmpty ? item.description : 'General Services';
-          revenueByService[title] = (revenueByService[title] ?? 0) + lineTotal(item);
-        }
-      }
-    }
-
     final Map<String, int> operatingExpensesByCategory = {};
     int totalExpensesCents = 0;
-
-    for (final e in office.entries) {
-      if (e['kind'] == 'expense' && e['status'] == 'paid' && _isDateInRange(e['date']?.toString(), filter.startDate, filter.endDate)) {
-        final amt = (e['amountCents'] as num?)?.toInt() ?? 0;
-        final cat = e['category']?.toString() ?? 'General Operating';
-        operatingExpensesByCategory[cat] = (operatingExpensesByCategory[cat] ?? 0) + amt;
-        totalExpensesCents += amt;
+    for (final line in AccountingEngine.postedLines(invoices, office)) {
+      if (!_isDateInRange(
+          line['date']?.toString(), filter.startDate, filter.endDate)) continue;
+      final group = line['accountGroup']?.toString();
+      final debit = (line['debitCents'] as num?)?.toInt() ?? 0;
+      final credit = (line['creditCents'] as num?)?.toInt() ?? 0;
+      final name = line['accountName']?.toString() ?? 'Uncategorised';
+      if (group == 'Income') {
+        final amount = credit - debit;
+        revenueByService[name] = (revenueByService[name] ?? 0) + amount;
+        totalRevenueCents += amount;
+      } else if (group == 'Expense') {
+        final amount = debit - credit;
+        operatingExpensesByCategory[name] =
+            (operatingExpensesByCategory[name] ?? 0) + amount;
+        totalExpensesCents += amount;
       }
-    }
-
-    // Payroll expense
-    int payrollExpenseCents = 0;
-    for (final p in office.payroll) {
-      if ((p['status'] == 'approved' || p['status'] == 'paid') && _isDateInRange(p['date']?.toString(), filter.startDate, filter.endDate)) {
-        final net = (p['netCents'] as num?)?.toInt() ?? 0;
-        payrollExpenseCents += net;
-      }
-    }
-    if (payrollExpenseCents > 0) {
-      operatingExpensesByCategory['Salaries & Wages'] = (operatingExpensesByCategory['Salaries & Wages'] ?? 0) + payrollExpenseCents;
-      totalExpensesCents += payrollExpenseCents;
-    }
-
-    // Depreciation expense
-    int depreciationExpenseCents = 0;
-    for (final a in office.assets) {
-      if (a['status'] != 'disposed' && a['status'] != 'void') {
-        final acc = (a['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
-        depreciationExpenseCents += acc;
-      }
-    }
-    if (depreciationExpenseCents > 0) {
-      operatingExpensesByCategory['Depreciation Expense'] = (operatingExpensesByCategory['Depreciation Expense'] ?? 0) + depreciationExpenseCents;
-      totalExpensesCents += depreciationExpenseCents;
     }
 
     final netProfitCents = totalRevenueCents - totalExpensesCents;
 
     return [
       // Operating Revenue
-      const ReportLineItem(label: 'REVENUE & OPERATING INCOME', amount: 0, isHeader: true),
+      const ReportLineItem(
+          label: 'REVENUE & OPERATING INCOME', amount: 0, isHeader: true),
       for (final entry in revenueByService.entries)
-        ReportLineItem(label: entry.key, amount: entry.value / 100.0, indentLevel: 1),
+        ReportLineItem(
+            label: entry.key, amount: entry.value / 100.0, indentLevel: 1),
       if (revenueByService.isEmpty)
-        ReportLineItem(label: 'Operating Sales', amount: totalRevenueCents / 100.0, indentLevel: 1),
-      ReportLineItem(label: 'Total Operating Revenue', amount: totalRevenueCents / 100.0, isTotal: true),
+        ReportLineItem(
+            label: 'Operating Sales',
+            amount: totalRevenueCents / 100.0,
+            indentLevel: 1),
+      ReportLineItem(
+          label: 'Total Operating Revenue',
+          amount: totalRevenueCents / 100.0,
+          isTotal: true),
 
       // Operating Expenses
-      const ReportLineItem(label: 'OPERATING EXPENSES', amount: 0, isHeader: true),
+      const ReportLineItem(
+          label: 'OPERATING EXPENSES', amount: 0, isHeader: true),
       for (final entry in operatingExpensesByCategory.entries)
-        ReportLineItem(label: entry.key, amount: entry.value / 100.0, indentLevel: 1),
+        ReportLineItem(
+            label: entry.key, amount: entry.value / 100.0, indentLevel: 1),
       if (operatingExpensesByCategory.isEmpty)
-        const ReportLineItem(label: 'General Operating Costs', amount: 0.0, indentLevel: 1),
-      ReportLineItem(label: 'Total Operating Expenses', amount: totalExpensesCents / 100.0, isTotal: true),
+        const ReportLineItem(
+            label: 'General Operating Costs', amount: 0.0, indentLevel: 1),
+      ReportLineItem(
+          label: 'Total Operating Expenses',
+          amount: totalExpensesCents / 100.0,
+          isTotal: true),
 
       // Net Profit / Loss
       ReportLineItem(
-        label: netProfitCents >= 0 ? 'NET OPERATING PROFIT' : 'NET OPERATING LOSS',
+        label:
+            netProfitCents >= 0 ? 'NET OPERATING PROFIT' : 'NET OPERATING LOSS',
         amount: netProfitCents / 100.0,
         isTotal: true,
       ),
@@ -131,7 +118,9 @@ class ReportCalculationService {
       double cur = 0, d1_30 = 0, d31_60 = 0, d61_90 = 0, d90plus = 0, total = 0;
 
       for (final inv in invs) {
-        final due = DateTime.tryParse(inv.dueDate) ?? DateTime.tryParse(inv.date) ?? now;
+        final due = DateTime.tryParse(inv.dueDate) ??
+            DateTime.tryParse(inv.date) ??
+            now;
         final overdueDays = now.difference(due).inDays;
         final bal = Totals.of(inv).balance / 100.0;
         total += bal;
@@ -176,7 +165,10 @@ class ReportCalculationService {
 
     for (final e in office.entries) {
       if (e['kind'] == 'expense' && e['status'] == 'unpaid') {
-        final vendor = e['vendor']?.toString() ?? e['supplier']?.toString() ?? e['category']?.toString() ?? 'Supplier';
+        final vendor = e['vendor']?.toString() ??
+            e['supplier']?.toString() ??
+            e['category']?.toString() ??
+            'Supplier';
         vendorBills.putIfAbsent(vendor, () => []).add(e);
       }
     }
@@ -230,7 +222,8 @@ class ReportCalculationService {
   }) {
     double stdSales = 0, stdSalesVat = 0, zeroSales = 0, exemptSales = 0;
     for (final inv in invoices) {
-      if (inv.status == 'issued' && _isDateInRange(inv.date, filter.startDate, filter.endDate)) {
+      if (inv.status == 'issued' &&
+          _isDateInRange(inv.date, filter.startDate, filter.endDate)) {
         final t = Totals.of(inv);
         stdSales += t.subtotal / 100.0;
         stdSalesVat += t.tax / 100.0;
@@ -239,7 +232,10 @@ class ReportCalculationService {
 
     double stdExpenses = 0, recoverableVat = 0;
     for (final e in office.entries) {
-      if (e['kind'] == 'expense' && e['status'] == 'paid' && _isDateInRange(e['date']?.toString(), filter.startDate, filter.endDate)) {
+      if (e['kind'] == 'expense' &&
+          e['status'] == 'paid' &&
+          _isDateInRange(
+              e['date']?.toString(), filter.startDate, filter.endDate)) {
         final amt = ((e['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
         final vatRate = (e['vatPercent'] as num?)?.toDouble() ?? 5.0;
         final base = amt / (1 + (vatRate / 100.0));
@@ -289,18 +285,26 @@ class ReportCalculationService {
         }
       }
     }
-    operatingItems.add(ReportLineItem(label: 'Customer Invoices Collected', amount: operatingInflow));
+    operatingItems.add(ReportLineItem(
+        label: 'Customer Invoices Collected', amount: operatingInflow));
 
     for (final e in office.entries) {
-      if (e['kind'] == 'expense' && e['status'] == 'paid' && _isDateInRange(e['date']?.toString(), filter.startDate, filter.endDate)) {
+      if (e['kind'] == 'expense' &&
+          e['status'] == 'paid' &&
+          _isDateInRange(
+              e['date']?.toString(), filter.startDate, filter.endDate)) {
         final amt = ((e['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
         operatingOutflow += amt;
       }
     }
-    operatingItems.add(ReportLineItem(label: 'Supplier & Operational Disbursements', amount: -operatingOutflow));
+    operatingItems.add(ReportLineItem(
+        label: 'Supplier & Operational Disbursements',
+        amount: -operatingOutflow));
 
     for (final p in office.payroll) {
-      if (p['status'] == 'paid' && _isDateInRange(p['date']?.toString(), filter.startDate, filter.endDate)) {
+      if (p['status'] == 'paid' &&
+          _isDateInRange(
+              p['date']?.toString(), filter.startDate, filter.endDate)) {
         final amt = ((p['netCents'] as num?)?.toInt() ?? 0) / 100.0;
         operatingOutflow += amt;
       }
@@ -312,11 +316,15 @@ class ReportCalculationService {
     final List<ReportLineItem> investingItems = [];
     double assetPurchases = 0;
     for (final a in office.assets) {
-      if (a['acquisitionType'] == 'companyPurchase' && a['status'] != 'void' && _isDateInRange(a['purchaseDate']?.toString(), filter.startDate, filter.endDate)) {
+      if (a['acquisitionType'] == 'companyPurchase' &&
+          a['status'] != 'void' &&
+          _isDateInRange(a['purchaseDate']?.toString(), filter.startDate,
+              filter.endDate)) {
         assetPurchases += ((a['costCents'] as num?)?.toInt() ?? 0) / 100.0;
       }
     }
-    investingItems.add(ReportLineItem(label: 'Fixed Asset Capital Acquisitions', amount: -assetPurchases));
+    investingItems.add(ReportLineItem(
+        label: 'Fixed Asset Capital Acquisitions', amount: -assetPurchases));
     final netInvesting = -assetPurchases;
 
     // 3. Financing Activities
@@ -326,10 +334,12 @@ class ReportCalculationService {
 
     for (final cap in office.capitalTransactions) {
       if (cap['status'] == 'void') continue;
-      if (_isDateInRange(cap['date']?.toString(), filter.startDate, filter.endDate)) {
+      if (_isDateInRange(
+          cap['date']?.toString(), filter.startDate, filter.endDate)) {
         final amt = ((cap['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
         final cType = cap['contributionType']?.toString() ?? 'bank';
-        final tType = cap['transactionType']?.toString() ?? 'capitalContribution';
+        final tType =
+            cap['transactionType']?.toString() ?? 'capitalContribution';
         if (cType.toLowerCase() != 'asset') {
           if (tType == 'capitalWithdrawal') {
             capitalOutflow += amt;
@@ -339,22 +349,27 @@ class ReportCalculationService {
         }
       }
     }
-    financingItems.add(ReportLineItem(label: 'Shareholder Cash Contributions', amount: capitalInflow));
+    financingItems.add(ReportLineItem(
+        label: 'Shareholder Cash Contributions', amount: capitalInflow));
     if (capitalOutflow > 0) {
-      financingItems.add(ReportLineItem(label: 'Shareholder Capital Withdrawals', amount: -capitalOutflow));
+      financingItems.add(ReportLineItem(
+          label: 'Shareholder Capital Withdrawals', amount: -capitalOutflow));
     }
 
     for (final loan in office.shareholderLoans) {
       if (loan['status'] == 'void') continue;
-      if (_isDateInRange(loan['date']?.toString(), filter.startDate, filter.endDate)) {
+      if (_isDateInRange(
+          loan['date']?.toString(), filter.startDate, filter.endDate)) {
         final amt = ((loan['amountCents'] as num?)?.toInt() ?? 0) / 100.0;
         final type = loan['type']?.toString() ?? 'loanReceived';
         if (type == 'loanReceived') {
           capitalInflow += amt;
-          financingItems.add(ReportLineItem(label: 'Shareholder Loans Inflow', amount: amt));
+          financingItems.add(
+              ReportLineItem(label: 'Shareholder Loans Inflow', amount: amt));
         } else {
           capitalOutflow += amt;
-          financingItems.add(ReportLineItem(label: 'Shareholder Loan Repayments', amount: -amt));
+          financingItems.add(ReportLineItem(
+              label: 'Shareholder Loan Repayments', amount: -amt));
         }
       }
     }
@@ -362,9 +377,18 @@ class ReportCalculationService {
     final netFinancing = capitalInflow - capitalOutflow;
 
     return [
-      CashFlowSectionData(title: '1. Cash Flow from Operating Activities', items: operatingItems, netCashFlow: netOperating),
-      CashFlowSectionData(title: '2. Cash Flow from Investing Activities', items: investingItems, netCashFlow: netInvesting),
-      CashFlowSectionData(title: '3. Cash Flow from Financing Activities', items: financingItems, netCashFlow: netFinancing),
+      CashFlowSectionData(
+          title: '1. Cash Flow from Operating Activities',
+          items: operatingItems,
+          netCashFlow: netOperating),
+      CashFlowSectionData(
+          title: '2. Cash Flow from Investing Activities',
+          items: investingItems,
+          netCashFlow: netInvesting),
+      CashFlowSectionData(
+          title: '3. Cash Flow from Financing Activities',
+          items: financingItems,
+          netCashFlow: netFinancing),
     ];
   }
 
@@ -381,10 +405,13 @@ class ReportCalculationService {
     int grandTotalCents = 0;
 
     for (final inv in invoices) {
-      if (inv.status == 'issued' && _isDateInRange(inv.date, filter.startDate, filter.endDate)) {
+      if (inv.status == 'issued' &&
+          _isDateInRange(inv.date, filter.startDate, filter.endDate)) {
         final t = Totals.of(inv);
-        revenueByCustomer[inv.customer.id] = (revenueByCustomer[inv.customer.id] ?? 0) + t.total;
-        invoiceCounts[inv.customer.id] = (invoiceCounts[inv.customer.id] ?? 0) + 1;
+        revenueByCustomer[inv.customer.id] =
+            (revenueByCustomer[inv.customer.id] ?? 0) + t.total;
+        invoiceCounts[inv.customer.id] =
+            (invoiceCounts[inv.customer.id] ?? 0) + 1;
         grandTotalCents += t.total;
       }
     }
@@ -398,7 +425,8 @@ class ReportCalculationService {
           label: c.name,
           code: c.id.substring(0, c.id.length.clamp(0, 6)),
           amount: revCents / 100.0,
-          secondaryAmount: grandTotalCents > 0 ? (revCents / grandTotalCents) * 100.0 : 0.0,
+          secondaryAmount:
+              grandTotalCents > 0 ? (revCents / grandTotalCents) * 100.0 : 0.0,
           metadata: {'invoiceCount': count},
         ));
       }
@@ -438,12 +466,16 @@ class ReportCalculationService {
     }
 
     for (final a in office.assets) {
-      if (a['acquisitionType'] == 'shareholderContribution' && a['status'] != 'void') {
+      if (a['acquisitionType'] == 'shareholderContribution' &&
+          a['status'] != 'void') {
         assetContributions += ((a['costCents'] as num?)?.toInt() ?? 0) / 100.0;
       }
     }
 
-    final closingCapital = openingCapital + cashContributions + assetContributions - capitalWithdrawals;
+    final closingCapital = openingCapital +
+        cashContributions +
+        assetContributions -
+        capitalWithdrawals;
 
     // Operating Net Income
     int revCents = 0;
@@ -452,29 +484,56 @@ class ReportCalculationService {
     }
     int expCents = 0;
     for (final e in office.entries) {
-      if (e['kind'] == 'expense' && e['status'] == 'paid') expCents += (e['amountCents'] as num?)?.toInt() ?? 0;
+      if (e['kind'] == 'expense' && e['status'] == 'paid')
+        expCents += (e['amountCents'] as num?)?.toInt() ?? 0;
     }
     for (final p in office.payroll) {
-      if (p['status'] == 'approved' || p['status'] == 'paid') expCents += (p['netCents'] as num?)?.toInt() ?? 0;
+      if (p['status'] == 'approved' || p['status'] == 'paid')
+        expCents += (p['netCents'] as num?)?.toInt() ?? 0;
     }
     final netProfit = (revCents - expCents) / 100.0;
     final closingEquity = closingCapital + netProfit;
 
     return [
-      const ReportLineItem(label: 'SHAREHOLDER CONTRIBUTED CAPITAL', amount: 0, isHeader: true),
-      ReportLineItem(label: 'Opening Shareholder Capital', amount: openingCapital, indentLevel: 1),
-      ReportLineItem(label: '+ Cash Capital Contributions', amount: cashContributions, indentLevel: 1),
-      ReportLineItem(label: '+ Fixed Asset Capital Contributions', amount: assetContributions, indentLevel: 1),
+      const ReportLineItem(
+          label: 'SHAREHOLDER CONTRIBUTED CAPITAL', amount: 0, isHeader: true),
+      ReportLineItem(
+          label: 'Opening Shareholder Capital',
+          amount: openingCapital,
+          indentLevel: 1),
+      ReportLineItem(
+          label: '+ Cash Capital Contributions',
+          amount: cashContributions,
+          indentLevel: 1),
+      ReportLineItem(
+          label: '+ Fixed Asset Capital Contributions',
+          amount: assetContributions,
+          indentLevel: 1),
       if (capitalWithdrawals > 0)
-        ReportLineItem(label: '- Capital Withdrawals', amount: -capitalWithdrawals, indentLevel: 1),
-      ReportLineItem(label: 'Closing Shareholder Capital', amount: closingCapital, isTotal: true),
-
-      const ReportLineItem(label: 'RETAINED EARNINGS & OPERATING PROFIT', amount: 0, isHeader: true),
-      const ReportLineItem(label: 'Opening Retained Earnings', amount: 0.0, indentLevel: 1),
-      ReportLineItem(label: '+ Current Period Net Operating Income', amount: netProfit, indentLevel: 1),
-      ReportLineItem(label: 'Closing Retained Earnings', amount: netProfit, isTotal: true),
-
-      ReportLineItem(label: 'TOTAL CLOSING SHAREHOLDER EQUITY', amount: closingEquity, isTotal: true),
+        ReportLineItem(
+            label: '- Capital Withdrawals',
+            amount: -capitalWithdrawals,
+            indentLevel: 1),
+      ReportLineItem(
+          label: 'Closing Shareholder Capital',
+          amount: closingCapital,
+          isTotal: true),
+      const ReportLineItem(
+          label: 'RETAINED EARNINGS & OPERATING PROFIT',
+          amount: 0,
+          isHeader: true),
+      const ReportLineItem(
+          label: 'Opening Retained Earnings', amount: 0.0, indentLevel: 1),
+      ReportLineItem(
+          label: '+ Current Period Net Operating Income',
+          amount: netProfit,
+          indentLevel: 1),
+      ReportLineItem(
+          label: 'Closing Retained Earnings', amount: netProfit, isTotal: true),
+      ReportLineItem(
+          label: 'TOTAL CLOSING SHAREHOLDER EQUITY',
+          amount: closingEquity,
+          isTotal: true),
     ];
   }
 
@@ -489,7 +548,8 @@ class ReportCalculationService {
   }) {
     final List<Map<String, dynamic>> entries = [];
 
-    void addEntry(String date, String accountName, String description, int debit, int credit) {
+    void addEntry(String date, String accountName, String description,
+        int debit, int credit) {
       if (!_isDateInRange(date, filter.startDate, filter.endDate)) return;
       entries.add({
         'date': date,
@@ -504,16 +564,23 @@ class ReportCalculationService {
     for (final inv in invoices) {
       if (inv.status == 'issued') {
         final t = Totals.of(inv);
-        addEntry(inv.date, 'Accounts Receivable', 'Invoice ${inv.number} - ${inv.customer.name}', t.total, 0);
-        addEntry(inv.date, 'Service Revenue', 'Invoice ${inv.number} - Services', 0, t.subtotal);
+        addEntry(inv.date, 'Accounts Receivable',
+            'Invoice ${inv.number} - ${inv.customer.name}', t.total, 0);
+        addEntry(inv.date, 'Service Revenue',
+            'Invoice ${inv.number} - Services', 0, t.subtotal);
         if (t.tax > 0) {
-          addEntry(inv.date, 'VAT Output Liability', 'Invoice ${inv.number} - VAT 5%', 0, t.tax);
+          addEntry(inv.date, 'VAT Output Liability',
+              'Invoice ${inv.number} - VAT 5%', 0, t.tax);
         }
 
         for (final p in inv.payments) {
-          final acc = p.account.toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account';
-          addEntry(p.date, acc, 'Payment for Invoice ${inv.number}', p.cents, 0);
-          addEntry(p.date, 'Accounts Receivable', 'Payment Received - ${inv.customer.name}', 0, p.cents);
+          final acc = p.account.toLowerCase() == 'cash'
+              ? 'Cash in Hand'
+              : 'Bank Account';
+          addEntry(
+              p.date, acc, 'Payment for Invoice ${inv.number}', p.cents, 0);
+          addEntry(p.date, 'Accounts Receivable',
+              'Payment Received - ${inv.customer.name}', 0, p.cents);
         }
       }
     }
@@ -523,17 +590,23 @@ class ReportCalculationService {
       final date = e['date']?.toString() ?? '';
       final amount = (e['amountCents'] as num?)?.toInt() ?? 0;
       final category = e['category']?.toString() ?? 'General';
-      final acc = (e['account']?.toString() ?? 'Bank').toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account';
+      final acc = (e['account']?.toString() ?? 'Bank').toLowerCase() == 'cash'
+          ? 'Cash in Hand'
+          : 'Bank Account';
 
       if (e['status'] == 'unpaid') {
-        addEntry(date, 'Operating Expenses - $category', 'Supplier Bill - ${e['supplier'] ?? 'Expense'}', amount, 0);
-        addEntry(date, 'Accounts Payable', 'Bill Accrual - ${e['supplier'] ?? 'Payable'}', 0, amount);
+        addEntry(date, 'Operating Expenses - $category',
+            'Supplier Bill - ${e['supplier'] ?? 'Expense'}', amount, 0);
+        addEntry(date, 'Accounts Payable',
+            'Bill Accrual - ${e['supplier'] ?? 'Payable'}', 0, amount);
       } else if (e['status'] == 'paid') {
         if (e['kind'] == 'income') {
           addEntry(date, acc, 'Income Received - $category', amount, 0);
-          addEntry(date, 'Other Income', 'Income - ${e['notes'] ?? category}', 0, amount);
+          addEntry(date, 'Other Income', 'Income - ${e['notes'] ?? category}',
+              0, amount);
         } else {
-          addEntry(date, 'Operating Expenses - $category', 'Expense Payment - ${e['notes'] ?? category}', amount, 0);
+          addEntry(date, 'Operating Expenses - $category',
+              'Expense Payment - ${e['notes'] ?? category}', amount, 0);
           addEntry(date, acc, 'Payment Disbursed', 0, amount);
         }
       }
@@ -545,9 +618,12 @@ class ReportCalculationService {
           ? p['paidDate'].toString()
           : '${p['month']?.toString() ?? ''}-01';
       final net = (p['netCents'] as num?)?.toInt() ?? 0;
-      final acc = (p['account']?.toString() ?? 'Bank').toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account';
+      final acc = (p['account']?.toString() ?? 'Bank').toLowerCase() == 'cash'
+          ? 'Cash in Hand'
+          : 'Bank Account';
       if (p['status'] == 'paid') {
-        addEntry(date, 'Salaries & Wages Expense', 'Payroll Disbursement', net, 0);
+        addEntry(
+            date, 'Salaries & Wages Expense', 'Payroll Disbursement', net, 0);
         addEntry(date, acc, 'Payroll Net Transfer', 0, net);
       } else if (p['status'] == 'approved') {
         addEntry(date, 'Salaries & Wages Expense', 'Payroll Accrual', net, 0);
@@ -562,7 +638,9 @@ class ReportCalculationService {
       final amt = (cap['amountCents'] as num?)?.toInt() ?? 0;
       final tType = cap['transactionType']?.toString() ?? 'capitalContribution';
       final cType = cap['contributionType']?.toString() ?? 'bank';
-      final assetAcc = cType.toLowerCase() == 'asset' ? 'Fixed Assets' : (cType.toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account');
+      final assetAcc = cType.toLowerCase() == 'asset'
+          ? 'Fixed Assets'
+          : (cType.toLowerCase() == 'cash' ? 'Cash in Hand' : 'Bank Account');
 
       if (tType == 'capitalWithdrawal') {
         addEntry(date, 'Shareholder Capital', 'Capital Withdrawal', amt, 0);
@@ -583,7 +661,8 @@ class ReportCalculationService {
         addEntry(date, 'Bank Account', 'Shareholder Loan Received', amt, 0);
         addEntry(date, 'Shareholder Loans Payable', 'Loan Liability', 0, amt);
       } else {
-        addEntry(date, 'Shareholder Loans Payable', 'Shareholder Loan Repayment', amt, 0);
+        addEntry(date, 'Shareholder Loans Payable',
+            'Shareholder Loan Repayment', amt, 0);
         addEntry(date, 'Bank Account', 'Loan Repayment Disbursement', 0, amt);
       }
     }
@@ -591,9 +670,11 @@ class ReportCalculationService {
     // A ledger balance belongs to an individual account, never to the whole
     // chart of accounts. Sort first, then carry each account's own balance.
     entries.sort((a, b) {
-      final dateOrder = (a['date']?.toString() ?? '').compareTo(b['date']?.toString() ?? '');
+      final dateOrder =
+          (a['date']?.toString() ?? '').compareTo(b['date']?.toString() ?? '');
       if (dateOrder != 0) return dateOrder;
-      return (a['accountName']?.toString() ?? '').compareTo(b['accountName']?.toString() ?? '');
+      return (a['accountName']?.toString() ?? '')
+          .compareTo(b['accountName']?.toString() ?? '');
     });
     final balances = <String, int>{};
     for (final entry in entries) {

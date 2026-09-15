@@ -31,6 +31,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final cubit = context.watch<OfficeCubit>();
     final office = cubit.state.data;
     final assets = office.assets;
@@ -65,20 +66,30 @@ class _AssetsScreenState extends State<AssetsScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Fixed Assets Register', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(isCompact ? 'Fixed Assets' : 'Fixed Assets Register', style: const TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
         backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
         actions: [
-          TextButton.icon(
+          isCompact ? IconButton(
+            tooltip: 'Run depreciation',
+            onPressed: () => _runDepreciation(context),
+            icon: const Icon(Icons.calculate_outlined),
+            color: const Color(0xFF2563EB),
+          ) : TextButton.icon(
             onPressed: () => _runDepreciation(context),
             icon: const Icon(Icons.calculate_outlined, size: 18),
             label: const Text('Run Depreciation'),
             style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB)),
           ),
-          const SizedBox(width: 8),
+          if (!isCompact) const SizedBox(width: 8),
           Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: FilledButton.icon(
+            padding: EdgeInsets.only(right: isCompact ? 4 : 16),
+            child: isCompact ? IconButton.filled(
+              tooltip: 'Add asset',
+              onPressed: () => _showAddAssetModal(context),
+              icon: const Icon(Icons.add),
+              style: IconButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+            ) : FilledButton.icon(
               onPressed: () => _showAddAssetModal(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Asset'),
@@ -88,7 +99,7 @@ class _AssetsScreenState extends State<AssetsScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isCompact ? 12 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -235,7 +246,28 @@ class _AssetsScreenState extends State<AssetsScreen> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     ),
-                    child: Row(
+                    child: LayoutBuilder(builder: (context, constraints) {
+                      final compactCard = constraints.maxWidth < 600;
+                      return compactCard ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF2563EB).withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(_getCategoryIcon(category), color: const Color(0xFF2563EB), size: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            _StatusChip(status: status),
+                          ]),
+                          const SizedBox(height: 10),
+                          Text('$category • $date', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                          const SizedBox(height: 8),
+                          Text('Book: ${currency(bookValue)}  •  Cost: ${currency(cost)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                          Align(alignment: Alignment.centerRight, child: Wrap(children: [
+                            IconButton(icon: const Icon(Icons.info_outline, size: 20), tooltip: 'Asset details', onPressed: () => _showAssetDetailsModal(context, a)),
+                            IconButton(icon: const Icon(Icons.edit_outlined, size: 20), tooltip: 'Edit asset', onPressed: () => _showAddAssetModal(context, asset: a)),
+                            IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red), tooltip: 'Delete asset', onPressed: () => _confirmDelete(context, 'Asset', () => context.read<OfficeCubit>().run('assetDelete', {'id': a['id']}))),
+                          ])),
+                        ],
+                      ) : Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -301,7 +333,8 @@ class _AssetsScreenState extends State<AssetsScreen> {
                           }),
                         ),
                       ],
-                    ),
+                    );
+                    }),
                   );
                 },
               ),

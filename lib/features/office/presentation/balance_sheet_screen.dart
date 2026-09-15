@@ -31,6 +31,7 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final billing = context.watch<BillingCubit>().state.data;
     final office = context.watch<OfficeCubit>().state.data;
 
@@ -40,11 +41,13 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Accounting & Balance Sheet', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(isCompact ? 'Accounts' : 'Accounting & Balance Sheet', style: const TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
         backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: isCompact,
+          tabAlignment: isCompact ? TabAlignment.start : TabAlignment.fill,
           labelColor: const Color(0xFF2563EB),
           unselectedLabelColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           indicatorColor: const Color(0xFF2563EB),
@@ -75,6 +78,7 @@ class _BalanceSheetView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final isBalanced = bs['isBalanced'] as bool? ?? false;
     final totalAssets = bs['totalAssetsCents'] as int? ?? 0;
     final totalLiabilities = bs['totalLiabilitiesCents'] as int? ?? 0;
@@ -93,7 +97,7 @@ class _BalanceSheetView extends StatelessWidget {
     final outstandingCapital = bs['outstandingCapitalCents'] as int? ?? 0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isCompact ? 12 : 24),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -102,13 +106,22 @@ class _BalanceSheetView extends StatelessWidget {
             children: [
               // Header Card with Balance Indicator
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(isCompact ? 16 : 20),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                 ),
-                child: Row(
+                child: isCompact ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Statement of Financial Position', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('As of ${DateTime.now().toIso8601String().substring(0, 10)}', style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B), fontSize: 13)),
+                    const SizedBox(height: 12),
+                    _BalanceStatus(isBalanced: isBalanced),
+                  ],
+                ) : Row(
                   children: [
                     Expanded(
                       child: Column(
@@ -121,25 +134,7 @@ class _BalanceSheetView extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: (isBalanced ? Colors.green : Colors.orange).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: (isBalanced ? Colors.green : Colors.orange).withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(isBalanced ? Icons.check_circle : Icons.warning_amber_rounded, color: isBalanced ? Colors.green : Colors.orange, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            isBalanced ? 'Balanced: Assets = Liab + Equity' : 'Imbalance Detected',
-                            style: TextStyle(color: isBalanced ? Colors.green : Colors.orange, fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _BalanceStatus(isBalanced: isBalanced),
                   ],
                 ),
               ),
@@ -280,6 +275,7 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
     final journals = widget.office.journals;
 
     // Flatten journal lines with header context
@@ -310,14 +306,14 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isCompact ? 12 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('General Ledger Entries', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Expanded(child: Text(isCompact ? 'Ledger' : 'General Ledger Entries', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
               DropdownButton<String>(
                 value: _selectedAccount,
                 items: const [
@@ -365,10 +361,10 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
                     final cred = e['creditCents'] as int? ?? 0;
 
                     return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 20, vertical: 8),
                       title: Row(
                         children: [
-                          Text(e['accountName'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Expanded(child: Text(e['accountName'], overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -382,7 +378,7 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
                       ),
                       subtitle: Text('${e['date']} • ${e['journalNumber']} • ${e['description']}',
                           style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
-                      trailing: Row(
+                      trailing: isCompact ? null : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (deb > 0)
@@ -509,6 +505,25 @@ class _TrialBalanceView extends StatelessWidget {
   }
 }
 
+class _BalanceStatus extends StatelessWidget {
+  final bool isBalanced;
+  const _BalanceStatus({required this.isBalanced});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isBalanced ? Colors.green : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10), border: Border.all(color: color.withOpacity(0.3))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(isBalanced ? Icons.check_circle : Icons.warning_amber_rounded, color: color, size: 18),
+        const SizedBox(width: 8),
+        Text(isBalanced ? 'Balanced' : 'Imbalance detected', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+      ]),
+    );
+  }
+}
+
 class _SectionContainer extends StatelessWidget {
   final String title;
   final Color color;
@@ -520,7 +535,7 @@ class _SectionContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 16 : 20),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -533,7 +548,7 @@ class _SectionContainer extends StatelessWidget {
             children: [
               Container(width: 4, height: 18, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: color, letterSpacing: 0.5)),
+          Expanded(child: Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: color, letterSpacing: 0.5))),
             ],
           ),
           const SizedBox(height: 16),
@@ -556,7 +571,14 @@ class _ReportRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      child: MediaQuery.sizeOf(context).width < 420 ? Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: TextStyle(fontSize: 14, color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155))),
+          const SizedBox(height: 2),
+          Text(currency(amountCents), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isProfit ? const Color(0xFF10B981) : null)),
+        ],
+      ) : Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(name, style: TextStyle(fontSize: 14, color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155))),
@@ -583,7 +605,10 @@ class _SubtotalRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      child: MediaQuery.sizeOf(context).width < 420 ? Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)), const SizedBox(height: 2), Text(currency(amountCents), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))],
+      ) : Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
@@ -603,7 +628,10 @@ class _TotalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return MediaQuery.sizeOf(context).width < 420 ? Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: color)), const SizedBox(height: 3), Text(currency(amountCents), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: color))],
+    ) : Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
