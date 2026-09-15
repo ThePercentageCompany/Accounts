@@ -132,11 +132,35 @@ class WorkspaceLoadingView extends StatelessWidget {
   }
 }
 
-class Workspace extends StatelessWidget {
+class Workspace extends StatefulWidget {
   const Workspace({super.key});
 
   @override
+  State<Workspace> createState() => _WorkspaceState();
+}
+
+class _WorkspaceState extends State<Workspace> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _openWorkspace();
+  }
+
+  Future<void> _openWorkspace() async {
+    // Always attempt a live Sheets pull when the workspace opens. If the
+    // browser is offline, syncNow preserves the pending queue and the cached
+    // records remain available instead of blocking the user.
+    try {
+      await session.syncNow();
+    } catch (_) {}
+    if (mounted) setState(() => _ready = true);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!_ready) return const WorkspaceLoadingView();
     // Unified hybrid repositories: offline-first local storage + automatic
     // background cloud sync — no mode switching needed.
     final BillingRepository billingRepo = HybridBillingRepository(session);
