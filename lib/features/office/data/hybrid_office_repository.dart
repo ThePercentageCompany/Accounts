@@ -143,13 +143,20 @@ class HybridOfficeRepository implements OfficeRepository {
       final code = d['code']?.toString().trim() ?? '';
       final name = d['name']?.toString().trim() ?? '';
       final joinDate = d['joinDate']?.toString() ?? '';
+      final department = d['department']?.toString().trim() ?? '';
+      final title = d['title']?.toString().trim() ?? '';
+      final email = d['email']?.toString().trim() ?? '';
+      final phone = d['phone']?.toString().trim() ?? '';
+      final bank = d['bank']?.toString().trim() ?? '';
+      final iban = d['iban']?.toString().trim() ?? '';
       final old = employees.where((x) => x['id'] == id).firstOrNull;
       if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) {
         throw StateError('Record changed. Refresh and reopen.');
       }
-      if (id.isEmpty || code.isEmpty || name.isEmpty) {
-        throw StateError('Employee ID, code, and full name are required.');
+      if (id.isEmpty || code.isEmpty || name.isEmpty || department.isEmpty || title.isEmpty || email.isEmpty || phone.isEmpty || bank.isEmpty || iban.isEmpty) {
+        throw StateError('Complete code, name, department, title, work email, mobile, salary bank, and IBAN before saving an employee.');
       }
+      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) throw StateError('Enter a valid work email address.');
       if (DateTime.tryParse(joinDate) == null) throw StateError('Use a valid joining date (YYYY-MM-DD).');
       final endDate = d['endDate']?.toString() ?? '';
       if (endDate.isNotEmpty && (DateTime.tryParse(endDate) == null || endDate.compareTo(joinDate) < 0)) {
@@ -158,7 +165,7 @@ class HybridOfficeRepository implements OfficeRepository {
       if (employees.any((e) => e['id'] != id && e['code']?.toString().toLowerCase() == code.toLowerCase())) {
         throw StateError('Employee code already exists.');
       }
-      scaled(d['basic'].toString(), 2);
+      if (scaled(d['basic'].toString(), 2) <= 0) throw StateError('Monthly basic salary must be greater than zero.');
       scaled(d['allowances'].toString(), 2);
 
       final record = {

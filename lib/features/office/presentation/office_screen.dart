@@ -938,17 +938,17 @@ class _OfficeScreenState extends State<OfficeScreen> {
       const [
         InputSpec('code', 'Employee Code', required: true, icon: CupertinoIcons.tag),
         InputSpec('name', 'Full Name', required: true, icon: CupertinoIcons.person),
-        InputSpec('department', 'Department', icon: CupertinoIcons.building_2_fill),
-        InputSpec('title', 'Job Title', icon: CupertinoIcons.briefcase),
-        InputSpec('email', 'Email Address', icon: CupertinoIcons.mail),
-        InputSpec('phone', 'Phone Number', icon: CupertinoIcons.phone),
+        InputSpec('department', 'Department', required: true, icon: CupertinoIcons.building_2_fill),
+        InputSpec('title', 'Job Title', required: true, icon: CupertinoIcons.briefcase),
+        InputSpec('email', 'Work Email Address', required: true, icon: CupertinoIcons.mail),
+        InputSpec('phone', 'Mobile Number', required: true, icon: CupertinoIcons.phone),
         InputSpec('address', 'Address', icon: CupertinoIcons.location_solid),
         InputSpec('joinDate', 'Joining Date (YYYY-MM-DD)', required: true, icon: CupertinoIcons.calendar),
         InputSpec('endDate', 'Last Employment Date (optional)', icon: CupertinoIcons.calendar_badge_minus),
         InputSpec('basic', 'Monthly Basic Salary (AED)', required: true, icon: CupertinoIcons.money_dollar),
         InputSpec('allowances', 'Monthly Allowances (AED)', required: true, icon: CupertinoIcons.money_dollar_circle),
-        InputSpec('bank', 'Bank Name', icon: CupertinoIcons.building_2_fill),
-        InputSpec('iban', 'IBAN', icon: CupertinoIcons.creditcard),
+        InputSpec('bank', 'Salary Bank Name', required: true, icon: CupertinoIcons.building_2_fill),
+        InputSpec('iban', 'Salary IBAN', required: true, icon: CupertinoIcons.creditcard),
         InputSpec('emiratesId', 'Emirates ID (optional)', icon: CupertinoIcons.person_crop_square),
         InputSpec('passport', 'Passport Number (optional)', icon: CupertinoIcons.book),
         InputSpec('visaExpiry', 'Visa Expiry (optional)', icon: CupertinoIcons.clock),
@@ -1335,6 +1335,14 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('OT hours must be between 0 and 24.')));
                     return;
                   }
+                  if (works && checkIn.text.isNotEmpty && checkOut.text.isNotEmpty) {
+                    final start = parseTime(checkIn.text);
+                    final end = parseTime(checkOut.text);
+                    if (start == null || end == null || end.hour * 60 + end.minute <= start.hour * 60 + start.minute) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Check-out time must be after check-in time.')));
+                      return;
+                    }
+                  }
                   final ok = await cubit.run('attendanceSave', {
                     'employeeId': employee['id'], 'date': date, 'status': status,
                     'checkIn': works ? checkIn.text : '', 'checkOut': works ? checkOut.text : '',
@@ -1395,6 +1403,26 @@ class _OfficeScreenState extends State<OfficeScreen> {
         .where((item) => item['employeeId']?.toString() == employeeId && item['date']?.toString() == day)
         .firstOrNull;
     await attendance(employee, existing);
+  }
+
+  Future<void> markAllPresent() async {
+    final office = context.read<OfficeCubit>().state.data;
+    final activeEmployees = office.employees.where((e) => e['active'] != false).toList();
+    final unmarked = activeEmployees.where((e) => !office.attendance.any((a) => a['employeeId'] == e['id'] && a['date'] == day)).toList();
+    if (unmarked.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All active employees are already marked for this date.')));
+      return;
+    }
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Mark all present?'),
+      content: Text('This will mark ${unmarked.length} unmarked active employees as Present for $day. Check-in and check-out remain blank for later confirmation.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Mark Present'))],
+    ));
+    if (confirm != true || !mounted) return;
+    await context.read<OfficeCubit>().runBatch([
+      for (final employee in unmarked)
+        MapEntry('attendanceSave', {'employeeId': employee['id'], 'date': day, 'status': 'present', 'checkIn': '', 'checkOut': '', 'overtimeHours': '0', 'notes': 'Bulk marked present', 'version': 0}),
+    ]);
   }
 
   Future<void> payroll(Map<String, dynamic> employee, [Map<String, dynamic>? old]) async {
@@ -2031,6 +2059,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 icon: const Icon(CupertinoIcons.checkmark_alt_circle_fill, size: 16),
                 label: const Text('Mark Attendance'),
                 style: FilledButton.styleFrom(backgroundColor: AppTheme.zohoBlue),
+              ),
+              OutlinedButton.icon(
+                onPressed: markAllPresent,
+                icon: const Icon(CupertinoIcons.person_2_fill, size: 16),
+                label: const Text('Mark All Present'),
               ),
             ],
           ),
