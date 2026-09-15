@@ -73,6 +73,18 @@ class SyncManager extends ChangeNotifier {
   int get pendingCount => _pendingQueue.length;
 
   bool _initialized = false;
+  Future<void> Function(Object error)? onAuthorizationFailure;
+
+  bool _isAuthorizationFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('status 401') ||
+        message.contains('status 403') ||
+        message.contains('(401)') ||
+        message.contains('(403)') ||
+        message.contains('unauthorized') ||
+        message.contains('invalid credentials') ||
+        message.contains('authentication credentials');
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -461,6 +473,9 @@ class SyncManager extends ChangeNotifier {
       }
     } catch (e) {
       _lastError = e.toString();
+      if (_isAuthorizationFailure(e) && onAuthorizationFailure != null) {
+        unawaited(onAuthorizationFailure!(e));
+      }
       markOffline();
     } finally {
       _isBackgroundSyncing = false;

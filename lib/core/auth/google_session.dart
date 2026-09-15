@@ -45,6 +45,7 @@ class GoogleSession extends ChangeNotifier {
   Timer? _automaticSyncTimer;
   Future<void>? _identityHandling;
   Future<void>? _authorizationHandling;
+  Future<void>? _forcedSignOut;
 
   final GoogleWorkspaceService workspaceService = GoogleWorkspaceService();
   final SyncManager syncManager = SyncManager.instance;
@@ -104,6 +105,9 @@ class GoogleSession extends ChangeNotifier {
     _initialized = true;
 
     await syncManager.initialize();
+    syncManager.onAuthorizationFailure = (error) => forceSignOut(
+          reason: 'Google access is no longer authorized. Please sign in again.',
+        );
     await _loadCachedSession();
 
     const client = String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: defaultClientId);
@@ -497,14 +501,36 @@ class GoogleSession extends ChangeNotifier {
     if (isOffline && workspace != null) {
       throw StateError('Currently working in offline mode.');
     }
-    authorized = false;
-    notifyListeners();
+    await forceSignOut(
+      reason: 'Your Google token is no longer available. Please sign in again.',
+    );
     throw StateError('Reconnect your Google account.');
   }
 
-  void expire() {
-    authorized = false;
-    notifyListeners();
+  /// Revokes the local application session when Google rejects its token or
+  /// the linked workspace permission was removed. Network failures use
+  /// offline mode and do not call this method.
+  Future<void> forceSignOut({
+    String reason = 'Your Google session has expired. Please sign in again.',
+  }) {
+    if (_forcedSignOut != null) return _forcedSignOut!;
+    final task = () async {
+      authorized = false;
+      error = reason;
+      notifyListeners();
+      await signOut();
+      error = reason;
+      notifyListeners();
+    }();
+    _forcedSignOut = task;
+    task.whenComplete(() => _forcedSignOut = null);
+    return task;
+  }
+
+  void expire([String? reason]) {
+    unawaited(forceSignOut(
+      reason: reason ?? 'Your Google session has expired. Please sign in again.',
+    ));
   }
 
   Future<void> syncNow() async {

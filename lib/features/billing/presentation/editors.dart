@@ -212,6 +212,49 @@ class _CompanyEditorState extends State<CompanyEditor> {
     }
   }
 
+  Future<void> previewLogo() async {
+    final logoBytes = companyLogoBytes(data['logo']?.toString() ?? '');
+    if (logoBytes == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logo preview'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                height: 120,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.centerLeft,
+                child: Image.memory(logoBytes, fit: BoxFit.contain),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This is how the logo is placed in invoice, quotation, payslip, and finance-report headers.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -240,7 +283,7 @@ class _CompanyEditorState extends State<CompanyEditor> {
                             letterSpacing: -0.6),
                       ),
                       Text(
-                        'Configure your branding, company profile, and bank details for invoices.',
+                        'Configure your branding, company profile, and bank details for all company documents.',
                         style: TextStyle(
                           color: isDark
                               ? AppTheme.iosDarkTextSecondary
@@ -321,6 +364,13 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                                   BorderRadius.circular(100)),
                                         ),
                                       ),
+                                      if (logoBytes != null)
+                                        OutlinedButton.icon(
+                                          onPressed: previewLogo,
+                                          icon: const Icon(CupertinoIcons.eye,
+                                              size: 15),
+                                          label: const Text('Preview'),
+                                        ),
                                       if (logoBytes != null)
                                         TextButton.icon(
                                           onPressed: () {
@@ -1155,156 +1205,167 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
     return LayoutBuilder(builder: (context, constraints) {
       final isCompact = constraints.maxWidth < 560;
       return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24, vertical: isCompact ? 10 : 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Title and Breadcrumb
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.invoice == null ? 'Create Invoice' : 'Edit Invoice',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  letterSpacing: -0.5,
+        padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 16 : 24, vertical: isCompact ? 10 : 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Title and Breadcrumb
+            Expanded(
+                child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.invoice == null ? 'Create Invoice' : 'Edit Invoice',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
-              if (!isCompact) ...[
-              const SizedBox(height: 3),
-              Row(
-                children: [
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Home',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
+                if (!isCompact) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'Home',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      '>',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF94A3B8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          '>',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? const Color(0xFF64748B)
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Invoices',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'Invoices',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      '>',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF94A3B8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          '>',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? const Color(0xFF64748B)
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Text(
-                    widget.invoice == null ? 'Create Invoice' : 'Edit Invoice',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.zohoBlue,
-                    ),
+                      Text(
+                        widget.invoice == null
+                            ? 'Create Invoice'
+                            : 'Edit Invoice',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.zohoBlue,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
               ],
-            ],
-          )),
+            )),
 
-          // Top Action Buttons
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.invoice != null) ...[
-                TextButton.icon(
-                  onPressed: () async {
-                    final cubit = context.read<BillingCubit>();
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        title: const Text('Delete Draft Invoice?'),
-                        content: Text(
-                            'Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel')),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(
-                                backgroundColor: AppTheme.pastelRose),
-                            child: const Text('Delete Draft'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true && mounted) {
-                      setState(() => dirty = false);
-                      final ok = await cubit.deleteDraft(invoice.id);
-                      if (ok && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Draft invoice deleted.')),
-                        );
-                        Navigator.of(context).pop();
+            // Top Action Buttons
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.invoice != null) ...[
+                  TextButton.icon(
+                    onPressed: () async {
+                      final cubit = context.read<BillingCubit>();
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          title: const Text('Delete Draft Invoice?'),
+                          content: Text(
+                              'Are you sure you want to permanently delete this draft invoice for ${invoice.customer.name}?'),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel')),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: AppTheme.pastelRose),
+                              child: const Text('Delete Draft'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && mounted) {
+                        setState(() => dirty = false);
+                        final ok = await cubit.deleteDraft(invoice.id);
+                        if (ok && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Draft invoice deleted.')),
+                          );
+                          Navigator.of(context).pop();
+                        }
                       }
-                    }
-                  },
-                  icon: const Icon(CupertinoIcons.trash,
-                      size: 15, color: AppTheme.pastelRose),
-                  label: isCompact
-                      ? const SizedBox.shrink()
-                      : const Text('Delete Draft', style: TextStyle(color: AppTheme.pastelRose, fontWeight: FontWeight.w600)),
-                  style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 12)),
+                    },
+                    icon: const Icon(CupertinoIcons.trash,
+                        size: 15, color: AppTheme.pastelRose),
+                    label: isCompact
+                        ? const SizedBox.shrink()
+                        : const Text('Delete Draft',
+                            style: TextStyle(
+                                color: AppTheme.pastelRose,
+                                fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 8 : 12)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(CupertinoIcons.arrow_left, size: 14),
+                  label:
+                      isCompact ? const SizedBox.shrink() : const Text('Back'),
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 10 : 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.buttonRadiusVal)),
+                  ),
                 ),
-                const SizedBox(width: 8),
               ],
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(CupertinoIcons.arrow_left, size: 14),
-                label: isCompact ? const SizedBox.shrink() : const Text('Back'),
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 10 : 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.buttonRadiusVal)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+            ),
+          ],
+        ),
+      );
     });
   }
 
