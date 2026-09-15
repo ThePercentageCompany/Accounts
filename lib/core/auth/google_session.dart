@@ -255,7 +255,13 @@ class GoogleSession extends ChangeNotifier {
       cachedDisplayName = null;
       cachedPhotoUrl = null;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      // Authentication state is disposable; workspace data and offline queues
+      // are not. Clearing all preferences here caused a web sign-out to erase
+      // the local fallback before its next Google Sheets refresh completed.
+      await prefs.remove(_cachedEmailKey);
+      await prefs.remove(_cachedNameKey);
+      await prefs.remove(_cachedPhotoKey);
+      await prefs.remove(_cachedWorkspaceKey);
     } catch (_) {}
   }
 
@@ -336,7 +342,14 @@ class GoogleSession extends ChangeNotifier {
             );
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        // Do not pretend a workspace is live when its initial cloud pull
+        // failed. The cached records remain usable, but the UI can now show a
+        // useful reconnect/sync error instead of silently showing stale data.
+        isOffline = true;
+        syncManager.markOffline();
+        error = 'Could not refresh Google Sheets: $e';
+      }
       _startAutomaticSync();
     } else {
       _automaticSyncTimer?.cancel();
