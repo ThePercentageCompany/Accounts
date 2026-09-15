@@ -428,6 +428,7 @@ Map<String, dynamic> calculateBalanceSheet(
   List<Invoice> invoices,
   OfficeData office,
   List<Map<String, dynamic>> companyShareholders,
+  {DateTime? start, DateTime? end,
 ) {
   final groups = <String, List<Map<String, dynamic>>>{
     'Asset': [],
@@ -436,7 +437,7 @@ Map<String, dynamic> calculateBalanceSheet(
   };
   var income = 0;
   var expenses = 0;
-  for (final line in AccountingEngine.postedLines(invoices, office)) {
+  for (final line in AccountingEngine.postedLines(invoices, office, start: start, end: end)) {
     final debit = (line['debitCents'] as num?)?.toInt() ?? 0;
     final credit = (line['creditCents'] as num?)?.toInt() ?? 0;
     final group = line['accountGroup']?.toString() ?? '';
@@ -834,9 +835,9 @@ Map<String, dynamic> legacyCalculateBalanceSheet(
 
 /// Generates Trial Balance with balanced Debits vs Credits verification
 Map<String, dynamic> calculateTrialBalance(
-    List<Invoice> invoices, OfficeData office) {
+  List<Invoice> invoices, OfficeData office, {DateTime? start, DateTime? end}) {
   final accounts = <String, Map<String, dynamic>>{};
-  for (final line in AccountingEngine.postedLines(invoices, office)) {
+  for (final line in AccountingEngine.postedLines(invoices, office, start: start, end: end)) {
     final id = line['accountId']?.toString() ?? '';
     if (id.isEmpty) continue;
     final row = accounts.putIfAbsent(

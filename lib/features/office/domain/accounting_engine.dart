@@ -212,9 +212,16 @@ class AccountingEngine {
   }
 
   static List<Map<String, dynamic>> postedLines(
-      List<Invoice> invoices, OfficeData office) {
+    List<Invoice> invoices,
+    OfficeData office, {
+    DateTime? start,
+    DateTime? end,
+  }) {
     final lines = <Map<String, dynamic>>[];
     for (final journal in postedJournals(invoices, office)) {
+      final date = DateTime.tryParse(journal['date']?.toString() ?? '');
+      if (date != null && start != null && date.isBefore(start)) continue;
+      if (date != null && end != null && date.isAfter(DateTime(end.year, end.month, end.day, 23, 59, 59))) continue;
       for (final raw in (journal['lines'] as List? ?? const [])) {
         if (raw is! Map) continue;
         final line = Map<String, dynamic>.from(raw);

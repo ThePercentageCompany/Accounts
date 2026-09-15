@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../billing/domain/totals.dart';
 import '../../billing/presentation/billing_cubit.dart';
 import '../domain/office_repository.dart';
@@ -15,6 +18,7 @@ class BalanceSheetScreen extends StatefulWidget {
 
 class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -28,6 +32,41 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
     super.dispose();
   }
 
+  Future<void> _selectPeriod() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: _dateRange ?? DateTimeRange(start: DateTime(now.year, now.month, 1), end: now),
+      helpText: 'Select reporting period',
+    );
+    if (selected != null && mounted) setState(() => _dateRange = selected);
+  }
+
+  Future<void> _downloadStatement(Map<String, dynamic> bs, Map<String, dynamic> tb) async {
+    final document = pw.Document();
+    final period = _dateRange == null ? 'All posted activity' : '${_dateRange!.start.toIso8601String().substring(0, 10)} to ${_dateRange!.end.toIso8601String().substring(0, 10)}';
+    final pageTitle = ['Balance Sheet', 'General Ledger', 'Trial Balance'][_tabController.index];
+    document.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (_) => [
+        pw.Text('The Percentage Company', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 4),
+        pw.Text('$pageTitle - $period'),
+        pw.Divider(),
+        pw.Text('Assets: ${currency(bs['totalAssetsCents'] as int? ?? 0)}'),
+        pw.Text('Liabilities: ${currency(bs['totalLiabilitiesCents'] as int? ?? 0)}'),
+        pw.Text('Equity: ${currency(bs['totalEquityCents'] as int? ?? 0)}'),
+        pw.Text('Trial balance debits: ${currency(tb['totalDebitCents'] as int? ?? 0)}'),
+        pw.Text('Trial balance credits: ${currency(tb['totalCreditCents'] as int? ?? 0)}'),
+        pw.SizedBox(height: 16),
+        pw.Text('Prepared from posted journal lines. Draft and void records are excluded.'),
+      ],
+    ));
+    await Printing.sharePdf(bytes: await document.save(), filename: '${pageTitle.toLowerCase().replaceAll(' ', '_')}.pdf');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -35,8 +74,8 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
     final billing = context.watch<BillingCubit>().state.data;
     final office = context.watch<OfficeCubit>().state.data;
 
-    final balanceSheet = calculateBalanceSheet(billing.invoices, office, billing.company.shareholders);
-    final trialBalance = calculateTrialBalance(billing.invoices, office);
+    final balanceSheet = calculateBalanceSheet(billing.invoices, office, billing.company.shareholders, start: _dateRange?.start, end: _dateRange?.end);
+    final trialBalance = calculateTrialBalance(billing.invoices, office, start: _dateRange?.start, end: _dateRange?.end);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
@@ -44,6 +83,10 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
         title: Text(isCompact ? 'Accounts' : 'Accounting & Balance Sheet', style: const TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
         backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        actions: [
+          IconButton(tooltip: 'Reporting period', onPressed: _selectPeriod, icon: const Icon(Icons.date_range_outlined)),
+          IconButton(tooltip: 'Download PDF', onPressed: () => _downloadStatement(balanceSheet, trialBalance), icon: const Icon(Icons.download_outlined)),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: isCompact,
@@ -63,7 +106,7 @@ class _BalanceSheetScreenState extends State<BalanceSheetScreen> with SingleTick
         controller: _tabController,
         children: [
           _BalanceSheetView(bs: balanceSheet),
-          _GeneralLedgerView(office: office),
+          _GeneralLedgerView(office: office, start: _dateRange?.start, end: _dateRange?.end),
           _TrialBalanceView(tb: trialBalance),
         ],
       ),
@@ -263,7 +306,9 @@ class _BalanceSheetView extends StatelessWidget {
 
 class _GeneralLedgerView extends StatefulWidget {
   final OfficeData office;
-  const _GeneralLedgerView({required this.office});
+  final DateTime? start;
+  final DateTime? end;
+  const _GeneralLedgerView({required this.office, this.start, this.end});
 
   @override
   State<_GeneralLedgerView> createState() => _GeneralLedgerViewState();
@@ -301,6 +346,9 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
     }
 
     final filtered = flatEntries.where((e) {
+      final date = DateTime.tryParse(e['date']?.toString() ?? '');
+      if (date != null && widget.start != null && date.isBefore(widget.start!)) return false;
+      if (date != null && widget.end != null && date.isAfter(DateTime(widget.end!.year, widget.end!.month, widget.end!.day, 23, 59, 59))) return false;
       if (_selectedAccount != 'All' && e['accountGroup'] != _selectedAccount) return false;
       return true;
     }).toList();
