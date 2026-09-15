@@ -40,6 +40,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Provider.debugCheckInvalidValueType = null;
   try {
+    await themeController.initialize();
     await session.initialize();
     runApp(const TpcApp());
   } catch (e) {

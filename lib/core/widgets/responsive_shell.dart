@@ -933,14 +933,14 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             const TpcBrandLogo(size: 24, borderRadius: 6),
             const SizedBox(width: 8),
-            Text(
+            Flexible(child: Text(
               currentItem.title,
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, letterSpacing: -0.3),
-            ),
+              overflow: TextOverflow.ellipsis,
+            )),
           ],
         ),
         actions: [

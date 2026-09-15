@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppTheme {
   // -------------------------------------------------------------
@@ -106,10 +107,11 @@ class AppTheme {
   // -------------------------------------------------------------
   // Zoho Card Curves & Geometry Tokens
   // -------------------------------------------------------------
-  static const double cardRadiusVal = 10.0;
+  // Compact, sharp geometry keeps finance-dense screens calm and legible.
+  static const double cardRadiusVal = 8.0;
   static const double buttonRadiusVal = 8.0;
-  static const double inputRadiusVal = 8.0;
-  static const double badgeRadiusVal = 6.0;
+  static const double inputRadiusVal = 7.0;
+  static const double badgeRadiusVal = 5.0;
 
   static final BorderRadius cardRadius = BorderRadius.circular(cardRadiusVal);
   static final BorderRadius buttonRadius = BorderRadius.circular(buttonRadiusVal);
@@ -178,6 +180,7 @@ class AppTheme {
         scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
+        toolbarHeight: 52,
         titleTextStyle: TextStyle(
           color: zohoLightTextPrimary,
           fontSize: 18,
@@ -194,6 +197,21 @@ class AppTheme {
           borderRadius: BorderRadius.circular(cardRadiusVal),
           side: const BorderSide(color: zohoLightBorder, width: 1.0),
         ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: zohoLightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardRadiusVal)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        dense: true,
+        minVerticalPadding: 8,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: zohoLightSurfaceElevated,
+        side: const BorderSide(color: zohoLightBorder, width: 0.8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(badgeRadiusVal)),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -273,7 +291,7 @@ class AppTheme {
           return const TextStyle(color: zohoLightTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
         }),
       ),
-      dividerTheme: const DividerThemeData(color: zohoLightSeparator, thickness: 1.0, space: 16),
+      dividerTheme: const DividerThemeData(color: zohoLightSeparator, thickness: 0.8, space: 14),
     );
   }
 
@@ -312,6 +330,7 @@ class AppTheme {
         scrolledUnderElevation: 1,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
+        toolbarHeight: 52,
         titleTextStyle: TextStyle(
           color: zohoDarkTextPrimary,
           fontSize: 18,
@@ -328,6 +347,21 @@ class AppTheme {
           borderRadius: BorderRadius.circular(cardRadiusVal),
           side: const BorderSide(color: zohoDarkBorder, width: 1.0),
         ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: zohoDarkSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardRadiusVal)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        dense: true,
+        minVerticalPadding: 8,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: zohoDarkSurfaceElevated,
+        side: const BorderSide(color: zohoDarkBorder, width: 0.8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(badgeRadiusVal)),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -407,14 +441,30 @@ class AppTheme {
           return const TextStyle(color: zohoDarkTextSecondary, fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: -0.1, fontFamily: 'Inter');
         }),
       ),
-      dividerTheme: const DividerThemeData(color: zohoDarkSeparator, thickness: 1.0, space: 16),
+      dividerTheme: const DividerThemeData(color: zohoDarkSeparator, thickness: 0.8, space: 14),
     );
   }
 }
 
 class ThemeController extends ChangeNotifier {
+  static const _storageKey = 'tpc_theme_mode';
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
+
+  Future<void> initialize() async {
+    final prefs = await SharedPreferences.getInstance();
+    switch (prefs.getString(_storageKey)) {
+      case 'light':
+        _themeMode = ThemeMode.light;
+        break;
+      case 'dark':
+        _themeMode = ThemeMode.dark;
+        break;
+      default:
+        _themeMode = ThemeMode.system;
+    }
+    notifyListeners();
+  }
 
   bool get isDarkMode {
     if (_themeMode == ThemeMode.system) {
@@ -425,12 +475,19 @@ class ThemeController extends ChangeNotifier {
 
   void toggleTheme() {
     _themeMode = isDarkMode ? ThemeMode.light : ThemeMode.dark;
+    _persist();
     notifyListeners();
   }
 
   void setThemeMode(ThemeMode mode) {
     _themeMode = mode;
+    _persist();
     notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, _themeMode.name);
   }
 }
 

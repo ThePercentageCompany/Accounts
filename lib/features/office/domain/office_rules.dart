@@ -428,7 +428,7 @@ Map<String, dynamic> calculateBalanceSheet(
   List<Invoice> invoices,
   OfficeData office,
   List<Map<String, dynamic>> companyShareholders,
-  {DateTime? start, DateTime? end,
+  {DateTime? start, DateTime? end}
 ) {
   final groups = <String, List<Map<String, dynamic>>>{
     'Asset': [],
