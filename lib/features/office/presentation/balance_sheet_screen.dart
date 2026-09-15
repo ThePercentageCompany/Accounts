@@ -400,7 +400,15 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                 ),
-                child: ListView.separated(
+                child: Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                      child: const Text('DATE  •  JOURNAL REFERENCE  •  ACCOUNT  •  DEBIT / CREDIT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+                    ),
+                    Expanded(child: ListView.separated(
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
@@ -437,6 +445,8 @@ class _GeneralLedgerViewState extends State<_GeneralLedgerView> {
                       ),
                     );
                   },
+                )),
+                  ],
                 ),
               ),
             ),
@@ -521,8 +531,9 @@ class _TrialBalanceView extends StatelessWidget {
                   ...rows.map((r) {
                     final deb = r['displayDebitCents'] as int? ?? 0;
                     final cred = r['displayCreditCents'] as int? ?? 0;
-                    return Padding(
+                    return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 0.7))),
                       child: Row(
                         children: [
                           Expanded(flex: 3, child: Text(r['accountName'], style: const TextStyle(fontWeight: FontWeight.w600))),

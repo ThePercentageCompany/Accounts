@@ -980,15 +980,6 @@ class _ResponsiveShellState extends State<ResponsiveShell> {
         child: _buildSidebar(context, true, isDrawer: true),
       ),
       body: widget.child,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showQuickAddBottomSheet(context, isDark),
-        backgroundColor: const Color(0xFF10B981),
-        foregroundColor: Colors.white,
-        elevation: 3,
-        shape: const CircleBorder(),
-        tooltip: 'Quick Action',
-        child: const Icon(CupertinoIcons.plus, size: 24),
-      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: widget.selectedIndex < 3
             ? widget.selectedIndex
