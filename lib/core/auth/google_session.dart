@@ -88,14 +88,22 @@ class GoogleSession extends ChangeNotifier {
     return allowed.any((s) => s.toLowerCase().trim() == normalized);
   }
 
-  /// Pairs the current Google user session with an employee invitation QR or JSON payload.
-  Future<void> pairWithEmployeeInvite(String inviteCodeOrJson) async {
+  /// Pairs the current Google user session with a QR invitation and employee code.
+  Future<void> pairWithEmployeeInvite(
+    String inviteCodeOrJson, {
+    required String employeeCode,
+  }) async {
     final config = WorkspaceConfig.fromInvitePayload(inviteCodeOrJson);
     if (config == null || config.spreadsheetId.isEmpty || (config.employeeId ?? '').isEmpty) {
       throw StateError('Invalid employee invitation code or QR data.');
     }
     if (user == null) {
       throw StateError('Sign in with the employee\'s registered Google account before using this invite.');
+    }
+    final expectedCode = config.employeeCode?.trim() ?? '';
+    if (expectedCode.isEmpty ||
+        employeeCode.trim().toLowerCase() != expectedCode.toLowerCase()) {
+      throw StateError('The employee code does not match this QR invitation.');
     }
     _pendingEmployeeInvite = null;
     await setWorkspace(config);
@@ -390,6 +398,15 @@ class GoogleSession extends ChangeNotifier {
         reason: 'This employee access code is no longer active. Contact your administrator.',
       );
       throw StateError('Employee access code is not active.');
+    }
+
+    final recordCode = employee['code']?.toString().trim() ?? '';
+    final inviteCode = config.employeeCode?.trim() ?? '';
+    if (recordCode.isEmpty || inviteCode.toLowerCase() != recordCode.toLowerCase()) {
+      await forceSignOut(
+        reason: 'This employee QR code is no longer valid. Ask your administrator for a new QR code.',
+      );
+      throw StateError('Employee QR code is no longer valid.');
     }
 
     if (employee['active'] == false ||

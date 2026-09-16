@@ -70,6 +70,17 @@ class TpcApp extends StatelessWidget {
             home: ListenableBuilder(
               listenable: session,
               builder: (context, _) {
+                // A scanned employee QR always takes precedence over a cached
+                // workspace so the employee can confirm their own access code.
+                if (session.pendingEmployeeInvite != null) {
+                  if (session.isCheckingWorkspace) {
+                    return const WorkspaceLoadingView();
+                  }
+                  if (session.authorized) {
+                    return CompanyOnboardingView(session: session);
+                  }
+                }
+
                 if (session.workspace != null) {
                   return Workspace(key: ValueKey(session.workspace!.spreadsheetId));
                 }

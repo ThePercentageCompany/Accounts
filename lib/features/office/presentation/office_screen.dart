@@ -1497,7 +1497,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Scan to open the employee login link. Access is verified live against the employee record.',
+                            'Employee QR sign-in: scan to open the login page, then enter the fixed employee code. Access is verified live.',
                             style: TextStyle(
                                 fontSize: 11.5,
                                 color: isDark
@@ -1510,7 +1510,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Copy Invite Code / Payload Button
+                    // A manager may securely share the deep link when QR scanning is unavailable.
                     OutlinedButton.icon(
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: inviteLink));
@@ -1529,7 +1529,7 @@ class _OfficeScreenState extends State<OfficeScreen> {
                       label: Text(
                           copied
                               ? 'Employee Login Link Copied!'
-                              : 'Copy Employee Login Link',
+                              : 'Copy Employee QR Link',
                           style: TextStyle(
                               color: copied ? AppTheme.pastelMint : null,
                               fontWeight: FontWeight.w600)),

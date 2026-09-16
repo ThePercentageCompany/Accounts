@@ -32,7 +32,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
   final _swiftController = TextEditingController(text: 'EBILAEADXXX');
   final _currencyController = TextEditingController(text: 'AED');
   final _adminEmailController = TextEditingController(text: defaultMasterAdminEmail);
-  final _inviteCodeController = TextEditingController();
+  final _employeeCodeController = TextEditingController();
 
   bool _isEmployeeMode = false;
   bool _isProvisioning = false;
@@ -45,7 +45,6 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
     final invite = widget.session.pendingEmployeeInvite;
     if (invite != null && invite.isNotEmpty) {
       _isEmployeeMode = true;
-      _inviteCodeController.text = invite;
     }
     if (widget.session.user?.email != null) {
       _emailController.text = widget.session.user!.email;
@@ -67,14 +66,19 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
     _swiftController.dispose();
     _currencyController.dispose();
     _adminEmailController.dispose();
-    _inviteCodeController.dispose();
+    _employeeCodeController.dispose();
     super.dispose();
   }
 
   Future<void> _joinAsEmployee() async {
-    final code = _inviteCodeController.text.trim();
-    if (code.isEmpty) {
-      setState(() => _errorMessage = 'Please enter or paste your employee invite code / QR payload.');
+    final invite = widget.session.pendingEmployeeInvite;
+    if (invite == null || invite.isEmpty) {
+      setState(() => _errorMessage = 'Scan your company QR code to open the employee sign-in page.');
+      return;
+    }
+    final employeeCode = _employeeCodeController.text.trim();
+    if (employeeCode.isEmpty) {
+      setState(() => _errorMessage = 'Enter your employee code to continue.');
       return;
     }
     setState(() {
@@ -83,7 +87,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
       _progressStatus = 'Connecting to company workspace...';
     });
     try {
-      await widget.session.pairWithEmployeeInvite(code);
+      await widget.session.pairWithEmployeeInvite(invite, employeeCode: employeeCode);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -261,7 +265,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                                     ),
                                     child: Center(
                                       child: Text(
-                                        'Join with Employee QR / Code',
+                                        'Employee QR Sign-in',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: _isEmployeeMode ? FontWeight.w700 : FontWeight.w500,
@@ -279,6 +283,15 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
 
                         if (_isEmployeeMode) ...[
                           // Employee Mode UI
+                          Builder(
+                            builder: (context) {
+                              final invite = WorkspaceConfig.fromInvitePayload(
+                                widget.session.pendingEmployeeInvite ?? '',
+                              );
+                              final hasInvite = invite != null;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -286,36 +299,47 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: AppTheme.pastelIndigo.withValues(alpha: 0.2), width: 0.5),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Icon(CupertinoIcons.qrcode_viewfinder, color: AppTheme.pastelIndigo, size: 22),
                                 SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'Paste the invite code or QR payload provided by your company admin. Your Google account will be paired with the company workspace.',
-                                    style: TextStyle(color: AppTheme.pastelIndigo, fontSize: 12.5, fontWeight: FontWeight.w500, height: 1.35),
+                                    hasInvite
+                                        ? 'Employee sign-in for ${invite.companyName}. Confirm your fixed employee code to securely connect this Google account.'
+                                        : 'Scan the employee QR code supplied by your company administrator. It opens this secure employee sign-in page automatically.',
+                                    style: const TextStyle(color: AppTheme.pastelIndigo, fontSize: 12.5, fontWeight: FontWeight.w500, height: 1.35),
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 20),
-                          _buildSectionHeader('Employee Invitation Data', CupertinoIcons.tag_fill, isDark),
+                          _buildSectionHeader('Employee Code', CupertinoIcons.number, isDark),
                           const SizedBox(height: 12),
                           TextFormField(
-                            controller: _inviteCodeController,
-                            maxLines: 5,
+                            controller: _employeeCodeController,
+                            enabled: hasInvite,
+                            autofocus: hasInvite,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => hasInvite ? _joinAsEmployee() : null,
                             decoration: InputDecoration(
-                              labelText: 'Paste QR Invite Code or JSON Payload *',
-                              hintText: '{"type":"tpc_employee_invite","companyName":"...","spreadsheetId":"..."}',
+                              labelText: 'Your fixed employee code *',
+                              hintText: hasInvite ? 'For example: EMP-001' : 'Scan your QR code first',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              prefixIcon: const Icon(CupertinoIcons.doc_plaintext, size: 18),
+                              prefixIcon: const Icon(CupertinoIcons.number, size: 18),
                             ),
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            'Your company manager can generate this code from the HR / Employees screen.',
+                            hasInvite
+                                ? 'Use the code created with your employee profile. Your role and page access are verified live after sign-in.'
+                                : 'Ask your company manager to display the QR from the HR / Employees screen.',
                             style: TextStyle(fontSize: 12, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
+                          ),
+                                ],
+                              );
+                            },
                           ),
                         ] else ...[
                           // Info banner
@@ -577,9 +601,13 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                             ),
                             const Spacer(),
                             FilledButton.icon(
-                              onPressed: _isProvisioning ? null : (_isEmployeeMode ? _joinAsEmployee : _startProvisioning),
+                              onPressed: _isProvisioning ||
+                                      (_isEmployeeMode &&
+                                          (widget.session.pendingEmployeeInvite?.isEmpty ?? true))
+                                  ? null
+                                  : (_isEmployeeMode ? _joinAsEmployee : _startProvisioning),
                               icon: Icon(_isEmployeeMode ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.cloud_upload_fill, size: 18),
-                              label: Text(_isEmployeeMode ? 'Connect to Company Workspace' : 'Provision Google Workspace', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              label: Text(_isEmployeeMode ? 'Verify Employee Code' : 'Provision Google Workspace', style: const TextStyle(fontWeight: FontWeight.w600)),
                               style: FilledButton.styleFrom(
                                 backgroundColor: _isEmployeeMode ? AppTheme.pastelIndigo : AppTheme.pastelMint,
                                 foregroundColor: Colors.white,
