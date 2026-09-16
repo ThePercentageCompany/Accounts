@@ -39,6 +39,10 @@ class HybridQuotationRepository implements QuotationRepository {
     if (!_hasCloudWorkspace) return;
     Future.microtask(() async {
       try {
+        if (session.isCodeEmployeeSession) {
+          await session.syncNow();
+          return;
+        }
         final token = await session.tryGetToken();
         if (token != null) {
           await _sync.triggerBackgroundSync(
@@ -51,6 +55,9 @@ class HybridQuotationRepository implements QuotationRepository {
   }
 
   Future<void> _upsert(String id, Map<String, dynamic> data) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, 'Quotations');
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final expectedVersion = (previous?['version'] as num?)?.toInt() ?? 0;
     await _sync.upsertCachedRecord(_spreadsheetId, 'Quotations', id, data);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -59,11 +66,15 @@ class HybridQuotationRepository implements QuotationRepository {
         recordId: id,
         action: 'upsert',
         data: data,
+        expectedVersion: expectedVersion,
       );
     }
   }
 
   Future<void> _delete(String id) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, 'Quotations');
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final expectedVersion = (previous?['version'] as num?)?.toInt() ?? 0;
     await _sync.deleteCachedRecord(_spreadsheetId, 'Quotations', id);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -71,6 +82,7 @@ class HybridQuotationRepository implements QuotationRepository {
         tabName: 'Quotations',
         recordId: id,
         action: 'delete',
+        expectedVersion: expectedVersion,
       );
     }
   }
@@ -83,15 +95,19 @@ class HybridQuotationRepository implements QuotationRepository {
   Future<List<Quotation>> load() async {
     final sid = _spreadsheetId;
     if (_hasCloudWorkspace) {
-      final token = await session.tryGetToken();
-      if (token != null) {
-        await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+      if (session.isCodeEmployeeSession) {
+        await session.syncNow();
+      } else {
+        final token = await session.tryGetToken();
+        if (token != null) {
+          await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+        }
       }
     }
     var cached = await _sync.loadCachedRecords(sid, 'Quotations');
 
     // Cold start: seed cache from legacy local storage key
-    if (cached.isEmpty) {
+    if (!session.isEmployee && cached.isEmpty) {
       await _seedCacheFromLocalStorage(sid);
       cached = await _sync.loadCachedRecords(sid, 'Quotations');
     }
@@ -199,16 +215,25 @@ class HybridQuotationRepository implements QuotationRepository {
     if (!_hasCloudWorkspace) {
       throw StateError('Drive archive is available in connected mode.');
     }
-    final token = await session.tryGetToken();
-    if (token == null) return '';
-
     final fileName = '${quotation.number.isNotEmpty ? quotation.number : quotation.id}.pdf';
-    final link = await _service.uploadPdfFile(
-      token, _driveFolderId, fileName, bytes, subfolder: 'Quotations',
-    );
+    final String link;
+    if (session.isCodeEmployeeSession) {
+      await session.syncNow();
+      link = await session.uploadEmployeeFile(
+        tabName: 'Quotations', recordId: quotation.id,
+        name: fileName, mimeType: 'application/pdf', bytes: bytes,
+      );
+    } else {
+      final token = await session.tryGetToken();
+      if (token == null) return '';
+      link = await _service.uploadPdfFile(
+        token, _driveFolderId, fileName, bytes, subfolder: 'Quotations',
+      );
+    }
     if (link.isNotEmpty) {
       final updated = quotation.copyWith(driveUrl: link);
       await _upsert(updated.id, updated.toJson());
+      _scheduleBackgroundSync();
     }
     return link;
   }

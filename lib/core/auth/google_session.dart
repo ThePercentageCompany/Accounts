@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../sync/sync_manager.dart';
 import '../utils/browser_storage_cleaner.dart';
 import 'google_workspace_service.dart';
+import 'employee_gateway.dart';
 
 const connectedMode = bool.fromEnvironment('CONNECTED', defaultValue: false);
 const googleScopes = [
@@ -31,12 +33,23 @@ bool _isIgnorableAuthError(Object e) {
 }
 
 class GoogleSession extends ChangeNotifier {
+  GoogleSession({EmployeeGateway? employeeGateway})
+      : _employeeGateway = employeeGateway ?? EmployeeGateway();
+
+  final EmployeeGateway _employeeGateway;
+  String? _employeeSessionToken;
+  DateTime? _employeeSessionExpiresAt;
+  Future<void>? _employeeSyncTask;
+  DateTime? _lastEmployeeSync;
+  bool _googleInitialized = false;
+  bool _disposed = false;
   GoogleSignInAccount? user;
   String? cachedEmail;
   String? cachedDisplayName;
   String? cachedPhotoUrl;
   String? _inMemoryAccessToken;
   String? _pendingEmployeeInvite;
+  bool _employeeLoginRequested = false;
   bool authorized = false;
   bool isAuthorizing = false;
   bool isCheckingWorkspace = false;
@@ -78,6 +91,35 @@ class GoogleSession extends ChangeNotifier {
   String? get currentEmployeeName => workspace?.employeeName ?? effectiveDisplayName;
   List<String>? get allowedSections => workspace?.allowedSections;
   String? get pendingEmployeeInvite => _pendingEmployeeInvite;
+  bool get employeeLoginRequested => _employeeLoginRequested;
+  bool get isCodeEmployeeSession => _employeeSessionToken != null && workspace?.isEmployee == true;
+  String get employeeGatewayUrl => _employeeGateway.isConfigured ? _employeeGateway.endpoint : '';
+
+  /// Opens the employee-specific sign-in path before Google authentication.
+  void requestEmployeeLogin() {
+    _employeeLoginRequested = true;
+    notifyListeners();
+  }
+
+  void cancelEmployeeLogin() {
+    _employeeLoginRequested = false;
+    _pendingEmployeeInvite = null;
+    error = null;
+    notifyListeners();
+  }
+
+  /// Accepts only a valid employee QR/deep-link payload from the scanner.
+  bool acceptEmployeeInvite(String scannedValue) {
+    final invite = WorkspaceConfig.fromInvitePayload(scannedValue);
+    if (invite == null || !_employeeGateway.isConfigured ||
+        invite.employeeGatewayUrl != _employeeGateway.endpoint || (invite.employeeId ?? '').isEmpty) {
+      return false;
+    }
+    _pendingEmployeeInvite = invite.toInvitePayload();
+    _employeeLoginRequested = true;
+    notifyListeners();
+    return true;
+  }
 
   /// Checks whether a given section/tab title is permitted for the active session.
   bool isSectionAllowed(String sectionTitle) {
@@ -88,26 +130,133 @@ class GoogleSession extends ChangeNotifier {
     return allowed.any((s) => s.toLowerCase().trim() == normalized);
   }
 
-  /// Pairs the current Google user session with a QR invitation and employee code.
+  /// Login codes are checked by the owner's gateway. They are never in a QR,
+  /// cached workspace or Google credential store.
   Future<void> pairWithEmployeeInvite(
     String inviteCodeOrJson, {
     required String employeeCode,
   }) async {
     final config = WorkspaceConfig.fromInvitePayload(inviteCodeOrJson);
-    if (config == null || config.spreadsheetId.isEmpty || (config.employeeId ?? '').isEmpty) {
-      throw StateError('Invalid employee invitation code or QR data.');
+    if (config == null || (config.employeeId ?? '').isEmpty ||
+        config.employeeGatewayUrl != employeeGatewayUrl || employeeGatewayUrl.isEmpty) {
+      throw StateError('Scan a new employee QR issued by this company.');
     }
-    if (user == null) {
-      throw StateError('Sign in with the employee\'s registered Google account before using this invite.');
+    if (employeeCode.trim().isEmpty) throw StateError('Enter your private employee login code.');
+    final result = await _employeeGateway.call('login', data: {
+      'employeeId': config.employeeId, 'loginCode': employeeCode.trim(),
+    });
+    final employeeWorkspace = WorkspaceConfig.fromJson(Map<String, dynamic>.from(result['workspace'] as Map));
+    if (!employeeWorkspace.isEmployee || employeeWorkspace.employeeId != config.employeeId ||
+        employeeWorkspace.spreadsheetId.isEmpty || employeeWorkspace.driveFolderId.isEmpty) {
+      throw StateError('The employee service returned an invalid workspace.');
     }
-    final expectedCode = config.employeeCode?.trim() ?? '';
-    if (expectedCode.isEmpty ||
-        employeeCode.trim().toLowerCase() != expectedCode.toLowerCase()) {
-      throw StateError('The employee code does not match this QR invitation.');
+    final token = result['sessionToken']?.toString() ?? '';
+    final expiry = DateTime.tryParse(result['expiresAt']?.toString() ?? '');
+    if (token.isEmpty || expiry == null || !expiry.isAfter(DateTime.now())) {
+      throw StateError('The employee service returned an invalid session.');
     }
-    _pendingEmployeeInvite = null;
-    await setWorkspace(config);
+    _automaticSyncTimer?.cancel();
+    await syncManager.useEmployeeScope(employeeWorkspace.employeeId);
+    // A fresh online snapshot replaces any earlier, broader permissions.
+    await syncManager.clearEmployeeSnapshots();
+    _employeeSessionToken = token;
+    _employeeSessionExpiresAt = expiry;
+    user = null;
+    _inMemoryAccessToken = null;
+    workspace = employeeWorkspace;
+    cachedEmail = employeeWorkspace.employeeEmail;
+    cachedDisplayName = employeeWorkspace.employeeName;
+    cachedPhotoUrl = null;
+    try {
+      final snapshot = await syncManager.syncEmployee(
+        gateway: _employeeGateway, sessionToken: token,
+        spreadsheetId: employeeWorkspace.spreadsheetId,
+      );
+      _applyEmployeeWorkspace(snapshot);
+      _lastEmployeeSync = DateTime.now();
+      authorized = true;
+      isOffline = false;
+      error = null;
+      _pendingEmployeeInvite = null;
+      _employeeLoginRequested = false;
+      _startAutomaticSync();
+      notifyListeners();
+    } catch (_) {
+      _employeeSessionToken = null;
+      _employeeSessionExpiresAt = null;
+      workspace = null;
+      authorized = false;
+      await syncManager.clearEmployeeSnapshots();
+      await syncManager.useEmployeeScope(null);
+      rethrow;
+    }
   }
+
+  String employeeInviteLink({required String employeeId, required String companyName}) {
+    if (employeeGatewayUrl.isEmpty) throw StateError('Set up the employee gateway before generating QR codes.');
+    return WorkspaceConfig(
+      spreadsheetId: '', driveFolderId: '', companyName: companyName,
+      employeeId: employeeId, isEmployee: true, employeeGatewayUrl: employeeGatewayUrl,
+    ).toInviteLink();
+  }
+
+  Future<Map<String, dynamic>> provisionEmployeeAccess(String employeeId, {bool reset = false}) async {
+    if (isEmployee || user == null || workspace == null) throw StateError('Only the company owner can issue login codes.');
+    final ownerToken = await token();
+    await syncNow();
+    if (syncManager.pendingQueue.any((op) => op.spreadsheetId == workspace!.spreadsheetId &&
+        op.tabName == 'Employees' && op.recordId == employeeId)) {
+      throw StateError('Save this employee online before generating their login code.');
+    }
+    return _employeeGateway.call('provisionEmployee', ownerAccessToken: ownerToken, data: {
+      'employeeId': employeeId, 'reset': reset,
+      'spreadsheetId': workspace!.spreadsheetId, 'driveFolderId': workspace!.driveFolderId,
+    });
+  }
+
+  void _applyEmployeeWorkspace(Map<String, dynamic> result) {
+    final raw = result['workspace'];
+    if (raw is! Map) throw StateError('Employee permissions were not returned by the service.');
+    final updated = WorkspaceConfig.fromJson(Map<String, dynamic>.from(raw));
+    if (!updated.isEmployee || updated.employeeId != workspace?.employeeId ||
+        updated.spreadsheetId != workspace?.spreadsheetId || updated.driveFolderId != workspace?.driveFolderId) {
+      throw const EmployeeGatewayException('Employee workspace changed. Sign in again.', 'UNAUTHORIZED');
+    }
+    workspace = updated;
+    cachedDisplayName = updated.employeeName;
+    cachedEmail = updated.employeeEmail;
+  }
+
+  Future<Map<String, dynamic>> _employeeRequest(String action, Map<String, dynamic> data) async {
+    if (!isCodeEmployeeSession) throw StateError('Sign in as an employee first.');
+    try {
+      return await _employeeGateway.call(action, data: data, sessionToken: _employeeSessionToken);
+    } on EmployeeGatewayException catch (e) {
+      if (e.sessionExpired) await forceSignOut(reason: e.message);
+      rethrow;
+    }
+  }
+
+  Future<String> uploadEmployeeFile({required String tabName, required String recordId,
+      required String name, required String mimeType, required Uint8List bytes}) async {
+    await syncNow();
+    if (syncManager.pendingQueue.any((op) => op.tabName == tabName && op.recordId == recordId)) {
+      throw StateError('Save this record online before uploading its file.');
+    }
+    final result = await _employeeRequest('upload', {
+      'tabName': tabName, 'recordId': recordId, 'name': name,
+      'mimeType': mimeType, 'base64': base64Encode(bytes),
+    });
+    final url = result['url']?.toString() ?? '';
+    if (url.isEmpty) throw StateError('The owner Drive upload did not complete. Please retry.');
+    return url;
+  }
+
+  Future<bool> deleteEmployeeFile(String url) async =>
+      (await _employeeRequest('deleteFile', {'url': url}))['deleted'] == true;
+
+  Future<Map<String, dynamic>> downloadEmployeeFile(String url) =>
+      _employeeRequest('download', {'url': url});
 
   static const _cachedEmailKey = 'tpc_cached_user_email';
   static const _cachedNameKey = 'tpc_cached_user_name';

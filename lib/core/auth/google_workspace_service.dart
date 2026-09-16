@@ -24,6 +24,7 @@ class WorkspaceConfig {
   final String? employeeRole;
   final List<String>? allowedSections;
   final bool isEmployee;
+  final String? employeeGatewayUrl;
 
   const WorkspaceConfig({
     required this.spreadsheetId,
@@ -38,6 +39,7 @@ class WorkspaceConfig {
     this.employeeRole,
     this.allowedSections,
     this.isEmployee = false,
+    this.employeeGatewayUrl,
   });
 
   Map<String, dynamic> toJson() => {
@@ -53,6 +55,7 @@ class WorkspaceConfig {
         if (employeeRole != null) 'employeeRole': employeeRole,
         if (allowedSections != null) 'allowedSections': allowedSections,
         'isEmployee': isEmployee,
+        if (employeeGatewayUrl != null) 'employeeGatewayUrl': employeeGatewayUrl,
       };
 
   factory WorkspaceConfig.fromJson(Map<String, dynamic> json) => WorkspaceConfig(
@@ -68,6 +71,7 @@ class WorkspaceConfig {
         employeeRole: json['employeeRole'] as String?,
         allowedSections: (json['allowedSections'] as List?)?.map((e) => e.toString()).toList(),
         isEmployee: json['isEmployee'] == true,
+        employeeGatewayUrl: json['employeeGatewayUrl'] as String?,
       );
 
   WorkspaceConfig copyWith({
@@ -88,9 +92,18 @@ class WorkspaceConfig {
         employeeRole: employeeRole ?? this.employeeRole,
         allowedSections: allowedSections ?? this.allowedSections,
         isEmployee: isEmployee,
+        employeeGatewayUrl: employeeGatewayUrl,
       );
 
   String toInvitePayload() {
+    if (employeeGatewayUrl != null) {
+      return jsonEncode({
+        'type': 'tpc_employee_access_v2',
+        'companyName': companyName,
+        'employeeId': employeeId,
+        'employeeGatewayUrl': employeeGatewayUrl,
+      });
+    }
     return jsonEncode({
       'type': 'tpc_employee_invite',
       'companyName': companyName,
@@ -105,17 +118,24 @@ class WorkspaceConfig {
     });
   }
 
-  /// Minimal camera-scannable app link. The immutable employee ID is the
-  /// authority; role and permissions are always read from the Employees sheet.
+  /// A public invitation identifies the employee, never their login secret.
   String toInviteLink() {
+    if (employeeGatewayUrl != null) {
+      final payload = toInvitePayload();
+      const configuredLoginUrl = String.fromEnvironment('EMPLOYEE_LOGIN_URL');
+      final base = configuredLoginUrl.isNotEmpty
+          ? Uri.parse(configuredLoginUrl)
+          : Uri.base.scheme == 'https'
+              ? Uri.base.replace(query: '', fragment: '')
+              : Uri.parse('tpc://employee-login');
+      return base.replace(queryParameters: {'invite': payload}).toString();
+    }
     final accessPayload = jsonEncode({
       'type': 'tpc_employee_access',
       'companyName': companyName,
       'spreadsheetId': spreadsheetId,
       'driveFolderId': driveFolderId,
       'employeeId': employeeId ?? '',
-      'employeeCode': employeeCode ?? '',
-      'employeeRole': employeeRole ?? 'Staff',
     });
     return 'tpc://employee-login?invite=${Uri.encodeComponent(accessPayload)}';
   }
@@ -132,6 +152,17 @@ class WorkspaceConfig {
         cleaned = cleaned.substring('TPC_INVITE:'.length).trim();
       }
       final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic> && decoded['type'] == 'tpc_employee_access_v2') {
+        final employeeId = decoded['employeeId'];
+        final gateway = decoded['employeeGatewayUrl'];
+        if (employeeId is! String || employeeId.trim().isEmpty ||
+            gateway is! String || gateway.isEmpty) return null;
+        return WorkspaceConfig(
+          spreadsheetId: '', driveFolderId: '',
+          companyName: decoded['companyName'] as String? ?? 'Company',
+          employeeId: employeeId, employeeGatewayUrl: gateway, isEmployee: true,
+        );
+      }
       if (decoded is Map<String, dynamic> && decoded['spreadsheetId'] != null) {
         return WorkspaceConfig(
           spreadsheetId: decoded['spreadsheetId'] as String? ?? '',

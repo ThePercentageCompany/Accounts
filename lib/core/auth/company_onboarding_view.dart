@@ -32,9 +32,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
   final _swiftController = TextEditingController(text: 'EBILAEADXXX');
   final _currencyController = TextEditingController(text: 'AED');
   final _adminEmailController = TextEditingController(text: defaultMasterAdminEmail);
-  final _employeeCodeController = TextEditingController();
 
-  bool _isEmployeeMode = false;
   bool _isProvisioning = false;
   String _progressStatus = '';
   String? _errorMessage;
@@ -42,10 +40,6 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
   @override
   void initState() {
     super.initState();
-    final invite = widget.session.pendingEmployeeInvite;
-    if (invite != null && invite.isNotEmpty) {
-      _isEmployeeMode = true;
-    }
     if (widget.session.user?.email != null) {
       _emailController.text = widget.session.user!.email;
     }
@@ -66,36 +60,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
     _swiftController.dispose();
     _currencyController.dispose();
     _adminEmailController.dispose();
-    _employeeCodeController.dispose();
     super.dispose();
-  }
-
-  Future<void> _joinAsEmployee() async {
-    final invite = widget.session.pendingEmployeeInvite;
-    if (invite == null || invite.isEmpty) {
-      setState(() => _errorMessage = 'Scan your company QR code to open the employee sign-in page.');
-      return;
-    }
-    final employeeCode = _employeeCodeController.text.trim();
-    if (employeeCode.isEmpty) {
-      setState(() => _errorMessage = 'Enter your employee code to continue.');
-      return;
-    }
-    setState(() {
-      _isProvisioning = true;
-      _errorMessage = null;
-      _progressStatus = 'Connecting to company workspace...';
-    });
-    try {
-      await widget.session.pairWithEmployeeInvite(invite, employeeCode: employeeCode);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.toString().replaceFirst('Exception: ', '').replaceFirst('StateError: ', '');
-          _isProvisioning = false;
-        });
-      }
-    }
   }
 
   Future<void> _startProvisioning() async {
@@ -192,14 +157,12 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _isEmployeeMode ? 'Employee Workspace Login' : 'Workspace Setup',
+                                    'Workspace Setup',
                                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    _isEmployeeMode
-                                        ? 'Connect to your employer\'s Google Sheet and Drive with your Google account.'
-                                        : 'Setup your company details & private Google Cloud storage.',
+                                    'Setup your company details & private Google Cloud storage.',
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
@@ -212,136 +175,6 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Mode Selector (Company Owner vs Employee)
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0), width: 0.8),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () => setState(() {
-                                    _isEmployeeMode = false;
-                                    _errorMessage = null;
-                                  }),
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: !_isEmployeeMode ? (isDark ? const Color(0xFF0F172A) : Colors.white) : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(9),
-                                      boxShadow: !_isEmployeeMode ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        'Company Owner Setup',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: !_isEmployeeMode ? FontWeight.w700 : FontWeight.w500,
-                                          color: !_isEmployeeMode ? (isDark ? Colors.white : const Color(0xFF0F172A)) : Colors.grey,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () => setState(() {
-                                    _isEmployeeMode = true;
-                                    _errorMessage = null;
-                                  }),
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: _isEmployeeMode ? (isDark ? const Color(0xFF0F172A) : Colors.white) : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(9),
-                                      boxShadow: _isEmployeeMode ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        'Employee QR Sign-in',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: _isEmployeeMode ? FontWeight.w700 : FontWeight.w500,
-                                          color: _isEmployeeMode ? AppTheme.pastelMint : Colors.grey,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        if (_isEmployeeMode) ...[
-                          // Employee Mode UI
-                          Builder(
-                            builder: (context) {
-                              final invite = WorkspaceConfig.fromInvitePayload(
-                                widget.session.pendingEmployeeInvite ?? '',
-                              );
-                              final hasInvite = invite != null;
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppTheme.pastelIndigoBg,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppTheme.pastelIndigo.withValues(alpha: 0.2), width: 0.5),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(CupertinoIcons.qrcode_viewfinder, color: AppTheme.pastelIndigo, size: 22),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    hasInvite
-                                        ? 'Employee sign-in for ${invite.companyName}. Confirm your fixed employee code to securely connect this Google account.'
-                                        : 'Scan the employee QR code supplied by your company administrator. It opens this secure employee sign-in page automatically.',
-                                    style: const TextStyle(color: AppTheme.pastelIndigo, fontSize: 12.5, fontWeight: FontWeight.w500, height: 1.35),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          _buildSectionHeader('Employee Code', CupertinoIcons.number, isDark),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _employeeCodeController,
-                            enabled: hasInvite,
-                            autofocus: hasInvite,
-                            textInputAction: TextInputAction.done,
-                            onFieldSubmitted: (_) => hasInvite ? _joinAsEmployee() : null,
-                            decoration: InputDecoration(
-                              labelText: 'Your fixed employee code *',
-                              hintText: hasInvite ? 'For example: EMP-001' : 'Scan your QR code first',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              prefixIcon: const Icon(CupertinoIcons.number, size: 18),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            hasInvite
-                                ? 'Use the code created with your employee profile. Your role and page access are verified live after sign-in.'
-                                : 'Ask your company manager to display the QR from the HR / Employees screen.',
-                            style: TextStyle(fontSize: 12, color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary),
-                          ),
-                                ],
-                              );
-                            },
-                          ),
-                        ] else ...[
                           // Info banner
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -524,8 +357,6 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                           icon: CupertinoIcons.person_badge_plus,
                           isDark: isDark,
                         ),
-                      ],
-
                         // Error message
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 20),
@@ -601,15 +432,11 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                             ),
                             const Spacer(),
                             FilledButton.icon(
-                              onPressed: _isProvisioning ||
-                                      (_isEmployeeMode &&
-                                          (widget.session.pendingEmployeeInvite?.isEmpty ?? true))
-                                  ? null
-                                  : (_isEmployeeMode ? _joinAsEmployee : _startProvisioning),
-                              icon: Icon(_isEmployeeMode ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.cloud_upload_fill, size: 18),
-                              label: Text(_isEmployeeMode ? 'Verify Employee Code' : 'Provision Google Workspace', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              onPressed: _isProvisioning ? null : _startProvisioning,
+                              icon: const Icon(CupertinoIcons.cloud_upload_fill, size: 18),
+                              label: const Text('Provision Google Workspace', style: TextStyle(fontWeight: FontWeight.w600)),
                               style: FilledButton.styleFrom(
-                                backgroundColor: _isEmployeeMode ? AppTheme.pastelIndigo : AppTheme.pastelMint,
+                                backgroundColor: AppTheme.pastelMint,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

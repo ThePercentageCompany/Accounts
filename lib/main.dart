@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/company_onboarding_view.dart';
+import 'core/auth/employee_login_view.dart';
 import 'core/auth/google_session.dart';
 import 'core/auth/sign_in_button.dart';
 import 'core/theme/app_theme.dart';
@@ -72,13 +73,8 @@ class TpcApp extends StatelessWidget {
               builder: (context, _) {
                 // A scanned employee QR always takes precedence over a cached
                 // workspace so the employee can confirm their own access code.
-                if (session.pendingEmployeeInvite != null) {
-                  if (session.isCheckingWorkspace) {
-                    return const WorkspaceLoadingView();
-                  }
-                  if (session.authorized) {
-                    return CompanyOnboardingView(session: session);
-                  }
+                if (session.pendingEmployeeInvite != null || session.employeeLoginRequested) {
+                  return EmployeeLoginView(session: session);
                 }
 
                 if (session.workspace != null) {
@@ -376,11 +372,53 @@ class GoogleLogin extends StatelessWidget {
                           Center(child: googleButton(() => session.signIn())),
                           const SizedBox(height: 16),
                           Text(
-                            'Sign in securely with your Google account',
+                            'Company owners: sign in with Google',
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
                             ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: session.isAuthorizing
+                                      ? null
+                                      : session.requestEmployeeLogin,
+                                  icon: const Icon(CupertinoIcons.person_crop_circle, size: 17),
+                                  label: const Text('Employee Login'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    foregroundColor: AppTheme.pastelIndigo,
+                                    side: const BorderSide(color: AppTheme.pastelIndigo),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: session.isAuthorizing
+                                      ? null
+                                      : () async {
+                                          final scannedValue = await scanEmployeeQr(context);
+                                          if (!context.mounted || scannedValue == null) return;
+                                          if (!session.acceptEmployeeInvite(scannedValue)) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('This employee QR is not supported. Ask your manager for a new QR.')),
+                                            );
+                                          }
+                                        },
+                                  icon: const Icon(CupertinoIcons.qrcode_viewfinder, size: 17),
+                                  label: const Text('Scan QR'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    foregroundColor: AppTheme.pastelMint,
+                                    side: const BorderSide(color: AppTheme.pastelMint),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       )

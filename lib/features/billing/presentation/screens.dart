@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/auth/google_session.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/file_download.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/date_field.dart';
@@ -1248,9 +1252,21 @@ class InvoiceDetail extends StatelessWidget {
                       ],
                       if (invoice.driveUrl.isNotEmpty)
                         TextButton.icon(
-                          onPressed: () => launchUrl(Uri.parse(invoice.driveUrl), mode: LaunchMode.externalApplication),
+                          onPressed: state.busy ? null : () => guarded(() async {
+                            final session = context.read<GoogleSession>();
+                            if (session.isCodeEmployeeSession) {
+                              final file = await session.downloadEmployeeFile(invoice.driveUrl);
+                              await downloadFile(
+                                base64Decode(file['base64'] as String),
+                                filename: file['name'] as String? ?? '${invoice.number}.pdf',
+                                mimeType: file['mimeType'] as String? ?? 'application/pdf',
+                              );
+                            } else {
+                              await launchUrl(Uri.parse(invoice.driveUrl), mode: LaunchMode.externalApplication);
+                            }
+                          }),
                           icon: const Icon(CupertinoIcons.arrow_up_right_square, size: 15),
-                          label: const Text('Open in Drive'),
+                          label: const Text('Open saved PDF'),
                         ),
                       if (invoice.status == 'issued' && invoice.payments.isEmpty)
                         TextButton(

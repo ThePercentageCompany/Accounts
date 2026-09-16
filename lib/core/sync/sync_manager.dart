@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/google_workspace_service.dart';
+import '../auth/employee_gateway.dart';
 import 'sheet_schema.dart';
 
 enum SyncStatus {
@@ -21,6 +22,8 @@ class PendingOperation {
   final String action; // 'upsert' | 'delete'
   final Map<String, dynamic>? data;
   final DateTime timestamp;
+  final String? actorId;
+  final int? expectedVersion;
 
   const PendingOperation({
     required this.id,
@@ -30,6 +33,8 @@ class PendingOperation {
     required this.action,
     this.data,
     required this.timestamp,
+    this.actorId,
+    this.expectedVersion,
   });
 
   Map<String, dynamic> toJson() => {
@@ -40,6 +45,8 @@ class PendingOperation {
         'action': action,
         'data': data,
         'timestamp': timestamp.toIso8601String(),
+        if (actorId != null) 'actorId': actorId,
+        if (expectedVersion != null) 'expectedVersion': expectedVersion,
       };
 
   factory PendingOperation.fromJson(Map<String, dynamic> json) => PendingOperation(
@@ -50,6 +57,8 @@ class PendingOperation {
         action: json['action'] as String,
         data: json['data'] != null ? Map<String, dynamic>.from(json['data'] as Map) : null,
         timestamp: DateTime.parse(json['timestamp'] as String),
+        actorId: json['actorId'] as String?,
+        expectedVersion: (json['expectedVersion'] as num?)?.toInt(),
       );
 }
 
@@ -69,8 +78,20 @@ class SyncManager extends ChangeNotifier {
   DateTime? get lastSyncedTime => _lastSyncedTime;
 
   List<PendingOperation> _pendingQueue = [];
-  List<PendingOperation> get pendingQueue => List.unmodifiable(_pendingQueue);
-  int get pendingCount => _pendingQueue.length;
+  String? _employeeScope;
+  int _dataRevision = 0;
+  int get dataRevision => _dataRevision;
+  List<PendingOperation> get pendingQueue => List.unmodifiable(
+      _pendingQueue.where((op) => op.actorId == _employeeScope));
+  int get pendingCount => pendingQueue.length;
+
+  Future<void> useEmployeeScope(String? employeeId) async {
+    await waitForIdle();
+    _employeeScope = employeeId;
+    _lastError = null;
+    _status = pendingCount == 0 ? SyncStatus.synced : SyncStatus.pendingChanges;
+    notifyListeners();
+  }
 
   bool _initialized = false;
   Future<void> Function(Object error)? onAuthorizationFailure;
@@ -95,6 +116,7 @@ class SyncManager extends ChangeNotifier {
   /// Clears in-memory pending queue, error states, remote tab caches, and resets sync status.
   Future<void> clearAll() async {
     _pendingQueue.clear();
+    _employeeScope = null;
     _status = SyncStatus.synced;
     _lastError = null;
     _lastSyncedTime = null;
@@ -111,7 +133,8 @@ class SyncManager extends ChangeNotifier {
 
   // --- LOCAL PERSISTENT CACHE ---
 
-  static String _cacheKey(String spreadsheetId, String tabName) => 'tpc_tab_cache_${spreadsheetId}_$tabName';
+  String _cacheKey(String spreadsheetId, String tabName) =>
+      'tpc_tab_cache_${spreadsheetId}_${_employeeScope == null ? '' : 'employee_${_employeeScope}_'}$tabName';
 
   Future<List<Map<String, dynamic>>> loadCachedRecords(String spreadsheetId, String tabName) async {
     final prefs = await SharedPreferences.getInstance();
@@ -153,6 +176,7 @@ class SyncManager extends ChangeNotifier {
     Map<String, dynamic>? data, {
     bool isDelete = false,
   }) async {
+    if (_employeeScope != null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -248,7 +272,7 @@ class SyncManager extends ChangeNotifier {
   Future<void> _savePendingQueue() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_queueKey, jsonEncode(_pendingQueue.map((e) => e.toJson()).toList()));
-    _status = _pendingQueue.isEmpty ? SyncStatus.synced : SyncStatus.pendingChanges;
+    _status = pendingCount == 0 ? SyncStatus.synced : SyncStatus.pendingChanges;
     notifyListeners();
   }
 
@@ -258,9 +282,14 @@ class SyncManager extends ChangeNotifier {
     required String recordId,
     required String action,
     Map<String, dynamic>? data,
+    int? expectedVersion,
   }) async {
+    final previous = _pendingQueue.where((op) => op.spreadsheetId == spreadsheetId &&
+        op.tabName == tabName && op.recordId == recordId && op.actorId == _employeeScope).firstOrNull;
+    final baseVersion = previous?.expectedVersion ?? expectedVersion ??
+        ((data?['version'] as num?)?.toInt() ?? 1) - 1;
     // Remove previous pending ops for the same record to keep queue compact
-    _pendingQueue.removeWhere((op) => op.spreadsheetId == spreadsheetId && op.tabName == tabName && op.recordId == recordId);
+    _pendingQueue.removeWhere((op) => op.spreadsheetId == spreadsheetId && op.tabName == tabName && op.recordId == recordId && op.actorId == _employeeScope);
 
     _pendingQueue.add(
       PendingOperation(
@@ -271,6 +300,8 @@ class SyncManager extends ChangeNotifier {
         action: action,
         data: data,
         timestamp: DateTime.now(),
+        actorId: _employeeScope,
+        expectedVersion: baseVersion < 0 ? 0 : baseVersion,
       ),
     );
     await _savePendingQueue();
@@ -285,6 +316,91 @@ class SyncManager extends ChangeNotifier {
   Future<void> waitForIdle() async {
     while (_isBackgroundSyncing) {
       await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+  }
+
+  /// Discard private snapshots on logout, but retain unsent edits for the same
+  /// employee to retry after authenticating again. Owner caches are untouched.
+  Future<void> clearEmployeeSnapshots() async {
+    if (_employeeScope == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final marker = '_employee_${_employeeScope}_';
+    for (final key in prefs.getKeys().where((key) =>
+        key.startsWith('tpc_tab_cache_') && key.contains(marker))) {
+      await prefs.remove(key);
+    }
+  }
+
+  /// All employee traffic is mediated by the owner gateway; Google credentials
+  /// are never passed to or synthesized for an employee device.
+  Future<Map<String, dynamic>> syncEmployee({
+    required EmployeeGateway gateway,
+    required String sessionToken,
+    required String spreadsheetId,
+  }) async {
+    await waitForIdle();
+    if (_employeeScope == null) throw StateError('Employee session is not active.');
+    _isBackgroundSyncing = true;
+    _status = SyncStatus.syncing;
+    notifyListeners();
+    final sent = pendingQueue.where((op) => op.spreadsheetId == spreadsheetId).take(100).toList();
+    try {
+      final result = await gateway.call('sync', sessionToken: sessionToken, data: {
+        'operations': [for (final op in sent) {
+          'id': op.id, 'tabName': op.tabName, 'recordId': op.recordId,
+          'action': op.action, 'expectedVersion': op.expectedVersion ?? 0,
+          if (op.data != null) 'data': op.data,
+          if (op.data != null) 'row': SheetSchema.recordToRow(op.tabName, op.data!),
+        }],
+      });
+      final acknowledged = (result['acknowledged'] as List? ?? []).map((id) => id.toString()).toSet();
+      _pendingQueue.removeWhere((op) => sent.contains(op) && acknowledged.contains(op.id));
+      await _savePendingQueue();
+      final rejected = (result['rejected'] as List? ?? []).whereType<Map>().toList();
+      final rejectedIds = rejected.map((op) => op['id']?.toString()).toSet();
+      final readable = (result['readableTabs'] as List? ?? []).map((v) => v.toString()).toSet();
+      final tabs = Map<String, dynamic>.from(result['tabs'] as Map? ?? {});
+      var changed = false;
+      for (final tab in SheetSchema.dataTabsToSync) {
+        final rows = (tabs[tab] as List? ?? []).whereType<List>().toList();
+        final records = <Map<String, dynamic>>[];
+        if (rows.isNotEmpty) {
+          final headers = rows.first.map((v) => v.toString()).toList();
+          final indices = SheetSchema.getHeaders(tab).map(headers.indexOf).toList();
+          for (final row in rows.skip(1)) {
+            final aligned = [for (final index in indices)
+              index >= 0 && index < row.length ? row[index] : ''];
+            if (aligned.isEmpty || aligned.first.toString().isEmpty) continue;
+            records.add(SheetSchema.rowToRecord(tab, aligned));
+          }
+        }
+        // Edits made while the request was running remain visible until their
+        // own acknowledgement. Rejected or newly forbidden edits stay only in
+        // the outbox, never masquerading as accepted server records.
+        if (readable.contains(tab)) {
+          for (final op in pendingQueue.where((op) =>
+              op.spreadsheetId == spreadsheetId && op.tabName == tab && !rejectedIds.contains(op.id))) {
+            records.removeWhere((record) => record['id']?.toString() == op.recordId);
+            if (op.action == 'upsert' && op.data != null) records.add(op.data!);
+          }
+        }
+        final before = await loadCachedRecords(spreadsheetId, tab);
+        changed = changed || jsonEncode(before) != jsonEncode(records);
+        await saveCachedRecords(spreadsheetId, tab, records);
+      }
+      if (changed) _dataRevision++;
+      _lastSyncedTime = DateTime.now();
+      _lastError = rejected.isEmpty ? null : rejected.map((r) => r['message'] ?? 'Pending change rejected').join('\n');
+      _status = rejected.isNotEmpty ? SyncStatus.error : pendingCount > 0 ? SyncStatus.pendingChanges : SyncStatus.synced;
+      return result;
+    } catch (e) {
+      _lastError = e.toString();
+      _status = e is EmployeeGatewayException && e.code != 'NETWORK'
+          ? SyncStatus.error : pendingCount > 0 ? SyncStatus.pendingChanges : SyncStatus.offline;
+      rethrow;
+    } finally {
+      _isBackgroundSyncing = false;
+      notifyListeners();
     }
   }
 
@@ -433,6 +549,7 @@ class SyncManager extends ChangeNotifier {
     required String spreadsheetId,
     void Function()? onDataRefreshed,
   }) async {
+    if (_employeeScope != null) throw StateError('Employees must sync through the owner gateway.');
     // A CRUD operation may arrive while an earlier pass is uploading. Keep the
     // UI non-blocking, but guarantee a follow-up pass once that upload ends.
     if (_isBackgroundSyncing) {
@@ -454,15 +571,19 @@ class SyncManager extends ChangeNotifier {
       final batchData = await _service.readAllTabsBatch(token, spreadsheetId, tabs);
 
       bool hasData = false;
+      var changed = false;
       for (final entry in batchData.entries) {
         // An empty tab is meaningful: it may be a cloud-side deletion and
         // must clear the cache rather than leaving stale records visible.
+        final before = await loadCachedRecords(spreadsheetId, entry.key);
+        changed = changed || jsonEncode(before) != jsonEncode(entry.value);
         await saveCachedRecords(spreadsheetId, entry.key, entry.value);
         hasData = hasData || entry.value.isNotEmpty;
       }
 
       // Mirror remote data into local storage so local databases are always populated
       await _mirrorRemoteToLocalStorage(batchData);
+      if (changed) _dataRevision++;
 
       _status = SyncStatus.synced;
       _lastSyncedTime = DateTime.now();
@@ -492,6 +613,7 @@ class SyncManager extends ChangeNotifier {
   }
 
   Future<void> _mirrorRemoteToLocalStorage(Map<String, List<Map<String, dynamic>>> batchData) async {
+    if (_employeeScope != null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -580,7 +702,7 @@ class SyncManager extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
 
-    final remaining = List<PendingOperation>.from(_pendingQueue);
+    final remaining = _pendingQueue.where((op) => op.spreadsheetId == spreadsheetId && op.actorId == null).toList();
     final successfullySynced = <PendingOperation>[];
 
     for (final op in remaining) {
@@ -611,7 +733,7 @@ class SyncManager extends ChangeNotifier {
     }
 
     notifyListeners();
-    return _pendingQueue.isEmpty;
+    return !_pendingQueue.any((op) => op.spreadsheetId == spreadsheetId && op.actorId == null);
   }
 
   void markOffline() {

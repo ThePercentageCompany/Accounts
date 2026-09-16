@@ -45,6 +45,10 @@ class HybridBillingRepository implements BillingRepository {
     if (!_hasCloudWorkspace) return;
     Future.microtask(() async {
       try {
+        if (session.isCodeEmployeeSession) {
+          await session.syncNow();
+          return;
+        }
         final token = await session.tryGetToken();
         if (token != null) {
           await _sync.triggerBackgroundSync(
@@ -59,6 +63,12 @@ class HybridBillingRepository implements BillingRepository {
   /// Upserts into SyncManager cache (which mirrors to local storage) and
   /// optionally enqueues a cloud op.
   Future<void> _upsert(String tab, String id, Map<String, dynamic> data) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, tab);
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final previousValue = tab == 'Settings' ? previous?['value'] : previous;
+    final expectedVersion = previousValue is Map
+        ? (previousValue['version'] as num?)?.toInt() ?? 0
+        : 0;
     await _sync.upsertCachedRecord(_spreadsheetId, tab, id, data);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -67,6 +77,7 @@ class HybridBillingRepository implements BillingRepository {
         recordId: id,
         action: 'upsert',
         data: data,
+        expectedVersion: expectedVersion,
       );
     }
   }
@@ -74,6 +85,9 @@ class HybridBillingRepository implements BillingRepository {
   /// Deletes from SyncManager cache (which mirrors to local storage) and
   /// optionally enqueues a cloud op.
   Future<void> _delete(String tab, String id) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, tab);
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final expectedVersion = (previous?['version'] as num?)?.toInt() ?? 0;
     await _sync.deleteCachedRecord(_spreadsheetId, tab, id);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -81,6 +95,7 @@ class HybridBillingRepository implements BillingRepository {
         tabName: tab,
         recordId: id,
         action: 'delete',
+        expectedVersion: expectedVersion,
       );
     }
   }
@@ -96,9 +111,13 @@ class HybridBillingRepository implements BillingRepository {
     // Connected workspaces are cloud-authoritative. Refresh the cache before
     // constructing screen state; local storage remains the instant fallback.
     if (_hasCloudWorkspace) {
-      final token = await session.tryGetToken();
-      if (token != null) {
-        await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+      if (session.isCodeEmployeeSession) {
+        await session.syncNow();
+      } else {
+        final token = await session.tryGetToken();
+        if (token != null) {
+          await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+        }
       }
     }
 
@@ -108,14 +127,20 @@ class HybridBillingRepository implements BillingRepository {
     var cachedSettings = await _sync.loadCachedRecords(sid, 'Settings');
 
     // Cold start: seed cache from legacy local storage keys
-    if (cachedCustomers.isEmpty && cachedInvoices.isEmpty && cachedSettings.isEmpty) {
+    if (!session.isEmployee && cachedCustomers.isEmpty && cachedInvoices.isEmpty && cachedSettings.isEmpty) {
       await _seedCacheFromLocalStorage(sid);
       cachedCustomers = await _sync.loadCachedRecords(sid, 'Customers');
       cachedInvoices = await _sync.loadCachedRecords(sid, 'Invoices');
       cachedSettings = await _sync.loadCachedRecords(sid, 'Settings');
     }
 
-    Company company = const Company();
+    Company company = session.isEmployee
+        ? Company(
+            name: session.workspace?.companyName ?? '',
+            address: '', phone: '', email: '', prefix: '', accountHolder: '',
+            bank: '', accountNumber: '', notes: '', terms: '',
+          )
+        : const Company();
     for (final s in cachedSettings) {
       if (s['id'] == 'company') {
         final val = s['value'] ?? s;
@@ -186,6 +211,9 @@ class HybridBillingRepository implements BillingRepository {
 
   @override
   Future<void> saveCompany(Company company) async {
+    if (session.isEmployee) {
+      throw StateError('Only the company owner can change company settings or branding.');
+    }
     String previousLogoDriveUrl = '';
     if (_hasCloudWorkspace) {
       final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
@@ -351,19 +379,28 @@ class HybridBillingRepository implements BillingRepository {
     if (!_hasCloudWorkspace) {
       throw StateError('Drive archive is available in connected mode.');
     }
-    final token = await session.tryGetToken();
-    if (token == null) return '';
-
     final fileName = paymentId != null && paymentId.isNotEmpty
         ? '${invoice.number.isNotEmpty ? invoice.number : invoice.id}_Receipt_$paymentId.pdf'
         : '${invoice.number.isNotEmpty ? invoice.number : invoice.id}.pdf';
 
-    final link = await _service.uploadPdfFile(
-      token, _driveFolderId, fileName, bytes, subfolder: 'Invoices',
-    );
+    final String link;
+    if (session.isCodeEmployeeSession) {
+      await session.syncNow();
+      link = await session.uploadEmployeeFile(
+        tabName: 'Invoices', recordId: invoice.id,
+        name: fileName, mimeType: 'application/pdf', bytes: bytes,
+      );
+    } else {
+      final token = await session.tryGetToken();
+      if (token == null) return '';
+      link = await _service.uploadPdfFile(
+        token, _driveFolderId, fileName, bytes, subfolder: 'Invoices',
+      );
+    }
     if (link.isNotEmpty) {
       final updated = invoice.copyWith(driveUrl: link, archivedVersion: invoice.version);
       await _upsert('Invoices', updated.id, updated.toJson());
+      _scheduleBackgroundSync();
     }
     return link;
   }

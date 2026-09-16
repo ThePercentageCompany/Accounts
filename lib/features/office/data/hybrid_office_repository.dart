@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
@@ -43,6 +44,10 @@ class HybridOfficeRepository implements OfficeRepository {
     if (!_hasCloudWorkspace) return;
     Future.microtask(() async {
       try {
+        if (session.isCodeEmployeeSession) {
+          await session.syncNow();
+          return;
+        }
         final token = await session.tryGetToken();
         if (token != null) {
           await _sync.triggerBackgroundSync(
@@ -55,6 +60,9 @@ class HybridOfficeRepository implements OfficeRepository {
   }
 
   Future<void> _upsert(String tab, String id, Map<String, dynamic> data) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, tab);
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final expectedVersion = (previous?['version'] as num?)?.toInt() ?? 0;
     await _sync.upsertCachedRecord(_spreadsheetId, tab, id, data);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -63,11 +71,15 @@ class HybridOfficeRepository implements OfficeRepository {
         recordId: id,
         action: 'upsert',
         data: data,
+        expectedVersion: expectedVersion,
       );
     }
   }
 
   Future<void> _delete(String tab, String id) async {
+    final records = await _sync.loadCachedRecords(_spreadsheetId, tab);
+    final previous = records.where((record) => record['id'] == id).firstOrNull;
+    final expectedVersion = (previous?['version'] as num?)?.toInt() ?? 0;
     await _sync.deleteCachedRecord(_spreadsheetId, tab, id);
     if (_hasCloudWorkspace) {
       await _sync.enqueueOperation(
@@ -76,8 +88,39 @@ class HybridOfficeRepository implements OfficeRepository {
         recordId: id,
         action: 'delete',
         data: {},
+        expectedVersion: expectedVersion,
       );
     }
+  }
+
+  Future<String> _uploadFile({
+    required String tabName,
+    required String recordId,
+    required String name,
+    required String mimeType,
+    required Uint8List bytes,
+    required String subfolder,
+  }) async {
+    if (session.isCodeEmployeeSession) {
+      // A newly-created record must reach the owner sheet before the gateway
+      // can authorize a file attachment to it.
+      await session.syncNow();
+      return session.uploadEmployeeFile(
+        tabName: tabName,
+        recordId: recordId,
+        name: name,
+        mimeType: mimeType,
+        bytes: bytes,
+      );
+    }
+    final token = await session.tryGetToken();
+    if (token == null) {
+      throw StateError('Saving to Google Drive requires an active internet connection.');
+    }
+    return _service.uploadDriveFile(
+      token, _driveFolderId, name, bytes,
+      mimeType: mimeType, subfolder: subfolder,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -103,13 +146,17 @@ class HybridOfficeRepository implements OfficeRepository {
     // ── officeLoad ────────────────────────────────────────────────────────────
     if (action == 'officeLoad') {
       if (_hasCloudWorkspace) {
-        final token = await session.tryGetToken();
-        if (token != null) {
-          await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+        if (session.isCodeEmployeeSession) {
+          await session.syncNow();
+        } else {
+          final token = await session.tryGetToken();
+          if (token != null) {
+            await _sync.triggerBackgroundSync(token: token, spreadsheetId: sid);
+          }
         }
       }
       // Seed cache from legacy local storage if needed
-      await _seedCacheFromLocalStorage(sid);
+      if (!session.isEmployee) await _seedCacheFromLocalStorage(sid);
 
       final employees = await _sync.loadCachedRecords(sid, 'Employees');
       final attendance = await _sync.loadCachedRecords(sid, 'Attendance');
@@ -150,6 +197,16 @@ class HybridOfficeRepository implements OfficeRepository {
       final bank = d['bank']?.toString().trim() ?? '';
       final iban = d['iban']?.toString().trim() ?? '';
       final old = employees.where((x) => x['id'] == id).firstOrNull;
+      if (session.isEmployee && old != null) {
+        for (final field in const [
+          'systemRole', 'allowedSections', 'active', 'code', 'googleEmail',
+          'loginCode', 'loginCodeHash', 'loginCodeSalt', 'accessVersion',
+        ]) {
+          if (d.containsKey(field) && jsonEncode(d[field]) != jsonEncode(old[field])) {
+            throw StateError('Only the company owner can change employee login access.');
+          }
+        }
+      }
       if (old != null && (old['version'] ?? 0) != (d['version'] ?? 0)) {
         throw StateError('Record changed. Refresh and reopen.');
       }
@@ -169,6 +226,9 @@ class HybridOfficeRepository implements OfficeRepository {
       scaled(d['allowances'].toString(), 2);
 
       final record = {
+        // Access credentials are not part of the editable HR form. Preserve
+        // existing values while the gateway authorizes the employee update.
+        if (session.isEmployee && old != null) ...old,
         ...d,
         'code': code,
         'name': name,
@@ -654,15 +714,14 @@ class HybridOfficeRepository implements OfficeRepository {
       if (!_hasCloudWorkspace) {
         throw StateError('Archiving to Google Drive requires a connected Google workspace.');
       }
-      final token = await session.tryGetToken();
-      if (token == null) {
-        throw StateError('Archiving to Google Drive requires an active internet connection.');
-      }
       final id = d['id'] as String;
       final bytes = base64Decode(d['pdf'] as String);
       final fileName = 'Payslip_$id.pdf';
-      final link = await _service.uploadPdfFile(
-          token, _driveFolderId, fileName, bytes, subfolder: 'Payroll');
+      final link = await _uploadFile(
+        tabName: 'Payroll', recordId: id,
+        name: fileName, mimeType: 'application/pdf', bytes: bytes,
+        subfolder: 'Payroll',
+      );
 
       if (link.isNotEmpty) {
         final payroll = await _sync.loadCachedRecords(sid, 'Payroll');
@@ -685,15 +744,14 @@ class HybridOfficeRepository implements OfficeRepository {
       if (!_hasCloudWorkspace) {
         throw StateError('Archiving to Google Drive requires a connected Google workspace.');
       }
-      final token = await session.tryGetToken();
-      if (token == null) {
-        throw StateError('Archiving to Google Drive requires an active internet connection.');
-      }
       final month = d['month'] as String? ?? DateTime.now().toIso8601String().substring(0, 7);
       final bytes = base64Decode(d['pdf'] as String);
       final fileName = 'Financial_Report_$month.pdf';
-      final link = await _service.uploadPdfFile(
-          token, _driveFolderId, fileName, bytes, subfolder: 'Reports');
+      final link = await _uploadFile(
+        tabName: 'Reports', recordId: month,
+        name: fileName, mimeType: 'application/pdf', bytes: bytes,
+        subfolder: 'Reports',
+      );
       return {'url': link};
     }
 
@@ -718,8 +776,6 @@ class HybridOfficeRepository implements OfficeRepository {
       final documents = (current['documents'] as List? ?? []).whereType<Map>().toList();
       if (documents.any((doc) => doc['id']?.toString() == documentId)) return current;
 
-      final token = await session.tryGetToken();
-      if (token == null) throw StateError('Document upload requires an active Google connection.');
       final bytes = base64Decode(d['bytes']?.toString() ?? d['base64']?.toString() ?? '');
       if (bytes.isEmpty || bytes.length > 5000000) throw StateError('Select a file up to 5 MB.');
       final extension = (d['extension']?.toString() ?? name.split('.').last).toLowerCase();
@@ -729,7 +785,10 @@ class HybridOfficeRepository implements OfficeRepository {
       final subfolder = table == 'Payroll' || table == 'Employees' || table == 'Attendance'
           ? 'Payroll'
           : (table == 'Invoices' ? 'Invoices' : (table == 'Quotations' ? 'Quotations' : 'Assets'));
-      final link = await _service.uploadDriveFile(token, _driveFolderId, name, bytes, mimeType: mimeType, subfolder: subfolder);
+      final link = await _uploadFile(
+        tabName: table, recordId: id,
+        name: name, mimeType: mimeType, bytes: bytes, subfolder: subfolder,
+      );
       if (link.isEmpty) throw StateError('Google Drive upload failed. Please retry.');
 
       final updated = Map<String, dynamic>.from(current)
@@ -744,10 +803,6 @@ class HybridOfficeRepository implements OfficeRepository {
       if (!_hasCloudWorkspace) {
         throw StateError('Document upload to Google Drive requires a connected Google workspace.');
       }
-      final token = await session.tryGetToken();
-      if (token == null) {
-        throw StateError('Document upload to Google Drive requires an active internet connection.');
-      }
       final bytes = base64Decode(d['base64'] as String);
       final fileName = d['name'] as String;
       final mimeType = d['type'] as String? ?? 'application/octet-stream';
@@ -757,12 +812,15 @@ class HybridOfficeRepository implements OfficeRepository {
         mimeType: mimeType,
         category: category,
       );
-      final link = await _service.uploadDriveFile(
-        token,
-        _driveFolderId,
-        fileName,
-        bytes,
-        mimeType: mimeType,
+      final table = d['table']?.toString() ?? '';
+      final recordId = d['id']?.toString() ?? '';
+      if (session.isCodeEmployeeSession &&
+          (!SheetSchema.dataTabsToSync.contains(table) || recordId.isEmpty)) {
+        throw StateError('Save the record before attaching a file.');
+      }
+      final link = await _uploadFile(
+        tabName: table, recordId: recordId,
+        name: fileName, mimeType: mimeType, bytes: bytes,
         subfolder: targetSubfolder,
       );
       return {'url': link};
