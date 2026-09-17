@@ -119,16 +119,22 @@ class WorkspaceConfig {
   }
 
   /// A public invitation identifies the employee, never their login secret.
-  String toInviteLink() {
+  String toInviteLink({Uri? appBaseUri}) {
     if (employeeGatewayUrl != null) {
       final payload = toInvitePayload();
       const configuredLoginUrl = String.fromEnvironment('EMPLOYEE_LOGIN_URL');
+      final current = appBaseUri ?? Uri.base;
       final base = configuredLoginUrl.isNotEmpty
           ? Uri.parse(configuredLoginUrl)
-          : Uri.base.scheme == 'https'
-              ? Uri.base.replace(query: '', fragment: '')
+          : current.scheme == 'https' ||
+                  (current.scheme == 'http' &&
+                      const ['localhost', '127.0.0.1', '[::1]'].contains(current.host))
+              ? current
               : Uri.parse('tpc://employee-login');
-      return base.replace(queryParameters: {'invite': payload}).toString();
+      if (base.scheme != 'https' && base.scheme != 'http' && base.scheme != 'tpc') {
+        throw StateError('Set a valid employee login website URL.');
+      }
+      return base.replace(queryParameters: {'invite': payload}, fragment: '').toString();
     }
     final accessPayload = jsonEncode({
       'type': 'tpc_employee_access',
@@ -143,10 +149,16 @@ class WorkspaceConfig {
   static WorkspaceConfig? fromInvitePayload(String raw) {
     try {
       var cleaned = raw.trim();
-      final uri = Uri.tryParse(cleaned);
-      final linkInvite = uri?.queryParameters['invite'];
-      if (linkInvite != null && linkInvite.isNotEmpty) {
-        cleaned = linkInvite;
+      if (cleaned.startsWith('TPC_INVITE:')) {
+        cleaned = cleaned.substring('TPC_INVITE:'.length).trim();
+      }
+      // Flutter web can place its route in the fragment. Native deep links and
+      // normal website links carry the invite in the outer query instead.
+      if (!cleaned.startsWith('{')) {
+        final uri = Uri.tryParse(cleaned);
+        final route = uri?.hasFragment == true ? Uri.tryParse(uri!.fragment) : null;
+        final linkInvite = uri?.queryParameters['invite'] ?? route?.queryParameters['invite'];
+        if (linkInvite != null && linkInvite.isNotEmpty) cleaned = linkInvite;
       }
       if (cleaned.startsWith('TPC_INVITE:')) {
         cleaned = cleaned.substring('TPC_INVITE:'.length).trim();
@@ -155,8 +167,9 @@ class WorkspaceConfig {
       if (decoded is Map<String, dynamic> && decoded['type'] == 'tpc_employee_access_v2') {
         final employeeId = decoded['employeeId'];
         final gateway = decoded['employeeGatewayUrl'];
-        if (employeeId is! String || employeeId.trim().isEmpty ||
-            gateway is! String || gateway.isEmpty) return null;
+        if (employeeId is! String ||
+            !RegExp(r'^[a-zA-Z0-9_-]{1,160}$').hasMatch(employeeId) ||
+            gateway is! String || gateway.trim().isEmpty) return null;
         return WorkspaceConfig(
           spreadsheetId: '', driveFolderId: '',
           companyName: decoded['companyName'] as String? ?? 'Company',

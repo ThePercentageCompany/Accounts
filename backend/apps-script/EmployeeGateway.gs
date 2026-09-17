@@ -84,7 +84,10 @@ function egOwner_(config,token) {
   egRequire_(identity.email_verified===true&&egText_(identity.email).trim().toLowerCase()===config.ownerEmail, 'Only the workspace owner can manage employee access.', 'FORBIDDEN');
 }
 function egProvision_(config,data,token) {
-  egOwner_(config,token); const id=egId_(data.employeeId); egEmployee_(config,id);
+  egOwner_(config,token);
+  egRequire_(data.spreadsheetId===config.spreadsheetId&&data.driveFolderId===config.driveFolderId,
+    'Employee gateway belongs to another workspace. Check the app configuration.', 'CONFIGURATION');
+  const id=egId_(data.employeeId); egEmployee_(config,id);
   const key='credential:'+id, existing=egPrivateGet_(config,key);
   if(existing&&!existing.revokedAt&&!data.reset) return {employeeId:id,exists:true};
   const raw=egRandom_().slice(0,20).toUpperCase(), salt=egRandom_();

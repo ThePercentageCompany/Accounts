@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -40,7 +39,7 @@ class GoogleSession extends ChangeNotifier {
   String? _employeeSessionToken;
   DateTime? _employeeSessionExpiresAt;
   Future<void>? _employeeSyncTask;
-  DateTime? _lastEmployeeSync;
+  StreamSubscription<GoogleSignInAuthenticationEvent>? _googleAuthenticationEvents;
   bool _googleInitialized = false;
   bool _disposed = false;
   GoogleSignInAccount? user;
@@ -113,6 +112,10 @@ class GoogleSession extends ChangeNotifier {
     final invite = WorkspaceConfig.fromInvitePayload(scannedValue);
     if (invite == null || !_employeeGateway.isConfigured ||
         invite.employeeGatewayUrl != _employeeGateway.endpoint || (invite.employeeId ?? '').isEmpty) {
+      if (_pendingEmployeeInvite != null) {
+        _pendingEmployeeInvite = null;
+        notifyListeners();
+      }
       return false;
     }
     _pendingEmployeeInvite = invite.toInvitePayload();
@@ -125,8 +128,8 @@ class GoogleSession extends ChangeNotifier {
   bool isSectionAllowed(String sectionTitle) {
     if (!isEmployee) return true; // Company owner/admin has unrestricted access
     final allowed = allowedSections;
-    if (allowed == null || allowed.isEmpty) return sectionTitle == 'Dashboard';
     final normalized = sectionTitle.toLowerCase().trim();
+    if (allowed == null || allowed.isEmpty) return normalized == 'dashboard';
     return allowed.any((s) => s.toLowerCase().trim() == normalized);
   }
 
@@ -145,7 +148,11 @@ class GoogleSession extends ChangeNotifier {
     final result = await _employeeGateway.call('login', data: {
       'employeeId': config.employeeId, 'loginCode': employeeCode.trim(),
     });
-    final employeeWorkspace = WorkspaceConfig.fromJson(Map<String, dynamic>.from(result['workspace'] as Map));
+    final rawWorkspace = result['workspace'];
+    if (rawWorkspace is! Map) {
+      throw StateError('The employee service returned an invalid workspace.');
+    }
+    final employeeWorkspace = WorkspaceConfig.fromJson(Map<String, dynamic>.from(rawWorkspace));
     if (!employeeWorkspace.isEmployee || employeeWorkspace.employeeId != config.employeeId ||
         employeeWorkspace.spreadsheetId.isEmpty || employeeWorkspace.driveFolderId.isEmpty) {
       throw StateError('The employee service returned an invalid workspace.');
@@ -159,6 +166,7 @@ class GoogleSession extends ChangeNotifier {
     await syncManager.useEmployeeScope(employeeWorkspace.employeeId);
     // A fresh online snapshot replaces any earlier, broader permissions.
     await syncManager.clearEmployeeSnapshots();
+    await _clearCachedSession();
     _employeeSessionToken = token;
     _employeeSessionExpiresAt = expiry;
     user = null;
@@ -173,7 +181,6 @@ class GoogleSession extends ChangeNotifier {
         spreadsheetId: employeeWorkspace.spreadsheetId,
       );
       _applyEmployeeWorkspace(snapshot);
-      _lastEmployeeSync = DateTime.now();
       authorized = true;
       isOffline = false;
       error = null;
@@ -186,6 +193,8 @@ class GoogleSession extends ChangeNotifier {
       _employeeSessionExpiresAt = null;
       workspace = null;
       authorized = false;
+      cachedEmail = null;
+      cachedDisplayName = null;
       await syncManager.clearEmployeeSnapshots();
       await syncManager.useEmployeeScope(null);
       rethrow;
@@ -201,16 +210,26 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> provisionEmployeeAccess(String employeeId, {bool reset = false}) async {
-    if (isEmployee || user == null || workspace == null) throw StateError('Only the company owner can issue login codes.');
+    if (isEmployee || user == null || workspace == null || !authorized || isOffline) {
+      throw StateError('Connect as the company owner to issue employee login codes.');
+    }
+    if (!_employeeGateway.isConfigured) {
+      throw StateError('Set up the employee gateway before generating login codes.');
+    }
+    final ownerWorkspace = workspace!;
     final ownerToken = await token();
     await syncNow();
-    if (syncManager.pendingQueue.any((op) => op.spreadsheetId == workspace!.spreadsheetId &&
+    if (!authorized || isEmployee || workspace != ownerWorkspace ||
+        syncManager.lastError != null || syncManager.status == SyncStatus.offline) {
+      throw StateError('Reconnect and sync the company workspace before issuing login codes.');
+    }
+    if (syncManager.pendingQueue.any((op) => op.spreadsheetId == ownerWorkspace.spreadsheetId &&
         op.tabName == 'Employees' && op.recordId == employeeId)) {
       throw StateError('Save this employee online before generating their login code.');
     }
     return _employeeGateway.call('provisionEmployee', ownerAccessToken: ownerToken, data: {
       'employeeId': employeeId, 'reset': reset,
-      'spreadsheetId': workspace!.spreadsheetId, 'driveFolderId': workspace!.driveFolderId,
+      'spreadsheetId': ownerWorkspace.spreadsheetId, 'driveFolderId': ownerWorkspace.driveFolderId,
     });
   }
 
@@ -230,6 +249,7 @@ class GoogleSession extends ChangeNotifier {
   Future<Map<String, dynamic>> _employeeRequest(String action, Map<String, dynamic> data) async {
     if (!isCodeEmployeeSession) throw StateError('Sign in as an employee first.');
     try {
+      _checkEmployeeSessionExpiry();
       return await _employeeGateway.call(action, data: data, sessionToken: _employeeSessionToken);
     } on EmployeeGatewayException catch (e) {
       if (e.sessionExpired) await forceSignOut(reason: e.message);
@@ -273,20 +293,29 @@ class GoogleSession extends ChangeNotifier {
           reason: 'Google access is no longer authorized. Please sign in again.',
         );
     await _loadCachedSession();
-    final launchInvite = WorkspaceConfig.fromInvitePayload(
-        WidgetsBinding.instance.platformDispatcher.defaultRouteName);
-    if (launchInvite != null) {
-      _pendingEmployeeInvite = launchInvite.toInvitePayload();
+    // Web query parameters are not always included in defaultRouteName.
+    for (final source in [Uri.base.toString(),
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName]) {
+      if (acceptEmployeeInvite(source)) break;
     }
 
     const client = String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: defaultClientId);
     const server = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-    await GoogleSignIn.instance.initialize(
-      clientId: client.isEmpty ? null : client,
-      serverClientId: server.isEmpty ? null : server,
-    );
+    try {
+      await GoogleSignIn.instance.initialize(
+        clientId: client.isEmpty ? null : client,
+        serverClientId: server.isEmpty ? null : server,
+      );
+      _googleInitialized = true;
+    } catch (e) {
+      // Employee credentials are independent of the Google SDK.
+      if (!_employeeLoginRequested) error = e.toString();
+      notifyListeners();
+      return;
+    }
 
-    GoogleSignIn.instance.authenticationEvents.listen((event) async {
+    _googleAuthenticationEvents = GoogleSignIn.instance.authenticationEvents.listen((event) async {
+      if (_employeeLoginRequested || isCodeEmployeeSession || _disposed) return;
       if (event is GoogleSignInAuthenticationEventSignIn) {
         await _handleIdentitySignIn(event.user);
       }
@@ -303,7 +332,7 @@ class GoogleSession extends ChangeNotifier {
         notifyListeners();
       }
     }, onError: (Object e) {
-      if (!_isIgnorableAuthError(e)) {
+      if (!_employeeLoginRequested && !isCodeEmployeeSession && !_isIgnorableAuthError(e)) {
         error = e.toString();
         notifyListeners();
       }
@@ -313,7 +342,9 @@ class GoogleSession extends ChangeNotifier {
       // The authentication event listener completes identity restoration. Do
       // not request scopes here: doing so after the web account chooser opens
       // a second Google account chooser.
-      await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (!_employeeLoginRequested) {
+        await GoogleSignIn.instance.attemptLightweightAuthentication();
+      }
     } catch (_) {
       // If network fails during initial lightweight auth, use cached session
       if (cachedEmail != null && workspace != null) {
@@ -328,6 +359,7 @@ class GoogleSession extends ChangeNotifier {
   /// Handles Google Identity sign-in exactly once, then requests the Sheets
   /// and Drive permissions in that same sign-in flow.
   Future<void> _handleIdentitySignIn(GoogleSignInAccount account) async {
+    if (_employeeLoginRequested || isCodeEmployeeSession || _disposed) return;
     if (_identityHandling != null) return _identityHandling!;
     final task = () async {
       user = account;
@@ -336,6 +368,7 @@ class GoogleSession extends ChangeNotifier {
       await _saveUserToCache(account.email, account.displayName ?? '', photoUrl: account.photoUrl);
       try {
         final auth = await account.authorizationClient.authorizationForScopes(googleScopes);
+        if (_employeeLoginRequested || isCodeEmployeeSession || _disposed) return;
         if (auth != null && auth.accessToken.isNotEmpty) {
           _inMemoryAccessToken = auth.accessToken;
           authorized = true;
@@ -367,6 +400,7 @@ class GoogleSession extends ChangeNotifier {
         headers: {'Authorization': 'Bearer $accessToken'},
       ).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
+        if (_employeeLoginRequested || isCodeEmployeeSession || _disposed) return;
         final data = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
         final name = (data['name'] as String?)?.trim();
         final picture = (data['picture'] as String?)?.trim();
@@ -397,7 +431,7 @@ class GoogleSession extends ChangeNotifier {
       if (wsRaw != null && wsRaw.isNotEmpty) {
         final ws = WorkspaceConfig.fromJson(Map<String, dynamic>.from(jsonDecode(wsRaw) as Map));
         // Never auto-restore offline/local demo sessions — always require Google Sign-In
-        if (ws.spreadsheetId != 'local_demo_workspace' && ws.spreadsheetId.isNotEmpty) {
+        if (!ws.isEmployee && ws.spreadsheetId != 'local_demo_workspace' && ws.spreadsheetId.isNotEmpty) {
           workspace = ws;
           authorized = true;
           isOffline = true;
@@ -439,6 +473,7 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<void> _loadOrDiscoverWorkspace() async {
+    if (_employeeLoginRequested || isCodeEmployeeSession) return;
     if (user == null && cachedEmail == null) return;
     isCheckingWorkspace = true;
     notifyListeners();
@@ -447,7 +482,8 @@ class GoogleSession extends ChangeNotifier {
       final email = effectiveEmail;
       // 1. Try local cache
       var saved = await GoogleWorkspaceService.loadSavedWorkspace(email);
-      if (saved != null) {
+      if (_employeeLoginRequested || isCodeEmployeeSession) return;
+      if (saved != null && !saved.isEmployee) {
         await setWorkspace(saved);
         return;
       }
@@ -455,7 +491,8 @@ class GoogleSession extends ChangeNotifier {
       // 2. Discover in user's Drive if online
       if (user != null) {
         final tokenStr = await token();
-        final discovered = await workspaceService.findExistingWorkspace(tokenStr);
+          final discovered = await workspaceService.findExistingWorkspace(tokenStr);
+          if (_employeeLoginRequested || isCodeEmployeeSession) return;
         if (discovered != null) {
           // A discovered workspace can contain newer records from another
           // device.  Pull it first; SyncManager safely flushes any queued
@@ -606,7 +643,9 @@ class GoogleSession extends ChangeNotifier {
   void _startAutomaticSync() {
     _automaticSyncTimer?.cancel();
     _automaticSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
-      syncNow();
+      // A transient connection failure is surfaced by session/sync state.
+      // It must not become an unhandled periodic-timer exception.
+      unawaited(syncNow().catchError((Object _) {}));
     });
   }
 
@@ -677,6 +716,7 @@ class GoogleSession extends ChangeNotifier {
       notifyListeners();
 
       final auth = await user!.authorizationClient.authorizeScopes(googleScopes);
+      if (_employeeLoginRequested || isCodeEmployeeSession || _disposed) return;
       if (auth.accessToken.isNotEmpty) {
         _inMemoryAccessToken = auth.accessToken;
         authorized = true;
@@ -702,6 +742,7 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<String?> tryGetToken() async {
+    if (isCodeEmployeeSession) return null;
     try {
       final auth = await user?.authorizationClient.authorizationForScopes(googleScopes);
       if (auth?.accessToken != null && auth!.accessToken.isNotEmpty) {
@@ -715,6 +756,9 @@ class GoogleSession extends ChangeNotifier {
   }
 
   Future<String> token() async {
+    if (isCodeEmployeeSession) {
+      throw StateError('Employee access uses the company gateway.');
+    }
     try {
       final auth = await user?.authorizationClient.authorizationForScopes(googleScopes);
       if (auth?.accessToken != null && auth!.accessToken.isNotEmpty) {
@@ -775,6 +819,9 @@ class GoogleSession extends ChangeNotifier {
 
   Future<void> syncNow() async {
     if (workspace == null || workspace!.spreadsheetId.isEmpty || workspace!.spreadsheetId == 'local_demo_workspace') return;
+    if (isCodeEmployeeSession) {
+      return _syncEmployeeSession();
+    }
     final tok = await tryGetToken();
     if (tok != null) {
       isOffline = false;
@@ -790,7 +837,65 @@ class GoogleSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _checkEmployeeSessionExpiry() {
+    final expiry = _employeeSessionExpiresAt;
+    if (expiry == null || !expiry.isAfter(DateTime.now())) {
+      throw const EmployeeGatewayException(
+        'Employee session expired. Scan the QR and sign in again.',
+        'UNAUTHORIZED',
+      );
+    }
+  }
+
+  Future<void> _syncEmployeeSession() async {
+    if (_employeeSyncTask != null) return _employeeSyncTask!;
+    final sessionToken = _employeeSessionToken!;
+    final spreadsheetId = workspace!.spreadsheetId;
+    final task = () async {
+      try {
+        _checkEmployeeSessionExpiry();
+        final snapshot = await syncManager.syncEmployee(
+          gateway: _employeeGateway,
+          sessionToken: sessionToken,
+          spreadsheetId: spreadsheetId,
+        );
+        // Sign-out can complete while an in-flight request returns.
+        if (_employeeSessionToken != sessionToken) return;
+        _applyEmployeeWorkspace(snapshot);
+        isOffline = false;
+        error = null;
+      } on EmployeeGatewayException catch (e) {
+        if (_employeeSessionToken != sessionToken) return;
+        if (e.sessionExpired) {
+          await forceSignOut(reason: e.message);
+        } else {
+          isOffline = e.code == 'NETWORK';
+          error = e.message;
+        }
+        rethrow;
+      } catch (e) {
+        if (_employeeSessionToken != sessionToken) return;
+        isOffline = true;
+        error = 'Could not sync the employee workspace: $e';
+        rethrow;
+      } finally {
+        notifyListeners();
+      }
+    }();
+    _employeeSyncTask = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_employeeSyncTask, task)) _employeeSyncTask = null;
+    }
+  }
+
   Future<void> signOut() async {
+    final employeeToken = _employeeSessionToken;
+    _employeeSessionToken = null;
+    _employeeSessionExpiresAt = null;
+    _pendingEmployeeInvite = null;
+    _employeeLoginRequested = false;
     _automaticSyncTimer?.cancel();
     _automaticSyncTimer = null;
     user = null;
@@ -803,6 +908,19 @@ class GoogleSession extends ChangeNotifier {
     cachedDisplayName = null;
     cachedPhotoUrl = null;
     error = null;
+
+    if (employeeToken != null) {
+      // Scope changes wait for the old response before clearing its private
+      // snapshots. Unsent employee edits remain available after re-login.
+      await syncManager.waitForIdle();
+      await syncManager.clearEmployeeSnapshots();
+      await syncManager.useEmployeeScope(null);
+      await _clearCachedSession();
+      unawaited(_employeeGateway.call('logout', sessionToken: employeeToken)
+          .then<void>((_) {}, onError: (Object _) {}));
+      notifyListeners();
+      return;
+    }
 
     try {
       await syncManager.clearAll();
@@ -817,12 +935,25 @@ class GoogleSession extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      await GoogleSignIn.instance.signOut();
+      if (_googleInitialized) await GoogleSignIn.instance.signOut();
     } catch (_) {}
     try {
-      await GoogleSignIn.instance.disconnect();
+      if (_googleInitialized) await GoogleSignIn.instance.disconnect();
     } catch (_) {}
 
     notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _automaticSyncTimer?.cancel();
+    _googleAuthenticationEvents?.cancel();
+    super.dispose();
   }
 }

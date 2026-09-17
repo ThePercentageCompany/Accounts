@@ -78,7 +78,15 @@ class TpcApp extends StatelessWidget {
                 }
 
                 if (session.workspace != null) {
-                  return Workspace(key: ValueKey(session.workspace!.spreadsheetId));
+                  // Recreate repositories and cached screen data when the
+                  // signed-in identity or server-assigned permissions change.
+                  return Workspace(key: ValueKey((
+                    session.workspace!.spreadsheetId,
+                    session.isEmployee,
+                    session.currentEmployeeId,
+                    session.currentEmployeeRole,
+                    session.allowedSections?.join('|'),
+                  )));
                 }
 
                 if (session.isCheckingWorkspace) {
@@ -197,9 +205,15 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
   int navIndex = 0;
 
   Future<void> openEditor([Invoice? invoice]) async {
+    if (!session.isSectionAllowed('Invoices')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your role does not allow creating invoices.')),
+      );
+      return;
+    }
     final cubit = context.read<BillingCubit>();
     if (cubit.state.data.customers.isEmpty) {
-      setState(() => navIndex = 4);
+      if (session.isSectionAllowed('Customers')) setState(() => navIndex = 7);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add a customer before creating an invoice.')),
       );
@@ -236,7 +250,7 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
         final selectedDestination = appNavDestinations[navIndex];
         final effectiveNavIndex = session.isSectionAllowed(selectedDestination.title)
             ? navIndex
-            : 0;
+            : appNavDestinations.indexWhere((item) => session.isSectionAllowed(item.title));
 
         Widget body;
         switch (effectiveNavIndex) {
@@ -283,10 +297,7 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
             body = const OfficeScreen(key: ValueKey('office-attendance'), initialPage: 1);
             break;
           default:
-            body = DashboardView(
-              onNewInvoice: () => openEditor(),
-              onNavigate: (idx) => setState(() => navIndex = idx),
-            );
+            body = const Center(child: Text('No sections are assigned. Contact your company owner.'));
         }
 
         return ResponsiveShell(

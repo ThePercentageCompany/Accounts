@@ -2,5 +2,7 @@
   "CONNECTED": "true",
   "GOOGLE_CLIENT_ID": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
   "GOOGLE_SERVER_CLIENT_ID": "",
-  "MASTER_ADMIN_EMAIL": "thepercentagecompany1@gmail.com"
+  "MASTER_ADMIN_EMAIL": "thepercentagecompany1@gmail.com",
+  "EMPLOYEE_GATEWAY_URL": "",
+  "EMPLOYEE_LOGIN_URL": ""
 }

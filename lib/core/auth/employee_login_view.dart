@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../widgets/brand_logo.dart';
 import 'google_session.dart';
+import 'google_workspace_service.dart';
 
 /// Opens only the camera; accepting a QR never starts Google authentication.
 Future<String?> scanEmployeeQr(BuildContext context) {
@@ -39,8 +40,17 @@ class _EmployeeLoginViewState extends State<EmployeeLoginView> {
   }
 
   Future<void> _scan() async {
-    final value = await (widget.scanQr ?? scanEmployeeQr)(context);
-    if (!mounted || value == null) return;
+    try {
+      final value = await (widget.scanQr ?? scanEmployeeQr)(context);
+      if (!mounted || value == null) return;
+      _acceptInvite(value);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Unable to open the camera. Try again or paste the employee login link.');
+    }
+  }
+
+  void _acceptInvite(String value) {
     final accepted = widget.session.acceptEmployeeInvite(value);
     setState(() {
       _code.clear();
@@ -48,6 +58,35 @@ class _EmployeeLoginViewState extends State<EmployeeLoginView> {
           ? null
           : 'This employee QR is not supported. Ask your manager for a new QR.';
     });
+  }
+
+  Future<void> _pasteInvite() async {
+    var link = '';
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Employee login link'),
+        content: TextField(
+          onChanged: (value) => link = value,
+          autofocus: true,
+          maxLines: 4,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Paste the link from your manager',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, link.trim()),
+            child: const Text('Use link'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || value == null) return;
+    _acceptInvite(value);
   }
 
   Future<void> _login() async {
@@ -87,6 +126,7 @@ class _EmployeeLoginViewState extends State<EmployeeLoginView> {
       listenable: widget.session,
       builder: (context, _) {
         final hasInvite = widget.session.pendingEmployeeInvite?.isNotEmpty ?? false;
+        final invite = WorkspaceConfig.fromInvitePayload(widget.session.pendingEmployeeInvite ?? '');
         final configured = widget.session.employeeGatewayUrl.isNotEmpty;
         return PopScope(
           canPop: !_busy,
@@ -128,7 +168,7 @@ class _EmployeeLoginViewState extends State<EmployeeLoginView> {
                             const SizedBox(height: 16),
                           ],
                           if (hasInvite) ...[
-                            _message('Employee QR accepted',
+                            _message('Employee QR accepted${invite == null ? '' : ' for ${invite.companyName}'}',
                                 colors.secondaryContainer, colors.onSecondaryContainer),
                             const SizedBox(height: 12),
                           ],
@@ -136,6 +176,11 @@ class _EmployeeLoginViewState extends State<EmployeeLoginView> {
                             onPressed: _busy || !configured ? null : _scan,
                             icon: const Icon(Icons.qr_code_scanner),
                             label: Text(hasInvite ? 'Scan a different QR' : 'Scan QR'),
+                          ),
+                          TextButton.icon(
+                            onPressed: _busy || !configured ? null : _pasteInvite,
+                            icon: const Icon(Icons.link),
+                            label: const Text('Paste employee login link'),
                           ),
                           const SizedBox(height: 20),
                           TextFormField(
@@ -211,14 +256,8 @@ class EmployeeQrScanner extends StatefulWidget {
 }
 
 class _EmployeeQrScannerState extends State<EmployeeQrScanner> {
-  final _controller = MobileScannerController(formats: [BarcodeFormat.qrCode]);
   bool _handled = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  String? _scanError;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -234,12 +273,19 @@ class _EmployeeQrScannerState extends State<EmployeeQrScanner> {
               const SizedBox(height: 16),
               Expanded(
                 child: MobileScanner(
-                  controller: _controller,
+                  // Let the scanner own its controller so it resumes the
+                  // camera after app/browser lifecycle changes and disposes it.
                   onDetect: (capture) {
-                    if (_handled) return;
+                    if (!mounted || _handled) return;
                     for (final barcode in capture.barcodes) {
+                      if (barcode.format != BarcodeFormat.qrCode) continue;
                       final value = barcode.rawValue?.trim();
                       if (value == null || value.isEmpty) continue;
+                      final invite = WorkspaceConfig.fromInvitePayload(value);
+                      if (invite?.employeeGatewayUrl == null) {
+                        setState(() => _scanError = 'This is not a current employee QR. Ask your manager to generate a new one.');
+                        continue;
+                      }
                       _handled = true;
                       Navigator.pop(context, value);
                       break;
@@ -259,6 +305,9 @@ class _EmployeeQrScannerState extends State<EmployeeQrScanner> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (_scanError != null)
+                Text(_scanError!, textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ],
           ),

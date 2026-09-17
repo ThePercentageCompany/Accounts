@@ -19,13 +19,14 @@ class EmployeeGateway {
   final http.Client _client;
 
   EmployeeGateway({String? endpoint, http.Client? client})
-      : endpoint = endpoint ?? configuredEmployeeGatewayUrl,
+      : endpoint = (endpoint ?? configuredEmployeeGatewayUrl).trim(),
         _client = client ?? http.Client();
 
   bool get isConfigured {
     final uri = Uri.tryParse(endpoint);
     return uri != null && uri.scheme == 'https' && uri.host == 'script.google.com' &&
-        uri.path.startsWith('/macros/s/') && uri.path.endsWith('/exec') &&
+        RegExp(r'^/macros/s/[a-zA-Z0-9_-]+/exec$').hasMatch(uri.path) &&
+        (!uri.hasPort || uri.port == 443) &&
         !uri.hasQuery && !uri.hasFragment && uri.userInfo.isEmpty;
   }
 
@@ -79,6 +80,13 @@ class EmployeeGateway {
         body['code']?.toString() ?? 'INVALID_REQUEST',
       );
     }
-    return Map<String, dynamic>.from(body['result'] as Map? ?? const {});
+    final result = body['result'];
+    if (result is! Map) {
+      throw const EmployeeGatewayException(
+        'Employee gateway returned an invalid response. Check its deployment settings.',
+        'CONFIGURATION',
+      );
+    }
+    return Map<String, dynamic>.from(result);
   }
 }

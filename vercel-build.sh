@@ -28,8 +28,10 @@ ADMIN_EMAIL="${MASTER_ADMIN_EMAIL:-thepercentagecompany1@gmail.com}"
 CONNECTED_FLAG="${CONNECTED:-true}"
 
 flutter build web --release \
-  --dart-define=CONNECTED=$CONNECTED_FLAG \
-  --dart-define=GOOGLE_CLIENT_ID=$CLIENT_ID \
-  --dart-define=MASTER_ADMIN_EMAIL=$ADMIN_EMAIL
+  "--dart-define=CONNECTED=$CONNECTED_FLAG" \
+  "--dart-define=GOOGLE_CLIENT_ID=$CLIENT_ID" \
+  "--dart-define=MASTER_ADMIN_EMAIL=$ADMIN_EMAIL" \
+  "--dart-define=EMPLOYEE_GATEWAY_URL=${EMPLOYEE_GATEWAY_URL:-}" \
+  "--dart-define=EMPLOYEE_LOGIN_URL=${EMPLOYEE_LOGIN_URL:-}"
 
 echo "=== Build Complete! Output generated in build/web ==="
