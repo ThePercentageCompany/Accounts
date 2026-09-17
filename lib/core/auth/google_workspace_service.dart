@@ -169,7 +169,9 @@ class WorkspaceConfig {
         final gateway = decoded['employeeGatewayUrl'];
         if (employeeId is! String ||
             !RegExp(r'^[a-zA-Z0-9_-]{1,160}$').hasMatch(employeeId) ||
-            gateway is! String || gateway.trim().isEmpty) return null;
+            gateway is! String || gateway.trim().isEmpty) {
+          return null;
+        }
         return WorkspaceConfig(
           spreadsheetId: '', driveFolderId: '',
           companyName: decoded['companyName'] as String? ?? 'Company',
