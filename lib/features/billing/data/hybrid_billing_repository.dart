@@ -65,7 +65,7 @@ class HybridBillingRepository implements BillingRepository {
   Future<void> _upsert(String tab, String id, Map<String, dynamic> data) async {
     final records = await _sync.loadCachedRecords(_spreadsheetId, tab);
     final previous = records.where((record) => record['id'] == id).firstOrNull;
-    final previousValue = tab == 'Settings' ? previous?['value'] : previous;
+    final previousValue = tab == 'Settings' ? (previous?['value']) : previous;
     final expectedVersion = previousValue is Map
         ? (previousValue['version'] as num?)?.toInt() ?? 0
         : 0;
