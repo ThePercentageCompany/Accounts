@@ -63,10 +63,20 @@ class PendingOperation {
 }
 
 class SyncManager extends ChangeNotifier {
-  static final SyncManager instance = SyncManager._internal();
-  SyncManager._internal();
+  static final SyncManager instance = SyncManager();
+  SyncManager({GoogleWorkspaceService? service})
+      : _service = service ?? GoogleWorkspaceService();
 
-  final GoogleWorkspaceService _service = GoogleWorkspaceService();
+  final GoogleWorkspaceService _service;
+  Future<void> _localWrites = Future<void>.value();
+
+  // A tab snapshot and the offline mirror must be committed together. Otherwise
+  // an older cloud response can win a race against a newly saved local edit.
+  Future<T> _writeLocally<T>(Future<T> Function() write) {
+    final result = _localWrites.then((_) => write());
+    _localWrites = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
 
   SyncStatus _status = SyncStatus.synced;
   SyncStatus get status => _status;
@@ -87,31 +97,26 @@ class SyncManager extends ChangeNotifier {
 
   Future<void> useEmployeeScope(String? employeeId) async {
     await waitForIdle();
+    await _localWrites;
     _employeeScope = employeeId;
     _lastError = null;
     _status = pendingCount == 0 ? SyncStatus.synced : SyncStatus.pendingChanges;
     notifyListeners();
   }
 
-  bool _initialized = false;
+  Future<void>? _initialization;
   Future<void> Function(Object error)? onAuthorizationFailure;
 
   bool _isAuthorizationFailure(Object error) {
     final message = error.toString().toLowerCase();
     return message.contains('status 401') ||
-        message.contains('status 403') ||
         message.contains('(401)') ||
-        message.contains('(403)') ||
         message.contains('unauthorized') ||
         message.contains('invalid credentials') ||
         message.contains('authentication credentials');
   }
 
-  Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
-    await _loadPendingQueue();
-  }
+  Future<void> initialize() => _initialization ??= _loadPendingQueue();
 
   /// Clears in-memory pending queue, error states, remote tab caches, and resets sync status.
   Future<void> clearAll() async {
@@ -137,6 +142,11 @@ class SyncManager extends ChangeNotifier {
       'tpc_tab_cache_${spreadsheetId}_${_employeeScope == null ? '' : 'employee_${_employeeScope}_'}$tabName';
 
   Future<List<Map<String, dynamic>>> loadCachedRecords(String spreadsheetId, String tabName) async {
+    await _localWrites;
+    return _loadCachedRecords(spreadsheetId, tabName);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadCachedRecords(String spreadsheetId, String tabName) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_cacheKey(spreadsheetId, tabName));
     if (raw == null || raw.isEmpty) return [];
@@ -149,22 +159,31 @@ class SyncManager extends ChangeNotifier {
     }
   }
 
-  Future<void> saveCachedRecords(String spreadsheetId, String tabName, List<Map<String, dynamic>> records) async {
+  Future<void> saveCachedRecords(String spreadsheetId, String tabName, List<Map<String, dynamic>> records) =>
+      _writeLocally(() => _saveCachedRecords(spreadsheetId, tabName, records));
+
+  Future<void> _saveCachedRecords(String spreadsheetId, String tabName, List<Map<String, dynamic>> records) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_cacheKey(spreadsheetId, tabName), jsonEncode(records));
   }
 
-  Future<void> upsertCachedRecord(String spreadsheetId, String tabName, String recordId, Map<String, dynamic> record) async {
-    final existing = await loadCachedRecords(spreadsheetId, tabName);
+  Future<void> upsertCachedRecord(String spreadsheetId, String tabName, String recordId, Map<String, dynamic> record) =>
+      _writeLocally(() => _upsertCachedRecord(spreadsheetId, tabName, recordId, record));
+
+  Future<void> _upsertCachedRecord(String spreadsheetId, String tabName, String recordId, Map<String, dynamic> record) async {
+    final existing = await _loadCachedRecords(spreadsheetId, tabName);
     final updated = [...existing.where((r) => r['id']?.toString() != recordId), record];
-    await saveCachedRecords(spreadsheetId, tabName, updated);
+    await _saveCachedRecords(spreadsheetId, tabName, updated);
     await mirrorTabRecordToLocalStorage(tabName, recordId, record, isDelete: false);
   }
 
-  Future<void> deleteCachedRecord(String spreadsheetId, String tabName, String recordId) async {
-    final existing = await loadCachedRecords(spreadsheetId, tabName);
+  Future<void> deleteCachedRecord(String spreadsheetId, String tabName, String recordId) =>
+      _writeLocally(() => _deleteCachedRecord(spreadsheetId, tabName, recordId));
+
+  Future<void> _deleteCachedRecord(String spreadsheetId, String tabName, String recordId) async {
+    final existing = await _loadCachedRecords(spreadsheetId, tabName);
     final updated = existing.where((r) => r['id']?.toString() != recordId).toList();
-    await saveCachedRecords(spreadsheetId, tabName, updated);
+    await _saveCachedRecords(spreadsheetId, tabName, updated);
     await mirrorTabRecordToLocalStorage(tabName, recordId, null, isDelete: true);
   }
 
@@ -259,7 +278,7 @@ class SyncManager extends ChangeNotifier {
       try {
         final list = jsonDecode(raw) as List<dynamic>;
         _pendingQueue = list.map((e) => PendingOperation.fromJson(Map<String, dynamic>.from(e as Map))).toList();
-        if (_pendingQueue.isNotEmpty) {
+        if (pendingCount > 0) {
           _status = SyncStatus.pendingChanges;
         }
       } catch (_) {
@@ -272,8 +291,6 @@ class SyncManager extends ChangeNotifier {
   Future<void> _savePendingQueue() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_queueKey, jsonEncode(_pendingQueue.map((e) => e.toJson()).toList()));
-    _status = pendingCount == 0 ? SyncStatus.synced : SyncStatus.pendingChanges;
-    notifyListeners();
   }
 
   Future<void> enqueueOperation({
@@ -284,6 +301,8 @@ class SyncManager extends ChangeNotifier {
     Map<String, dynamic>? data,
     int? expectedVersion,
   }) async {
+    await initialize();
+    await _writeLocally(() async {
     final previous = _pendingQueue.where((op) => op.spreadsheetId == spreadsheetId &&
         op.tabName == tabName && op.recordId == recordId && op.actorId == _employeeScope).firstOrNull;
     final baseVersion = previous?.expectedVersion ?? expectedVersion ??
@@ -305,11 +324,29 @@ class SyncManager extends ChangeNotifier {
       ),
     );
     await _savePendingQueue();
+    // Reapply the mutation within the same local write as the outbox entry.
+    // Repositories may have saved it just before an older cloud pull completed.
+    if (action == 'upsert' && data != null) {
+      await _upsertCachedRecord(spreadsheetId, tabName, recordId, data);
+    } else if (action == 'delete') {
+      await _deleteCachedRecord(spreadsheetId, tabName, recordId);
+    }
+    });
+    if (_isBackgroundSyncing && _employeeScope == null) {
+      _syncRequestedWhileRunning = true;
+    }
+    if (_status != SyncStatus.error) {
+      _status = _isBackgroundSyncing ? SyncStatus.syncing
+          : pendingCount == 0 ? SyncStatus.synced : SyncStatus.pendingChanges;
+    }
+    notifyListeners();
   }
 
   bool _isBackgroundSyncing = false;
   bool get isBackgroundSyncing => _isBackgroundSyncing;
   bool _syncRequestedWhileRunning = false;
+  ({String token, String spreadsheetId, void Function()? onDataRefreshed})?
+      _queuedOwnerSync;
 
   /// Lets feature startup wait for an already-running pull instead of reading
   /// stale cached rows while another sync is replacing them.
@@ -549,17 +586,43 @@ class SyncManager extends ChangeNotifier {
     required String spreadsheetId,
     void Function()? onDataRefreshed,
   }) async {
+    await initialize();
     if (_employeeScope != null) throw StateError('Employees must sync through the owner gateway.');
     // A CRUD operation may arrive while an earlier pass is uploading. Keep the
     // UI non-blocking, but guarantee a follow-up pass once that upload ends.
     if (_isBackgroundSyncing) {
       _syncRequestedWhileRunning = true;
+      _queuedOwnerSync = (token: token, spreadsheetId: spreadsheetId,
+          onDataRefreshed: onDataRefreshed);
       return;
     }
     _isBackgroundSyncing = true;
-    _status = SyncStatus.syncing;
-    notifyListeners();
+    try {
+      do {
+        _syncRequestedWhileRunning = false;
+        _status = SyncStatus.syncing;
+        notifyListeners();
+        await _syncOwnerOnce(token: token, spreadsheetId: spreadsheetId,
+            onDataRefreshed: onDataRefreshed);
+        final requested = _queuedOwnerSync;
+        _queuedOwnerSync = null;
+        if (requested != null) {
+          token = requested.token;
+          spreadsheetId = requested.spreadsheetId;
+          onDataRefreshed = requested.onDataRefreshed;
+        }
+      } while (_syncRequestedWhileRunning);
+    } finally {
+      _isBackgroundSyncing = false;
+      notifyListeners();
+    }
+  }
 
+  Future<void> _syncOwnerOnce({
+    required String token,
+    required String spreadsheetId,
+    void Function()? onDataRefreshed,
+  }) async {
     try {
       // 1. Push all local mutations before reading remote data. Never overwrite
       // a pending local edit with an older cloud row after a failed upload.
@@ -570,26 +633,33 @@ class SyncManager extends ChangeNotifier {
       final tabs = SheetSchema.dataTabsToSync;
       final batchData = await _service.readAllTabsBatch(token, spreadsheetId, tabs);
 
-      bool hasData = false;
-      var changed = false;
-      for (final entry in batchData.entries) {
-        // An empty tab is meaningful: it may be a cloud-side deletion and
-        // must clear the cache rather than leaving stale records visible.
-        final before = await loadCachedRecords(spreadsheetId, entry.key);
-        changed = changed || jsonEncode(before) != jsonEncode(entry.value);
-        await saveCachedRecords(spreadsheetId, entry.key, entry.value);
-        hasData = hasData || entry.value.isNotEmpty;
-      }
-
-      // Mirror remote data into local storage so local databases are always populated
-      await _mirrorRemoteToLocalStorage(batchData);
+      final changed = await _writeLocally(() async {
+        final merged = <String, List<Map<String, dynamic>>>{};
+        var changed = false;
+        for (final entry in batchData.entries) {
+          // The user can save or delete a row while the cloud read is running.
+          // Keep these pending changes in both the cache and offline mirror.
+          final records = List<Map<String, dynamic>>.of(entry.value);
+          for (final op in pendingQueue.where((op) =>
+              op.spreadsheetId == spreadsheetId && op.tabName == entry.key)) {
+            records.removeWhere((record) => record['id']?.toString() == op.recordId);
+            if (op.action == 'upsert' && op.data != null) records.add(op.data!);
+          }
+          final before = await _loadCachedRecords(spreadsheetId, entry.key);
+          changed = changed || jsonEncode(before) != jsonEncode(records);
+          await _saveCachedRecords(spreadsheetId, entry.key, records);
+          merged[entry.key] = records;
+        }
+        await _mirrorRemoteToLocalStorage(merged);
+        return changed;
+      });
       if (changed) _dataRevision++;
 
-      _status = SyncStatus.synced;
+      _status = pendingCount > 0 ? SyncStatus.pendingChanges : SyncStatus.synced;
       _lastSyncedTime = DateTime.now();
       _lastError = null;
 
-      if (hasData && onDataRefreshed != null) {
+      if (changed && onDataRefreshed != null) {
         onDataRefreshed();
       }
     } catch (e) {
@@ -597,18 +667,7 @@ class SyncManager extends ChangeNotifier {
       if (_isAuthorizationFailure(e) && onAuthorizationFailure != null) {
         unawaited(onAuthorizationFailure!(e));
       }
-      markOffline();
-    } finally {
-      _isBackgroundSyncing = false;
-      notifyListeners();
-      if (_syncRequestedWhileRunning) {
-        _syncRequestedWhileRunning = false;
-        Future.microtask(() => triggerBackgroundSync(
-              token: token,
-              spreadsheetId: spreadsheetId,
-              onDataRefreshed: onDataRefreshed,
-            ));
-      }
+      _status = SyncStatus.error;
     }
   }
 
@@ -692,11 +751,8 @@ class SyncManager extends ChangeNotifier {
     required String token,
     required String spreadsheetId,
   }) async {
-    if (_pendingQueue.isEmpty) {
-      _status = SyncStatus.synced;
-      notifyListeners();
-      return true;
-    }
+    await initialize();
+    if (_employeeScope != null) throw StateError('Employees must sync through the owner gateway.');
 
     _status = SyncStatus.syncing;
     _lastError = null;
@@ -704,6 +760,7 @@ class SyncManager extends ChangeNotifier {
 
     final remaining = _pendingQueue.where((op) => op.spreadsheetId == spreadsheetId && op.actorId == null).toList();
     final successfullySynced = <PendingOperation>[];
+    var failed = false;
 
     for (final op in remaining) {
       try {
@@ -711,20 +768,32 @@ class SyncManager extends ChangeNotifier {
           await _service.upsertTabRecord(token, op.spreadsheetId, op.tabName, op.recordId, op.data!);
         } else if (op.action == 'delete') {
           await _service.deleteTabRecord(token, op.spreadsheetId, op.tabName, op.recordId);
+        } else {
+          throw StateError('Invalid pending operation: ${op.action}');
         }
         successfullySynced.add(op);
       } catch (e) {
+        failed = true;
         _lastError = 'Sync paused: $e';
         _status = SyncStatus.error;
+        if (_isAuthorizationFailure(e) && onAuthorizationFailure != null) {
+          unawaited(onAuthorizationFailure!(e));
+        }
         break;
       }
     }
 
     // Remove successfully synced ops
-    _pendingQueue.removeWhere((op) => successfullySynced.contains(op));
-    await _savePendingQueue();
+    await _writeLocally(() async {
+      _pendingQueue.removeWhere((op) => successfullySynced.contains(op));
+      await _savePendingQueue();
+    });
 
-    if (_pendingQueue.isEmpty) {
+    if (failed) {
+      _status = SyncStatus.error;
+    } else if (_isBackgroundSyncing) {
+      _status = SyncStatus.syncing;
+    } else if (pendingCount == 0) {
       _status = SyncStatus.synced;
       _lastSyncedTime = DateTime.now();
       _lastError = null;
@@ -733,16 +802,16 @@ class SyncManager extends ChangeNotifier {
     }
 
     notifyListeners();
-    return !_pendingQueue.any((op) => op.spreadsheetId == spreadsheetId && op.actorId == null);
+    return !failed && !_pendingQueue.any((op) => op.spreadsheetId == spreadsheetId && op.actorId == null);
   }
 
   void markOffline() {
-    _status = _pendingQueue.isNotEmpty ? SyncStatus.pendingChanges : SyncStatus.offline;
+    _status = pendingCount > 0 ? SyncStatus.pendingChanges : SyncStatus.offline;
     notifyListeners();
   }
 
   void markSynced() {
-    _status = _pendingQueue.isNotEmpty ? SyncStatus.pendingChanges : SyncStatus.synced;
+    _status = pendingCount > 0 ? SyncStatus.pendingChanges : SyncStatus.synced;
     _lastSyncedTime = DateTime.now();
     notifyListeners();
   }

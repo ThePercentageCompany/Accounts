@@ -19,19 +19,19 @@ class CompanyOnboardingView extends StatefulWidget {
 class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
   final _formKey = GlobalKey<FormState>();
 
-  final _nameController = TextEditingController(text: 'The Percentage Company');
-  final _addressController = TextEditingController(text: 'Business Bay, Downtown Dubai, UAE');
-  final _phoneController = TextEditingController(text: '+971 4 000 0000');
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _trnController = TextEditingController(text: '100294857600003');
+  final _trnController = TextEditingController();
   final _invoicePrefixController = TextEditingController(text: 'INV-');
   final _quotationPrefixController = TextEditingController(text: 'QTN-');
-  final _bankNameController = TextEditingController(text: 'Emirates NBD');
-  final _accountNameController = TextEditingController(text: 'The Percentage Company LLC');
-  final _ibanController = TextEditingController(text: 'AE000000000000000000000');
-  final _swiftController = TextEditingController(text: 'EBILAEADXXX');
+  final _bankNameController = TextEditingController();
+  final _accountNameController = TextEditingController();
+  final _ibanController = TextEditingController();
+  final _swiftController = TextEditingController();
   final _currencyController = TextEditingController(text: 'AED');
-  final _adminEmailController = TextEditingController(text: defaultMasterAdminEmail);
+  final _adminEmailController = TextEditingController();
 
   bool _isProvisioning = false;
   String _progressStatus = '';
@@ -157,12 +157,12 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Workspace Setup',
+                                    'Create your company',
                                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Setup your company details & private Google Cloud storage.',
+                                    'Enter your company details. We will create its spreadsheet and document folders automatically.',
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
@@ -339,11 +339,11 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                         ),
 
                         const SizedBox(height: 24),
-                        // Section 4: Auto Share Permission
-                        _buildSectionHeader('Master Admin View Access', CupertinoIcons.eye_fill, isDark),
+                        // Sharing is an explicit company-owner choice.
+                        _buildSectionHeader('Optional reviewer access', CupertinoIcons.eye_fill, isDark),
                         const SizedBox(height: 8),
                         Text(
-                          'A read-only view permission will automatically be granted to the master admin email below for cross-company executive review.',
+                          'Leave this empty to keep your files private. Enter an email only if you want that person to read your company spreadsheet and documents.',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark ? AppTheme.iosDarkTextSecondary : AppTheme.iosLightTextSecondary,
@@ -352,8 +352,8 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                         const SizedBox(height: 12),
                         _buildTextField(
                           controller: _adminEmailController,
-                          label: 'Admin / Reviewer Email',
-                          hint: 'thepercentagecompany1@gmail.com',
+                          label: 'Reviewer email (optional)',
+                          hint: 'reviewer@company.com',
                           icon: CupertinoIcons.person_badge_plus,
                           isDark: isDark,
                         ),
@@ -434,7 +434,7 @@ class _CompanyOnboardingViewState extends State<CompanyOnboardingView> {
                             FilledButton.icon(
                               onPressed: _isProvisioning ? null : _startProvisioning,
                               icon: const Icon(CupertinoIcons.cloud_upload_fill, size: 18),
-                              label: const Text('Provision Google Workspace', style: TextStyle(fontWeight: FontWeight.w600)),
+                              label: const Text('Create company', style: TextStyle(fontWeight: FontWeight.w600)),
                               style: FilledButton.styleFrom(
                                 backgroundColor: AppTheme.pastelMint,
                                 foregroundColor: Colors.white,

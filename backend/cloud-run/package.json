@@ -1,0 +1,20 @@
+{
+  "name": "tpc-accounts-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --test"
+  },
+  "dependencies": {
+    "@google-cloud/kms": "^5.0.0",
+    "@google-cloud/secret-manager": "^6.0.0",
+    "@google-cloud/storage": "^8.2.0",
+    "google-auth-library": "^10.0.0"
+  }
+}

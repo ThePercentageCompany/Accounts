@@ -210,13 +210,30 @@ class CompanyEditor extends StatefulWidget {
 }
 
 class _CompanyEditorState extends State<CompanyEditor> {
-  final form = GlobalKey<FormState>();
+  var form = GlobalKey<FormState>();
   late Map<String, dynamic> data;
 
   @override
   void initState() {
     super.initState();
     data = widget.company.toJson();
+  }
+
+  @override
+  void didUpdateWidget(covariant CompanyEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previous = oldWidget.company.toJson();
+    final incoming = widget.company.toJson();
+    var changed = false;
+    for (final entry in incoming.entries) {
+      // Accept refreshed values only where the user has not started an edit.
+      if (jsonEncode(data[entry.key]) == jsonEncode(previous[entry.key]) &&
+          jsonEncode(data[entry.key]) != jsonEncode(entry.value)) {
+        data[entry.key] = entry.value;
+        changed = true;
+      }
+    }
+    if (changed) form = GlobalKey<FormState>();
   }
 
   Future<void> pickLogo() async {
@@ -241,8 +258,10 @@ class _CompanyEditorState extends State<CompanyEditor> {
         throw const FormatException('Use a valid PNG or JPEG image.');
       final mimeType = png ? 'image/png' : 'image/jpeg';
       if (mounted)
-        setState(() =>
-            data['logo'] = 'data:$mimeType;base64,${base64Encode(bytes)}');
+        setState(() {
+          data['logo'] = 'data:$mimeType;base64,${base64Encode(bytes)}';
+          data['logoDriveUrl'] = '';
+        });
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -412,7 +431,10 @@ class _CompanyEditorState extends State<CompanyEditor> {
                                       if (logoBytes != null)
                                         TextButton.icon(
                                           onPressed: () {
-                                            setState(() => data['logo'] = '');
+                                            setState(() {
+                                              data['logo'] = '';
+                                              data['logoDriveUrl'] = '';
+                                            });
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(

@@ -203,6 +203,45 @@ class AppWorkspaceShell extends StatefulWidget {
 
 class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
   int navIndex = 0;
+  late int _displayedRevision;
+  bool _refreshQueued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayedRevision = session.syncManager.dataRevision;
+    session.syncManager.addListener(_onSyncedData);
+  }
+
+  @override
+  void dispose() {
+    session.syncManager.removeListener(_onSyncedData);
+    super.dispose();
+  }
+
+  void _onSyncedData() {
+    final sync = session.syncManager;
+    if (!mounted || _refreshQueued || sync.isBackgroundSyncing ||
+        sync.dataRevision == _displayedRevision) {
+      return;
+    }
+    _refreshQueued = true;
+    Future<void>.microtask(() async {
+      try {
+        if (!mounted) return;
+        final billing = context.read<BillingCubit>();
+        final office = context.read<OfficeCubit>();
+        final quotations = context.read<QuotationCubit>();
+        if (billing.state.busy || office.state.busy || quotations.state.busy) return;
+        _displayedRevision = sync.dataRevision;
+        await Future.wait([
+          billing.refresh(), office.run(), quotations.refresh(),
+        ]);
+      } finally {
+        _refreshQueued = false;
+      }
+    });
+  }
 
   Future<void> openEditor([Invoice? invoice]) async {
     if (!session.isSectionAllowed('Invoices')) {
@@ -318,7 +357,30 @@ class _AppWorkspaceShellState extends State<AppWorkspaceShell> {
           session: session,
           isDemo: isDemo,
           companyName: companyName,
-          child: body,
+          child: ListenableBuilder(
+            listenable: session.syncManager,
+            builder: (context, _) => Column(
+              children: [
+                if (session.syncManager.lastError != null)
+                  MaterialBanner(
+                    content: Text('Google sync needs attention. ${session.syncManager.lastError}'),
+                    actions: [
+                      TextButton(
+                        onPressed: session.syncManager.isBackgroundSyncing ? null : () async {
+                          try {
+                            await session.syncNow();
+                          } catch (_) {
+                            // The sync manager keeps the failure visible here.
+                          }
+                        },
+                        child: const Text('Retry sync'),
+                      ),
+                    ],
+                  ),
+                Expanded(child: body),
+              ],
+            ),
+          ),
         );
       },
     );

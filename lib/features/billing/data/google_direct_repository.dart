@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import '../../../core/auth/google_session.dart';
 import '../../../core/auth/google_workspace_service.dart';
@@ -6,13 +5,16 @@ import '../../../core/sync/sync_manager.dart';
 import '../domain/billing_repository.dart';
 import '../domain/models.dart';
 import '../domain/totals.dart';
+import 'company_logo_storage.dart';
 
 class GoogleDirectBillingRepository implements BillingRepository {
   final GoogleSession session;
-  final GoogleWorkspaceService _service = GoogleWorkspaceService();
+  final GoogleWorkspaceService _service;
   final SyncManager _sync = SyncManager.instance;
+  Future<void> _companySave = Future.value();
 
-  GoogleDirectBillingRepository(this.session);
+  GoogleDirectBillingRepository(this.session, {GoogleWorkspaceService? service})
+      : _service = service ?? GoogleWorkspaceService();
 
   @override
   bool get isDemo => false;
@@ -59,6 +61,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
     if (company.name.isEmpty && session.workspace?.companyName != null && session.workspace!.companyName.isNotEmpty) {
       company = company.copyWith(name: session.workspace!.companyName);
     }
+    company = await CompanyLogoStorage(session, _service).hydrate(company);
 
     final localData = BillingData(
       customers: cachedCustomers.map((x) => Customer.fromJson(x)).toList(),
@@ -99,13 +102,25 @@ class GoogleDirectBillingRepository implements BillingRepository {
   }
 
   @override
-  Future<void> saveCompany(Company company) async {
-    String previousLogoDriveUrl = '';
+  Future<void> saveCompany(Company company) {
+    final result = _companySave.then((_) => _saveCompany(company));
+    _companySave = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  Future<void> _saveCompany(Company company) async {
+    if (session.isEmployee) {
+      throw StateError('Only the company owner can change company settings or branding.');
+    }
     final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
     final currentSettings = settings.where((record) => record['id'] == 'company').firstOrNull;
     final currentValue = currentSettings?['value'];
-    if (currentValue is Map) previousLogoDriveUrl = currentValue['logoDriveUrl']?.toString() ?? '';
-    final updated = company.copyWith(version: company.version + 1);
+    final previous = currentValue is Map
+        ? Company.fromJson(Map<String, dynamic>.from(currentValue))
+        : const Company();
+    final prepared = await CompanyLogoStorage(session, _service).prepareForSave(company, previous);
+    final version = previous.version > company.version ? previous.version : company.version;
+    final updated = prepared.copyWith(version: version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
     await _sync.upsertCachedRecord(_spreadsheetId, 'Settings', 'company', payload);
     await _sync.enqueueOperation(
@@ -114,6 +129,7 @@ class GoogleDirectBillingRepository implements BillingRepository {
       recordId: 'company',
       action: 'upsert',
       data: payload,
+      expectedVersion: previous.version,
     );
     if (session.workspace != null && company.name.isNotEmpty && session.workspace!.companyName != company.name) {
       final updatedWs = WorkspaceConfig(
@@ -124,56 +140,6 @@ class GoogleDirectBillingRepository implements BillingRepository {
         companyName: company.name,
       );
       await session.setWorkspace(updatedWs);
-    }
-
-    // Archive company logo into Assets/ subfolder in Drive in background
-    if (company.logo.isNotEmpty) {
-      Future.microtask(() async {
-        try {
-          final token = await session.tryGetToken();
-          if (token != null && _driveFolderId.isNotEmpty) {
-            String raw = company.logo;
-            String mime = 'image/png';
-            if (raw.contains(';base64,')) {
-              final parts = raw.split(';base64,');
-              mime = parts.first.replaceFirst('data:', '');
-              raw = parts.last;
-            }
-            final bytes = base64Decode(raw);
-            final ext = mime.contains('jpeg') || mime.contains('jpg') ? 'jpg' : 'png';
-            final cleanName = company.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            final logoLink = await _service.uploadImageFile(
-              token,
-              _driveFolderId,
-              '${cleanName.isNotEmpty ? cleanName : "company"}_logo.$ext',
-              bytes,
-              mimeType: mime,
-              subfolder: 'Assets',
-            );
-            if (logoLink.isNotEmpty) {
-              final value = Map<String, dynamic>.from(updated.toJson())
-                ..['logoDriveUrl'] = logoLink;
-              final logoPayload = {'id': 'company', 'value': value};
-              await _sync.upsertCachedRecord(_spreadsheetId, 'Settings', 'company', logoPayload);
-              await _sync.enqueueOperation(
-                spreadsheetId: _spreadsheetId,
-                tabName: 'Settings',
-                recordId: 'company',
-                action: 'upsert',
-                data: logoPayload,
-              );
-              if (previousLogoDriveUrl.isNotEmpty && previousLogoDriveUrl != logoLink) {
-                await _service.deleteDriveFile(token, previousLogoDriveUrl);
-              }
-            }
-          }
-        } catch (_) {}
-      });
-    } else if (previousLogoDriveUrl.isNotEmpty) {
-      Future.microtask(() async {
-        final token = await session.tryGetToken();
-        if (token != null) await _service.deleteDriveFile(token, previousLogoDriveUrl);
-      });
     }
 
     _scheduleBackgroundSync();

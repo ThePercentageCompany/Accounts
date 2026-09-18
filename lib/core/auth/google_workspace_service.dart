@@ -198,6 +198,29 @@ class WorkspaceConfig {
 }
 
 class GoogleWorkspaceService {
+  GoogleWorkspaceService({http.Client? client}) : _httpClient = client;
+
+  http.Client? _httpClient;
+  http.Client get _client => _httpClient ??= http.Client();
+  final Set<String> _verifiedSchemas = {};
+
+  void _requireSuccess(http.Response response, String action) {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    var detail = '';
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['error'] is Map) {
+        detail = body['error']['message']?.toString() ?? '';
+      }
+    } catch (_) {}
+    throw StateError('$action (${response.statusCode})${detail.isEmpty ? '.' : ': $detail'}');
+  }
+
+  String _tabRange(String tabName, {int startRow = 2, String? endColumn}) {
+    final title = "'${tabName.replaceAll("'", "''")}'";
+    return '$title!A$startRow:${endColumn ?? SheetSchema.getColLetter(SheetSchema.getHeaders(tabName).length)}';
+  }
+
   static const _prefsKeyPrefix = 'tpc_workspace_';
 
   static const List<String> standardSubfolders = [
@@ -242,7 +265,7 @@ class GoogleWorkspaceService {
         'https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name,webViewLink,parents)&pageSize=5',
       );
 
-      final response = await http.get(
+      final response = await _client.get(
         url,
         headers: {'Authorization': 'Bearer $accessToken'},
       ).timeout(const Duration(seconds: 15));
@@ -264,7 +287,7 @@ class GoogleWorkspaceService {
         final folderQuery = Uri.encodeComponent(
           "name contains 'TPC Business Documents' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
         );
-        final folderRes = await http.get(
+        final folderRes = await _client.get(
           Uri.parse('https://www.googleapis.com/drive/v3/files?q=$folderQuery&fields=files(id,name,webViewLink)&pageSize=1'),
           headers: {'Authorization': 'Bearer $accessToken'},
         ).timeout(const Duration(seconds: 10));
@@ -305,7 +328,7 @@ class GoogleWorkspaceService {
 
     // STEP 1: Create Documents Folder in user's Drive
     onProgress?.call('Creating Google Drive documents folder...');
-    final folderRes = await http.post(
+    final folderRes = await _client.post(
       Uri.parse('https://www.googleapis.com/drive/v3/files'),
       headers: {
         'Authorization': 'Bearer $accessToken',
@@ -331,7 +354,7 @@ class GoogleWorkspaceService {
     onProgress?.call('Creating private Google Spreadsheet database...');
     final sheetTitles = SheetSchema.allTabs;
 
-    final sheetRes = await http.post(
+    final sheetRes = await _client.post(
       Uri.parse('https://sheets.googleapis.com/v4/spreadsheets'),
       headers: {
         'Authorization': 'Bearer $accessToken',
@@ -339,7 +362,10 @@ class GoogleWorkspaceService {
       },
       body: jsonEncode({
         'properties': {'title': 'TPC Business - $companyName'},
-        'sheets': sheetTitles.map((t) => {'properties': {'title': t}}).toList(),
+        'sheets': sheetTitles.map((t) => {'properties': {
+          'title': t,
+          'gridProperties': {'columnCount': SheetSchema.getHeaders(t).length},
+        }}).toList(),
       }),
     ).timeout(const Duration(seconds: 25));
 
@@ -370,7 +396,7 @@ class GoogleWorkspaceService {
       'values': [companyRow],
     });
 
-    await http.post(
+    await _client.post(
       Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
       headers: {
         'Authorization': 'Bearer $accessToken',
@@ -403,7 +429,7 @@ class GoogleWorkspaceService {
       onProgress?.call('Sharing view-only access with master admin ($masterEmail)...');
       try {
         // Share Spreadsheet
-        await http.post(
+        await _client.post(
           Uri.parse('https://www.googleapis.com/drive/v3/files/$spreadsheetId/permissions?sendNotificationEmail=false'),
           headers: {
             'Authorization': 'Bearer $accessToken',
@@ -417,7 +443,7 @@ class GoogleWorkspaceService {
         ).timeout(const Duration(seconds: 15));
 
         // Share Documents Folder
-        await http.post(
+        await _client.post(
           Uri.parse('https://www.googleapis.com/drive/v3/files/$folderId/permissions?sendNotificationEmail=false'),
           headers: {
             'Authorization': 'Bearer $accessToken',
@@ -443,354 +469,261 @@ class GoogleWorkspaceService {
     );
   }
 
-  /// Ensures all required tabs from SheetSchema exist in the spreadsheet.
-  /// Automatically creates any missing tabs and sets up their column headers.
+  /// Creates missing tabs and adds new trailing headers without relabelling
+  /// existing columns or converting a failed read into an empty sheet.
   Future<void> ensureAllTabsExist(String accessToken, String spreadsheetId) async {
-    try {
-      final res = await http.get(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId?fields=sheets.properties.title'),
-        headers: {'Authorization': 'Bearer $accessToken'},
-      ).timeout(const Duration(seconds: 15));
-
-      if (res.statusCode != 200) return;
-
-      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
-      final sheets = (body['sheets'] as List?) ?? [];
-      final existingTitles = sheets
-          .map((s) => s is Map && s['properties'] is Map ? (Map<String, dynamic>.from(s['properties'] as Map)['title'] as String?) : null)
-          .whereType<String>()
-          .toSet();
-
-      final requiredTabs = SheetSchema.allTabs;
-      final missingTabs = requiredTabs.where((t) => !existingTitles.contains(t)).toList();
-
-      // 1. Add missing sheets via batchUpdate.
-      if (missingTabs.isNotEmpty) {
-        final addSheetRequests = missingTabs
-            .map((title) => {
-                  'addSheet': {
-                    'properties': {'title': title},
-                  }
-                })
-            .toList();
-        final batchRes = await http.post(
-          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({'requests': addSheetRequests}),
-        ).timeout(const Duration(seconds: 20));
-        if (batchRes.statusCode != 200 && batchRes.statusCode != 201) return;
-      }
-
-      // 2. Re-apply the owned header row on every tab. This is a safe schema
-      // migration for existing workspaces and exposes newly-added link columns.
-      final valueData = <Map<String, dynamic>>[];
-      for (final title in requiredTabs) {
-        final headers = SheetSchema.getHeaders(title);
-        final endCol = SheetSchema.getColLetter(headers.length);
-        valueData.add({
-          'range': '$title!A1:${endCol}1',
-          'values': [headers],
-        });
-      }
-
-      await http.post(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'valueInputOption': 'USER_ENTERED',
-          'data': valueData,
-        }),
-      ).timeout(const Duration(seconds: 20));
-    } catch (_) {}
-  }
-
-  /// Ensures a specific sheet tab exists and initializes its headers.
-  Future<void> ensureTabExists(String accessToken, String spreadsheetId, String tabName) async {
-    try {
-      final addRes = await http.post(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'requests': [
-            {
-              'addSheet': {
-                'properties': {'title': tabName},
-              }
-            }
-          ]
-        }),
-      ).timeout(const Duration(seconds: 15));
-
-      if (addRes.statusCode == 200 || addRes.statusCode == 201) {
-        final headers = SheetSchema.getHeaders(tabName);
-        final endCol = SheetSchema.getColLetter(headers.length);
-        await http.put(
-          Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$tabName!A1:${endCol}1?valueInputOption=USER_ENTERED'),
-          headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'values': [headers]
-          }),
-        ).timeout(const Duration(seconds: 15));
-      }
-    } catch (_) {}
-  }
-
-  /// Reads all records from multiple sheet tabs in a SINGLE batch API request.
-  Future<Map<String, List<Map<String, dynamic>>>> readAllTabsBatch(
-    String accessToken,
-    String spreadsheetId,
-    List<String> tabNames,
-  ) async {
-    try {
-      // First ensure all required tabs exist
-      await ensureAllTabsExist(accessToken, spreadsheetId);
-
-      final queryRanges = tabNames.map((t) => 'ranges=${Uri.encodeComponent('$t!A2:Z')}').join('&');
-      final url = Uri.parse(
-        'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$queryRanges',
-      );
-
-      final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) {
-        // Fallback: read tabs individually if batch range fails
-        final fallbackMap = <String, List<Map<String, dynamic>>>{};
-        for (final tab in tabNames) {
-          final records = await readTabRecords(accessToken, spreadsheetId, tab);
-          if (records.isNotEmpty) {
-            fallbackMap[tab] = records;
-          }
-        }
-        return fallbackMap;
-      }
-
-      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
-      final valueRanges = (body['valueRanges'] as List?) ?? [];
-
-      final resultMap = <String, List<Map<String, dynamic>>>{};
-      for (int i = 0; i < tabNames.length && i < valueRanges.length; i++) {
-        final tabName = tabNames[i];
-        final vrRaw = valueRanges[i];
-        if (vrRaw is! Map) continue;
-        final vr = Map<String, dynamic>.from(vrRaw);
-        final values = (vr['values'] as List?) ?? [];
-        final list = <Map<String, dynamic>>[];
-        for (final row in values) {
-          if (row is List && row.isNotEmpty) {
-            final record = SheetSchema.rowToRecord(tabName, row);
-            if (record.isNotEmpty) {
-              list.add(record);
-            }
-          }
-        }
-        resultMap[tabName] = list;
-      }
-      return resultMap;
-    } catch (_) {
-      return {};
-    }
-  }
-
-  /// Reads all records from a sheet tab.
-  Future<List<Map<String, dynamic>>> readTabRecords(String accessToken, String spreadsheetId, String sheetName) async {
-    try {
-      final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:Z')}');
-      var res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-
-      if (res.statusCode == 400 || res.statusCode == 404) {
-        await ensureTabExists(accessToken, spreadsheetId, sheetName);
-        res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-      }
-
-      if (res.statusCode != 200) return [];
-      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
-      final values = (body['values'] as List?) ?? [];
-
-      final list = <Map<String, dynamic>>[];
-      for (final row in values) {
-        if (row is List && row.isNotEmpty) {
-          final record = SheetSchema.rowToRecord(sheetName, row);
-          if (record.isNotEmpty) {
-            list.add(record);
-          }
-        }
-      }
-      return list;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  /// Inserts or updates a record by ID in a sheet tab with human-readable column fields.
-  Future<void> upsertTabRecord(String accessToken, String spreadsheetId, String sheetName, String id, Map<String, dynamic> record) async {
-    // Read existing IDs
-    final getUrl = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:A')}');
-    var res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-
-    if (res.statusCode == 400 || res.statusCode == 404) {
-      await ensureTabExists(accessToken, spreadsheetId, sheetName);
-      res = await http.get(getUrl, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 15));
-    }
-
-    int targetRow = 2;
-    if (res.statusCode == 200) {
-      final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
-      final values = (body['values'] as List?) ?? [];
-      final index = values.indexWhere((r) => r is List && r.isNotEmpty && r[0].toString() == id);
-      if (index >= 0) {
-        targetRow = index + 2;
-      } else {
-        targetRow = values.length + 2;
-      }
-    }
-
-    final rowValues = SheetSchema.recordToRow(sheetName, record);
-    final endCol = SheetSchema.getColLetter(rowValues.length);
-
-    final putUrl = Uri.parse(
-      'https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A$targetRow:$endCol$targetRow')}?valueInputOption=USER_ENTERED',
-    );
-
-    var putRes = await http.put(
-      putUrl,
-      headers: {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'values': [rowValues]
-      }),
-    ).timeout(const Duration(seconds: 20));
-
-    if (putRes.statusCode == 400 || putRes.statusCode == 404) {
-      await ensureTabExists(accessToken, spreadsheetId, sheetName);
-      putRes = await http.put(
-        putUrl,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'values': [rowValues]
-        }),
-      ).timeout(const Duration(seconds: 20));
-    }
-
-    if (putRes.statusCode != 200 && putRes.statusCode != 201) {
-      throw StateError('Failed to upsert tab record (${putRes.statusCode}): ${putRes.body}');
-    }
-  }
-
-  /// Deletes a record from a sheet tab by ID.
-  Future<void> deleteTabRecord(String accessToken, String spreadsheetId, String sheetName, String id) async {
-    // Read all records, filter out the ID, and rewrite
-    final existing = await readTabRecords(accessToken, spreadsheetId, sheetName);
-    final updated = existing.where((x) => x['id']?.toString() != id).toList();
-
-    // Clear range
-    final clearRes = await http.post(
-      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$sheetName!A2:Z')}:clear'),
-      headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
+    final auth = {'Authorization': 'Bearer $accessToken'};
+    final res = await _client.get(
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId?fields=sheets.properties'),
+      headers: auth,
     ).timeout(const Duration(seconds: 15));
-
-    if (clearRes.statusCode != 200 && clearRes.statusCode != 204) {
-      throw StateError('Failed to clear tab range (${clearRes.statusCode})');
-    }
-
-    if (updated.isNotEmpty) {
-      final rows = updated.map((r) => SheetSchema.recordToRow(sheetName, r)).toList();
-      final maxCols = rows.map((r) => r.length).fold(1, (a, b) => a > b ? a : b);
-      final endCol = SheetSchema.getColLetter(maxCols);
-      final putRes = await http.put(
-        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/$sheetName!A2:$endCol${rows.length + 1}?valueInputOption=USER_ENTERED'),
-        headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
-        body: jsonEncode({'values': rows}),
-      ).timeout(const Duration(seconds: 20));
-      if (putRes.statusCode != 200 && putRes.statusCode != 201) {
-        throw StateError('Failed to rewrite tab records (${putRes.statusCode})');
+    _requireSuccess(res, 'Could not inspect Google Sheets');
+    final body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
+    final existing = ((body['sheets'] as List?) ?? [])
+        .whereType<Map>()
+        .map((sheet) => (sheet['properties'] as Map?)?['title'])
+        .whereType<String>().toSet();
+    final missing = SheetSchema.allTabs.where((tab) => !existing.contains(tab)).toList();
+    final present = SheetSchema.allTabs.where(existing.contains).toList();
+    final needsHeaders = <String>[...missing];
+    final resizeRequests = <Map<String, dynamic>>[];
+    for (final sheet in ((body['sheets'] as List?) ?? []).whereType<Map>()) {
+      final properties = sheet['properties'] as Map? ?? {};
+      final title = properties['title'];
+      final columns = (properties['gridProperties'] as Map?)?['columnCount'];
+      if (title is String && SheetSchema.allTabs.contains(title) &&
+          columns is num && columns < SheetSchema.getHeaders(title).length) {
+        resizeRequests.add({'updateSheetProperties': {
+          'properties': {'sheetId': properties['sheetId'],
+            'gridProperties': {'columnCount': SheetSchema.getHeaders(title).length}},
+          'fields': 'gridProperties.columnCount',
+        }});
       }
     }
-  }
 
-  /// Ensures the standard 5-folder subfolder hierarchy exists within the root Drive folder.
-  /// Standard subfolders: Invoices, Quotations, Payroll, Assets, Reports.
-  Future<Map<String, String>> ensureFolderStructure(String accessToken, String rootFolderId) async {
-    if (rootFolderId.isEmpty) return {};
-    final cached = _subfolderCache[rootFolderId];
-    if (cached != null && standardSubfolders.every((f) => cached.containsKey(f))) {
-      return cached;
-    }
-
-    final folderMap = Map<String, String>.from(cached ?? {});
-    try {
-      // 1. Query existing child folders
-      final query = Uri.encodeComponent(
-        "'$rootFolderId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      );
-      final listRes = await http.get(
-        Uri.parse('https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name)&pageSize=50'),
-        headers: {'Authorization': 'Bearer $accessToken'},
+    if (present.isNotEmpty) {
+      final ranges = present.map((tab) =>
+          'ranges=${Uri.encodeComponent("'${tab.replaceAll("'", "''")}'!1:1")}').join('&');
+      final headersRes = await _client.get(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$ranges'),
+        headers: auth,
       ).timeout(const Duration(seconds: 15));
-
-      if (listRes.statusCode == 200) {
-        final body = Map<String, dynamic>.from(jsonDecode(listRes.body) as Map);
-        final files = (body['files'] as List?) ?? [];
-        for (final f in files) {
-          if (f is Map) {
-            final name = f['name'] as String?;
-            final id = f['id'] as String?;
-            if (name != null && id != null) {
-              folderMap[name] = id;
-            }
+      _requireSuccess(headersRes, 'Could not read spreadsheet headers');
+      final headerBody = jsonDecode(headersRes.body) as Map;
+      final valueRanges = headerBody['valueRanges'] as List?;
+      if (valueRanges == null || valueRanges.length != present.length) {
+        throw StateError('Google Sheets returned incomplete headers. Please retry syncing.');
+      }
+      for (var i = 0; i < present.length; i++) {
+        final values = (valueRanges[i] as Map)['values'] as List? ?? [];
+        final actual = values.isEmpty ? <dynamic>[] : values.first as List;
+        final expected = SheetSchema.getHeaders(present[i]);
+        for (var c = 0; c < actual.length && c < expected.length; c++) {
+          if (actual[c].toString() != expected[c]) {
+            throw StateError('The ${present[i]} columns do not match the app schema. Restore their original order before syncing.');
           }
         }
+        if (actual.length < expected.length) needsHeaders.add(present[i]);
       }
-
-      // 2. Create any missing standard subfolders
-      for (final subfolderName in standardSubfolders) {
-        if (!folderMap.containsKey(subfolderName)) {
-          final createRes = await http.post(
-            Uri.parse('https://www.googleapis.com/drive/v3/files'),
-            headers: {
-              'Authorization': 'Bearer $accessToken',
-              'Content-Type': 'application/json',
+    }
+    if (missing.isNotEmpty || resizeRequests.isNotEmpty) {
+      final added = await _client.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
+        headers: {...auth, 'Content-Type': 'application/json'},
+        body: jsonEncode({'requests': [
+          for (final tab in missing) {'addSheet': {'properties': {
+            'title': tab, 'gridProperties': {'columnCount': SheetSchema.getHeaders(tab).length},
+          }}},
+          ...resizeRequests,
+        ]}),
+      ).timeout(const Duration(seconds: 20));
+      _requireSuccess(added, 'Could not create missing spreadsheet tabs');
+    }
+    if (needsHeaders.isNotEmpty) {
+      final updated = await _client.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate'),
+        headers: {...auth, 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'valueInputOption': 'RAW',
+          'data': [
+            for (final tab in needsHeaders) {
+              'range': '${_tabRange(tab, startRow: 1)}1',
+              'values': [SheetSchema.getHeaders(tab)],
             },
-            body: jsonEncode({
-              'name': subfolderName,
-              'mimeType': 'application/vnd.google-apps.folder',
-              'parents': [rootFolderId],
-            }),
-          ).timeout(const Duration(seconds: 15));
-
-          if (createRes.statusCode == 200 || createRes.statusCode == 201) {
-            final data = Map<String, dynamic>.from(jsonDecode(createRes.body) as Map);
-            folderMap[subfolderName] = data['id'] as String;
-          }
-        }
-      }
-
-      _subfolderCache[rootFolderId] = folderMap;
-    } catch (_) {}
-
-    return folderMap;
+          ],
+        }),
+      ).timeout(const Duration(seconds: 20));
+      _requireSuccess(updated, 'Could not initialize spreadsheet headers');
+    }
+    _verifiedSchemas.add(spreadsheetId);
   }
 
-  /// Gets the folder ID for a given subfolder name, creating it if it doesn't exist.
-  Future<String> getSubfolderId(String accessToken, String rootFolderId, String subfolderName) async {
-    if (rootFolderId.isEmpty) return '';
-    final cached = _subfolderCache[rootFolderId]?[subfolderName];
-    if (cached != null && cached.isNotEmpty) return cached;
+  Future<void> ensureTabExists(String accessToken, String spreadsheetId, String tabName) async {
+    if (!SheetSchema.allTabs.contains(tabName)) throw StateError('Unknown spreadsheet tab: $tabName');
+    await ensureAllTabsExist(accessToken, spreadsheetId);
+  }
 
-    final structure = await ensureFolderStructure(accessToken, rootFolderId);
-    return structure[subfolderName] ?? rootFolderId;
+  Future<Map<String, List<Map<String, dynamic>>>> readAllTabsBatch(
+    String accessToken, String spreadsheetId, List<String> tabNames,
+  ) async {
+    if (tabNames.isEmpty) return {};
+    await ensureAllTabsExist(accessToken, spreadsheetId);
+    final ranges = tabNames.map((tab) => 'ranges=${Uri.encodeComponent(_tabRange(tab))}').join('&');
+    final res = await _client.get(
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchGet?$ranges'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    ).timeout(const Duration(seconds: 20));
+    _requireSuccess(res, 'Could not read Google Sheets');
+    final body = jsonDecode(res.body) as Map;
+    final valueRanges = body['valueRanges'] as List?;
+    if (valueRanges == null || valueRanges.length != tabNames.length) {
+      throw StateError('Google Sheets returned an incomplete snapshot. Please retry syncing.');
+    }
+    return {
+      for (var i = 0; i < tabNames.length; i++)
+        tabNames[i]: _decodeRows(tabNames[i], valueRanges[i] as Map),
+    };
+  }
+
+  List<Map<String, dynamic>> _decodeRows(String tabName, Map response) {
+    final values = response['values'] as List? ?? [];
+    return [
+      for (final row in values.whereType<List>())
+        if (row.isNotEmpty && row.first.toString().isNotEmpty)
+          SheetSchema.rowToRecord(tabName, row),
+    ].where((row) => row.isNotEmpty).toList();
+  }
+
+  Future<http.Response> _readRange(
+    String accessToken, String spreadsheetId, String sheetName, String range,
+  ) async {
+    final url = Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent(range)}');
+    final headers = {'Authorization': 'Bearer $accessToken'};
+    var response = await _client.get(url, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 400) {
+      await ensureTabExists(accessToken, spreadsheetId, sheetName);
+      response = await _client.get(url, headers: headers).timeout(const Duration(seconds: 15));
+    }
+    _requireSuccess(response, 'Could not read $sheetName');
+    return response;
+  }
+
+  Future<List<Map<String, dynamic>>> readTabRecords(
+    String accessToken, String spreadsheetId, String sheetName,
+  ) async {
+    final res = await _readRange(accessToken, spreadsheetId, sheetName, _tabRange(sheetName));
+    return _decodeRows(sheetName, jsonDecode(res.body) as Map);
+  }
+
+  Future<void> upsertTabRecord(
+    String accessToken, String spreadsheetId, String sheetName,
+    String id, Map<String, dynamic> record,
+  ) async {
+    final res = await _readRange(accessToken, spreadsheetId, sheetName, _tabRange(sheetName, endColumn: 'A'));
+    if (!_verifiedSchemas.contains(spreadsheetId)) {
+      await ensureAllTabsExist(accessToken, spreadsheetId);
+    }
+    final values = (jsonDecode(res.body) as Map)['values'] as List? ?? [];
+    final index = values.indexWhere((row) => row is List && row.isNotEmpty && row[0].toString() == id);
+    final rowValues = SheetSchema.recordToRow(sheetName, record);
+    final title = "'${sheetName.replaceAll("'", "''")}'";
+    final endCol = SheetSchema.getColLetter(rowValues.length);
+    final headers = {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'};
+    final body = jsonEncode({'values': [rowValues]});
+    late http.Response written;
+    if (index < 0) {
+      // Sheets allocates the new row atomically so concurrent inserts cannot
+      // both overwrite the same last row.
+      written = await _client.post(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$title!A:$endCol')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'),
+        headers: headers, body: body,
+      ).timeout(const Duration(seconds: 20));
+    } else {
+      final row = index + 2;
+      written = await _client.put(
+        Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values/${Uri.encodeComponent('$title!A$row:$endCol$row')}?valueInputOption=RAW'),
+        headers: headers, body: body,
+      ).timeout(const Duration(seconds: 20));
+    }
+    _requireSuccess(written, 'Could not save $sheetName');
+  }
+
+  /// Deletes just the matching row; never clears and rewrites unrelated data.
+  Future<void> deleteTabRecord(
+    String accessToken, String spreadsheetId, String sheetName, String id,
+  ) async {
+    final res = await _readRange(accessToken, spreadsheetId, sheetName, _tabRange(sheetName, endColumn: 'A'));
+    final values = (jsonDecode(res.body) as Map)['values'] as List? ?? [];
+    final index = values.indexWhere((row) => row is List && row.isNotEmpty && row[0].toString() == id);
+    if (index < 0) return;
+    final metadata = await _client.get(
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId?fields=sheets.properties'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    ).timeout(const Duration(seconds: 15));
+    _requireSuccess(metadata, 'Could not locate $sheetName');
+    final sheets = (jsonDecode(metadata.body) as Map)['sheets'] as List? ?? [];
+    final properties = sheets.whereType<Map>().map((sheet) => sheet['properties']).whereType<Map>()
+        .where((props) => props['title'] == sheetName).firstOrNull;
+    if (properties == null || properties['sheetId'] is! num) {
+      throw StateError('The $sheetName tab could not be located. Please retry.');
+    }
+    final deleted = await _client.post(
+      Uri.parse('https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId:batchUpdate'),
+      headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
+      body: jsonEncode({'requests': [{'deleteDimension': {'range': {
+        'sheetId': properties['sheetId'], 'dimension': 'ROWS',
+        'startIndex': index + 1, 'endIndex': index + 2,
+      }}}]}),
+    ).timeout(const Duration(seconds: 20));
+    _requireSuccess(deleted, 'Could not delete the $sheetName record');
+  }
+
+  /// Ensures the standard Drive folders exist; permission failures remain visible.
+  Future<Map<String, String>> ensureFolderStructure(String accessToken, String rootFolderId) async {
+    if (rootFolderId.isEmpty) throw StateError('Connect a company Drive folder before uploading.');
+    final cached = _subfolderCache[rootFolderId];
+    if (cached != null && standardSubfolders.every(cached.containsKey)) return cached;
+    final folders = Map<String, String>.from(cached ?? {});
+    final query = Uri.encodeComponent(
+      "'${rootFolderId.replaceAll("'", "\\'")}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+    );
+    final response = await _client.get(
+      Uri.parse('https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name)&pageSize=1000'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    ).timeout(const Duration(seconds: 15));
+    _requireSuccess(response, 'Could not access the company Drive folder');
+    final files = (jsonDecode(response.body) as Map)['files'] as List? ?? [];
+    for (final file in files.whereType<Map>()) {
+      if (file['name'] is String && file['id'] is String) {
+        folders[file['name'] as String] = file['id'] as String;
+      }
+    }
+    for (final name in standardSubfolders) {
+      folders[name] ??= await _createDriveFolder(accessToken, rootFolderId, name);
+    }
+    _subfolderCache[rootFolderId] = folders;
+    return folders;
+  }
+
+  Future<String> _createDriveFolder(String accessToken, String parent, String name) async {
+    final response = await _client.post(
+      Uri.parse('https://www.googleapis.com/drive/v3/files'),
+      headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [parent]}),
+    ).timeout(const Duration(seconds: 15));
+    _requireSuccess(response, 'Could not create the $name Drive folder');
+    final id = (jsonDecode(response.body) as Map)['id']?.toString() ?? '';
+    if (id.isEmpty) throw StateError('Google Drive did not return a folder identifier.');
+    return id;
+  }
+
+  Future<String> getSubfolderId(String accessToken, String rootFolderId, String subfolderName) async {
+    final folders = await ensureFolderStructure(accessToken, rootFolderId);
+    final existing = folders[subfolderName];
+    if (existing != null && existing.isNotEmpty) return existing;
+    final created = await _createDriveFolder(accessToken, rootFolderId, subfolderName);
+    folders[subfolderName] = created;
+    return created;
   }
 
   /// Automatically detects the appropriate subfolder based on file name, MIME type, or category.
@@ -871,7 +804,9 @@ class GoogleWorkspaceService {
     String mimeType = 'application/octet-stream',
     String? subfolder,
   }) async {
-    try {
+      if (rootFolderId.isEmpty || bytes.isEmpty || fileName.trim().isEmpty) {
+        throw StateError('Choose a file and connect the company Drive folder before uploading.');
+      }
       final targetSubfolder = subfolder ?? detectSubfolder(fileName: fileName, mimeType: mimeType);
       final targetFolderId = await getSubfolderId(accessToken, rootFolderId, targetSubfolder);
       final folderId = targetFolderId.isNotEmpty ? targetFolderId : rootFolderId;
@@ -889,7 +824,7 @@ class GoogleWorkspaceService {
       body.addAll(bytes);
       body.addAll(utf8.encode('\r\n--$boundary--\r\n'));
 
-      final uploadRes = await http.post(
+      final uploadRes = await _client.post(
         Uri.parse('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink'),
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -898,12 +833,13 @@ class GoogleWorkspaceService {
         body: Uint8List.fromList(body),
       ).timeout(const Duration(seconds: 40));
 
-      if (uploadRes.statusCode == 200 || uploadRes.statusCode == 201) {
-        final data = Map<String, dynamic>.from(jsonDecode(uploadRes.body) as Map);
-        return data['webViewLink'] as String? ?? 'https://drive.google.com/file/d/${data['id']}/view';
+      _requireSuccess(uploadRes, 'Google Drive upload failed');
+      final data = Map<String, dynamic>.from(jsonDecode(uploadRes.body) as Map);
+      final id = data['id']?.toString() ?? '';
+      if (id.isEmpty) {
+        throw StateError('Google Drive did not confirm the uploaded file. Please retry.');
       }
-    } catch (_) {}
-    return '';
+      return data['webViewLink'] as String? ?? 'https://drive.google.com/file/d/$id/view';
   }
 
   /// Uploads a PDF to the user's structured Drive folder and returns its web link.
@@ -943,15 +879,44 @@ class GoogleWorkspaceService {
     );
   }
 
+  static String? driveFileId(String driveUrl) {
+    final uri = Uri.tryParse(driveUrl);
+    if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty ||
+        !const ['drive.google.com', 'docs.google.com'].contains(uri.host)) {
+      return null;
+    }
+    final match = RegExp(r'/d/([a-zA-Z0-9_-]+)(?:/|$)').firstMatch(uri.path);
+    final id = match?.group(1) ?? uri.queryParameters['id'];
+    return id != null && RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(id) ? id : null;
+  }
+
+  /// Fetches private Drive bytes with the signed-in user's token. View links
+  /// return HTML, so they cannot be used directly as profile image URLs.
+  Future<Map<String, dynamic>> downloadDriveFile(String accessToken, String driveUrl) async {
+    final fileId = driveFileId(driveUrl);
+    if (fileId == null) throw StateError('The saved Google Drive file link is invalid.');
+    final response = await _client.get(
+      Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?alt=media'),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    ).timeout(const Duration(seconds: 30));
+    _requireSuccess(response, 'Could not load the Google Drive file');
+    if (response.bodyBytes.isEmpty || response.bodyBytes.length > 5 * 1024 * 1024) {
+      throw StateError('The Google Drive file is empty or exceeds 5 MB.');
+    }
+    return {
+      'base64': base64Encode(response.bodyBytes),
+      'mimeType': (response.headers['content-type'] ?? 'application/octet-stream').split(';').first,
+    };
+  }
+
   /// Deletes a Drive file identified by one of Drive's standard view links.
   /// Returns false for an unrecognised URL so callers never delete a file
   /// outside the company's managed Drive workspace by accident.
   Future<bool> deleteDriveFile(String accessToken, String driveUrl) async {
-    final match = RegExp(r'/d/([^/?]+)|[?&]id=([^&]+)').firstMatch(driveUrl);
-    final fileId = match?.group(1) ?? match?.group(2);
+    final fileId = driveFileId(driveUrl);
     if (fileId == null || fileId.isEmpty) return false;
     try {
-      final response = await http.delete(
+      final response = await _client.delete(
         Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId'),
         headers: {'Authorization': 'Bearer $accessToken'},
       ).timeout(const Duration(seconds: 20));

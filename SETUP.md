@@ -1,4 +1,16 @@
-# Employee QR login setup
+# Setup and deployment
+
+For the planned SaaS product, customers should only sign in, create their company,
+and invite employees. They must not deploy scripts or edit app configuration.
+See [the SaaS onboarding design](SAAS_ONBOARDING.md) for the proposed shared
+backend and implementation requirements.
+
+**Current implementation:** company signup creates Sheets and Drive storage,
+but employee login still uses a single-company Apps Script gateway. Automatic
+SaaS employee provisioning is not implemented yet. The instructions below are
+for the existing single-company deployment, not the intended customer signup flow.
+
+## Existing single-company employee QR login setup
 
 Employee login uses the company owner's Apps Script gateway. The QR identifies
 the employee; a separate private login code authenticates them. The gateway reads

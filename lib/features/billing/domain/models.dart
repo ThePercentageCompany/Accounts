@@ -62,6 +62,7 @@ abstract class Company with _$Company {
     @Default('Thanks for your business.') String notes,
     @Default('Due on Receipt') String terms,
     @Default('') String logo,
+    @Default('') String logoDriveUrl,
     @Default([]) List<Map<String, dynamic>> shareholders,
     @Default(0) int version,
   }) = _Company;
@@ -79,6 +80,7 @@ abstract class Company with _$Company {
     notes: json['notes']?.toString() ?? 'Thanks for your business.',
     terms: json['terms']?.toString() ?? 'Due on Receipt',
     logo: json['logo']?.toString() ?? '',
+    logoDriveUrl: json['logoDriveUrl']?.toString() ?? '',
     shareholders: (json['shareholders'] as List? ?? [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
@@ -100,6 +102,7 @@ abstract class Company with _$Company {
     'notes': notes,
     'terms': terms,
     'logo': logo,
+    'logoDriveUrl': logoDriveUrl,
     'shareholders': shareholders,
     'version': version,
   };

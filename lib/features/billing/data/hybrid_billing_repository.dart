@@ -7,6 +7,7 @@ import '../../../core/sync/sync_manager.dart';
 import '../domain/billing_repository.dart';
 import '../domain/models.dart';
 import '../domain/totals.dart';
+import 'company_logo_storage.dart';
 
 /// Unified offline-first + auto-cloud-sync billing repository.
 ///
@@ -19,10 +20,12 @@ import '../domain/totals.dart';
 /// Replaces both [LocalRepository] and [GoogleDirectBillingRepository].
 class HybridBillingRepository implements BillingRepository {
   final GoogleSession session;
-  final GoogleWorkspaceService _service = GoogleWorkspaceService();
+  final GoogleWorkspaceService _service;
   final SyncManager _sync = SyncManager.instance;
+  Future<void> _companySave = Future.value();
 
-  HybridBillingRepository(this.session);
+  HybridBillingRepository(this.session, {GoogleWorkspaceService? service})
+      : _service = service ?? GoogleWorkspaceService();
 
   @override
   bool get isDemo => !_hasCloudWorkspace;
@@ -152,6 +155,7 @@ class HybridBillingRepository implements BillingRepository {
         session.workspace!.companyName.isNotEmpty) {
       company = company.copyWith(name: session.workspace!.companyName);
     }
+    company = await CompanyLogoStorage(session, _service).hydrate(company);
 
     _scheduleBackgroundSync();
 
@@ -210,18 +214,29 @@ class HybridBillingRepository implements BillingRepository {
   }
 
   @override
-  Future<void> saveCompany(Company company) async {
+  Future<void> saveCompany(Company company) {
+    // Serialise company saves, including uploads, so a slower upload cannot
+    // overwrite a newer edit after the user has saved it.
+    final result = _companySave.then((_) => _saveCompany(company));
+    _companySave = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  Future<void> _saveCompany(Company company) async {
     if (session.isEmployee) {
       throw StateError('Only the company owner can change company settings or branding.');
     }
-    String previousLogoDriveUrl = '';
-    if (_hasCloudWorkspace) {
-      final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
-      final current = settings.where((record) => record['id'] == 'company').firstOrNull;
-      final value = current?['value'];
-      if (value is Map) previousLogoDriveUrl = value['logoDriveUrl']?.toString() ?? '';
-    }
-    final updated = company.copyWith(version: company.version + 1);
+    final settings = await _sync.loadCachedRecords(_spreadsheetId, 'Settings');
+    final current = settings.where((record) => record['id'] == 'company').firstOrNull;
+    final value = current?['value'];
+    final previous = value is Map
+        ? Company.fromJson(Map<String, dynamic>.from(value))
+        : const Company();
+    final prepared = _hasCloudWorkspace
+        ? await CompanyLogoStorage(session, _service).prepareForSave(company, previous)
+        : company;
+    final version = previous.version > company.version ? previous.version : company.version;
+    final updated = prepared.copyWith(version: version + 1);
     final payload = {'id': 'company', 'value': updated.toJson()};
     await _upsert('Settings', 'company', payload);
 
@@ -238,48 +253,6 @@ class HybridBillingRepository implements BillingRepository {
         companyName: company.name,
       );
       await session.setWorkspace(ws);
-    }
-
-    // Archive company logo to Drive (background, non-blocking)
-    if (company.logo.isNotEmpty && _hasCloudWorkspace) {
-      Future.microtask(() async {
-        try {
-          final token = await session.tryGetToken();
-          if (token != null && _driveFolderId.isNotEmpty) {
-            String raw = company.logo;
-            String mime = 'image/png';
-            if (raw.contains(';base64,')) {
-              final parts = raw.split(';base64,');
-              mime = parts.first.replaceFirst('data:', '');
-              raw = parts.last;
-            }
-            final bytes = base64Decode(raw);
-            final ext = mime.contains('jpeg') || mime.contains('jpg') ? 'jpg' : 'png';
-            final cleanName = company.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            final logoLink = await _service.uploadImageFile(
-              token,
-              _driveFolderId,
-              '${cleanName.isNotEmpty ? cleanName : "company"}_logo.$ext',
-              bytes,
-              mimeType: mime,
-              subfolder: 'Assets',
-            );
-            if (logoLink.isNotEmpty) {
-              final value = Map<String, dynamic>.from(updated.toJson())
-                ..['logoDriveUrl'] = logoLink;
-              await _upsert('Settings', 'company', {'id': 'company', 'value': value});
-              if (previousLogoDriveUrl.isNotEmpty && previousLogoDriveUrl != logoLink) {
-                await _service.deleteDriveFile(token, previousLogoDriveUrl);
-              }
-            }
-          }
-        } catch (_) {}
-      });
-    } else if (previousLogoDriveUrl.isNotEmpty && _hasCloudWorkspace) {
-      Future.microtask(() async {
-        final token = await session.tryGetToken();
-        if (token != null) await _service.deleteDriveFile(token, previousLogoDriveUrl);
-      });
     }
 
     _scheduleBackgroundSync();
