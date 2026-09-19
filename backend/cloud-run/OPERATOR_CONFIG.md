@@ -99,6 +99,129 @@ deploy Cloud Run, submit tasks or modify customer data.
 Command references: [service accounts](https://docs.cloud.google.com/sdk/gcloud/reference/iam/service-accounts/create),
 [task queues](https://docs.cloud.google.com/sdk/gcloud/reference/tasks/queues/create).
 
+### Resources created successfully
+
+The operator supplied successful Cloud Shell results for:
+
+- Runtime identity: `tpc-api-runtime@accounts-508118.iam.gserviceaccount.com`
+- Task identity: `tpc-setup-worker@accounts-508118.iam.gserviceaccount.com`
+- Setup queue: `projects/accounts-508118/locations/me-central1/queues/tpc-company-setup`
+
+No service-account keys were created. Resource-level IAM and live task delivery
+remain unverified.
+
+## Next operator action: private infrastructure
+
+Run these commands separately and stop on an error:
+
+```bash
+gcloud storage buckets create gs://accounts-508118-tpc-control --project=accounts-508118 --location=me-central1 --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets update gs://accounts-508118-tpc-control --versioning
+gcloud kms keyrings create tpc-accounts --location=me-central1 --project=accounts-508118
+gcloud kms keys create oauth-refresh-tokens --keyring=tpc-accounts --location=me-central1 --purpose=encryption --rotation-period=90d --next-rotation-time=2026-12-20T00:00:00Z --project=accounts-508118
+gcloud artifacts repositories create tpc-backend --repository-format=docker --location=me-central1 --description="TPC Accounts backend images" --project=accounts-508118
+```
+
+The bucket contains backend control metadata only and has public access prevention,
+uniform access and object versioning. The KMS key encrypts customer Google refresh
+tokens. The Artifact Registry repository stores deployable backend images. These
+commands do not deploy Cloud Run, change DNS or touch customer Sheets/Drive data.
+
+### Private infrastructure created successfully
+
+The operator supplied successful Cloud Shell results for:
+
+- Control bucket: `accounts-508118-tpc-control`, with versioning enabled
+- KMS key: `projects/accounts-508118/locations/me-central1/keyRings/tpc-accounts/cryptoKeys/oauth-refresh-tokens`
+- Docker repository: `me-central1-docker.pkg.dev/accounts-508118/tpc-backend`
+
+The KMS create commands normally produce no success text; subsequent IAM commands
+also serve as an existence check. Public access and uniform access still need a
+read-only verification before deployment.
+
+## Next operator action: scoped IAM and secret container
+
+Run the following commands one at a time. They grant only the backend capabilities
+required by the current implementation and create an empty Secret Manager secret.
+They do not deploy the service or add the OAuth client secret value.
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://accounts-508118-tpc-control --member=serviceAccount:tpc-api-runtime@accounts-508118.iam.gserviceaccount.com --role=roles/storage.objectAdmin
+gcloud kms keys add-iam-policy-binding oauth-refresh-tokens --keyring=tpc-accounts --location=me-central1 --member=serviceAccount:tpc-api-runtime@accounts-508118.iam.gserviceaccount.com --role=roles/cloudkms.cryptoKeyEncrypterDecrypter --project=accounts-508118
+gcloud tasks queues add-iam-policy-binding tpc-company-setup --location=me-central1 --member=serviceAccount:tpc-api-runtime@accounts-508118.iam.gserviceaccount.com --role=roles/cloudtasks.enqueuer --project=accounts-508118
+gcloud iam service-accounts add-iam-policy-binding tpc-setup-worker@accounts-508118.iam.gserviceaccount.com --member=serviceAccount:tpc-api-runtime@accounts-508118.iam.gserviceaccount.com --role=roles/iam.serviceAccountUser --project=accounts-508118
+gcloud iam service-accounts add-iam-policy-binding tpc-setup-worker@accounts-508118.iam.gserviceaccount.com --member=serviceAccount:service-110697421185@gcp-sa-cloudtasks.iam.gserviceaccount.com --role=roles/iam.serviceAccountTokenCreator --project=accounts-508118
+gcloud secrets create tpc-google-oauth --replication-policy=user-managed --locations=me-central1 --project=accounts-508118
+```
+
+Do not paste an OAuth client secret into chat or a command-line argument. Add its
+first version through Secret Manager's protected value editor after the redirect
+URIs have been configured. The required stored value is JSON with one field named
+`clientSecret`; the exact procedure follows after the commands above succeed.
+
+### Scoped IAM and secret container completed
+
+The operator supplied successful results for bucket object administration, KMS
+encrypt/decrypt, queue enqueue, runtime act-as-worker, and the Cloud Tasks service
+agent's token-creation permission. Secret `tpc-google-oauth` was created. A repeated
+create returned the expected `already exists` conflict and requires no correction.
+
+## Next operator action: OAuth redirect and protected secret value
+
+First grant the runtime access to this specific secret:
+
+```bash
+gcloud secrets add-iam-policy-binding tpc-google-oauth --member=serviceAccount:tpc-api-runtime@accounts-508118.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --project=accounts-508118
+```
+
+Then open Google Cloud Console > APIs & Services > Credentials and edit Web client
+`110697421185-klclvve50ibedrqjc830doqrenp44hif.apps.googleusercontent.com`.
+Preserve all existing entries and add these exact authorized redirect URIs:
+
+- `https://api.accounts.thepercentagecompany.com/v1/auth/google/callback`
+- `https://api.accounts.thepercentagecompany.com/v1/google/callback`
+
+Save the client. Obtain its existing client secret without rotating or deleting it.
+Open Secret Manager > `tpc-google-oauth` > New version and enter this value, replacing
+the placeholder inside Google Console only:
+
+```json
+{"clientSecret":"PASTE_EXISTING_CLIENT_SECRET_HERE"}
+```
+
+Do not paste the client secret or saved JSON into chat. Report only the created
+secret version number (normally `1`). If the existing secret cannot be viewed or
+downloaded, stop and report that fact before rotating it because rotation can break
+another application using the same OAuth client.
+
+### Security incident: OAuth secret disclosed
+
+The operator pasted the existing OAuth client secret into chat on 2026-09-20.
+The value is intentionally not reproduced or stored in this repository. Treat it
+as compromised: create a replacement secret in the Google Auth Platform client,
+store only the replacement as a Secret Manager version, and disable the exposed
+secret before deployment. Do not deploy while the exposed secret remains active.
+Follow [Google's client-secret rotation procedure](https://support.google.com/cloud/answer/15549257).
+
+The operator later confirmed that the exposed secret was disabled and both API
+redirect URIs were added. However, a read-only `gcloud secrets versions list`
+returned `NOT_FOUND` for `tpc-google-oauth`, despite an earlier successful create
+and IAM update. Treat the Secret Manager resource/version as unverified until its
+current project state is listed; do not configure or deploy the runtime yet.
+
+The subsequent project listing showed one current secret named `TPC-Accounts` and
+no `tpc-google-oauth`. Secret names are case-sensitive. Verify the versions and
+replication metadata for `TPC-Accounts`; if it contains the replacement OAuth
+secret, grant the runtime access to that resource and configure its pinned enabled
+version rather than creating another duplicate secret.
+
+Version listing confirmed enabled versions 1 and 2. A non-disclosing structure
+check confirmed version 2 contains exactly a non-empty `clientSecret` JSON field,
+which matches the backend parser. The local ignored environment now pins
+`projects/accounts-508118/secrets/TPC-Accounts/versions/2`. Grant the runtime
+access to this actual secret and disable older version 1; version disablement can
+be reversed if an unexpected dependency is found.
+
 After checking these results, prepare resource creation and IAM configuration for
 review: a private control bucket, KMS key, OAuth secret, task queue, runtime/worker
 identities, container registry and Cloud Run service. Then configure the load
