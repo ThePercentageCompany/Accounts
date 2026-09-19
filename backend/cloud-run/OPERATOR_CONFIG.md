@@ -222,6 +222,38 @@ which matches the backend parser. The local ignored environment now pins
 access to this actual secret and disable older version 1; version disablement can
 be reversed if an unexpected dependency is found.
 
+## Production deployment approval and first build attempt
+
+The operator explicitly approved the first Cloud Build and Cloud Run production
+deployment. Local tests passed (77/77), GitHub `main` was verified at commit
+`da96f3924ed5e3f6a72a5f08581f95ca29784fb1`, and that exact source was submitted.
+The first Cloud Build did not execute: the selected default build identity
+`110697421185-compute@developer.gserviceaccount.com` lacked `storage.objects.get`
+on `accounts-508118_cloudbuild`. No Cloud Run deployment occurred.
+
+Grant that build identity source-object viewer on the Cloud Build bucket,
+Artifact Registry writer on repository `tpc-backend`, and project log writer,
+then retry the same immutable image tag. These are build-time permissions only;
+do not grant the build identity access to runtime secrets, KMS, tenant storage or
+Cloud Run administration.
+
+After the scoped build permissions were applied, Cloud Build
+`23b7bc82-0f89-405a-abbf-b4a16f4f2e87` completed successfully from the approved
+source. It published
+`me-central1-docker.pkg.dev/accounts-508118/tpc-backend/api@sha256:4721ceed6c26cda8cc50f7754b121fddef965e6c6073faefdc5ea18eb2842c31`.
+The container install reported zero known dependency vulnerabilities. Deploy by
+this immutable digest, then verify `/healthz` before creating DNS or integrating
+the frontend.
+
+Cloud Run deployment completed successfully as service `tpc-accounts-api`, revision
+`tpc-accounts-api-00001-655`, serving 100% of traffic. The deployment-reported
+deterministic URL is
+`https://tpc-accounts-api-110697421185.me-central1.run.app`. A first health check
+used the different hash-based `status.url`
+`https://tpc-accounts-api-2knwa6weda-ww.a.run.app` and received a Google routing
+404, so application health remains unverified. Test the deterministic URL and
+inspect revision conditions/logs before any DNS or frontend change.
+
 After checking these results, prepare resource creation and IAM configuration for
 review: a private control bucket, KMS key, OAuth secret, task queue, runtime/worker
 identities, container registry and Cloud Run service. Then configure the load
