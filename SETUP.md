@@ -2,12 +2,15 @@
 
 For the planned SaaS product, customers should only sign in, create their company,
 and invite employees. They must not deploy scripts or edit app configuration.
-See [the SaaS onboarding design](SAAS_ONBOARDING.md) for the proposed shared
-backend and implementation requirements.
+See [SaaS onboarding](SAAS_ONBOARDING.md) for the phased implementation and
+[the shared backend guide](backend/cloud-run/README.md) for operator configuration.
 
 **Current implementation:** company signup creates Sheets and Drive storage,
-but employee login still uses a single-company Apps Script gateway. Automatic
-SaaS employee provisioning is not implemented yet. The instructions below are
+but employee login still uses a single-company Apps Script gateway. Phases 1–3 of
+the separate Cloud Run API implement owner authentication, company registration,
+offline Google connection, workspace provisioning, reconnect and employee access;
+it has not been deployed or connected to Flutter. The SaaS employee flow therefore
+is not available in the current Flutter UI yet. The instructions below are
 for the existing single-company deployment, not the intended customer signup flow.
 
 ## Existing single-company employee QR login setup

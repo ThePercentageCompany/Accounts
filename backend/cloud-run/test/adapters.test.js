@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { GoogleControlStorage } from '../src/google-storage.js';
 import { loadConfig } from '../src/config.js';
 import { RefreshTokenVault } from '../src/crypto.js';
+import { crc32c, readOAuthSecret } from '../src/integrity.js';
 
 test('storage pins generation and writes with compare-and-swap precondition', async () => {
   const calls = [];
@@ -39,6 +40,8 @@ test('configuration rejects blanks, insecure origins and URL paths', () => {
     APP_ORIGIN: 'https://app.test', API_ORIGIN: 'https://api.test', GOOGLE_OAUTH_CLIENT_ID: 'google-client',
     GOOGLE_OAUTH_SECRET_VERSION: 'projects/p/secrets/oauth/versions/1', CONTROL_BUCKET: 'private',
     GOOGLE_REFRESH_KMS_KEY: 'projects/p/locations/l/keyRings/r/cryptoKeys/k',
+    SETUP_TASK_QUEUE: 'projects/p/locations/l/queues/setup', SETUP_WORKER_EMAIL: 'setup@project.iam.gserviceaccount.com',
+    SETUP_WORKER_ORIGIN: 'https://worker.run.app',
   };
   assert.equal(loadConfig(valid).appOrigin, valid.APP_ORIGIN);
   assert.throws(() => loadConfig({}));
@@ -49,12 +52,33 @@ test('configuration rejects blanks, insecure origins and URL paths', () => {
 test('refresh-token encryption is bound to owner and company', async () => {
   let aad;
   const kms = {
-    encrypt: async args => { aad = args.additionalAuthenticatedData; return [{ ciphertext: Buffer.from('encrypted') }]; },
-    decrypt: async args => { assert.deepEqual(args.additionalAuthenticatedData, aad); return [{ plaintext: Buffer.from('private-refresh') }]; },
+    encrypt: async args => { aad = args.additionalAuthenticatedData; return [{ ciphertext: Buffer.from('encrypted'),
+      ciphertextCrc32c: { value: crc32c(Buffer.from('encrypted')) }, verifiedPlaintextCrc32c: true, verifiedAdditionalAuthenticatedDataCrc32c: true }]; },
+    decrypt: async args => { assert.deepEqual(args.additionalAuthenticatedData, aad); return [{ plaintext: Buffer.from('private-refresh'),
+      plaintextCrc32c: { value: crc32c(Buffer.from('private-refresh')) } }]; },
   };
   const vault = new RefreshTokenVault(kms, 'kms-key');
   const cipher = await vault.encrypt('private-refresh', 'owner', 'company-a');
   assert.ok(!cipher.includes('private-refresh'));
   assert.equal(await vault.decrypt(cipher, 'owner', 'company-a'), 'private-refresh');
   await assert.rejects(vault.decrypt(cipher, 'owner', 'company-b'));
+});
+
+test('Secret Manager validates integrity and CRC matches the standard test vector', async () => {
+  assert.equal(crc32c(Buffer.from('123456789')), 0xe3069283);
+  const bytes = Buffer.from('{"clientSecret":"operator-private"}');
+  const client = { accessSecretVersion: async () => [{ payload: { data: bytes, dataCrc32c: crc32c(bytes) } }] };
+  assert.equal(await readOAuthSecret(client, 'secret/version'), 'operator-private');
+  client.accessSecretVersion = async () => [{ payload: { data: bytes, dataCrc32c: 0 } }];
+  await assert.rejects(readOAuthSecret(client, 'secret/version'));
+});
+
+test('KMS corrupted responses fail closed', async () => {
+  const vault = new RefreshTokenVault({
+    encrypt: async () => [{ ciphertext: Buffer.from('ciphertext'), ciphertextCrc32c: { value: 0 },
+      verifiedPlaintextCrc32c: true, verifiedAdditionalAuthenticatedDataCrc32c: true }],
+    decrypt: async () => [{ plaintext: Buffer.from('refresh'), plaintextCrc32c: { value: 0 } }],
+  }, 'kms-key');
+  await assert.rejects(vault.encrypt('refresh', 'owner', 'company'));
+  await assert.rejects(vault.decrypt('Y2lwaGVydGV4dA==', 'owner', 'company'));
 });

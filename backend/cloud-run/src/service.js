@@ -12,6 +12,10 @@ const publicOwner = owner => ({ ownerId: owner.id, email: owner.email, name: own
 export const publicCompany = c => ({ companyId: c.id, name: c.name, stage: c.stage,
   createdAt: c.createdAt, updatedAt: c.updatedAt, version: c.version,
   employeeInvitationsEnabled: c.stage === 'READY',
+  errorCode: c.setupError || null,
+  nextAction: c.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_GOOGLE' :
+    c.stage === 'GOOGLE_CONNECTION_REQUIRED' ? 'CONNECT_GOOGLE' :
+    c.stage === 'RECOVERABLE_FAILURE' ? 'RETRY_SETUP' : null,
 });
 
 export class AccountsService {
@@ -38,7 +42,7 @@ export class AccountsService {
         }
       }
       requireThat(Object.keys(state.oauth).length < 1000, 429, 'SIGN_IN_BUSY', 'Please try signing in later.');
-      state.oauth[digest(stateToken)] = { bindingHash: digest(binding), nonce, verifier, expiresAt };
+      state.oauth[digest(stateToken)] = { kind: 'signin', bindingHash: digest(binding), nonce, verifier, expiresAt };
     });
     return { authorizationUrl: url, binding };
   }
@@ -47,7 +51,7 @@ export class AccountsService {
     requireThat(typeof code === 'string' && code.length > 0 && code.length <= 4096, 400, 'OAUTH_CODE_INVALID', 'Google authorization code is missing.');
     const transaction = await this.registry.transact(state => {
       const tx = state.oauth[digest(stateToken)];
-      requireThat(tx && tx.expiresAt > this.now() && tx.bindingHash === digest(binding),
+      requireThat(tx && (!tx.kind || tx.kind === 'signin') && tx.expiresAt > this.now() && tx.bindingHash === digest(binding),
         401, 'OAUTH_STATE_INVALID', 'Sign-in has expired or was already used.');
       delete state.oauth[digest(stateToken)];
       return tx;
@@ -117,11 +121,15 @@ export class AccountsService {
   }
   async companyStatus(token, companyId) {
     const { state } = await this.registry.read();
+    this.companyOwner(state, token, companyId);
+    return publicCompany(state.companies[companyId]);
+  }
+  companyOwner(state, token, companyId) {
     const owner = this.ownerSession(state, token);
     const member = state.memberships[digest(`${owner.id}:${companyId}`)];
     const company = state.companies[companyId];
     requireThat(member?.status === 'ACTIVE' && member.role === 'OWNER' && company && !company.deleted,
       404, 'COMPANY_NOT_FOUND', 'Company not found.');
-    return publicCompany(company);
+    return owner;
   }
 }

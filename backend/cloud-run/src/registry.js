@@ -17,7 +17,7 @@ export class Registry {
   async transact(update) {
     for (let attempt = 0; attempt < 12; attempt++) {
       const { state, generation } = await this.read();
-      for (const collection of [state.sessions, state.oauth]) {
+      for (const collection of [state.sessions, state.oauth, state.employeeSessions || {}]) {
         for (const [key, value] of Object.entries(collection)) {
           if (value.expiresAt <= this.now()) delete collection[key];
         }

@@ -62,6 +62,7 @@ test('membership removal and disabled owner apply on the next request', async ()
   const { company } = await f.service.createCompany(token, { name: 'A' }, key);
   Object.values(f.storage.state.memberships)[0].status = 'DISABLED';
   await assert.rejects(f.service.companyStatus(token, company.companyId), code('COMPANY_NOT_FOUND'));
+  await assert.rejects(f.service.createCompany(token, { name: 'A' }, key), code('COMPANY_NOT_FOUND'));
   Object.values(f.storage.state.owners)[0].status = 'DISABLED';
   await assert.rejects(f.service.me(token), code('UNAUTHORIZED'));
 });
