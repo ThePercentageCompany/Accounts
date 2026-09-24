@@ -14,6 +14,32 @@ async function running(t, options = {}) {
   return { ...f, logs, request: (path, options) => fetch(base + path, options) };
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
+test('public health uses /health and requires no session', async t => {
+  const f = await running(t, { business: {} });
+  const response = await f.request('/health');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: 'ok', phase: 4 });
+});
+test('document HTTP routes authenticate uploads and deliver private bytes with no-store headers', async t => {
+  const documentId = 'd'.repeat(43); let uploads = 0;
+  const documents = {
+    async upload(token, companyId, input, key) { uploads++; assert.equal(input.name, 'logo.png'); assert.equal(key, 'upload_logo_123456'); return { documentId }; },
+    async download(token, companyId, id, employee) { assert.equal(id, documentId); assert.equal(employee, true); assert.equal(token, 'employee-token'); return { bytes: Buffer.from('image'), mimeType: 'image/png', name: "company's logo.png" }; },
+  };
+  const f = await running(t, { documents });
+  const token = await f.login();
+  const companyId = (await f.service.createCompany(token, { name: 'Documents' }, 'document_company_123')).company.companyId;
+  const path = `/v1/companies/${companyId}/documents`;
+  const denied = await f.request(path, { method: 'POST', headers, body: '{}' });
+  assert.equal(denied.status, 401); assert.equal(uploads, 0);
+  const uploaded = await f.request(path, { method: 'POST', headers: { ...headers, Cookie: `__Host-tpc_session=${token}`, 'Idempotency-Key': 'upload_logo_123456' }, body: '{"name":"logo.png"}' });
+  assert.equal(uploaded.status, 201); assert.equal(uploads, 1);
+  const response = await f.request(`/v1/employee/companies/${companyId}/documents/${documentId}`, { headers: { Cookie: '__Host-tpc_employee=employee-token' } });
+  assert.equal(response.status, 200); assert.equal(await response.text(), 'image');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(response.headers.get('content-disposition'), /inline; filename\*=UTF-8''company%27s%20logo.png/);
+});
 test('HTTP Google callback creates secure cookie and no tokens in redirect/JSON', async t => {
   const f = await running(t);
   const start = await f.request('/v1/auth/google/start', { method: 'POST', headers, body: '{}' });
@@ -123,4 +149,43 @@ test('internal errors never reveal secrets in response or application logs', asy
   assert.ok(!output.includes('secret-client-credential'));
   assert.ok(!JSON.stringify(f.logs).includes('secret-client-credential'));
   assert.ok(!JSON.stringify(f.logs).includes(token));
+});
+
+test('sync HTTP boundary enforces CSRF, bounded bodies and tombstone queries', async t => {
+  const companyId = 'c'.repeat(43), token = 't'.repeat(43), calls = [];
+  const business = {
+    sync: async (...args) => { calls.push(args); return { results: [{ operationId: 'operation_1234567', status: 'NOT_ATTEMPTED' }] }; },
+    list: async (...args) => { calls.push(args); return []; },
+  };
+  const f = await running(t, { business }), path = `/v1/companies/${companyId}`;
+  const auth = { ...headers, Cookie: `__Host-tpc_session=${token}` };
+  const response = await f.request(path + '/sync', { method: 'POST', headers: auth, body: '{"operations":[]}' });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).results[0].status, 'NOT_ATTEMPTED');
+  assert.deepEqual(calls.shift(), [token, companyId, { operations: [] }]);
+  assert.equal((await f.request(path + '/sync', { method: 'POST', headers: { ...auth, 'X-TPC-CSRF': '' }, body: '{}' })).status, 403);
+  assert.equal((await f.request(path + '/sync', { method: 'POST', headers: auth, body: JSON.stringify({ value: 'a'.repeat(17000) }) })).status, 413);
+  assert.equal((await f.request(path + '/records/Customers?includeDeleted=true', { headers: auth })).status, 200);
+  assert.deepEqual(calls.shift(), [token, companyId, 'Customers', { includeDeleted: true }]);
+  assert.equal((await f.request(path + '/records/Customers?includeDeleted=yes', { headers: auth })).status, 400);
+  assert.equal((await f.request(path + '/records/Customers?includeDeleted=true&includeDeleted=false', { headers: auth })).status, 400);
+  const preflight = await f.request(path + '/records/Customers', { method: 'OPTIONS', headers: { Origin: headers.Origin } });
+  assert.ok(preflight.headers.get('access-control-allow-methods').includes('DELETE'));
+});
+
+test('owner business record routes preserve authority and idempotency keys', async t => {
+  const companyId = 'c'.repeat(43), recordId = 'r'.repeat(43), token = 't'.repeat(43), calls = [];
+  const business = {
+    list: async (...args) => { calls.push(['list', ...args]); return [{ recordId, name: 'A' }]; },
+    mutate: async (...args) => { calls.push(['mutate', ...args]); return { recordId, version: 1, replayed: false }; },
+  };
+  const f = await running(t, { business });
+  const auth = { ...headers, Cookie: `__Host-tpc_session=${token}`, 'Idempotency-Key': 'business_record_123' };
+  const list = await f.request(`/v1/companies/${companyId}/records/Customers`, { headers: auth });
+  assert.equal(list.status, 200); assert.equal((await list.json()).records[0].recordId, recordId);
+  const create = await f.request(`/v1/companies/${companyId}/records/Customers`, { method: 'POST', headers: auth,
+    body: JSON.stringify({ expectedVersion: 0, values: { name: 'A' } }) });
+  assert.equal(create.status, 201);
+  assert.deepEqual(calls, [['list', token, companyId, 'Customers'],
+    ['mutate', token, companyId, 'Customers', null, 'create', { expectedVersion: 0, values: { name: 'A' } }, 'business_record_123']]);
 });

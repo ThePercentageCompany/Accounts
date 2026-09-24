@@ -1,4 +1,4 @@
-# TPC Accounts shared API — Phases 1–3
+# TPC Accounts shared API — Phases 1–4 (partial)
 
 Implemented: backend owner sign-in, expiring/revocable owner sessions, atomic
 company registration, owner company listing, separate offline Google connection,
@@ -9,8 +9,9 @@ No existing workspace is migrated, modified or deleted by this package.
 
 New companies initially stop at `GOOGLE_CONNECTION_REQUIRED`. After owner consent,
 authenticated Cloud Tasks advance setup through the requested stages to `READY`.
-Business write APIs, document endpoints, offline sync and Flutter integration are
-subsequent phases. No stub returns a successful result for those operations.
+Owner business record CRUD, ordered sync batches and private document endpoints
+are implemented locally. Full accounting transactions and Flutter integration are
+unfinished. See [release status](RELEASE_STATUS.md) before deploying for customers.
 See [employee access and operator handoff](EMPLOYEE_ACCESS.md) for Phase 3 details.
 
 ## Local verification

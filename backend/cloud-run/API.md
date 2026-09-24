@@ -85,13 +85,117 @@ See [employee access](EMPLOYEE_ACCESS.md) for role privacy limits, rate limits,
 one-time code recovery and uncertain-write handling. Company-manager employee
 accounts cannot call owner management routes.
 
+## Implemented Phase 4 slice: owner business records
+
+Allowlisted normalized business tables now support owner reads and writes. Server
+fields cannot be supplied by clients. Writes use expected versions, stable
+idempotency keys, soft deletion and uncertain-write reconciliation.
+
+Financial fields require finite JSON numbers (absolute limit 1e12); quantity,
+rate and other nonnegative fields reject negative values. Percentages/tax rates
+are 0–100, line numbers are positive integers. Text fields reject non-text values
+and control characters; dates use valid YYYY-MM-DD, payroll months YYYY-MM, and
+currencies three uppercase letters. These are type/range checks, not accounting
+aggregate validation. See RELEASE_STATUS.md for remaining release gates.
+
+| Method and route | Contract |
+| --- | --- |
+| `GET /v1/companies/:id/records/:table` | Active records after live owner/company/READY authorization. Internal markers and sheet row numbers are omitted. |
+| `POST /v1/companies/:id/records/:table` | `{expectedVersion: 0, values: {...}}` plus `Idempotency-Key`; generates record ID and version 1. |
+| `PATCH /v1/companies/:id/records/:table/:recordId` | `{expectedVersion, values: {...}}`; changes allowlisted business fields. |
+| `DELETE /v1/companies/:id/records/:table/:recordId` | `{expectedVersion}`; writes a versioned soft deletion. |
+
+Employee/access and control tables are excluded from generic record APIs.
+Multi-record accounting invariants remain planned. Private documents use the
+separate endpoints below.
+
+Business-to-business references are now validated before submission while the
+company write reservation is held. Populated references must identify an active
+record in the same company. Child rows require their parent IDs. Deleting a parent
+with active dependents returns `RECORD_REFERENCED`; reassign or delete dependents
+first. Optional references can be cleared with an empty string. Polymorphic
+journal sources are not covered yet, and direct manual
+Sheets edits cannot be serialized by this API.
+
+`POST /v1/companies/:id/sync` accepts `{operations: [...]}` with 1–20 operations,
+within the existing 16 KiB body limit. Each operation has `operationId` (the stable
+idempotency key), `table`, `action`, `expectedVersion`, and `values` for create or
+update. Updates/deletes also require `recordId`; creates must omit it. Deletes
+must omit `values`. The whole envelope is validated before any write.
+
+Payroll, attendance, overtime and payslips require a same-company, non-deleted
+employee reference; asset assignments validate it when provided. Inactive employees
+remain valid references for historical records. Payslip employee IDs must match
+their payroll record. Internal reference reads never expose the Employees table
+through generic routes. Pending employee and business writes mutually block until
+confirmed. Document IDs must reference a completed upload for the same record;
+expense attachments reference a document for their parent expense. Polymorphic
+journal sources remain pending.
+
+Results are ordered and contain `operationId` and status `APPLIED`, `FAILED`, or
+`NOT_ATTEMPTED`. Applied results include recordId/version/replayed. A failed result
+includes a sanitized error code/message. Execution stops at the first failure.
+HTTP 200 means results are available, not that all writes succeeded. Keep failed
+and unattempted changes locally; retry uncertain writes with the same operation IDs
+and payloads. Successful operations replay without writing again. Resolve a version
+conflict before submitting the corrected edit. Creates return IDs for subsequent
+dependent operations; temporary-ID substitution is not implemented.
+
+This is an ordered per-operation protocol, not an all-or-nothing accounting
+transaction or a download/change-feed API. Manual concurrent Sheets edits remain
+outside its concurrency guarantees.
+
+Owner record downloads support `?includeDeleted=true` for offline reconciliation.
+Deleted records return only recordId, companyId, recordVersion, updatedAt and
+isDeleted; ordinary reads omit deletions. Apply these tombstones to the local cache
+without discarding pending edits. Downloads recheck owner authorization after the
+Sheets request. This is a bounded full-table read, not a paginated change feed or
+an atomic snapshot across tables.
+
+## Journal validation
+Journal writes now require DRAFT creation. Posting (PATCH status POSTED) requires
+at least two active lines with distinct positive line numbers, nonempty account
+identifiers, and exactly one positive debit/credit per line. Debit and credit sums
+and supplied header totals must agree exactly. The initial ledger contract permits
+two decimal places, summed as integer minor units. Other precisions are rejected.
+Posted journals and their lines cannot be edited, deleted, or moved through generic
+CRUD. Reversal workflows, chart-of-account validation and period closing are still
+pending. Draft header totals are provisional and checked at posting.
+
+
+## Private documents — implemented locally
+
+`POST /v1/companies/:id/documents` requires an owner session, CSRF header and a
+stable `Idempotency-Key`. JSON fields: `name`, `mimeType`, `relatedSection` (table
+name), `relatedRecordId`, `data` (canonical base64). PNG/JPEG/PDF only, at most
+5 MiB decoded, 7 MiB request. Company logos accept only images. Format signatures
+are checked; this is not a malware scan. Accepted tables: CompanyProfile,
+Invoices, Receipts, Quotations, Expenses, Employees, Payslips and Assets.
+
+The target record must already exist. Upload returns `{documentId, replayed}`.
+Then attach that ID with the record's expected version. The seeded company profile
+is updated at `/records/CompanyProfile/company`; duplicate creation and deletion
+are rejected. Existing uploaded content is immutable through this API.
+
+`GET /v1/companies/:id/documents/:documentId` serves owner-authorized bytes.
+`GET /v1/employee/companies/:id/documents/:documentId` uses the employee cookie and
+current record visibility. Both check active metadata and related record access;
+downloads verify Drive ownership, the configured folder, content size and SHA-256,
+then recheck authorization. Responses are no-store/nosniff; PDFs are attachments.
+No Google file IDs, public sharing links or arbitrary download URLs are accepted.
+
+Interrupted uploads retain their operation, pre-generated Drive ID and reserved
+Sheet row. Retry the identical payload/key; do not issue a new key to recover an
+uncertain upload. Other company writes wait while the document is pending.
+Google documents pre-generated-ID retry behavior in its
+[upload guide](https://developers.google.com/workspace/drive/api/guides/manage-uploads).
+Manual edits to the underlying Sheet are outside API serialization guarantees.
+Document cancellation, deletion and retention workflows remain unimplemented.
+
 ## Planned routes — not implemented, no successful stubs
 
 | Phase | Routes | Contract requirements |
 | --- | --- | --- |
-| 4 | `GET/POST/PATCH/DELETE /v1/companies/:id/records/:section[/recordId]` | Section/table allowlist, tenant membership, restricted fields, row visibility, versions and soft deletion. |
-| 4 | `POST /v1/companies/:id/sync` | Unique operation IDs and expected versions; atomic idempotency/conflict protocol; explicit per-operation results. |
-| 4 | `POST /v1/companies/:id/documents`, `GET /v1/companies/:id/documents/:documentId` | Opaque document IDs; registry and folder-scope validation; no arbitrary Drive IDs/URLs. |
 | 5 | Reviewed legacy workspace adoption | Owner verification, dry run, backup, resumable migration, mapping and invite reissue; approval before destructive steps. |
 
 Sheets does not provide multi-row compare-and-swap transactions. Phase 4 needs a

@@ -1,5 +1,75 @@
 # Validation
 
+## September 24: private documents and Flutter transport
+
+- PASS: 108 backend runner entries using `npm test -- --test-isolation=none`.
+- PASS: five Flutter SaaS client tests: trusted origin/QR parsing, CSRF and stable
+  operation keys, session expiry, proxy failures and partial sync failure handling.
+- Document tests cover lost Drive/Sheets responses without duplicate resources,
+  cross-owner/tenant denial, removed records, revoked sessions during download,
+  bounded content, changed bytes and private HTTP response headers.
+- Seeded company profile updates and same-record document attachment validation
+  are covered. Generic company profile duplication/deletion is rejected.
+- Cloud adapters remain substitutes. No deployment or customer-data migration.
+  The new Flutter transport is not connected to existing screens or repositories.
+
+## Local journal posting verification
+
+- PASS: 99 backend test runner entries (`npm test -- --test-isolation=none`).
+- Journal posting uses exact two-decimal sums; rejects forged totals, duplicate
+  line numbers, invalid accounts/amounts and unbalanced active lines. Posted journal
+  edits, deletes and line reassignment are rejected.
+- Account registry validation, period closing and reversal workflows remain pending.
+
+## Production-readiness audit and field validation
+
+- PASS: 95 backend test runner entries (`npm test -- --test-isolation=none`).
+- Financial fields reject coerced strings/booleans, non-finite numbers and values
+  beyond bounds. Dates reject invalid calendar days; text and currency types checked.
+- Concurrency regression covers rejected employee retries preserving pending writes.
+- Production remains blocked by the items in backend/cloud-run/RELEASE_STATUS.md;
+  these local results do not verify a live cloud deployment or Flutter integration.
+
+## Local employee relationship verification
+
+- PASS: 92 test runner entries (`npm test -- --test-isolation=none`).
+- Added historical inactive-employee references, deleted-employee rejection,
+  payroll/payslip employee consistency and pending employee-write exclusion.
+- Document endpoints, accounting totals validation and Flutter integration remain
+  pending. No cloud deployment or customer-data migration performed.
+
+## Local business relationship verification
+
+- PASS: 90 test runner entries using `npm test -- --test-isolation=none`.
+- Checked missing, deleted and foreign-company parent rejection, required child
+  parents, invalid reference types, and deletion with active dependents.
+- Employee/document relations and financial aggregate validation remain pending.
+
+## Local tombstone and HTTP sync verification
+
+- PASS: 87 test runner entries with `npm test -- --test-isolation=none`.
+- Verified minimal deletion tombstones, session revocation during a Sheets read,
+  HTTP sync dispatch, CSRF rejection, request-size limits, strict download query
+  parsing and browser DELETE preflight. Google adapters are still substitutes.
+
+## Local ordered sync verification
+
+- PASS: 85 Node test runner entries with `npm test -- --test-isolation=none`.
+- Added batch replay, reordered-field idempotency, stop-on-conflict, full-envelope
+  validation, cross-tenant rejection, and competing-request reservation tests.
+- Ordered batch upload is implemented; documents, accounting invariants, download
+  synchronization and Flutter integration remain pending. No cloud deployment.
+
+## Shared SaaS API Phase 4 record slice — 2026-09-23
+
+- PASS: 82 backend tests, including owner business CRUD routing, tenant isolation,
+  version conflicts, system-field rejection, soft deletion, idempotent replay and
+  lost-response reconciliation without duplicate Sheets writes.
+- PASS: syntax checks for all backend source modules and `git diff --check`.
+- Remaining Phase 4 work: batch offline sync, relationship/accounting invariant
+  validation, document transfer and employee business writes. No cloud resources
+  remain after the operator-approved scoped reset; no deployment was performed.
+
 ## Shared SaaS API Phase 3 — 2026-09-19
 
 - PASS: all 76 backend tests, including real scrypt hashing and local HTTP cookie tests.
@@ -83,3 +153,13 @@ Flutter/Dart are unavailable in this workspace and the earlier SDK download was 
 Backend tests use in-memory Google-service substitutes. They cover invoice arithmetic/rounding/validation, numbering and retry behavior, snapshots, stale versions, payment/overpayment, void retention, archive retries, Google email allowlist rejection, employee codes, attendance uniqueness, payroll arithmetic, missing/changed attendance, approved payroll locks, duplicate salary payments, supplier settlement and invalid payroll inputs.
 
 Flutter tests are supplied for Freezed JSON serialization, invoice/PDF basics, Cubit state, payroll calculation and cash-flow aggregation without duplicate invoice/payroll transactions. They remain unrun here.
+# SaaS session integration — 2026-09-24
+
+- Full Flutter regression suite: **154 tests passed**.
+- SaaS API/session tests cover trusted origins, CSRF headers, partial sync
+  failures, expired sessions, registration recovery after a lost response and
+  preservation of local pending edits on logout.
+- Added reusable company setup controls and a shared-backend session controller.
+  These are not enabled in the production entrypoint yet. Accounting repository
+  migration, browser OAuth/cookies and live two-company checks remain required.
+- No cloud resources, frontend deployment or DNS changes were made in this step.

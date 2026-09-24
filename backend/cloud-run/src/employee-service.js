@@ -17,6 +17,8 @@ export class EmployeeService {
     const c = state.companies[companyId];
     requireThat(c && !c.deleted && c.stage === 'READY', 409, c?.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_REQUIRED' : 'WORKSPACE_NOT_READY', 'Company workspace is not ready.');
     requireThat(allowWrite || !c.employeeWrite, 409, 'EMPLOYEE_UPDATE_PENDING', 'An employee update is being confirmed. Retry shortly.');
+    requireThat(!c.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'A business update is being confirmed. Retry shortly.');
+    requireThat(!c.documentWrite, 409, 'DOCUMENT_WRITE_PENDING', 'A document upload is being confirmed. Retry shortly.');
     return c;
   }
   owner(state, token, companyId, allowWrite = false) {
@@ -51,19 +53,20 @@ export class EmployeeService {
   }
   async save(token, companyId, employeeId, input, key) {
     this.accounts.companyOwner((await this.registry.read()).state, token, companyId);
-    try { return await this.saveOperation(token, companyId, employeeId, input, key); }
+    const reservation = opaque();
+    try { return await this.saveOperation(token, companyId, employeeId, input, key, reservation); }
     catch (error) {
       const opKey = typeof key === 'string' ? digest(`employee:${companyId}:${key}`) : '';
       await this.registry.transact(state => {
         const c = state.companies[companyId], op = c?.employeeOps?.[opKey];
-        if (c?.employeeWrite === opKey && op && !op.submitted && !op.completed) {
+        if (c?.employeeWrite === opKey && op?.reservation === reservation && !op.submitted && !op.completed) {
           delete c.employeeWrite; delete c.employeeOps[opKey];
         }
       });
       throw error;
     }
   }
-  async saveOperation(token, companyId, employeeId, input, key) {
+  async saveOperation(token, companyId, employeeId, input, key, reservation = opaque()) {
     keyRequired(key); const values = this.input(input);
     requireThat(employeeId === null ? values.expectedVersion === 0 : validId(employeeId) && values.expectedVersion > 0,
       400, 'INVALID_EMPLOYEE', 'Invalid employee ID or version.');
@@ -77,7 +80,7 @@ export class EmployeeService {
       }
       requireThat(!c.employeeWrite, 409, 'EMPLOYEE_UPDATE_PENDING', 'Confirm the previous employee update before making another change.');
       c.employeeWrite = opKey;
-      return c.employeeOps[opKey] = { employeeId: proposedId, fingerprint, submitted: false, completed: false,
+      return c.employeeOps[opKey] = { employeeId: proposedId, fingerprint, reservation, submitted: false, completed: false,
         version: values.expectedVersion + 1, at: this.now() };
     });
     if (op.completed) return { employeeId: op.employeeId, version: op.version, replayed: true };
@@ -113,7 +116,7 @@ export class EmployeeService {
       }
       await this.registry.transact(state => {
         const c = this.owner(state, token, companyId, true), pending = c.employeeOps[opKey];
-        requireThat(c.employeeWrite === opKey && !pending.submitted, 409, 'EMPLOYEE_UPDATE_PENDING', 'This employee update is already being submitted.');
+        requireThat(c.employeeWrite === opKey && pending?.reservation === op.reservation && !pending.submitted, 409, 'EMPLOYEE_UPDATE_PENDING', 'This employee update is already being submitted.');
         pending.submitted = true;
       });
       try { await this.sheets.write(companyId, changes); }

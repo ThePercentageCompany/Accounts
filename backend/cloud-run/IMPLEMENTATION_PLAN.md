@@ -109,9 +109,10 @@ Planned Flutter integration touches:
    roles/sections/record/field policies and read-only employee record API. Document
    policy helper is tested; serving document bytes and employee business writes
    remain Phase 4. No Flutter QR rendering/scanner integration yet.
-4. **Business API and offline sync.** Authorized CRUD/document operations, operation
-   journal and version conflicts, deterministic recovery, no duplicate accounting
-   records under retries. Preserve totals and attachment access.
+4. **Business API and offline sync — in progress locally.** Allowlisted owner CRUD,
+   expected versions, soft deletion, stable operation keys and deterministic
+   uncertain-write recovery, ordered batch upload and tombstone downloads are implemented. Relationship/accounting
+   invariant validation, documents and employee business writes remain.
 5. **Flutter integration and reviewed migration.** Connect API auth/onboarding,
    progress/reconnect screens, repository adapters, opaque invites, local-cache and
    queue mapping, adoption dry run and backup. Verify legacy data and reissue invites.

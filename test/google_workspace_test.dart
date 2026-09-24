@@ -104,7 +104,7 @@ void main() {
     expect(quotationRepo.isDemo, isFalse);
   });
 
-  test('GoogleSession signOut clears all SharedPreferences, syncManager, and in-memory caches', () async {
+  test('GoogleSession signOut clears identity and remote snapshots while retaining local records', () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('tpc_demo_v1', '{"invoices": []}');
     await prefs.setString('tpc_office_demo_v2', '{"employees": []}');
@@ -127,7 +127,10 @@ void main() {
     expect(session.authorized, isFalse);
     expect(session.cachedEmail, isNull);
     expect(session.cachedDisplayName, isNull);
-    expect(prefs.getKeys(), isEmpty);
+    expect(prefs.getString('tpc_demo_v1'), isNotNull);
+    expect(prefs.getString('tpc_office_demo_v2'), isNotNull);
+    expect(prefs.getString('tpc_google_auth_session'), isNull);
+    expect(prefs.getString('tpc_tab_cache_sheet123_Invoices'), isNull);
   });
 
   testWidgets('CompanyOnboardingView mounts with iOS styling and form fields', (tester) async {
@@ -139,10 +142,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Workspace Setup'), findsOneWidget);
+    expect(find.text('Create your company'), findsOneWidget);
     expect(find.text('Company Legal Name'), findsOneWidget);
     expect(find.text('Invoice Prefix'), findsOneWidget);
     expect(find.text('Quotation Prefix'), findsOneWidget);
-    expect(find.text('Provision Google Workspace'), findsOneWidget);
+    expect(find.text('Create company'), findsOneWidget);
   });
 }

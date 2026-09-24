@@ -20,21 +20,21 @@ function cookies(request) {
   }
   return result;
 }
-async function body(request) {
+async function body(request, limit = 16 * 1024) {
   requireThat(request.headers['content-type']?.split(';')[0].trim() === 'application/json',
     415, 'JSON_REQUIRED', 'Use application/json.');
   let size = 0;
   const chunks = [];
   for await (const chunk of request) {
     size += chunk.length;
-    requireThat(size <= 16 * 1024, 413, 'BODY_TOO_LARGE', 'Request is too large.');
+    requireThat(size <= limit, 413, 'BODY_TOO_LARGE', 'Request is too large.');
     chunks.push(chunk);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new ApiError(400, 'INVALID_JSON', 'Invalid JSON body.'); }
 }
 
-export function createApi(service, config, { log = console.error, workspace, queue, employees } = {}) {
+export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents } = {}) {
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
     response.setHeader('X-Request-Id', requestId);
@@ -57,13 +57,13 @@ export function createApi(service, config, { log = console.error, workspace, que
       }
       if (request.method === 'OPTIONS') {
         requireThat(origin === config.appOrigin, 403, 'ORIGIN_DENIED', 'Request origin is not allowed.');
-        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
         response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-TPC-CSRF');
         response.writeHead(204); response.end(); return;
       }
       const url = new URL(request.url, config.apiOrigin);
-      if (request.method === 'GET' && url.pathname === '/healthz') {
-        json(200, { status: 'ok', phase: employees ? 3 : workspace ? 2 : 1 }); return;
+      if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
+        json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1 }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);
@@ -81,6 +81,43 @@ export function createApi(service, config, { log = console.error, workspace, que
       }
       const jar = cookies(request), token = jar[SESSION];
       const route = `${request.method} ${url.pathname}`;
+      if (documents) {
+        const document = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
+        if (document && request.method === 'POST' && document[1] === 'companies' && !document[3]) {
+          // Authenticate before reading a potentially large document body.
+          await service.companyStatus(token, document[2]);
+          json(201, await documents.upload(token, document[2], await body(request, 7 * 1024 * 1024), request.headers['idempotency-key'])); return;
+        }
+        if (document && request.method === 'GET' && document[3]) {
+          const employee = document[1] !== 'companies';
+          const result = await documents.download(employee ? jar[EMPLOYEE] : token, document[2], document[3], employee);
+          response.writeHead(200, { 'Content-Type': result.mimeType, 'Content-Length': result.bytes.length,
+            'Content-Disposition': `${result.mimeType.startsWith('image/') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(result.name).replace(/['()*]/g, c => '%' + c.charCodeAt(0).toString(16))}` });
+          response.end(result.bytes); return;
+        }
+      }
+      if (business) {
+        const sync = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/sync$/.exec(url.pathname);
+        if (sync && request.method === 'POST') {
+          json(200, await business.sync(token, sync[1], await body(request))); return;
+        }
+        const records = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(url.pathname);
+        if (records && request.method === 'GET' && !records[3]) {
+          requireThat([...url.searchParams.keys()].every(key => key === 'includeDeleted') &&
+            url.searchParams.getAll('includeDeleted').length <= 1 &&
+            (!url.searchParams.has('includeDeleted') || ['true', 'false'].includes(url.searchParams.get('includeDeleted'))),
+          400, 'INVALID_QUERY', 'includeDeleted must be true or false.');
+          const options = url.searchParams.has('includeDeleted') ? [{ includeDeleted: url.searchParams.get('includeDeleted') === 'true' }] : [];
+          json(200, { records: await business.list(token, records[1], records[2], ...options) }); return;
+        }
+        if (records && ['POST', 'PATCH', 'DELETE'].includes(request.method)) {
+          const action = request.method === 'POST' ? 'create' : request.method === 'PATCH' ? 'update' : 'delete';
+          requireThat(action === 'create' ? !records[3] : Boolean(records[3]), 404, 'NOT_FOUND', 'Endpoint not found.');
+          const result = await business.mutate(token, records[1], records[2], records[3] || null,
+            action, await body(request), request.headers['idempotency-key']);
+          json(action === 'create' ? 201 : 200, result); return;
+        }
+      }
       if (employees) {
         if (route === 'POST /v1/employee/login' || route === 'POST /v1/employee/refresh') {
           const input = await body(request);

@@ -40,6 +40,21 @@ async function setup() {
 }
 const denied = e => e.code === 'EMPLOYEE_ACCESS_DENIED';
 
+test('conflicting employee retry cannot release the active write reservation', async () => {
+  const f = await setup(), read = f.sheets.read;
+  let release, entered;
+  const waiting = new Promise(resolve => { entered = resolve; });
+  f.sheets.read = async (...args) => { entered(); await new Promise(resolve => { release = resolve; }); return read(...args); };
+  const saving = f.create();
+  await waiting;
+  await assert.rejects(() => f.employees.save(f.owner, f.companyId, null,
+    { ...f.input, fullName: 'Conflicting name' }, 'employee_create_key'), e => e.code === 'IDEMPOTENCY_CONFLICT');
+  assert.ok(f.company().employeeWrite);
+  release(); await saving;
+  assert.equal(f.writes(), 1);
+  assert.equal(f.rows.Employees[0].fullName, f.input.fullName);
+});
+
 test('employee creation is idempotent, normalized and business details remain outside control storage', async () => {
   const f = await setup(), id = await f.create();
   assert.equal(await f.create(), id);

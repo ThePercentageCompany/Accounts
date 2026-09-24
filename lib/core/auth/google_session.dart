@@ -469,6 +469,7 @@ class GoogleSession extends ChangeNotifier {
       await prefs.remove(_cachedNameKey);
       await prefs.remove(_cachedPhotoKey);
       await prefs.remove(_cachedWorkspaceKey);
+      await prefs.remove('tpc_google_auth_session');
     } catch (_) {}
   }
 

@@ -17,6 +17,10 @@ import { SetupQueue } from './setup-queue.js';
 import { readOAuthSecret } from './integrity.js';
 import { EmployeeSheets } from './employee-sheets.js';
 import { EmployeeService } from './employee-service.js';
+import { BusinessSheets } from './business-sheets.js';
+import { BusinessService } from './business-service.js';
+import { DocumentDrive } from './document-drive.js';
+import { DocumentService, DocumentSheets } from './document-service.js';
 
 async function main() {
   const config = loadConfig();
@@ -31,8 +35,11 @@ async function main() {
     connection: new GoogleConnection(config, clientSecret), google,
     vault: new RefreshTokenVault(new KeyManagementServiceClient(), config.kmsKey) });
   const employees = new EmployeeService({ accounts: service, sheets: new EmployeeSheets(workspace, google) });
-  const server = createApi(service, config, { workspace, queue, employees });
-  server.listen(config.port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'listening', port: config.port, phase: 3 })));
+  const business = new BusinessService({ accounts: service, sheets: new BusinessSheets(workspace, google) });
+  const documents = new DocumentService({ accounts: service, business, employees, workspace, google,
+    drive: new DocumentDrive(google), sheets: new DocumentSheets(workspace, google) });
+  const server = createApi(service, config, { workspace, queue, employees, business, documents });
+  server.listen(config.port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'listening', port: config.port, phase: 4 })));
   process.on('SIGTERM', () => { server.close(); setTimeout(() => process.exit(0), 9_000).unref(); });
 }
 main().catch(() => {

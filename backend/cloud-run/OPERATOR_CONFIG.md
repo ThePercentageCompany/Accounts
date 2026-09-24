@@ -254,6 +254,54 @@ used the different hash-based `status.url`
 404, so application health remains unverified. Test the deterministic URL and
 inspect revision conditions/logs before any DNS or frontend change.
 
+On 2026-09-23, independent HTTPS checks of both the deterministic and hash-based
+run.app URLs still returned Google frontend 404 pages. This rules out a transient
+single-client result and does not exercise the Node `/healthz` handler. Inspect
+Cloud Run conditions, ingress/default-URL settings, IAM and revision logs before
+changing or redeploying the service.
+
+Service inspection showed Ready/ConfigurationsReady/RoutesReady, ingress `all`,
+and `allUsers` with `roles/run.invoker`, but no application logs. An authenticated
+request to the deterministic URL also received the Google frontend 404. This
+isolates the failure to default URL routing rather than application auth or the
+Node handler. Explicitly restore the default URL before considering a regional
+redeployment or load balancer.
+
+An explicit `gcloud beta run services update --default-url` completed, but the
+hash-based URL continued returning the Google frontend 404. Before creating a
+second regional service, use the authenticated Cloud Run local proxy to determine
+whether the deployed revision itself serves `/healthz` when bypassing public URL
+routing.
+
+The authenticated proxy also returned the same Google routing 404. The operator
+explicitly approved a controlled Dammam (`me-central2`) Cloud Run routing test on
+2026-09-23. Use the same immutable image and runtime resources, zero minimum
+instances and a maximum of two. Keep the Doha service intact until the Dammam
+health result is known; do not change DNS or frontend configuration during this
+test.
+
+## Approved scoped reset
+
+After the Dammam deployment was rejected by `LOCATION_POLICY_VIOLATED`, the
+operator explicitly approved deletion of only the TPC backend resources created
+during this setup. Preserve project `accounts-508118`, its OAuth client, Vercel,
+Sheets, Drive, GitHub and unrelated cloud resources. The approved targets are the
+Doha Cloud Run service, setup queue, backend Artifact Registry repository, control
+bucket, the two TPC service accounts, secret `TPC-Accounts`, setup-specific IAM
+grants, the two known Cloud Build source archives, and destruction scheduling for
+the created KMS key version. Google Cloud KMS key/key-ring containers cannot be
+deleted. Record actual command results before treating this reset as complete.
+
+The operator supplied successful deletion results for the Doha Cloud Run service,
+Cloud Tasks queue, Artifact Registry repository, secret `TPC-Accounts`, control
+bucket, both known Cloud Build source archives and both TPC service accounts. The
+build-time project log-writer and source-bucket viewer grants were removed. A
+second bucket removal returned 404 and a repeated service-account deletion failed
+after the first successful deletion; both are harmless repeat attempts. The KMS
+version-destroy command emitted no text, so verify its state is
+`DESTROY_SCHEDULED`. The local ignored `.env` resource references were cleared to
+prevent accidental use of deleted infrastructure.
+
 After checking these results, prepare resource creation and IAM configuration for
 review: a private control bucket, KMS key, OAuth secret, task queue, runtime/worker
 identities, container registry and Cloud Run service. Then configure the load

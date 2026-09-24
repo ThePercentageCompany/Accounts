@@ -1,0 +1,9 @@
+.gcloudignore
+.git
+node_modules
+.env
+.env.*
+coverage
+*.zip
+*client_secret*.json
+deploy-cloud-shell.sh

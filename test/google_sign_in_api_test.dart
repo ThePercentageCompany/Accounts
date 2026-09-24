@@ -69,7 +69,7 @@ void main() {
     expect(session.effectiveDisplayName, 'Local Demo User');
   });
 
-  test('GoogleSession signOut completely clears all local stored data in SharedPreferences', () async {
+  test('GoogleSession signOut retains local business data and clears active identity', () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('tpc_demo_v1', '{"company":{"name":"My Preserved Co"},"invoices":[]}');
     await prefs.setString('tpc_quotations_v1', '[{"id":"q1","title":"Web Dev"}]');
@@ -79,8 +79,11 @@ void main() {
     await session.useOfflineDemo();
     await session.signOut();
 
-    // Verify local storage and SharedPreferences are completely wiped
-    expect(prefs.getKeys(), isEmpty);
+    expect(prefs.getString('tpc_demo_v1'), contains('My Preserved Co'));
+    expect(prefs.getString('tpc_quotations_v1'), contains('q1'));
+    expect(prefs.getString('tpc_office_demo_v2'), contains('Alex'));
+    expect(session.workspace, isNull);
+    expect(session.authorized, isFalse);
   });
 
   test('SyncManager migrateAndSyncLocalDataToCloud migrates all local data into pending cloud sync queue', () async {
@@ -113,4 +116,3 @@ void main() {
     expect(sync.pendingQueue.isNotEmpty, isTrue);
   });
 }
-

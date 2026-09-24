@@ -113,7 +113,7 @@ class AccountingEngine {
           payroll['id']?.toString() ?? '',
           payroll['paidDate']?.toString().isNotEmpty == true
               ? payroll['paidDate'].toString()
-              : '${payroll['month']}-01',
+              : (payroll['date']?.toString() ?? '${payroll['month']}-01'),
           'Payroll',
           [
             _line(
@@ -192,6 +192,18 @@ class AccountingEngine {
       final cash = asset['paymentAccount']?.toString().toLowerCase() == 'cash';
       final contributed = asset['acquisitionType'] == 'shareholderContribution';
       final name = asset['name']?.toString() ?? 'Fixed Asset';
+      final accumulated = (asset['accumulatedDepreciationCents'] as num?)?.toInt() ?? 0;
+      // A stored depreciation journal is authoritative. Only bridge the legacy
+      // accumulated figure when there are no posted depreciation lines for it.
+      final assetId = asset['id']?.toString() ?? '';
+      final hasDepreciation = journals.any((j) => j['sourceType'] == 'depreciation' && j['sourceId'] == assetId);
+      if (accumulated > 0 && !hasDepreciation) {
+        add(_journal('depreciation', assetId, asset['depreciationDate']?.toString() ?? '',
+          'Accumulated depreciation - $name', [
+            _line('depreciation_expense', 'Depreciation Expense', 'Expense', debit: accumulated),
+            _line('accumulated_depreciation', 'Accumulated Depreciation', 'Asset', credit: accumulated),
+          ]));
+      }
       add(_journal(
           'asset_purchase',
           asset['id']?.toString() ?? '',

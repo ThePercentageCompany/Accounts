@@ -105,14 +105,14 @@ void main() {
       final lines = calc.generateProfitAndLoss(invoices: invoices, office: office, filter: filter);
 
       final revenueItem = lines.firstWhere((l) => l.label == 'Total Operating Revenue');
-      expect(revenueItem.amount, 10500.00); // AED 10,000 + 5% VAT = 10,500
+      expect(revenueItem.amount, 10000.00); // VAT is a liability, not operating revenue.
 
       final expenseItem = lines.firstWhere((l) => l.label == 'Total Operating Expenses');
-      // AED 2,000 (expense) + AED 3,000 (payroll) + AED 800 (depreciation) = AED 5,800
-      expect(expenseItem.amount, 5800.00);
+      // Accruals include the unpaid AED 1,500 bill as well as paid expenses.
+      expect(expenseItem.amount, 7300.00); // 2,000 + 1,500 + 3,000 + 800
 
       final netProfitItem = lines.firstWhere((l) => l.label.contains('NET OPERATING PROFIT'));
-      expect(netProfitItem.amount, 4700.00); // 10,500 - 5,800 = 4,700
+      expect(netProfitItem.amount, 2700.00); // 10,000 - 7,300
     });
 
     test('Receivables Aging correctly classifies unpaid balances into aging buckets', () {

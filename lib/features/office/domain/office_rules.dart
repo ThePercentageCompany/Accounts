@@ -437,37 +437,55 @@ Map<String, dynamic> calculateBalanceSheet(
   };
   var income = 0;
   var expenses = 0;
-  for (final line in AccountingEngine.postedLines(invoices, office, start: start, end: end)) {
+  var depreciation = 0;
+  final posted = AccountingEngine.postedLines(invoices, office, start: start, end: end);
+  final capitalRows = <String, Map<String, dynamic>>{};
+  for (final partner in office.shareholders.isNotEmpty ? office.shareholders : companyShareholders) {
+    final id = partner['id']?.toString() ?? '';
+    capitalRows[id] = {
+      'shareholderId': id, 'name': partner['name'] ?? 'Shareholder',
+      'ownershipPercentage': double.tryParse('${partner['ownershipPercentage'] ?? partner['sharesPercent'] ?? 0}') ?? 0,
+      'agreedCapitalCents': scaled('${partner['agreedCapital'] ?? partner['investedAmount'] ?? 0}', 2),
+      'cashInvestedCents': 0, 'assetContributionCents': 0,
+    };
+  }
+  for (final line in posted) {
     final debit = (line['debitCents'] as num?)?.toInt() ?? 0;
     final credit = (line['creditCents'] as num?)?.toInt() ?? 0;
     final group = line['accountGroup']?.toString() ?? '';
     if (group == 'Income') income += credit - debit;
     if (group == 'Expense') expenses += debit - credit;
+    if (line['accountId'] == 'depreciation_expense') depreciation += debit - credit;
+    if (group == 'Equity') {
+      final sourceType = line['sourceType'];
+      final sources = sourceType == 'capital' ? office.capitalTransactions :
+          sourceType == 'asset_purchase' ? office.assets : const <Map<String, dynamic>>[];
+      final source = sources.where((r) => r['id'] == line['sourceId']).firstOrNull;
+      final partnerId = source?['shareholderId']?.toString() ?? 'unassigned';
+      final row = capitalRows.putIfAbsent(partnerId, () => {
+        'shareholderId': partnerId, 'name': source?['shareholderName'] ?? 'Unassigned equity',
+        'ownershipPercentage': 0.0, 'agreedCapitalCents': 0,
+        'cashInvestedCents': 0, 'assetContributionCents': 0,
+      });
+      final asset = sourceType == 'asset_purchase' || source?['contributionType'] == 'asset';
+      final field = asset ? 'assetContributionCents' : 'cashInvestedCents';
+      row[field] = (row[field] as int) + credit - debit;
+    }
     if (!groups.containsKey(group)) continue;
     final amount = group == 'Asset' ? debit - credit : credit - debit;
     final name = line['accountName']?.toString() ?? 'Unknown account';
     final existing = groups[group]!.where((r) => r['name'] == name).firstOrNull;
     if (existing == null) {
-      groups[group]!.add({'name': name, 'amountCents': amount});
+      groups[group]!.add({'name': name, 'accountId': line['accountId'], 'amountCents': amount});
     } else {
       existing['amountCents'] = (existing['amountCents'] as int) + amount;
     }
   }
-  final currentAssets = groups['Asset']!
-      .where((r) =>
-          !(r['name'] as String).toLowerCase().contains('fixed') &&
-          !(r['name'] as String)
-              .toLowerCase()
-              .contains('accumulated depreciation'))
-      .toList();
+  bool isFixed(Map<String, dynamic> row) =>
+      '${row['accountId']}'.startsWith('fixed_asset') || row['accountId'] == 'accumulated_depreciation';
+  final currentAssets = groups['Asset']!.where((r) => !isFixed(r)).toList();
   final fixedAssets = groups['Asset']!
-      .where((r) =>
-          (r['name'] as String).toLowerCase().contains('fixed') ||
-          (r['name'] as String).toLowerCase().contains('equipment') ||
-          (r['name'] as String).toLowerCase().contains('asset') ||
-          (r['name'] as String)
-              .toLowerCase()
-              .contains('accumulated depreciation'))
+      .where(isFixed)
       .map((r) => {'category': r['name'], 'amountCents': r['amountCents']})
       .toList();
   final assets =
@@ -482,24 +500,34 @@ Map<String, dynamic> calculateBalanceSheet(
       currentAssets.fold<int>(0, (n, r) => n + (r['amountCents'] as int));
   final totalFixedAssets =
       fixedAssets.fold<int>(0, (n, r) => n + (r['amountCents'] as int));
+  for (final row in capitalRows.values) {
+    final invested = (row['cashInvestedCents'] as int) + (row['assetContributionCents'] as int);
+    row['totalInvestedCents'] = invested;
+    row['outstandingCapitalCents'] = ((row['agreedCapitalCents'] as int) - invested).clamp(0, 1 << 62);
+  }
+  int capitalTotal(String field) => capitalRows.values.fold(0, (sum, row) => sum + (row[field] as int));
+  int liabilityTotal(String id) => groups['Liability']!.where((r) => r['accountId'] == id)
+      .fold(0, (sum, row) => sum + (row['amountCents'] as int));
   return {
     'currentAssets': currentAssets,
     'fixedAssetsByCategory': fixedAssets,
     'liabilities': groups['Liability'],
-    'shareholderEquityRows': const <Map<String, dynamic>>[],
+    'shareholderEquityRows': capitalRows.values.toList(),
     'totalCurrentAssetsCents': totalCurrentAssets,
     'totalFixedAssetsCents': totalFixedAssets,
     'totalAssetsCents': assets,
     'totalLiabilitiesCents': liabilities,
-    'totalAgreedCapitalCents': contributedEquity,
-    'totalPaidInCashCapitalCents': contributedEquity,
-    'totalAssetContributionsCents': 0,
+    'totalAgreedCapitalCents': capitalTotal('agreedCapitalCents'),
+    'totalPaidInCashCapitalCents': capitalTotal('cashInvestedCents'),
+    'totalAssetContributionsCents': capitalTotal('assetContributionCents'),
     'totalShareholderEquityCents': contributedEquity,
-    'outstandingCapitalCents': 0,
+    'outstandingCapitalCents': capitalTotal('outstandingCapitalCents'),
+    'accountsPayableCents': liabilityTotal('accounts_payable'),
+    'payrollPayableCents': liabilityTotal('payroll_payable'),
     'currentYearNetProfitCents': profit,
     'operatingIncomeCents': income,
     'operatingExpensesCents': expenses,
-    'depreciationExpenseCents': 0,
+    'depreciationExpenseCents': depreciation,
     'totalEquityCents': equity,
     'totalLiabilitiesAndEquityCents': liabilities + equity,
     'isBalanced': assets == liabilities + equity,
