@@ -36,6 +36,12 @@ resources can incur charges even at low usage; zero cost is not guaranteed.
 
 Release-blocking work:
 
+Local UI update (2026-09-25): the new app opens shared workspaces, implements
+owner employee administration (including issue/reset/revoke), reads permission-
+checked employee records, and creates/edits customers through durable requests.
+Other financial tables are read-only. This does not complete accounting writes
+or migration, and does not establish live cookie/OAuth readiness.
+
 - Authoritative accounting totals, balanced journals, payment allocation limits,
   finalized-record controls and atomic multi-record business operations.
 - Live verification of private document delivery and registry linkage. Local

@@ -4,5 +4,6 @@
   "GOOGLE_SERVER_CLIENT_ID": "",
   "MASTER_ADMIN_EMAIL": "thepercentagecompany1@gmail.com",
   "EMPLOYEE_GATEWAY_URL": "",
+  "SAAS_API_ORIGIN": "",
   "EMPLOYEE_LOGIN_URL": ""
 }

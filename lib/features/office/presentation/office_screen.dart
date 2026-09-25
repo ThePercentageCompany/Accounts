@@ -14,7 +14,6 @@ import '../../../core/utils/form_validators.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/stat_card.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../../main.dart';
 import '../../billing/domain/totals.dart';
 import '../../billing/presentation/billing_cubit.dart';
 import '../../billing/presentation/editors.dart';
@@ -22,7 +21,6 @@ import '../../billing/presentation/screens.dart';
 import '../domain/office_documents.dart';
 import '../domain/office_rules.dart';
 import 'office_cubit.dart';
-import 'employee_access_dialog.dart';
 
 class InputSpec {
   final String key, label;
@@ -1251,15 +1249,9 @@ class _OfficeScreenState extends State<OfficeScreen> {
   }
 
   Future<void> showEmployeeAccessAndQr(Map<String, dynamic> employee) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => EmployeeAccessDialog(
-        employee: employee,
-        session: session,
-        cubit: context.read<OfficeCubit>(),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Employee invitations are managed in the shared company workspace.'),
+    ));
   }
 
   Future<void> attendance(

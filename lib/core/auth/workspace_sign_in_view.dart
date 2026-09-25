@@ -4,6 +4,7 @@ import '../widgets/brand_logo.dart';
 import 'employee_login_view.dart';
 import 'google_session.dart';
 import 'sign_in_button.dart';
+import '../saas/saas_api.dart';
 
 /// The entry screen keeps owner authorization separate from employee access.
 class WorkspaceSignInView extends StatelessWidget {
@@ -12,6 +13,10 @@ class WorkspaceSignInView extends StatelessWidget {
   final GoogleSession session;
 
   Future<void> _scan(BuildContext context) async {
+    if (configuredSaasApiOrigin.isNotEmpty) {
+      session.requestEmployeeLogin();
+      return;
+    }
     final value = await scanEmployeeQr(context);
     if (!context.mounted || value == null) return;
     if (!session.acceptEmployeeInvite(value)) {

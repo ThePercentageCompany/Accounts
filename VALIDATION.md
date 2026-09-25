@@ -173,3 +173,43 @@ Flutter tests are supplied for Freezed JSON serialization, invoice/PDF basics, C
   150% text scaling and employee-login navigation. Fixed the discovered narrow
   screen brand overflow. Browser Google button and live OAuth still need manual
   verification before deployment.
+# Shared employee authentication — 2026-09-25
+
+- Added a shared-backend employee login route selected by `SAAS_API_ORIGIN`;
+  the web build now forwards this setting. Legacy gateway fallback is retained
+  only when the shared API is not configured.
+- Eleven focused tests passed (API, session, employee login and app mounting).
+  Foreign-origin invitation links cannot submit credentials. Fresh invitations
+  always require a private code; successful login shows server-approved access.
+- Production configuration is not enabled. Company migration, backend-issued
+  invitations, same-site routing and employee accounting adapters remain required.
+  See `SHARED_EMPLOYEE_ACCESS.md` for the exact boundary of this implementation.
+# Shared-only entrypoint — 2026-09-25
+
+- Replaced `main.dart` startup/navigation with the shared backend flow; removed
+  GoogleSession initialization, Apps Script fallback and old workspace routes.
+- Extracted QR scanning into the SaaS module with trusted-origin invite checks.
+- Added `scripts/build-shared-web.sh`, delegated Vercel builds to it, and rewrote
+  `SETUP.md`. Builds require explicit API configuration and preview opt-in while
+  accounting integration is incomplete.
+- Full Flutter suite: **158 tests passed**. Targeted analyzer: no issues.
+- No production deployment performed. Legacy business source and local data are
+  preserved for migration; shared accounting and employee administration remain
+  incomplete. This source cutover is not a production-ready replacement yet.
+# Shared workspace integration — 2026-09-25
+
+- Owners can open a provisioned company, list/add/edit employees, assign roles
+  and sections, issue a QR with a separate one-time code, reset and revoke access.
+- Employee edits persist by owner/company before submission. Ambiguous writes
+  reuse their original request key after restart. Only confirmed rejections can
+  be explicitly discarded. Codes are never stored in preferences.
+- Owners and employees can read backend records; employee reads use only the
+  employee endpoints. No legacy local account data is loaded into this workspace.
+- Customer create/edit uses a durable queue with separate storage per operation;
+  only APPLIED results are acknowledged, including within HTTP 200 batches.
+- Eighteen focused tests passed across API/session, employee administration,
+  employee login, record scope, pending writes and app startup. Tests used
+  workspace-local temporary storage after the system temp disk filled up.
+- Financial writes remain read-only in the new workspace. Invoice/payment
+  transaction integration, payroll/ledger workflows, legacy migration and live
+  OAuth/tenant validation are still incomplete. Production restriction remains.

@@ -56,6 +56,13 @@ class _CompanySetupViewState extends State<CompanySetupView> {
             if (session.employee != null)
               const Text('Company setup is managed by your company owner.'),
             if (session.owner != null) ...[
+              if (session.ready)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Company setup is complete. Open your workspace to manage employee access and view company records.',
+                  ),
+                ),
               if (session.companies.isNotEmpty)
                 DropdownButton<String>(
                   isExpanded: true,

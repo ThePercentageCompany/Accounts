@@ -1,89 +1,45 @@
-# Setup and deployment
+# Shared-backend setup
 
-For the planned SaaS product, customers should only sign in, create their company,
-and invite employees. They must not deploy scripts or edit app configuration.
-See [SaaS onboarding](SAAS_ONBOARDING.md) for the phased implementation and
-[the shared backend guide](backend/cloud-run/README.md) for operator configuration.
+The application now starts with the Cloud Run API flow. There is no Apps Script,
+GoogleSession or direct-Sheets login fallback in `lib/main.dart`. Old local
+records are retained; this cutover does not migrate them into a new company.
 
-**Current implementation:** company signup creates Sheets and Drive storage,
-but employee login still uses a single-company Apps Script gateway. Phases 1–3 of
-the separate Cloud Run API implement owner authentication, company registration,
-offline Google connection, workspace provisioning, reconnect and employee access;
-it has not been deployed or connected to Flutter. The SaaS employee flow therefore
-is not available in the current Flutter UI yet. The instructions below are
-for the existing single-company deployment, not the intended customer signup flow.
+## Operator configuration
 
-## Existing single-company employee QR login setup
+1. Deploy the shared backend using `backend/cloud-run/deploy-cloud-shell.sh`.
+   This is the backend deployment script, not `backend/apps-script/Code.gs` or
+   `EmployeeGateway.gs`. Existing deployment configuration must be reviewed
+   before rerunning it; it currently names the planned API domain.
+2. Verify the trusted API origin, same-site browser cookies, OAuth callbacks,
+   Google connection, company provisioning and live tenant isolation.
+3. Set `SAAS_API_ORIGIN` to that verified HTTPS origin. No OAuth client secret
+   is compiled into Flutter. Do not put a Cloud Run URL in EMPLOYEE_GATEWAY_URL.
+4. For operator testing, set `SHARED_WORKSPACE_PREVIEW=1` and run:
 
-Employee login uses the company owner's Apps Script gateway. The QR identifies
-the employee; a separate private login code authenticates them. The gateway reads
-current permissions from the Employees sheet on each request. Employees do not
-need Google accounts or direct access to the company spreadsheet.
-
-## Deploy the employee gateway
-
-1. Open Apps Script using the Google account that owns the company workspace.
-2. Create a project and copy `backend/apps-script/EmployeeGateway.gs` into it.
-   Enable the manifest in project settings and copy
-   `backend/apps-script/appsscript.json`. The `script.external_request` scope is
-   required to verify the owner's Google identity when issuing private codes.
-3. In **Project settings > Script properties**, set:
-   - `SPREADSHEET_ID`: the existing company spreadsheet ID.
-   - `DRIVE_FOLDER_ID`: the company Drive root folder ID.
-   - `OWNER_EMAIL`: the deploying owner's Google email address.
-4. Use **Deploy > New deployment > Web app**, execute as **Me**, and allow access
-   to **Anyone**. The gateway itself authenticates every employee request. Copy
-   the deployment URL ending in `/exec`; do not use the editor or `/dev` URL.
-   See [Google's web app deployment instructions](https://developers.google.com/apps-script/guides/web).
-5. Use the spreadsheet already created by this Flutter app, with its normal
-   column headers. Do not run the legacy `Code.gs` setup against it: that code
-   uses a different JSON-row schema. The gateway creates its private
-   `EmployeeAccess` sheet automatically. Keep the spreadsheet owner-only.
-
-For updates, edit the existing deployment and select a new version so the `/exec`
-URL remains unchanged. Authorize any newly added scopes as the owner.
-
-## Configure and rebuild the app
-
-Fill these fields in `config/google.web.json` alongside the existing Google OAuth
-settings:
-
-```json
-{
-  "EMPLOYEE_GATEWAY_URL": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
-  "EMPLOYEE_LOGIN_URL": "https://YOUR_APP_HOST/"
-}
+```bash
+bash scripts/build-shared-web.sh
 ```
 
-`EMPLOYEE_LOGIN_URL` is the deployed app website, not the gateway URL. When empty,
-web builds use the current HTTPS site (or localhost for development); native
-builds use the `tpc://employee-login` app link. Set the HTTPS website explicitly
-when generating QR codes from a native app for people signing in through a browser.
+The Vercel build delegates to the same script. The script intentionally blocks
+an ordinary production build until the remaining workspace integration is
+finished. Do not deploy this preview over a working accounting site.
 
-```powershell
-flutter pub get
-flutter build web --dart-define-from-file=config/google.web.json
-```
+## New flow
 
-For Vercel, set `EMPLOYEE_GATEWAY_URL` and `EMPLOYEE_LOGIN_URL` in the project's
-environment variables and redeploy. `vercel-build.sh` passes both into Flutter.
-The employee device and owner's app must use the same configured gateway.
-An empty gateway setting deliberately disables employee access setup and login.
+- Owner: Google sign-in through the backend, create/select company, connect
+  Google storage, refresh/retry provisioning.
+- Employee: scan/paste a backend-issued invitation, enter a separate private
+  code, receive a server-verified identity and assigned sections.
+- Missing API configuration: display an operator configuration error rather
+  than reverting to legacy authentication.
 
-## Issue employee access
+## Work still required before rollout
 
-1. Sign in as the company owner, open **Employees > Access & QR Login**.
-2. Choose the employee's role and sections. Save permissions and generate access
-   while online; the employee record must reach the spreadsheet first.
-3. Give the employee the new QR/login link and their separately displayed private
-   login code. This is not their staff number. Copy the code before closing;
-   stored credentials cannot be read back.
-4. The employee opens **Employee Login**, scans the QR or pastes the login link,
-   then enters the private code. Camera scanning in a browser needs HTTPS or
-   localhost and camera permission.
-5. If the code is lost, use **Reset login code**. This invalidates the old code
-   and sessions. Reissue QR codes generated before this fix.
+Accounting repositories, offline migration and the employee management screen
+must be connected to the shared API. Provisioned companies currently show setup
+status, and authenticated employees show their assigned access; these are not
+complete accounting workspaces. Legacy invitations need reissuing through the
+backend after verified company migration. No customer should deploy scripts.
 
-Verify with a staff account: only assigned sections should appear; changing
-permissions should take effect on the next online sync. Real camera scanning and
-live Apps Script access require the deployed website and gateway.
+Retained legacy source and tests are migration references, not active routes.
+Cloud resources and the live website have not been changed by this local cutover.

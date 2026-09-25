@@ -209,6 +209,51 @@ class SaasApi {
   Future<Map<String, dynamic>> employeeMe() => _json('GET', '/v1/employee/me');
   Future<Map<String, dynamic>> employeeLogout() =>
       _json('POST', '/v1/employee/logout');
+  Future<Map<String, dynamic>> employees(String companyId) =>
+      _json('GET', '/v1/companies/${_id(companyId)}/employees');
+  Future<Map<String, dynamic>> saveEmployee(
+    String companyId,
+    String? employeeId,
+    Map<String, Object?> values,
+    String operationId,
+  ) => _json(
+    employeeId == null ? 'POST' : 'PATCH',
+    '/v1/companies/${_id(companyId)}/employees${employeeId == null ? '' : '/${_id(employeeId)}'}',
+    data: values,
+    operationId: operationId,
+  );
+  Future<Map<String, dynamic>> employeeAccess(
+    String companyId,
+    String employeeId,
+    String action, {
+    String? operationId,
+  }) {
+    if (!const ['issue', 'reset', 'revoke'].contains(action)) {
+      throw const SaasApiException('INVALID_ACTION', 'Invalid access action.');
+    }
+    return _json(
+      'POST',
+      '/v1/companies/${_id(companyId)}/employees/${_id(employeeId)}/access/$action',
+      operationId: operationId,
+    );
+  }
+
+  Future<Map<String, dynamic>> records(
+    String companyId,
+    String table, {
+    bool employee = false,
+  }) {
+    if (!RegExp(r'^[A-Za-z]+$').hasMatch(table)) {
+      throw const SaasApiException('INVALID_TABLE', 'Invalid record section.');
+    }
+    return _json(
+      'GET',
+      employee
+          ? '/v1/employee/records/$table'
+          : '/v1/companies/${_id(companyId)}/records/$table',
+    );
+  }
+
   Future<Map<String, dynamic>> sync(
     String companyId,
     List<Map<String, Object?>> operations,
