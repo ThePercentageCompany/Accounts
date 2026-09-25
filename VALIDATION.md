@@ -163,3 +163,13 @@ Flutter tests are supplied for Freezed JSON serialization, invoice/PDF basics, C
   These are not enabled in the production entrypoint yet. Accounting repository
   migration, browser OAuth/cookies and live two-company checks remain required.
 - No cloud resources, frontend deployment or DNS changes were made in this step.
+# Sign-in redesign — 2026-09-25
+
+- Replaced the production entry screen's old login card with a responsive
+  desktop/mobile layout and separate owner and employee access sections.
+- Existing Google authorization, account switching, employee login and QR
+  handlers remain connected. This does not switch accounting to the SaaS API.
+- Three focused widget tests passed, including 375px and 1200px layouts with
+  150% text scaling and employee-login navigation. Fixed the discovered narrow
+  screen brand overflow. Browser Google button and live OAuth still need manual
+  verification before deployment.
