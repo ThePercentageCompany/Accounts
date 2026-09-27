@@ -213,3 +213,89 @@ Flutter tests are supplied for Freezed JSON serialization, invoice/PDF basics, C
 - Financial writes remain read-only in the new workspace. Invoice/payment
   transaction integration, payroll/ledger workflows, legacy migration and live
   OAuth/tenant validation are still incomplete. Production restriction remains.
+# Income and expense integration — 2026-09-26
+
+- Owner income/expense create and edit forms use the shared backend and durable
+  write queue. Employee record views remain read-only.
+- The API calculates tax/total in integer minor units with half-up rounding,
+  validates amount precision, dates and payment status, and recalculates partial
+  updates. Incorrect client-supplied totals are rejected before writing.
+- Confirmed rejected edits can be explicitly discarded and refreshed. An unknown
+  network outcome cannot be discarded through this recovery action.
+- Backend: 113-test suite passed before adding the integration case; all 16
+  business/policy tests passed with that case included. Five targeted Flutter
+  form/queue/workspace tests passed; targeted analyzer found no issues. A debug
+  web compilation completed at `build/saas-test-web` (not a deployed build).
+- These are income/expense records, not automatic posted journal transactions.
+  Invoice/payment, payroll/ledger integration and live rollout remain incomplete.
+# Financial period controls — 2026-09-26
+
+- Owners can create/edit open periods and explicitly confirm closing them.
+- Server posting checks reject closed-period dates and invalid journal dates.
+  Periods cannot overlap; drafts prevent closing; journals prevent resizing or
+  deleting their period. Closing metadata is server assigned.
+- All 119 backend tests and four targeted Flutter tests passed.
+- Automatic invoice/income/expense ledger posting, reversals, account validation
+  and live migration remain incomplete. This is a local change, not deployment.
+# Draft journal uniqueness validation — 26 September 2026
+
+Draft line creates and edits reject a number already used by another active line
+in the same company and journal, including moves between drafts. Self updates,
+other companies/journals and deleted lines do not cause false conflicts. Posting
+retains its independent uniqueness check. Full backend suite: 121 passed using
+`npm test -- --test-isolation=none`. This change is local, not deployed.
+# Atomic business writer validation — 26 September 2026
+
+The internal BusinessSheets writer now supports bounded multi-record writes in
+one spreadsheets.batchUpdate request. Single-record writes use the same path.
+Tests verify typed literal values, one growth operation per sheet, rejection of
+duplicate row targets and invalid members before submission, tenant identity,
+capacity limits, and pre-submission versus uncertain network failures.
+Full backend suite: 124 passed (`npm test -- --test-isolation=none`). These tests
+use substitute Google adapters; source-to-ledger posting is not yet connected
+and no cloud deployment was performed.
+# Legacy backend removal and source protection — 26 September 2026
+
+Removed the five retired Apps Script files and their two dedicated test files.
+Historical test results below refer to those files before removal. Cloud Run is
+the active backend. Shared ledger/cash date validation now uses one implementation.
+Linked income/expense updates and deletes fail before submission and release the
+unsubmitted reservation. Automatic posting remains incomplete.
+
+Validation: 126 backend tests passed; the business integration suite passed again
+after adding linked-source rejection assertions; two Flutter record-queue tests
+passed. No cloud resources or customer data were changed.
+# Explicit cash ledger posting — 26 September 2026
+
+Owner sync accepts post operations only for Income/Expenses, without client
+values. Source and generated journals/lines commit in one Sheets batch. Tests
+cover income/expense balancing, accrual/payment dates, unpaid entries, closed
+payment periods, duplicate requests, lost responses, linked-source locking,
+invalid payment details and tenant denial. Full backend suite: 130 passed.
+Flutter record-queue/cash-editor tests: five passed. Targeted analyzer: no issues.
+Debug web build with the public production-origin configuration succeeded in
+`build/saas-test-web`. This is a local operator preview, not a production deployment.
+# Later cash payment validation — 27 September 2026
+
+Owners can record a full later payment against a posted unpaid income/expense.
+The source and settlement journal commit together; accrual remains unchanged.
+The backend rejects duplicate payments, mismatched balances/totals, unposted
+sources, closed payment dates and attempts to change the amount. Lost-response
+retries reconcile the existing marker. Full backend suite: 134 passed. Four
+focused Flutter payment/queue tests passed. Local changes only, not deployed.
+# Unpaid cash reversal — 27 September 2026
+
+Added owner reversal of unpaid posted income/expense. Original source financial
+fields and journals remain immutable; opposite entries and the source version
+commit atomically. Duplicate/retried reversal, payment after reversal, closed or
+backdated reversal, paid/unposted sources and empty reasons are covered by tests.
+Full backend suite: 137 passed. Five focused Flutter reversal/payment/queue tests
+and targeted static analysis passed. Not deployed.
+# Owner trial balance — 27 September 2026
+
+Implemented the scoped trial-balance endpoint and owner Reports screen. Exact
+integer minor-unit aggregation returns decimal strings. Cutoffs, cancellation
+by reversal, malformed ledgers, tenant denial, session revocation, pending writes
+and HTTP query/caching are covered. Full backend suite: 143 passed. Report widget
+test passed, including rejection of stale totals after a failed refresh. Local
+implementation only; no production deployment or live accounting certification.

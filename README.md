@@ -118,7 +118,7 @@ tpc_invoice/
 │   │       └── presentation/# Unified office, payroll & financial screens
 │   └── main.dart           # Application entrypoint & navigation router
 ├── backend/
-│   └── apps-script/        # Google Apps Script code for Sheets schema
+│   └── cloud-run/          # Shared API, provisioning and employee access
 ├── config/                 # Google OAuth client configurations (web/android/ios)
 ├── test/                   # 31+ unit and widget test suites
 └── web/                    # Web entry point, manifest, favicons, logos
@@ -184,4 +184,3 @@ The web application is configured for deployment on **Vercel** or any static/clo
 
 © 2026 **The Percentage Company FZ LLC**. All rights reserved.  
 *Internal business software developed exclusively for company accounting, payroll, and invoicing operations.*
-

@@ -8,6 +8,51 @@ import 'package:tpc_invoice/core/saas/record_write_queue.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'posting persists its identity without client values and retains rejected requests',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((r) async {
+          final op = jsonDecode(r.body)['operations'][0];
+          expect(op['action'], 'post');
+          expect(op.containsKey('values'), isFalse);
+          return http.Response(
+            jsonEncode({
+              'results': [
+                {
+                  'operationId': op['operationId'],
+                  'status': 'FAILED',
+                  'error': {
+                    'code': 'PERIOD_CLOSED',
+                    'message': 'Period closed.',
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+      await queue.enqueue(
+        'Income',
+        'post',
+        {},
+        recordId: 'r' * 43,
+        expectedVersion: 1,
+      );
+      final before = queue.pending.single;
+      await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
+      expect(queue.pending.single, before);
+      expect(queue.canDiscardRejected, isTrue);
+      await queue.discardRejected();
+      expect(queue.pending, isEmpty);
+      api.close();
+    },
+  );
   test('partial HTTP success removes only applied operations', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -57,6 +102,9 @@ void main() {
     }
     await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
     expect(queue.pending, [ops[1]]);
+    expect(queue.canDiscardRejected, isTrue);
+    await queue.discardRejected();
+    expect(queue.pending, isEmpty);
     expect(
       RecordWriteQueue(api, prefs, 'other-owner', 'c' * 43).pending,
       isEmpty,
@@ -93,6 +141,11 @@ void main() {
       'name': 'Customer',
     }, expectedVersion: 0);
     await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
+    expect(queue.canDiscardRejected, isFalse);
+    await expectLater(
+      queue.discardRejected(),
+      throwsA(isA<SaasApiException>()),
+    );
     final restored = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
     await restored.flush();
     expect(bodies.first, bodies.last);

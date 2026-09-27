@@ -4,8 +4,26 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/v1/:path*",
+      "destination": "https://tpc-accounts-api-110697421185.me-central1.run.app/v1/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://tpc-accounts-api-110697421185.me-central1.run.app/health"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/v1/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "CDN-Cache-Control", "value": "no-store" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+      ]
     }
   ]
 }

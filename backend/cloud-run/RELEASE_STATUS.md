@@ -2,6 +2,10 @@
 
 Status: NOT READY for customer production use.
 
+For the consolidated workflow and current module checklist, see
+[Software workflow and delivery status](../../SOFTWARE_WORKFLOW_AND_STATUS.md)
+(26 September 2026). Earlier deployment and test results below are historical.
+
 Confirmed target: accounts-508118; app https://accounts.thepercentagecompany.com.
 The operator deployed the replacement on September 24, 2026: Cloud Build
 `6a6f871b-c52c-474d-9bea-adfa3fe60a4a` succeeded and Cloud Run revision
@@ -20,11 +24,11 @@ Locally implemented: owner identity and registration, Google provisioning,
 employee login/access, owner record CRUD, ordered batch upload, deletion markers,
 business/employee references, bounded field types, draft/posted journal guards,
 private document upload/download, and same-record document attachment checks.
-The latest backend run has 108 passing test runner entries using substitute cloud
-adapters. The Flutter SaaS transport and session controller have eight passing
-tests. A reusable company setup view supports owner sign-in, company selection,
-registration recovery, Google connection and setup retries. These components are
-not yet connected to the production entrypoint, repositories or offline queue.
+The latest recorded backend run has 143 passing test runner entries using
+substitute cloud adapters. The shared-only Flutter entrypoint connects owner
+setup, employee authentication/administration and shared record screens. Customer,
+income/expense and financial-period owner writes are connected; other financial
+write workflows and complete offline/migration integration remain unfinished.
 Registration request keys persist per owner before sending, so a lost response
 can be retried after restarting without requesting a second company.
 
@@ -36,11 +40,29 @@ resources can incur charges even at low usage; zero cost is not guaranteed.
 
 Release-blocking work:
 
+Update 2026-09-26: financial period management is connected to owner forms.
+Backend rules validate dates, prevent overlapping periods, stamp closing identity,
+block closing with drafts, and prevent journal posting in closed periods. Closed
+period reopening and full source-transaction ledger posting remain unimplemented.
+
 Local UI update (2026-09-25): the new app opens shared workspaces, implements
 owner employee administration (including issue/reset/revoke), reads permission-
 checked employee records, and creates/edits customers through durable requests.
 Other financial tables are read-only. This does not complete accounting writes
 or migration, and does not establish live cookie/OAuth readiness.
+
+Update 2026-09-26: owner income/expense create/edit forms now use the durable
+record queue. Backend entry validation calculates tax/totals and rejects invalid
+dates, payment states and inconsistent supplied totals. Confirmed rejected edits
+can be explicitly discarded; uncertain network outcomes remain retryable.
+An explicit owner Post to ledger action now generates balanced income/expense
+accrual and optional payment journals atomically with the source version. Source
+records then lock. Later full payments are supported through a separate atomic
+settlement action. Unpaid entries can be reversed with an opposite journal while
+preserving original history. Partial payments, paid-entry refunds, configurable accounts and
+tax treatment remain unfinished. Other financial writes remain blocked.
+Deploy the updated backend policy before enabling these frontend entry forms:
+the earlier deployed generic-record API does not calculate these totals.
 
 - Authoritative accounting totals, balanced journals, payment allocation limits,
   finalized-record controls and atomic multi-record business operations.

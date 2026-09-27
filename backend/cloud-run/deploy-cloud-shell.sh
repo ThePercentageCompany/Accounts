@@ -108,7 +108,7 @@ DIGEST="$(gcloud artifacts docker images describe "$IMAGE" --project="$PROJECT" 
 cat >"$TASK_TEMP/env.yaml" <<YAML
 NODE_ENV: production
 APP_ORIGIN: https://accounts.thepercentagecompany.com
-API_ORIGIN: https://api.accounts.thepercentagecompany.com
+API_ORIGIN: https://accounts.thepercentagecompany.com
 GOOGLE_OAUTH_CLIENT_ID: $CLIENT
 GOOGLE_OAUTH_SECRET_VERSION: projects/$PROJECT/secrets/$SECRET/versions/$VERSION
 CONTROL_BUCKET: $CONTROL
@@ -134,5 +134,5 @@ assert health.get('status')=='ok' and health.get('phase')==4, 'Unexpected API he
 print('BACKEND_HEALTH_OK')
 PY
 echo "Service: $URL"
-echo 'Next: configure and verify api.accounts.thepercentagecompany.com, OAuth redirects and real tenant tests.'
+echo 'Next: verify website /v1 proxy routing, same-origin OAuth redirects and real tenant tests.'
 echo 'The Flutter frontend has not been changed by this deployment.'

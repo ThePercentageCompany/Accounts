@@ -14,6 +14,23 @@ async function running(t, options = {}) {
   return { ...f, logs, request: (path, options) => fetch(base + path, options) };
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
+
+test('trial-balance HTTP route validates date query and disables caching', async t => {
+  let calls = 0;
+  const id = 'c'.repeat(43);
+  const f = await running(t, { business: { async trialBalance(token, companyId, asOf) {
+    calls++; assert.equal(companyId, id); assert.equal(asOf, '2026-09-27');
+    return { accounts: [], totalDebit: '0.00', totalCredit: '0.00' };
+  } } });
+  const path = `/v1/companies/${id}/reports/trial-balance`;
+  for (const query of ['', '?asOf=a&asOf=b', '?asOf=2026-09-27&other=x']) {
+    assert.equal((await f.request(path + query)).status, 400);
+  }
+  assert.equal(calls, 0);
+  const response = await f.request(path + '?asOf=2026-09-27');
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(calls, 1);
+});
 test('public health uses /health and requires no session', async t => {
   const f = await running(t, { business: {} });
   const response = await f.request('/health');

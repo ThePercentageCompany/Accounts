@@ -22,6 +22,237 @@ async function setup() {
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
 
+async function cashFixture(table = 'Income', paid = true) {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  for (const name of [table, 'Journals', 'JournalLines', 'FinancialPeriods']) f.data[name] = [];
+  f.batchCount = 0;
+  f.sheets.writeBatch = async (id, changes) => {
+    f.batchCount++;
+    for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values);
+  };
+  const created = await f.business.mutate(f.token, f.companyId, table, null, 'create', {
+    expectedVersion: 0, values: { date: '2026-09-26', description: 'Service', amount: 10.1,
+      taxRate: 5, paymentStatus: paid ? 'PAID' : 'UNPAID', paidDate: paid ? '2026-09-27' : '', account: 'Bank' },
+  }, 'cash_create_fixture_01');
+  f.id = created.recordId;
+  f.post = (key = 'cash_post_fixture_01') => f.business.sync(f.token, f.companyId, {
+    operations: [{ operationId: key, table, action: 'post', recordId: f.id, expectedVersion: 1 }],
+  });
+  return f;
+}
+
+test('owner trial balance denies foreign owners and revoked sessions after reads', async () => {
+  const f = await cashFixture(); await f.post();
+  const report = await f.business.trialBalance(f.token, f.companyId, '2026-09-27');
+  assert.equal(report.journalCount, 2); assert.equal(report.totalDebit, report.totalCredit);
+  const other = await f.login('other');
+  await assert.rejects(f.business.trialBalance(other, f.companyId, '2026-09-27'), e => e.code === 'COMPANY_NOT_FOUND');
+  await f.registry.transact(state => { state.companies[f.companyId].businessWrite = 'pending'; });
+  await assert.rejects(f.business.trialBalance(f.token, f.companyId, '2026-09-27'), e => e.code === 'BUSINESS_WRITE_PENDING');
+  await f.registry.transact(state => { delete state.companies[f.companyId].businessWrite; });
+  const read = f.sheets.read;
+  f.sheets.read = async (...args) => { const result = await read(...args); await f.service.logout(f.token); return result; };
+  await assert.rejects(f.business.trialBalance(f.token, f.companyId, '2026-09-27'), e => e.code === 'UNAUTHORIZED');
+});
+
+function pay(f, table = 'Income', values = {}, version = 2, key = 'later_payment_key_01') {
+  return f.business.sync(f.token, f.companyId, { operations: [{ operationId: key, table,
+    action: 'pay', recordId: f.id, expectedVersion: version,
+    values: { paidDate: '2026-10-01', account: 'Cash', reference: 'Payment', ...values } }] });
+}
+
+function reverse(f, table = 'Income', values = {}, version = 2, key = 'reverse_cash_key_001') {
+  return f.business.sync(f.token, f.companyId, { operations: [{ operationId: key, table,
+    action: 'reverse', recordId: f.id, expectedVersion: version,
+    values: { date: '2026-10-01', description: 'Incorrect entry', ...values } }] });
+}
+
+test('unpaid reversal preserves history and negates each account without changing source fields', async () => {
+  for (const table of ['Income', 'Expenses']) {
+    const f = await cashFixture(table, false); await f.post();
+    const original = structuredClone(f.data.Journals[0]), source = structuredClone(f.data[table][0]);
+    f.data.FinancialPeriods.push({ companyId: f.companyId, startDate: '2026-09-01', endDate: '2026-09-30', status: 'CLOSED' });
+    assert.equal((await reverse(f, table)).results[0].status, 'APPLIED');
+    assert.deepEqual(f.data.Journals[0], original);
+    assert.equal(f.data.Journals[1].sourceType, `${table}Reversal`);
+    assert.equal(f.data.Journals[1].date, '2026-10-01');
+    for (const field of ['date', 'description', 'amount', 'total', 'paymentStatus']) assert.equal(f.data[table][0][field], source[field]);
+    assert.equal((await f.business.list(f.token, f.companyId, table))[0].ledgerStatus, 'REVERSED');
+    const balances = {};
+    for (const line of f.data.JournalLines) balances[line.accountId] = (balances[line.accountId] || 0) + Math.round(line.debit * 100) - Math.round(line.credit * 100);
+    assert.ok(Object.values(balances).every(n => n === 0));
+    assert.equal((await reverse(f, table)).results[0].status, 'APPLIED');
+    assert.equal((await reverse(f, table, {}, 3, 'duplicate_reverse_key')).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
+    assert.equal((await pay(f, table, {}, 3)).results[0].error.code, 'PAYMENT_NOT_AVAILABLE');
+    assert.equal(f.batchCount, 2);
+  }
+});
+
+test('reversals reject paid/unposted entries and invalid/closed dates before any write', async () => {
+  const paid = await cashFixture(); await paid.post();
+  assert.equal((await reverse(paid)).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
+  const f = await cashFixture('Income', false);
+  assert.equal((await reverse(f, 'Income', {}, 1)).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
+  await f.post();
+  assert.equal((await reverse(f, 'Income', { date: '2026-09-01' })).results[0].error.code, 'INVALID_REVERSAL');
+  assert.equal((await reverse(f, 'Income', { description: '' })).results[0].error.code, 'INVALID_REVERSAL');
+  f.data.FinancialPeriods.push({ companyId: f.companyId, startDate: '2026-10-01', endDate: '2026-10-31', status: 'CLOSED' });
+  assert.equal((await reverse(f)).results[0].error.code, 'PERIOD_CLOSED');
+  assert.equal(f.batchCount, 1);
+});
+
+test('reversal retry after lost response cannot append a second reversal', async () => {
+  const f = await cashFixture('Income', false); await f.post();
+  const write = f.sheets.writeBatch;
+  f.sheets.writeBatch = async (...args) => { await write(...args); throw new Error('lost response'); };
+  assert.equal((await reverse(f)).results[0].status, 'FAILED');
+  assert.equal((await reverse(f)).results[0].status, 'APPLIED');
+  assert.equal(f.batchCount, 2); assert.equal(f.data.Journals.length, 2);
+});
+
+test('later full payment settles posted unpaid entries without repeating accrual', async () => {
+  for (const table of ['Income', 'Expenses']) {
+    const f = await cashFixture(table, false); await f.post();
+    const original = structuredClone(f.data.Journals[0]);
+    f.data.FinancialPeriods.push({ companyId: f.companyId, startDate: '2026-09-01', endDate: '2026-09-30', status: 'CLOSED' });
+    assert.equal((await pay(f, table)).results[0].status, 'APPLIED');
+    assert.deepEqual(f.data.Journals[0], original);
+    assert.equal(f.data.Journals.length, 2);
+    assert.equal(f.data.Journals[1].sourceType, `${table}Payment`);
+    assert.equal(f.data.Journals[1].date, '2026-10-01');
+    assert.equal(f.data[table][0].paymentStatus, 'PAID');
+    assert.equal(f.data[table][0].recordVersion, 3);
+    const lines = f.data.JournalLines.filter(l => l.journalId === f.data.Journals[1].recordId);
+    assert.equal(lines.length, 2);
+    assert.equal(lines.reduce((sum, l) => sum + l.debit, 0), 10.61);
+    assert.equal(lines.reduce((sum, l) => sum + l.credit, 0), 10.61);
+    await pay(f, table);
+    assert.equal(f.batchCount, 2);
+    assert.equal((await pay(f, table, {}, 3, 'duplicate_payment_key_1')).results[0].error.code, 'PAYMENT_NOT_AVAILABLE');
+  }
+});
+
+test('later payment rejects unposted entries, changed amounts and closed payment dates', async () => {
+  const unposted = await cashFixture('Income', false);
+  assert.equal((await pay(unposted, 'Income', {}, 1)).results[0].error.code, 'PAYMENT_NOT_AVAILABLE');
+  const f = await cashFixture('Income', false); await f.post();
+  assert.equal((await pay(f, 'Income', { amount: 0.01 })).results[0].error.code, 'INVALID_PAYMENT');
+  f.data.FinancialPeriods.push({ companyId: f.companyId, startDate: '2026-10-01', endDate: '2026-10-31', status: 'CLOSED' });
+  assert.equal((await pay(f)).results[0].error.code, 'PERIOD_CLOSED');
+  assert.equal(f.batchCount, 1);
+  assert.equal(f.data.Income[0].paymentStatus, 'UNPAID');
+});
+
+test('lost later-payment response retries without a duplicate payment journal', async () => {
+  const f = await cashFixture('Expenses', false); await f.post();
+  const write = f.sheets.writeBatch;
+  f.sheets.writeBatch = async (...args) => { await write(...args); throw new Error('lost'); };
+  assert.equal((await pay(f, 'Expenses')).results[0].status, 'FAILED');
+  assert.equal((await pay(f, 'Expenses')).results[0].status, 'APPLIED');
+  assert.equal(f.batchCount, 2); assert.equal(f.data.Journals.length, 2);
+});
+
+test('mismatched control balances and duplicate accruals cannot be settled', async () => {
+  for (const change of ['control', 'duplicate', 'total']) {
+    const f = await cashFixture('Income', false); await f.post();
+    if (change === 'control') f.data.JournalLines[0].debit = 1;
+    if (change === 'duplicate') f.data.Journals.push({ ...f.data.Journals[0], recordId: 'duplicate' });
+    if (change === 'total') f.data.Income[0].total = 1;
+    assert.equal((await pay(f)).results[0].error.code, 'PAYMENT_NOT_AVAILABLE');
+    assert.equal(f.batchCount, 1);
+  }
+});
+
+test('explicit cash posting writes balanced accrual and payment journals with source in one batch', async () => {
+  for (const table of ['Income', 'Expenses']) {
+    const f = await cashFixture(table);
+    assert.equal((await f.post()).results[0].status, 'APPLIED');
+    assert.equal(f.batchCount, 1);
+    assert.equal(f.data[table][0].recordVersion, 2);
+    assert.equal((await f.business.list(f.token, f.companyId, table))[0].ledgerStatus, 'LINKED');
+    assert.equal(f.data.Journals.length, 2);
+    assert.deepEqual(f.data.Journals.map(j => j.date), ['2026-09-26', '2026-09-27']);
+    for (const journal of f.data.Journals) {
+      assert.equal(journal.status, 'POSTED');
+      const lines = f.data.JournalLines.filter(l => l.journalId === journal.recordId);
+      const cents = field => lines.reduce((sum, l) => sum + Math.round(l[field] * 100), 0);
+      assert.equal(cents('debit'), 1061); assert.equal(cents('credit'), 1061);
+      assert.ok(lines.every(l => l.companyId === f.companyId));
+    }
+    assert.equal((await f.post()).results[0].status, 'APPLIED');
+    assert.equal(f.batchCount, 1);
+    assert.equal((await f.post('different_post_key_001')).results[0].error.code, 'VERSION_CONFLICT');
+    await assert.rejects(f.business.mutate(f.token, f.companyId, table, f.id, 'update',
+      { expectedVersion: 2, values: { amount: 20 } }, 'posted_source_edit_001'), e => e.code === 'CASH_ENTRY_LINKED');
+  }
+});
+
+test('unpaid entries post only accrual; closed payment periods reject the whole operation', async () => {
+  const unpaid = await cashFixture('Expenses', false);
+  assert.equal((await unpaid.post()).results[0].status, 'APPLIED');
+  assert.equal(unpaid.data.Journals.length, 1);
+  const paid = await cashFixture();
+  paid.data.FinancialPeriods.push({ companyId: paid.companyId, startDate: '2026-09-27', endDate: '2026-09-27', status: 'CLOSED' });
+  assert.equal((await paid.post()).results[0].error.code, 'PERIOD_CLOSED');
+  assert.equal(paid.batchCount, 0);
+  assert.equal(paid.data.Income[0].recordVersion, 1);
+});
+
+test('lost atomic posting response reconciles source marker without a second journal', async () => {
+  const f = await cashFixture();
+  const write = f.sheets.writeBatch;
+  f.sheets.writeBatch = async (...args) => { await write(...args); throw new Error('response lost'); };
+  assert.equal((await f.post()).results[0].status, 'FAILED');
+  assert.equal((await f.post()).results[0].status, 'APPLIED');
+  assert.equal(f.batchCount, 1); assert.equal(f.data.Journals.length, 2);
+});
+
+test('posting rejects invalid payment details, forged values and unauthorized tenants', async () => {
+  for (const change of [{ account: 'unknown' }, { paidDate: '2026-09-25' }]) {
+    const f = await cashFixture(); Object.assign(f.data.Income[0], change);
+    assert.equal((await f.post()).results[0].status, 'FAILED');
+    assert.equal(f.batchCount, 0);
+  }
+  const f = await cashFixture(), other = await f.login('unrelated');
+  await assert.rejects(f.business.mutate(other, f.companyId, 'Income', f.id, 'post',
+    { expectedVersion: 1 }, 'foreign_post_key_001'), e => e.code === 'COMPANY_NOT_FOUND');
+  await assert.rejects(f.business.sync(f.token, f.companyId, { operations: [{ operationId: 'forged_post_values_1',
+    table: 'Income', action: 'post', recordId: f.id, expectedVersion: 1, values: { total: 0 } }] }), e => e.code === 'INVALID_BATCH');
+  assert.equal(f.batchCount, 0);
+});
+
+test('expense writes persist server totals and idempotent retries do not duplicate rows', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.data.Expenses = [];
+  const input = { expectedVersion: 0, values: { date: '2026-09-26', description: 'Supplies',
+    amount: 10.1, taxRate: 5, paymentStatus: 'UNPAID' } };
+  const created = await f.business.mutate(f.token, f.companyId, 'Expenses', null, 'create', input, 'expense_create_policy_01');
+  assert.equal(f.data.Expenses[0].taxAmount, 0.51);
+  assert.equal(f.data.Expenses[0].total, 10.61);
+  await f.business.mutate(f.token, f.companyId, 'Expenses', null, 'create', input, 'expense_create_policy_01');
+  assert.equal(f.data.Expenses.length, 1);
+  f.data.Journals = [{ companyId: f.companyId, sourceType: 'Expenses', sourceId: created.recordId, status: 'POSTED' }];
+  for (const action of ['update', 'delete']) {
+    await assert.rejects(f.business.mutate(f.token, f.companyId, 'Expenses', created.recordId, action,
+      { expectedVersion: 1, ...(action === 'update' ? { values: { amount: 20 } } : {}) }, `expense_linked_${action}_01`),
+    e => e.code === 'CASH_ENTRY_LINKED');
+  }
+  assert.equal(f.data.Expenses[0].recordVersion, 1);
+  assert.equal((await f.registry.read()).state.companies[f.companyId].businessWrite, undefined);
+  f.data.Journals = [];
+  await f.business.mutate(f.token, f.companyId, 'Expenses', created.recordId, 'update',
+    { expectedVersion: 1, values: { amount: 20 } }, 'expense_update_policy_01');
+  assert.equal(f.data.Expenses[0].total, 21);
+  assert.equal(f.data.Expenses[0].description, 'Supplies');
+  await assert.rejects(() => f.business.mutate(f.token, f.companyId, 'Expenses', created.recordId, 'update',
+    { expectedVersion: 2, values: { total: 0 } }, 'expense_forged_policy_01'), e => e.code === 'CASH_TOTAL_MISMATCH');
+  assert.equal(f.data.Expenses[0].recordVersion, 2);
+  const state = (await f.registry.read()).state;
+  assert.equal(state.companies[f.companyId].businessWrite, undefined);
+});
+
 test('seeded company profile is editable but cannot be duplicated or deleted', async () => {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);

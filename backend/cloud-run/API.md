@@ -153,14 +153,33 @@ Sheets request. This is a bounded full-table read, not a paginated change feed o
 an atomic snapshot across tables.
 
 ## Journal validation
+
+Income/expense entry policy (2026-09-26): owner writes require a valid entry date,
+nonempty description, positive amount (up to two decimals) and paymentStatus
+`PAID` or `UNPAID`. Paid entries require a valid paidDate; unpaid entries clear it.
+The server calculates taxAmount and total from amount and taxRate using integer
+minor units and half-up tax rounding. Rates support up to two decimal places,
+from 0 to 100. Explicit inconsistent totals are rejected. Partial amount/rate
+edits recalculate existing totals. This is single-record entry validation; it
+does not generate ledger postings or implement invoice/payment transactions.
+
 Journal writes now require DRAFT creation. Posting (PATCH status POSTED) requires
 at least two active lines with distinct positive line numbers, nonempty account
 identifiers, and exactly one positive debit/credit per line. Debit and credit sums
 and supplied header totals must agree exactly. The initial ledger contract permits
 two decimal places, summed as integer minor units. Other precisions are rejected.
 Posted journals and their lines cannot be edited, deleted, or moved through generic
-CRUD. Reversal workflows, chart-of-account validation and period closing are still
+CRUD. Posting requires a valid date and rejects dates within closed or unknown-state
+financial periods (including start/end dates). Dates without a configured period
+remain allowed. Reversal workflows and chart-of-account validation are still
 pending. Draft header totals are provisional and checked at posting.
+
+Financial periods are created OPEN with valid ordered dates and cannot overlap
+another active period. Closing requires all contained journals to be POSTED; the
+server stamps closedBy/closedAt. A period containing journals cannot be resized
+or deleted. Closed periods are immutable through generic CRUD; reopening requires
+a future dedicated audited workflow. Direct manual Sheet edits remain outside
+the API's concurrency guarantees.
 
 
 ## Private documents — implemented locally
@@ -202,3 +221,52 @@ Sheets does not provide multi-row compare-and-swap transactions. Phase 4 needs a
 durable operation journal with deterministic application/recovery before claiming
 exactly-once accounting writes. Registration idempotency alone does not solve
 invoice/payment synchronization.
+# Linked cash-entry protection
+
+Standalone updates/deletion of Income or Expenses return `409 CASH_ENTRY_LINKED`
+when an active same-company journal references the source record. This includes
+draft journals, to prevent source/ledger divergence. Source types are `Income`
+and `Expenses`, plus retained legacy `finance_income`, `expense`, `supplier_bill`.
+Saving alone does not post to the ledger. Owners can explicitly post an existing
+Income/Expenses record through `/v1/companies/:companyId/sync` using an operation
+with `action: "post"`, `recordId`, `expectedVersion`, `table` and `operationId`,
+without `values`. The source version and generated POSTED journals/lines are
+written in one atomic Sheets batch. Retrying the same operation reconciles the
+source marker. A different request cannot post a linked source again.
+
+Posting recognizes the entry on its date against receivables/payables. PAID
+entries additionally settle that control account on paidDate against Cash or Bank;
+payment before entry date is rejected. Income tax uses output VAT payable; expense
+tax uses input VAT. Tax recoverability choices, custom accounts/currencies,
+partial payments and paid-entry refunds remain unsupported. Both dates
+must pass the open-period checks. Income/Expenses reads expose derived
+`ledgerStatus: UNPOSTED|LINKED`, never accepted as client write authority.
+
+Owners can settle an unpaid posted Income/Expenses entry through sync with
+`action: "pay"`, the current expectedVersion, and values containing only paidDate,
+account (Cash/Bank) and optional reference. The server derives the full amount,
+verifies the existing posted control balance and absence of a payment journal,
+then atomically saves PAID and a payment journal. The original accrual is unchanged.
+Only the payment date needs an open period; a closed original period is allowed.
+Stable operation IDs recover lost responses without repeating payment.
+
+Owners can reverse an unpaid posted Income/Expenses entry with sync action
+`reverse`, current expectedVersion, and values `{date, description}` (reversal date
+and required reason, max 500 characters). The date must be in an open period and
+cannot precede the original posting. Original source financial fields and journals
+remain unchanged; a POSTED opposite journal and updated source version commit
+together. Reads show `ledgerStatus: REVERSED`; subsequent payment, reposting and
+ordinary edits are denied. Paid entries require a separate refund workflow and
+are rejected here. Reversal dates do not reopen the original accounting period.
+# Owner trial balance
+
+GET `/v1/companies/:companyId/reports/trial-balance?asOf=YYYY-MM-DD` returns
+posted balances through that date, grouped by account, with debit/credit totals
+as exact two-decimal strings. Owner membership is checked before and after the
+single multi-table read. Pending company writes block reporting. No employee
+report endpoint is exposed yet. Responses use no-store caching.
+
+Malformed dates, duplicate journal/line identities, inconsistent account labels
+or groups, and unbalanced/mismatched posted journal totals fail instead of returning
+partial figures. Draft/deleted/foreign-company journals are excluded. Reports
+cannot include source transactions that have not been posted to the shared ledger.

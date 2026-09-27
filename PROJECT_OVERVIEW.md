@@ -118,7 +118,7 @@ tpc_invoice/
 │   │       └── presentation/# Unified office, payroll & financial screens
 │   └── main.dart           # Application entrypoint & navigation router
 ├── backend/
-│   └── apps-script/        # Google Apps Script code for Sheets schema
+│   └── cloud-run/          # Shared API, provisioning and employee access
 ├── config/                 # Google OAuth client configurations (web/android/ios)
 ├── test/                   # 31+ unit and widget test suites
 └── web/                    # Web entry point, manifest, favicons, logos

@@ -10,4 +10,4 @@ dart run build_runner build --delete-conflicting-outputs
 dart format lib test
 flutter analyze
 flutter test
-printf '%s\n' 'Ready. Run: flutter run -d chrome (local demo). See SETUP.md for Google-only connected mode.'
+printf '%s\n' 'Dependencies checked. See SETUP.md for shared API configuration and operator preview. Production integration is still in progress.'

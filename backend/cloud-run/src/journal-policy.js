@@ -1,9 +1,10 @@
 import { requireThat } from './errors.js';
+import { assertOpenLedgerDate } from './financial-period-policy.js';
 
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 // Initial ledger contract: two decimal places. Reject unsupported precision rather
 // than silently rounding a journal into balance. Integer sums use BigInt.
-function minor(value) {
+export function minor(value) {
   requireThat(typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e12,
     400, 'INVALID_JOURNAL_AMOUNT', 'Journal amounts must be nonnegative numbers.');
   const text = String(value);
@@ -11,7 +12,7 @@ function minor(value) {
   const [whole, fraction = ''] = text.split('.');
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
 }
-function lineAmounts(line) {
+export function lineAmounts(line) {
   const debit = minor(line.debit === '' || line.debit === undefined ? 0 : line.debit);
   const credit = minor(line.credit === '' || line.credit === undefined ? 0 : line.credit);
   requireThat((debit > 0n) !== (credit > 0n), 400, 'INVALID_JOURNAL_LINE', 'Each line must have exactly one positive debit or credit.');
@@ -30,7 +31,14 @@ export async function validateJournal(sheets, companyId, table, recordId, action
       const journal = rows.find(row => row.recordId === journalId && row.companyId === companyId && active(row));
       requireThat(journal?.status === 'DRAFT', 409, 'JOURNAL_LOCKED', 'Only draft journal lines can change.');
     }
-    if (action !== 'delete') lineAmounts(next);
+    if (action !== 'delete') {
+      lineAmounts(next);
+      const lines = (await sheets.read(companyId, ['JournalLines'])).JournalLines;
+      requireThat(!lines.some(line => line.companyId === companyId &&
+        line.journalId === next.journalId && line.recordId !== recordId &&
+        active(line) && line.lineNumber === next.lineNumber),
+      409, 'INVALID_JOURNAL_LINE', 'Journal line numbers must be unique within the draft.');
+    }
     return;
   }
   requireThat(!old || old.status === 'DRAFT', 409, 'JOURNAL_LOCKED', 'Posted or unknown-state journals cannot be edited or deleted.');
@@ -38,6 +46,7 @@ export async function validateJournal(sheets, companyId, table, recordId, action
   requireThat(['DRAFT', 'POSTED'].includes(next.status), 400, 'INVALID_JOURNAL_STATUS', 'Journal status must be DRAFT or POSTED.');
   requireThat(action !== 'create' || next.status === 'DRAFT', 400, 'INVALID_JOURNAL_STATUS', 'Create the draft and its lines before posting.');
   if (next.status !== 'POSTED') return;
+  await assertOpenLedgerDate(sheets, companyId, next.date);
   const lines = (await sheets.read(companyId, ['JournalLines'])).JournalLines.filter(row =>
     row.companyId === companyId && row.journalId === recordId && active(row));
   requireThat(lines.length >= 2, 409, 'JOURNAL_UNBALANCED', 'Posting requires at least two journal lines.');

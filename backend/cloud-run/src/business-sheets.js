@@ -37,23 +37,51 @@ export class BusinessSheets {
     });
   }
   async write(companyId, tableName, row, values) {
+    return this.writeBatch(companyId, [{ table: tableName, row, values }]);
+  }
+  // Internal transport primitive. The caller must hold the company write
+  // reservation and validate business rules before submitting these changes.
+  async writeBatch(companyId, changes) {
     let submitted = false;
-    try { return await this.workspace.withGoogle(companyId, async (token, company) => {
-      const table = this.table(tableName), metadata = await this.google.metadata(token, company.resources.spreadsheetId);
-      const sheet = metadata.sheets.find(item => item.properties.title === tableName)?.properties;
-      requireThat(sheet && Number.isInteger(row) && row >= 2, 409, 'SCHEMA_MISMATCH', 'Business sheet is unavailable.');
-      const requests = [];
-      if (row > sheet.gridProperties.rowCount) requests.push({ updateSheetProperties: {
-        properties: { sheetId: sheet.sheetId, gridProperties: { rowCount: row + 100 } }, fields: 'gridProperties.rowCount' } });
-      for (const [key, value] of Object.entries(values)) {
+    try {
+      requireThat(Array.isArray(changes) && changes.length > 0 && changes.length <= 100,
+        400, 'INVALID_BATCH', 'Supply between 1 and 100 internal record writes.');
+      const seen = new Set();
+      const prepared = changes.map(change => {
+        requireThat(change && Number.isSafeInteger(change.row) && change.row >= 2 && change.row <= 10001 &&
+          change.values && typeof change.values === 'object' && !Array.isArray(change.values) &&
+          Object.keys(change.values).length > 0, 400, 'INVALID_RECORD', 'Invalid business row write.');
+        const table = this.table(change.table), target = `${change.table}:${change.row}`;
+        requireThat(!seen.has(target), 400, 'INVALID_BATCH', 'A batch cannot write a row twice.');
+        seen.add(target);
+        requireThat(!Object.hasOwn(change.values, 'companyId') || change.values.companyId === companyId,
+          409, 'RECORD_IDENTITY_MISMATCH', 'Company record identity differs.');
+        for (const [key, value] of Object.entries(change.values)) {
+          requireThat(table.headers.includes(key) && ['string', 'number', 'boolean'].includes(typeof value) &&
+            (typeof value !== 'number' || Number.isFinite(value)) &&
+            (typeof value !== 'string' || value.length <= 10000), 400, 'INVALID_FIELD', 'Invalid business field.');
+        }
+        return { ...change, values: { ...change.values }, schema: table };
+      });
+      return await this.workspace.withGoogle(companyId, async (token, company) => {
+      const metadata = await this.google.metadata(token, company.resources.spreadsheetId);
+      const requests = [], growth = new Map();
+      for (const { table: tableName, row, values, schema: table } of prepared) {
+        const sheet = metadata.sheets.find(item => item.properties.title === tableName)?.properties;
+        requireThat(sheet && Number.isSafeInteger(sheet.gridProperties?.rowCount),
+          409, 'SCHEMA_MISMATCH', 'Business sheet is unavailable.');
+        if (row > sheet.gridProperties.rowCount) growth.set(sheet.sheetId,
+          Math.max(growth.get(sheet.sheetId) || 0, row + 100));
+        for (const [key, value] of Object.entries(values)) {
         const column = table.headers.indexOf(key);
-        requireThat(column >= 0 && ['string', 'number', 'boolean'].includes(typeof value),
-          400, 'INVALID_FIELD', 'Invalid business field.');
         const userEnteredValue = typeof value === 'number' ? { numberValue: value } :
           typeof value === 'boolean' ? { boolValue: value } : { stringValue: value };
         requests.push({ updateCells: { start: { sheetId: sheet.sheetId, rowIndex: row - 1, columnIndex: column },
           rows: [{ values: [{ userEnteredValue }] }], fields: 'userEnteredValue' } });
+        }
       }
+      requests.unshift(...[...growth].map(([sheetId, rowCount]) => ({ updateSheetProperties: {
+        properties: { sheetId, gridProperties: { rowCount } }, fields: 'gridProperties.rowCount' } })));
       submitted = true;
       await this.google.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(company.resources.spreadsheetId)}:batchUpdate`, 'POST', { requests });
     }); } catch (error) { if (!submitted) error.definitelyNotSubmitted = true; throw error; }

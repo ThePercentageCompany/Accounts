@@ -13,6 +13,37 @@ class RecordWriteQueue {
   final String companyId;
   final String storageKey;
   bool _busy = false;
+  String get _rejectedKey => '$storageKey-rejected';
+  bool get canDiscardRejected =>
+      (preferences.getStringList(_rejectedKey) ?? []).isNotEmpty;
+  Future<void> discardRejected() async {
+    if (_busy) {
+      throw const SaasApiException('BUSY', 'Wait for the pending request.');
+    }
+    _busy = true;
+    try {
+      await preferences.reload();
+      final rejected = preferences.getStringList(_rejectedKey) ?? [];
+      if (rejected.isEmpty) {
+        throw const SaasApiException(
+          'PENDING',
+          'Retry to confirm this change before discarding it.',
+        );
+      }
+      for (final id in rejected) {
+        if (!await preferences.remove('${storageKey}_$id')) {
+          throw const SaasApiException(
+            'LOCAL_STORAGE',
+            'Could not discard the rejected change.',
+          );
+        }
+      }
+      await preferences.remove(_rejectedKey);
+    } finally {
+      _busy = false;
+    }
+  }
+
   List<Map<String, Object?>> get pending =>
       (preferences
               .getKeys()
@@ -63,7 +94,7 @@ class RecordWriteQueue {
         'action': action,
         'expectedVersion': expectedVersion,
         if (recordId != null) 'recordId': recordId,
-        if (action != 'delete') 'values': values,
+        if (action != 'delete' && action != 'post') 'values': values,
       });
     } finally {
       _busy = false;
@@ -121,11 +152,36 @@ class RecordWriteQueue {
       final failed = results.where((r) => r['status'] == 'FAILED').firstOrNull;
       if (failed != null) {
         final error = failed['error'] as Map;
+        if (const [
+          'VERSION_CONFLICT',
+          'CASH_TOTAL_MISMATCH',
+          'CASH_ENTRY_LINKED',
+          'INVALID_PAYMENT_ACCOUNT',
+          'INVALID_PAYMENT',
+          'INVALID_REVERSAL',
+          'REVERSAL_NOT_AVAILABLE',
+          'PAYMENT_NOT_AVAILABLE',
+          'INVALID_PAYMENT_DATE',
+          'PERIOD_CLOSED',
+          'INVALID_CASH_ENTRY',
+          'INVALID_MONEY',
+          'INVALID_FINANCIAL_PERIOD',
+          'PERIOD_METADATA',
+          'PERIOD_OVERLAP',
+          'PERIOD_LOCKED',
+          'PERIOD_HAS_JOURNALS',
+          'PERIOD_HAS_DRAFTS',
+        ].contains(error['code'])) {
+          await preferences.setStringList(_rejectedKey, [
+            failed['operationId'] as String,
+          ]);
+        }
         throw SaasApiException(
           error['code'] as String,
           error['message'] as String,
         );
       }
+      await preferences.remove(_rejectedKey);
       if (operations.isNotEmpty) {
         throw const SaasApiException(
           'PENDING',

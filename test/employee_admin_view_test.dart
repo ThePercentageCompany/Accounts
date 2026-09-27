@@ -18,7 +18,7 @@ void main() {
     final api = SaasApi(
       origin: 'https://api.test',
       client: MockClient((r) async {
-        if (r.method == 'GET')
+        if (r.method == 'GET') {
           return http.Response(
             jsonEncode({
               'employees': [
@@ -35,6 +35,7 @@ void main() {
             }),
             200,
           );
+        }
         expect(
           r.url.path,
           '/v1/companies/$company/employees/$employee/access/issue',

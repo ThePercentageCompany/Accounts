@@ -97,6 +97,12 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (business) {
+        const report = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/trial-balance$/.exec(url.pathname);
+        if (report && request.method === 'GET') {
+          requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,
+            400, 'INVALID_QUERY', 'Supply one asOf date.');
+          json(200, await business.trialBalance(token, report[1], url.searchParams.get('asOf'))); return;
+        }
         const sync = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/sync$/.exec(url.pathname);
         if (sync && request.method === 'POST') {
           json(200, await business.sync(token, sync[1], await body(request))); return;

@@ -5,6 +5,11 @@ import 'employee_admin_view.dart';
 import 'saas_api.dart';
 import 'record_write_queue.dart';
 import 'customer_editor.dart';
+import 'cash_entry_editor.dart';
+import 'cash_payment_editor.dart';
+import 'cash_reversal_editor.dart';
+import 'financial_period_editor.dart';
+import 'trial_balance_view.dart';
 
 const workspaceTables = <String, List<String>>{
   'Invoices': ['Invoices', 'InvoiceItems', 'Receipts', 'ReceiptAllocations'],
@@ -89,6 +94,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   Widget build(BuildContext context) {
     final allowed = widget.employee?['allowedSections'] as List?;
     final sections = <String>[
+      if (widget.employee == null) 'Reports',
       if (_employees != null || allowed!.contains('Employees')) 'Employees',
       for (final section in workspaceTables.keys)
         if (allowed == null || allowed.contains(section)) section,
@@ -128,6 +134,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                     child: Text(
                       'No record sections are assigned. Contact your company owner.',
                     ),
+                  )
+                : selected == 'Reports' && widget.employee == null
+                ? TrialBalanceView(
+                    key: ValueKey(widget.companyId),
+                    api: widget.api,
+                    companyId: widget.companyId,
                   )
                 : selected == 'Employees' && _employees != null
                 ? EmployeeAdminView(controller: _employees)
@@ -172,10 +184,64 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   bool busy = false;
   String? error;
   int _request = 0;
+  Future<void> _discardRejected() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard rejected edit?'),
+        content: const Text(
+          'This edit was rejected without being saved. Discard it and refresh the current record before editing again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep edit'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard edit'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.discardRejected();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  bool get _editable =>
+      widget.writes != null &&
+      const [
+        'Customers',
+        'Income',
+        'Expenses',
+        'FinancialPeriods',
+      ].contains(table);
+  String get _recordLabel => table == 'FinancialPeriods'
+      ? 'financial period'
+      : table == 'Customers'
+      ? 'customer'
+      : table == 'Expenses'
+      ? 'expense'
+      : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
     final values = await showDialog<Map<String, Object?>>(
       context: context,
-      builder: (_) => CustomerEditor(record: record),
+      builder: (_) => table == 'Customers'
+          ? CustomerEditor(record: record)
+          : table == 'FinancialPeriods'
+          ? FinancialPeriodEditor(record: record)
+          : CashEntryEditor(expense: table == 'Expenses', record: record),
     );
     if (values == null || !mounted) return;
     setState(() {
@@ -184,7 +250,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     });
     try {
       await widget.writes!.enqueue(
-        'Customers',
+        table,
         record == null ? 'create' : 'update',
         values,
         recordId: record?['recordId'] as String?,
@@ -207,6 +273,56 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
+  Future<void> _postCash(Map<String, dynamic> record) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Post to ledger?'),
+        content: const Text(
+          'This records the entry and any payment in the ledger. The entry will be locked. '
+          'Only unpaid entries can be reversed. Paid entries cannot be refunded here yet. '
+          'Check the amount, tax, dates and Cash or Bank account before continuing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Post to ledger'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue(
+        table,
+        'post',
+        {},
+        recordId: record['recordId'] as String,
+        expectedVersion: int.parse('${record['recordVersion']}'),
+      );
+      await widget.writes!.flush();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Unable to confirm posting. Retry the pending request.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _retryWrite() async {
     setState(() {
       busy = true;
@@ -217,6 +333,44 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _payCash(
+    Map<String, dynamic> record, {
+    bool reverse = false,
+  }) async {
+    final values = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (_) => reverse
+          ? const CashReversalEditor()
+          : CashPaymentEditor(total: record['total']),
+    );
+    if (values == null || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue(
+        table,
+        reverse ? 'reverse' : 'pay',
+        values,
+        recordId: record['recordId'] as String,
+        expectedVersion: int.parse('${record['recordVersion']}'),
+      );
+      await widget.writes!.flush();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Unable to confirm payment. Retry the pending request.',
+        );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -288,17 +442,22 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh'),
             ),
-            if (widget.writes != null && table == 'Customers')
+            if (_editable)
               FilledButton(
                 onPressed: busy || widget.writes!.pending.isNotEmpty
                     ? null
                     : () => _editCustomer(),
-                child: const Text('Add customer'),
+                child: Text('Add $_recordLabel'),
               ),
             if (widget.writes?.pending.isNotEmpty == true)
               OutlinedButton(
                 onPressed: busy ? null : _retryWrite,
                 child: const Text('Retry pending change'),
+              ),
+            if (widget.writes?.canDiscardRejected == true)
+              TextButton(
+                onPressed: busy ? null : _discardRejected,
+                child: const Text('Discard rejected edit'),
               ),
           ],
         ),
@@ -306,9 +465,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       Padding(
         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Text(
-          widget.writes != null && table == 'Customers'
-              ? 'Company customers'
-              : 'Online records · viewing only',
+          _editable ? 'Company records' : 'Online records · viewing only',
         ),
       ),
       if (busy) const LinearProgressIndicator(),
@@ -331,12 +488,46 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               title: Text(_title(row)),
               subtitle: row['status'] == null ? null : Text('${row['status']}'),
               children: [
-                if (widget.writes != null && table == 'Customers')
+                if (_editable &&
+                    const ['Income', 'Expenses'].contains(table) &&
+                    row['ledgerStatus'] == 'LINKED' &&
+                    row['paymentStatus'] == 'UNPAID')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _payCash(row, reverse: true),
+                    child: const Text('Reverse entry'),
+                  ),
+                if (_editable &&
+                    const ['Income', 'Expenses'].contains(table) &&
+                    row['ledgerStatus'] == 'LINKED' &&
+                    row['paymentStatus'] == 'UNPAID')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _payCash(row),
+                    child: const Text('Record payment'),
+                  ),
+                if (_editable &&
+                    const ['Income', 'Expenses'].contains(table) &&
+                    row['ledgerStatus'] == 'UNPOSTED')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _postCash(row),
+                    child: const Text('Post to ledger'),
+                  ),
+                if (_editable &&
+                    !const [
+                      'LINKED',
+                      'REVERSED',
+                    ].contains(row['ledgerStatus']) &&
+                    (table != 'FinancialPeriods' || row['status'] == 'OPEN'))
                   TextButton(
                     onPressed: busy || widget.writes!.pending.isNotEmpty
                         ? null
                         : () => _editCustomer(row),
-                    child: const Text('Edit customer'),
+                    child: Text('Edit $_recordLabel'),
                   ),
                 for (final field in row.entries)
                   if (!field.key.startsWith('_') &&
