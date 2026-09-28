@@ -22,6 +22,72 @@ async function setup() {
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
 
+test('invoice line retry reconciles atomic header totals without a duplicate parent update', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.data.Invoices = []; f.data.InvoiceItems = [];
+  const customer = await f.business.mutate(f.token, f.companyId, 'Customers', null, 'create',
+    { expectedVersion: 0, values: { name: 'Customer' } }, 'invoice_customer_001');
+  const invoice = await f.business.mutate(f.token, f.companyId, 'Invoices', null, 'create',
+    { expectedVersion: 0, values: { customerId: customer.recordId, issueDate: '2026-09-27', currency: 'AED' } }, 'invoice_header_001');
+  let batches = 0;
+  f.sheets.writeBatch = async (id, changes) => {
+    batches++;
+    for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values);
+    throw new Error('response lost');
+  };
+  const input = { expectedVersion: 0, values: { invoiceId: invoice.recordId, lineNumber: 1, description: 'Service', quantity: 3, unitPrice: 0.1, discount: 0.05, taxRate: 5 } };
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'InvoiceItems', null, 'create', input, 'invoice_line_001x'));
+  await f.business.mutate(f.token, f.companyId, 'InvoiceItems', null, 'create', input, 'invoice_line_001x');
+  assert.equal(batches, 1); assert.equal(f.data.InvoiceItems.length, 1);
+  assert.equal(f.data.Invoices[0].total, 0.26); assert.equal(f.data.Invoices[0].recordVersion, 2);
+  assert.equal((await f.business.list(f.token, f.companyId, 'InvoiceItems'))[0].parentStatus, 'DRAFT');
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'update',
+    { expectedVersion: 1, values: { notes: 'Stale edit' } }, 'invoice_stale_edit'), e => e.code === 'VERSION_CONFLICT');
+  Object.assign(f.data, { CompanyProfile: [{ companyId: f.companyId, invoicePrefix: 'TPC' }],
+    Journals: [], JournalLines: [], FinancialPeriods: [] });
+  f.sheets.writeBatch = async (id, changes) => {
+    batches++;
+    for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values);
+  };
+  const issued = await f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'issue',
+    { expectedVersion: 2 }, 'invoice_issue_001x');
+  assert.equal(issued.version, 3); assert.equal(f.data.Invoices[0].number, 'TPC-2026-000001');
+  assert.equal(f.data.Invoices[0].status, 'ISSUED'); assert.equal(f.data.Journals.length, 1);
+  assert.equal(f.data.JournalLines.length, 3); assert.equal(batches, 2);
+  await f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'issue',
+    { expectedVersion: 2 }, 'invoice_issue_001x');
+  assert.equal(batches, 2); assert.equal(f.data.Journals.length, 1);
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'issue',
+    { expectedVersion: 3 }, 'invoice_issue_again'), e => e.code === 'INVOICE_LOCKED');
+});
+
+test('receipt payment is atomic, server numbered and idempotent after a lost response', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  const customerId = 'c'.repeat(43), invoiceId = 'i'.repeat(43);
+  Object.assign(f.data, {
+    Customers: [{ companyId: f.companyId, recordId: customerId, name: 'Customer', _row: 2 }],
+    Invoices: [{ companyId: f.companyId, recordId: invoiceId, customerId, issueDate: '2026-09-27', currency: 'AED',
+      total: 100, paidAmount: 0, balance: 100, status: 'ISSUED', recordVersion: 3, _row: 2 }],
+    Receipts: [], ReceiptAllocations: [], Journals: [], JournalLines: [], FinancialPeriods: [],
+  });
+  let batches = 0;
+  f.sheets.writeBatch = async (id, changes) => {
+    batches++;
+    for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values);
+    throw new Error('response lost');
+  };
+  const operation = { operations: [{ operationId: 'receipt_payment_001', table: 'Receipts', action: 'receive', expectedVersion: 0,
+    values: { invoiceId, customerId, paymentDate: '2026-09-28', amount: 25, currency: 'AED', paymentAccount: 'Cash', reference: 'Cash desk' } }] };
+  assert.equal((await f.business.sync(f.token, f.companyId, operation)).results[0].status, 'FAILED');
+  assert.equal((await f.business.sync(f.token, f.companyId, operation)).results[0].status, 'APPLIED');
+  assert.equal(batches, 1); assert.equal(f.data.Receipts.length, 1); assert.equal(f.data.ReceiptAllocations.length, 1);
+  assert.equal(f.data.Invoices[0].paidAmount, 25); assert.equal(f.data.Invoices[0].balance, 75);
+  assert.equal(f.data.Invoices[0].status, 'PARTIALLY_PAID'); assert.equal(f.data.Journals.length, 1);
+  assert.equal(f.data.JournalLines.length, 2);
+});
+
 async function cashFixture(table = 'Income', paid = true) {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);
@@ -46,7 +112,14 @@ test('owner trial balance denies foreign owners and revoked sessions after reads
   const f = await cashFixture(); await f.post();
   const report = await f.business.trialBalance(f.token, f.companyId, '2026-09-27');
   assert.equal(report.journalCount, 2); assert.equal(report.totalDebit, report.totalCredit);
+  const profit = await f.business.profitAndLoss(f.token, f.companyId, '2026-09-01', '2026-09-30');
+  assert.equal(profit.netProfit, '10.10');
+  const balance = await f.business.balanceSheet(f.token, f.companyId, '2026-09-27');
+  assert.equal(balance.totalAssets, '10.61'); assert.equal(balance.totalLiabilities, '0.51');
+  assert.equal(balance.totalEquity, '10.10');
   const other = await f.login('other');
+  await assert.rejects(f.business.balanceSheet(other, f.companyId, '2026-09-27'), e => e.code === 'COMPANY_NOT_FOUND');
+  await assert.rejects(f.business.profitAndLoss(other, f.companyId, '2026-09-01', '2026-09-30'), e => e.code === 'COMPANY_NOT_FOUND');
   await assert.rejects(f.business.trialBalance(other, f.companyId, '2026-09-27'), e => e.code === 'COMPANY_NOT_FOUND');
   await f.registry.transact(state => { state.companies[f.companyId].businessWrite = 'pending'; });
   await assert.rejects(f.business.trialBalance(f.token, f.companyId, '2026-09-27'), e => e.code === 'BUSINESS_WRITE_PENDING');

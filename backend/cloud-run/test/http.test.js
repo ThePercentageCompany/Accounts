@@ -15,6 +15,32 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('balance-sheet HTTP accepts exactly one asOf and uses private responses', async t => {
+  let calls = 0;
+  const f = await running(t, { business: { async balanceSheet(token, id, date) {
+    calls++; assert.equal(date, '2026-09-27'); return { balanced: true };
+  } } });
+  const path = `/v1/companies/${'c'.repeat(43)}/reports/balance-sheet`;
+  for (const query of ['', '?asOf=a&asOf=b', '?asOf=a&from=b']) assert.equal((await f.request(path + query)).status, 400);
+  assert.equal(calls, 0);
+  const response = await f.request(path + '?asOf=2026-09-27');
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('profit and loss HTTP requires a single start and end date and remains private', async t => {
+  let calls = 0;
+  const f = await running(t, { business: { async profitAndLoss(token, companyId, from, asOf) {
+    calls++; assert.equal(from, '2026-09-01'); assert.equal(asOf, '2026-09-30'); return { netProfit: '0.00' };
+  } } });
+  const path = `/v1/companies/${'c'.repeat(43)}/reports/profit-and-loss`;
+  for (const query of ['', '?asOf=2026-09-30', '?from=a&from=b&asOf=c', '?from=a&asOf=b&unexpected=c']) {
+    assert.equal((await f.request(path + query)).status, 400);
+  }
+  assert.equal(calls, 0);
+  const response = await f.request(path + '?from=2026-09-01&asOf=2026-09-30');
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
 test('trial-balance HTTP route validates date query and disables caching', async t => {
   let calls = 0;
   const id = 'c'.repeat(43);

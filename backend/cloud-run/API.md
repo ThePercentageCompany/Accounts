@@ -260,6 +260,22 @@ ordinary edits are denied. Paid entries require a separate refund workflow and
 are rejected here. Reversal dates do not reopen the original accounting period.
 # Owner trial balance
 
+Owner balance sheet uses GET `/v1/companies/:companyId/reports/balance-sheet?asOf=YYYY-MM-DD`.
+It returns signed asset/liability/equity account balances, postedEquity and
+accumulatedEarnings (the remaining income/expense balances through the cutoff).
+totalEquity includes both, avoiding double-counting earnings already transferred
+to posted equity. Assets must equal liabilities plus total equity. Exact decimal
+strings preserve losses and contra balances. The report uses the same owner and
+ledger-integrity checks as trial balance and only includes posted shared journals.
+
+Owner profit/loss uses GET `/v1/companies/:companyId/reports/profit-and-loss?from=YYYY-MM-DD&asOf=YYYY-MM-DD`.
+Both dates are required, inclusive and ordered. Posted income is net credit,
+expenses net debit; netProfit is income minus expenses. Results are signed decimal
+strings, including negative revenue from reversals in the selected period. Asset,
+liability and equity balances are excluded from profit. The same owner checks,
+pending-write restriction, ledger validation and no-store headers apply. Only
+transactions already posted to the shared ledger contribute to the report.
+
 GET `/v1/companies/:companyId/reports/trial-balance?asOf=YYYY-MM-DD` returns
 posted balances through that date, grouped by account, with debit/credit totals
 as exact two-decimal strings. Owner membership is checked before and after the
@@ -270,3 +286,43 @@ Malformed dates, duplicate journal/line identities, inconsistent account labels
 or groups, and unbalanced/mismatched posted journal totals fail instead of returning
 partial figures. Draft/deleted/foreign-company journals are excluded. Reports
 cannot include source transactions that have not been posted to the shared ledger.
+# Draft invoice writes
+
+Invoices begin as DRAFT with a customer, issueDate and currency. Due date, when
+provided, cannot precede issueDate. Numbering, header totals, paidAmount and balance
+are server fields. Generic writes cannot issue or modify finalized invoices.
+
+InvoiceItems require a draft parent, positive quantity and unique positive line
+number. Quantity/unit price/discount/tax rate currently support two decimal places.
+Gross amount rounds half-up after quantity multiplication; the absolute line
+discount is applied before half-up tax. Tax rate must be 0–100, and discount cannot
+exceed gross. Supplied taxAmount/lineTotal must match server calculations.
+
+Line creation, edits and soft deletion update parent totals and increment its
+recordVersion in the same Sheets batch. Clients must refresh the invoice after
+changing lines. Lost-response retries reconcile the line marker without a second
+header update. Moving a line to a different invoice is not supported. Owner draft
+and line forms are connected; InvoiceItems reads include derived `parentStatus`
+so the UI hides edits after finalization.
+
+Owners issue a draft through sync action `issue` with recordId and current
+expectedVersion, without values. At least one valid line and an open issue-date
+period are required. The server recalculates and matches stored totals, validates
+the CompanyProfile invoicePrefix (default `INV`), and assigns
+`PREFIX-YYYY-NNNNNN` using the next active invoice number for that prefix/year.
+The company-wide write reservation serializes issuance.
+
+The invoice becomes ISSUED and its accounts-receivable debit, net-revenue credit
+and output-VAT credit are saved in the same Sheets batch. The source marker makes
+a lost-response retry return the existing issue result without allocating another
+number or journal. Issued invoices and lines are immutable through generic editing.
+## Customer receipt posting
+
+The `receive` action on `Receipts` accepts an invoice, customer, payment date,
+amount, currency, Cash/Bank account and optional reference. The server validates
+the open invoice and exact outstanding balance and rejects mismatches and
+overpayments. It assigns `REC-YYYY-NNNNNN`, creates the allocation, updates the
+invoice paid amount/balance/status, and posts Cash/Bank debit and Accounts
+Receivable credit in one batch. Stable operation IDs prevent duplicates after
+uncertain responses. Posted receipts and allocations cannot be edited through
+generic writes. Credit, void, refund, reversal and invoice-document workflows remain.

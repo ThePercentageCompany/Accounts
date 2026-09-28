@@ -24,7 +24,7 @@ Locally implemented: owner identity and registration, Google provisioning,
 employee login/access, owner record CRUD, ordered batch upload, deletion markers,
 business/employee references, bounded field types, draft/posted journal guards,
 private document upload/download, and same-record document attachment checks.
-The latest recorded backend run has 143 passing test runner entries using
+The latest recorded backend run has 160 passing test runner entries using
 substitute cloud adapters. The shared-only Flutter entrypoint connects owner
 setup, employee authentication/administration and shared record screens. Customer,
 income/expense and financial-period owner writes are connected; other financial
@@ -59,8 +59,10 @@ An explicit owner Post to ledger action now generates balanced income/expense
 accrual and optional payment journals atomically with the source version. Source
 records then lock. Later full payments are supported through a separate atomic
 settlement action. Unpaid entries can be reversed with an opposite journal while
-preserving original history. Partial payments, paid-entry refunds, configurable accounts and
-tax treatment remain unfinished. Other financial writes remain blocked.
+preserving original history. Invoice receipts support partial and final customer
+payments with server numbering, allocation, balance updates and Cash/Bank-to-AR
+posting in one retry-safe batch. Paid-entry refunds, receipt reversals,
+configurable accounts and tax treatment remain unfinished. Other financial writes remain blocked.
 Deploy the updated backend policy before enabling these frontend entry forms:
 the earlier deployed generic-record API does not calculate these totals.
 

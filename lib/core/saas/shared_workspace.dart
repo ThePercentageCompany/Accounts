@@ -10,6 +10,8 @@ import 'cash_payment_editor.dart';
 import 'cash_reversal_editor.dart';
 import 'financial_period_editor.dart';
 import 'trial_balance_view.dart';
+import 'invoice_editor.dart';
+import 'receipt_editor.dart';
 
 const workspaceTables = <String, List<String>>{
   'Invoices': ['Invoices', 'InvoiceItems', 'Receipts', 'ReceiptAllocations'],
@@ -226,18 +228,55 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         'Income',
         'Expenses',
         'FinancialPeriods',
+        'Invoices',
+        'InvoiceItems',
+        'Receipts',
       ].contains(table);
   String get _recordLabel => table == 'FinancialPeriods'
       ? 'financial period'
       : table == 'Customers'
       ? 'customer'
+      : table == 'Invoices'
+      ? 'draft invoice'
+      : table == 'InvoiceItems'
+      ? 'invoice line'
+      : table == 'Receipts'
+      ? 'receipt'
       : table == 'Expenses'
       ? 'expense'
       : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
+    List<Map<String, dynamic>> choices = const [];
+    if (table == 'Invoices' || table == 'InvoiceItems' || table == 'Receipts') {
+      final response = await widget.api.records(
+        widget.companyId,
+        table == 'Invoices' ? 'Customers' : 'Invoices',
+      );
+      choices = (response['records'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .where(
+            (item) =>
+                table == 'Invoices' ||
+                (table == 'InvoiceItems' && item['status'] == 'DRAFT') ||
+                (table == 'Receipts' &&
+                    const [
+                      'ISSUED',
+                      'PARTIALLY_PAID',
+                    ].contains(item['status']) &&
+                    (item['balance'] as num? ?? 0) > 0),
+          )
+          .toList();
+      if (!mounted) return;
+    }
     final values = await showDialog<Map<String, Object?>>(
       context: context,
-      builder: (_) => table == 'Customers'
+      builder: (_) => table == 'Invoices'
+          ? InvoiceEditor(customers: choices, record: record)
+          : table == 'InvoiceItems'
+          ? InvoiceLineEditor(invoices: choices, record: record)
+          : table == 'Receipts'
+          ? ReceiptEditor(invoices: choices)
+          : table == 'Customers'
           ? CustomerEditor(record: record)
           : table == 'FinancialPeriods'
           ? FinancialPeriodEditor(record: record)
@@ -251,7 +290,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     try {
       await widget.writes!.enqueue(
         table,
-        record == null ? 'create' : 'update',
+        table == 'Receipts'
+            ? 'receive'
+            : record == null
+            ? 'create'
+            : 'update',
         values,
         recordId: record?['recordId'] as String?,
         expectedVersion: record == null
@@ -316,6 +359,54 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (mounted) {
         setState(
           () => error = 'Unable to confirm posting. Retry the pending request.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _issueInvoice(Map<String, dynamic> record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Issue invoice?'),
+        content: const Text(
+          'The server will assign the invoice number and post receivable, revenue and VAT. The invoice and its lines cannot be edited afterward.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Issue invoice'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue(
+        'Invoices',
+        'issue',
+        {},
+        recordId: record['recordId'] as String,
+        expectedVersion: int.parse('${record['recordVersion']}'),
+      );
+      await widget.writes!.flush();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Unable to confirm issuing. Retry the pending request.',
         );
       }
     } finally {
@@ -489,6 +580,15 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               subtitle: row['status'] == null ? null : Text('${row['status']}'),
               children: [
                 if (_editable &&
+                    table == 'Invoices' &&
+                    row['status'] == 'DRAFT')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _issueInvoice(row),
+                    child: const Text('Issue invoice'),
+                  ),
+                if (_editable &&
                     const ['Income', 'Expenses'].contains(table) &&
                     row['ledgerStatus'] == 'LINKED' &&
                     row['paymentStatus'] == 'UNPAID')
@@ -522,7 +622,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       'LINKED',
                       'REVERSED',
                     ].contains(row['ledgerStatus']) &&
-                    (table != 'FinancialPeriods' || row['status'] == 'OPEN'))
+                    (table != 'FinancialPeriods' || row['status'] == 'OPEN') &&
+                    (table != 'Invoices' || row['status'] == 'DRAFT') &&
+                    (table != 'InvoiceItems' ||
+                        row['parentStatus'] == 'DRAFT') &&
+                    table != 'Receipts')
                   TextButton(
                     onPressed: busy || widget.writes!.pending.isNotEmpty
                         ? null

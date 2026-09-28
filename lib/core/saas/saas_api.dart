@@ -183,6 +183,21 @@ class SaasApi {
 
   Future<Uri> startSignIn() => _authorization('/v1/auth/google/start');
   Future<Map<String, dynamic>> me() => _json('GET', '/v1/me');
+  Future<Map<String, dynamic>> balanceSheet(
+    String companyId,
+    String asOf,
+  ) => _json(
+    'GET',
+    '/v1/companies/$companyId/reports/balance-sheet?asOf=${Uri.encodeQueryComponent(asOf)}',
+  );
+  Future<Map<String, dynamic>> profitAndLoss(
+    String companyId,
+    String from,
+    String asOf,
+  ) => _json(
+    'GET',
+    '/v1/companies/$companyId/reports/profit-and-loss?from=${Uri.encodeQueryComponent(from)}&asOf=${Uri.encodeQueryComponent(asOf)}',
+  );
   Future<Map<String, dynamic>> trialBalance(
     String companyId,
     String asOf,

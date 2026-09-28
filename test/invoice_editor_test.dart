@@ -1,78 +1,97 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tpc_invoice/core/theme/app_theme.dart';
-import 'package:tpc_invoice/features/billing/data/invoice_pdf.dart';
-import 'package:tpc_invoice/features/billing/data/local_repository.dart';
-import 'package:tpc_invoice/features/billing/domain/invoice_document_service.dart';
-import 'package:tpc_invoice/features/billing/presentation/billing_cubit.dart';
-import 'package:tpc_invoice/features/billing/presentation/editors.dart';
+import 'package:tpc_invoice/core/saas/invoice_editor.dart';
 
 void main() {
-  testWidgets('InvoiceEditor mounts with split layout and live preview on desktop', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final repository = LocalRepository();
-    final cubit = BillingCubit(repository);
-    await cubit.refresh();
+  testWidgets(
+    'invoice editor requires customer and ordered dates and omits totals',
+    (tester) async {
+      Map<String, Object?>? result;
+      final customers = [
+        {'recordId': 'c' * 43, 'name': 'Client'},
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () async =>
+                    result = await showDialog<Map<String, Object?>>(
+                      context: context,
+                      builder: (_) => InvoiceEditor(customers: customers),
+                    ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose a customer.'), findsOneWidget);
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Client').last);
+      await tester.pumpAndSettle();
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), '2026-09-27');
+      await tester.enterText(fields.at(1), '2026-09-01');
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(find.text('Due date cannot precede issue date.'), findsOneWidget);
+      await tester.enterText(fields.at(1), '2026-10-01');
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(result?['customerId'], 'c' * 43);
+      expect(result?['currency'], 'AED');
+      expect(result?.containsKey('total'), isFalse);
+      expect(result?.containsKey('status'), isFalse);
+    },
+  );
 
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
-
+  testWidgets('invoice line sends base inputs without calculated totals', (
+    tester,
+  ) async {
+    Map<String, Object?>? result;
+    final invoices = [
+      {'recordId': 'i' * 43, 'issueDate': '2026-09-27', 'status': 'DRAFT'},
+    ];
     await tester.pumpWidget(
-      MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: cubit),
-          RepositoryProvider<InvoiceDocumentService>(create: (_) => PdfInvoiceDocumentService()),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: const InvoiceEditor(),
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async =>
+                  result = await showDialog<Map<String, Object?>>(
+                    context: context,
+                    builder: (_) => InvoiceLineEditor(invoices: invoices),
+                  ),
+              child: const Text('Open'),
+            ),
+          ),
         ),
       ),
     );
-
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-
-    expect(find.text('Create Invoice'), findsWidgets);
-    expect(find.text('Invoice Information'), findsOneWidget);
-    expect(find.text('Invoice Items'), findsOneWidget);
-    expect(find.text('Invoice Preview'), findsOneWidget);
-    expect(find.textContaining('Terms & Conditions'), findsWidgets);
-    expect(find.text('Save as Draft'), findsOneWidget);
-    expect(find.text('Save & Send'), findsOneWidget);
-    expect(find.text('Download PDF'), findsOneWidget);
-
-    await cubit.close();
-  });
-
-  testWidgets('InvoiceEditor keeps its primary actions usable on a phone', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final cubit = BillingCubit(LocalRepository());
-    await cubit.refresh();
-
-    tester.view.physicalSize = const Size(390, 2000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() => tester.view.resetPhysicalSize());
-
-    await tester.pumpWidget(
-      MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: cubit),
-          RepositoryProvider<InvoiceDocumentService>(create: (_) => PdfInvoiceDocumentService()),
-        ],
-        child: MaterialApp(theme: AppTheme.light(), home: const InvoiceEditor()),
-      ),
-    );
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(find.text('Save as Draft'), 200, scrollable: find.byType(Scrollable).first);
-    expect(find.text('Save as Draft'), findsOneWidget);
-    expect(find.text('Preview'), findsOneWidget);
-    expect(find.text('Save & Send'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    await cubit.close();
+    await tester.tap(find.text('2026-09-27').last);
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '1');
+    await tester.enterText(fields.at(1), 'Service');
+    await tester.enterText(fields.at(2), '3');
+    await tester.enterText(fields.at(3), '0.10');
+    await tester.enterText(fields.at(4), '0.05');
+    await tester.enterText(fields.at(5), '5');
+    await tester.tap(find.text('Save line'));
+    await tester.pumpAndSettle();
+    expect(result?['quantity'], 3.0);
+    expect(result?['unitPrice'], 0.1);
+    expect(result?.containsKey('lineTotal'), isFalse);
+    expect(result?.containsKey('taxAmount'), isFalse);
   });
 }

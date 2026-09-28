@@ -299,3 +299,49 @@ by reversal, malformed ledgers, tenant denial, session revocation, pending write
 and HTTP query/caching are covered. Full backend suite: 143 passed. Report widget
 test passed, including rejection of stale totals after a failed refresh. Local
 implementation only; no production deployment or live accounting certification.
+# Period profit and loss — 27 September 2026
+
+Added owner period profit/loss API and a selector beside trial balance. Date bounds
+are inclusive and ordered. Exact signed minor-unit calculations preserve expense
+losses and later-period reversals. Full backend suite: 146 passed. The report
+remains limited to posted shared journals; this is not a completed accounting
+release or a production deployment.
+# Balance sheet — 27 September 2026
+
+Added owner balance-sheet API and report selection. Assets reconcile to liabilities
+plus posted equity and accumulated earnings. Tests cover cutoffs, closing transfers
+without double-counting, negative/contra balances, tenant denial and HTTP queries.
+Full backend suite: 149 passed. Three report widget tests passed. This remains
+limited to posted shared journals; full transaction coverage and deployment are
+still pending.
+# Draft invoice policy — 27 September 2026
+
+Added authoritative line rounding and atomic invoice-header refresh, draft-only
+mutation guards, server-owned totals and numbering, and protection against direct
+issuing. Tested malformed amounts, discounts/tax, duplicates, finalized parents,
+moving lines, forged totals, header version conflicts and lost-response retry.
+Full backend suite: 154 passed. Invoice forms, issuing, receipts and ledger posting
+remain incomplete; no deployment was performed. Two focused Flutter invoice form
+tests passed, confirming validation and that calculated totals/status are omitted
+from client submissions.
+
+# Invoice issuing — 28 September 2026
+
+Added explicit owner issuing from the shared workspace. The backend assigns the
+yearly prefixed number and atomically saves the locked invoice plus balanced
+receivable/revenue/VAT journal. Empty/stale invoices, closed periods, invalid
+prefixes, repeated issuing and forged client values are rejected. Lost-response
+retry does not allocate another number or journal. Full backend suite: 156 passed;
+six focused Flutter invoice/queue tests and targeted analysis passed. Not deployed.
+
+# Customer receipt posting — 28 September 2026
+
+Added a server-controlled receipt operation that validates the open invoice,
+customer, currency, payment date, period and exact balance. Receipt numbering,
+allocation, invoice balance/status update and Cash/Bank-to-Accounts-Receivable
+posting commit in one retry-safe batch. Generic receipt/allocation edits are
+locked. The owner UI selects only open invoices and validates overpayment.
+
+Full backend suite: **160 passed**. Eight focused Flutter receipt/invoice/queue
+tests and the full **177-test Flutter suite** passed. Static analysis introduced
+no new errors. Not deployed.

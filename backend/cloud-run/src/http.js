@@ -97,6 +97,19 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (business) {
+        const balanceReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/balance-sheet$/.exec(url.pathname);
+        if (balanceReport && request.method === 'GET') {
+          requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,
+            400, 'INVALID_QUERY', 'Supply one asOf date.');
+          json(200, await business.balanceSheet(token, balanceReport[1], url.searchParams.get('asOf'))); return;
+        }
+        const profitReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/profit-and-loss$/.exec(url.pathname);
+        if (profitReport && request.method === 'GET') {
+          requireThat([...url.searchParams.keys()].every(k => ['from', 'asOf'].includes(k)) &&
+            url.searchParams.getAll('from').length === 1 && url.searchParams.getAll('asOf').length === 1,
+          400, 'INVALID_QUERY', 'Supply one from and one asOf date.');
+          json(200, await business.profitAndLoss(token, profitReport[1], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
+        }
         const report = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/trial-balance$/.exec(url.pathname);
         if (report && request.method === 'GET') {
           requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,

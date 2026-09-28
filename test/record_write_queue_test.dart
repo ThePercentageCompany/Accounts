@@ -9,6 +9,85 @@ import 'package:tpc_invoice/core/saas/record_write_queue.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'receipt payment retains the server-validated allocation inputs',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async {
+          final operation = jsonDecode(request.body)['operations'][0] as Map;
+          expect(operation['action'], 'receive');
+          expect(operation.containsKey('recordId'), isFalse);
+          expect(operation['expectedVersion'], 0);
+          expect(operation['values']['invoiceId'], 'i' * 43);
+          return http.Response(
+            jsonEncode({
+              'results': [
+                {
+                  'operationId': operation['operationId'],
+                  'status': 'APPLIED',
+                  'recordId': 'r' * 43,
+                  'version': 1,
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+      await queue.enqueue('Receipts', 'receive', {
+        'invoiceId': 'i' * 43,
+        'customerId': 'u' * 43,
+        'paymentDate': '2026-09-28',
+        'amount': 25.0,
+        'currency': 'AED',
+        'paymentAccount': 'Bank',
+        'reference': 'Transfer',
+      }, expectedVersion: 0);
+      await queue.flush();
+      expect(queue.pending, isEmpty);
+      api.close();
+    },
+  );
+  test('invoice issuing persists no client-controlled values', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final api = SaasApi(
+      origin: 'https://api.test',
+      client: MockClient((request) async {
+        final operation = jsonDecode(request.body)['operations'][0] as Map;
+        expect(operation['action'], 'issue');
+        expect(operation.containsKey('values'), isFalse);
+        return http.Response(
+          jsonEncode({
+            'results': [
+              {
+                'operationId': operation['operationId'],
+                'status': 'APPLIED',
+                'recordId': 'i' * 43,
+                'version': 3,
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+    final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+    await queue.enqueue(
+      'Invoices',
+      'issue',
+      {},
+      recordId: 'i' * 43,
+      expectedVersion: 2,
+    );
+    await queue.flush();
+    expect(queue.pending, isEmpty);
+    api.close();
+  });
+  test(
     'posting persists its identity without client values and retains rejected requests',
     () async {
       SharedPreferences.setMockInitialValues({});

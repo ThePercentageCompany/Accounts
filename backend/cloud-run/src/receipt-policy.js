@@ -1,0 +1,80 @@
+import { challenge } from './crypto.js';
+import { requireThat } from './errors.js';
+import { assertOpenLedgerDate, validLedgerDate } from './financial-period-policy.js';
+import { minor } from './journal-policy.js';
+
+const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
+const money = cents => Number(cents) / 100;
+const nextRow = rows => Math.max(1, ...rows.map(row => Number(row._row) || 1)) + 1;
+
+export function receiptInput(input) {
+  requireThat(input && typeof input === 'object' && !Array.isArray(input) &&
+    Object.keys(input).length > 0 && Object.keys(input).every(key =>
+      ['invoiceId', 'customerId', 'paymentDate', 'amount', 'currency', 'paymentAccount', 'reference'].includes(key)),
+  400, 'INVALID_RECEIPT', 'Supply one invoice and its payment details.');
+  const values = { ...input, reference: input.reference ?? '' };
+  requireThat(typeof values.invoiceId === 'string' && /^[A-Za-z0-9_-]{43}$/.test(values.invoiceId) &&
+    typeof values.customerId === 'string' && /^[A-Za-z0-9_-]{43}$/.test(values.customerId) &&
+    validLedgerDate(values.paymentDate) && typeof values.currency === 'string' && /^[A-Z]{3}$/.test(values.currency) &&
+    ['Cash', 'Bank'].includes(values.paymentAccount) && typeof values.reference === 'string' && values.reference.length <= 500,
+  400, 'INVALID_RECEIPT', 'Choose an invoice, date, currency and Cash or Bank account.');
+  requireThat(minor(values.amount) > 0n, 400, 'INVALID_RECEIPT', 'Receipt amount must be positive.');
+  return Object.fromEntries(Object.keys(values).sort().map(key => [key, values[key]]));
+}
+
+export async function receiptChanges(sheets, companyId, table, id, action, old, values, system, operation) {
+  if (table === 'ReceiptAllocations') {
+    requireThat(false, 409, 'RECEIPT_LOCKED', 'Receipt allocations are created by the payment workflow.');
+  }
+  if (table !== 'Receipts') return { values, extra: [] };
+  requireThat(action === 'receive' && !old, 409, 'RECEIPT_LOCKED', 'Posted receipts cannot be edited or deleted.');
+  const { invoiceId, ...receipt } = values;
+  const data = await sheets.read(companyId, ['Customers', 'Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+  const customer = data.Customers.find(row => row.companyId === companyId && row.recordId === receipt.customerId && active(row));
+  const invoice = data.Invoices.find(row => row.companyId === companyId && row.recordId === invoiceId && active(row));
+  requireThat(customer, 409, 'RECEIPT_CUSTOMER_INVALID', 'The selected customer is unavailable.');
+  requireThat(invoice && ['ISSUED', 'PARTIALLY_PAID'].includes(invoice.status), 409, 'INVOICE_NOT_PAYABLE', 'The selected invoice is not open for payment.');
+  requireThat(invoice.customerId === receipt.customerId, 409, 'RECEIPT_CUSTOMER_MISMATCH', 'The receipt customer does not match the invoice.');
+  requireThat(invoice.currency === receipt.currency, 409, 'RECEIPT_CURRENCY_MISMATCH', 'The receipt currency does not match the invoice.');
+  requireThat(receipt.paymentDate >= invoice.issueDate, 409, 'INVALID_PAYMENT_DATE', 'Payment date cannot precede the invoice date.');
+  await assertOpenLedgerDate(sheets, companyId, receipt.paymentDate);
+  const total = minor(invoice.total), paid = minor(invoice.paidAmount ?? 0), balance = minor(invoice.balance);
+  requireThat(paid + balance === total && balance > 0n, 409, 'INVOICE_BALANCE_INVALID', 'Refresh or repair the invoice balance before receiving payment.');
+  const amount = minor(receipt.amount);
+  requireThat(amount <= balance, 409, 'RECEIPT_OVERPAYMENT', 'Receipt amount exceeds the invoice balance.');
+
+  const year = receipt.paymentDate.slice(0, 4), pattern = new RegExp(`^REC-${year}-(\\d{6})$`);
+  const sequence = Math.max(0, ...data.Receipts.filter(row => row.companyId === companyId && active(row))
+    .map(row => pattern.exec(row.number)?.[1]).filter(Boolean).map(Number)) + 1;
+  requireThat(sequence <= 999999, 409, 'RECEIPT_SEQUENCE_EXHAUSTED', 'Receipt numbering is exhausted for this year.');
+  const number = `REC-${year}-${String(sequence).padStart(6, '0')}`;
+  const allocationId = challenge(`${companyId}:${operation}:receipt-allocation`);
+  const journalId = challenge(`${companyId}:${operation}:receipt-journal`);
+  const journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
+  const newPaid = paid + amount, newBalance = balance - amount;
+  const accountId = receipt.paymentAccount === 'Cash' ? 'cash' : 'bank';
+  const accountName = receipt.paymentAccount === 'Cash' ? 'Cash' : 'Bank';
+  return { values: { ...receipt, number, status: 'POSTED' }, extra: [
+    { table: 'ReceiptAllocations', row: nextRow(data.ReceiptAllocations), values: {
+      ...journalSystem, recordId: allocationId, receiptId: id, invoiceId, amount: money(amount),
+    } },
+    { table: 'Invoices', row: invoice._row, values: {
+      paidAmount: money(newPaid), balance: money(newBalance), status: newBalance === 0n ? 'PAID' : 'PARTIALLY_PAID',
+      updatedAt: system.updatedAt, updatedBy: system.updatedBy, recordVersion: Number(invoice.recordVersion) + 1,
+      syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey,
+    } },
+    { table: 'Journals', row: nextRow(data.Journals), values: {
+      ...journalSystem, recordId: journalId, number: `AUTO-${journalId}`, date: receipt.paymentDate,
+      description: `Receipt ${number}`, sourceType: 'Receipt', sourceId: id,
+      totalDebit: money(amount), totalCredit: money(amount), status: 'POSTED',
+    } },
+    { table: 'JournalLines', row: nextRow(data.JournalLines), values: {
+      ...journalSystem, recordId: challenge(`${journalId}:0`), journalId, lineNumber: 1,
+      accountId, accountName, accountGroup: 'Asset', debit: money(amount), credit: 0,
+    } },
+    { table: 'JournalLines', row: nextRow(data.JournalLines) + 1, values: {
+      ...journalSystem, recordId: challenge(`${journalId}:1`), journalId, lineNumber: 2,
+      accountId: 'accounts_receivable', accountName: 'Accounts Receivable', accountGroup: 'Asset', debit: 0, credit: money(amount),
+    } },
+  ] };
+}

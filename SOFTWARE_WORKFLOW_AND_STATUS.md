@@ -148,7 +148,7 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 | Customers | Create, edit and read | Permitted reads | Complete business workflow integration |
 | Income/expenses | Create/edit unposted entries; post journals; record later full payments; reverse unpaid postings while preserving history | Permitted reads | Partial payments, paid-entry refunds, configurable tax/accounts, attachment UI and live validation |
 | Financial periods | Create/edit open periods and close with restrictions | Permitted reads | Audited reopening workflow |
-| Invoices/receipts | Record viewing | Permitted reads | Creation, issuing, numbering, payments, allocations, documents and ledger integration |
+| Invoices/receipts | Create/edit drafts and lines; issue with server numbering and atomic receivable/revenue/VAT journal; record partial/final receipts with server allocation, balance update and Cash/Bank-to-AR journal; finalized records lock | Permitted reads | Invoice documents, credit/void/refund and receipt-reversal workflows and live validation |
 | Quotations | Record viewing | Permitted reads | Authoring, issuing and safe conversion to invoice |
 | Payroll/payslips | Record viewing | Permitted reads, subject to record scope | Calculation, approval, payment, documents and postings |
 | Attendance/overtime | Record viewing | Permitted reads | Authorized write/approval workflows |
@@ -156,7 +156,7 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 | Capital/equity | Record viewing | Permitted reads | Contribution/loan/equity workflows and postings |
 | Journals/balance sheet | Underlying records viewable; backend journal rules exist | Permitted reads | Complete posting workflow and calculated financial statements |
 | Company profile/logo | Profile records viewable; backend document support exists | Subject to settings permission | Editing/upload/display integration and verification |
-| Dashboard/reports | Owner trial balance from posted journals, with as-of date and integrity checks | Reports not yet connected for employees | P&L, balance sheet, dashboard and remaining reports |
+| Dashboard/reports | Owner trial balance, period profit/loss and balance sheet from posted journals, with date controls and integrity checks | Reports not yet connected for employees | Dashboard, exports, remaining reports and full transaction coverage |
 
 Granting a section does not implement missing screens or authorize writes that
 the API does not support. Readable journal records are not a completed balance
@@ -199,7 +199,22 @@ reviewed launch decision; their priority does not mean they can be silently skip
 
 ### Recorded local validation
 
-- Latest full backend run: **143 tests passed**. Trial-balance tests cover exact
+- Latest full backend run: **160 tests passed**. Receipt tests cover payment
+  limits, customer/currency/date/period checks, partial and final allocation,
+  server numbering, balanced journals, write locks and lost-response replay.
+  Eight focused Flutter receipt/invoice/queue tests and the full **177-test Flutter suite** passed. Invoice issuing tests cover yearly
+  server numbering, open periods, prefix validation, balanced journals, locking,
+  retries and prevention of duplicate journals. Invoice draft tests cover exact
+  line rounding, discount/tax limits, finalized locks, forged totals, atomic header
+  refresh and lost-response recovery without duplicate updates. Two Flutter form
+  tests verify source-only draft and line submissions; the queue test also verifies
+  issuing contains no client-controlled values.
+  Balance-sheet tests cover earnings,
+  closing transfers without double-counting, signed contra balances, tenant denial,
+  date query validation and private caching. Three report widget tests passed.
+  Profit/loss tests cover inclusive
+  dates, exact signed results, expense losses and reversals in a later period.
+  Trial-balance tests cover exact
   balances, cutoffs, reversals, corrupt-ledger rejection, scoped owner access,
   revoked sessions, pending writes and HTTP query/cache behavior. The report
   widget test verifies stale totals disappear when refresh fails.
@@ -211,7 +226,7 @@ reviewed launch decision; their priority does not mean they can be silently skip
   tests passed. Explicit owner cash-entry posting
   saves source and journals atomically, validates both accounting dates, and
   reconciles lost responses without duplicate posting. Five focused Flutter
-  queue/editor tests passed in the preceding milestone. Partial payments and paid-entry refunds remain unfinished.
+  queue/editor tests passed in the preceding milestone. Paid-entry refunds and receipt reversal remain unfinished.
   Linked income/expense entries
   reject standalone edits and deletion until coordinated correction is available.
   The obsolete Apps Script backend and its own tests have been removed; active

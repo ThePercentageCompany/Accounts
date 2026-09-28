@@ -15,6 +15,10 @@ class TrialBalanceView extends StatefulWidget {
 
 class _TrialBalanceViewState extends State<TrialBalanceView> {
   DateTime _date = DateTime.now();
+  DateTime _from = DateTime(DateTime.now().year);
+  bool _profit = false;
+  bool _balance = false;
+  bool get _statement => _profit || _balance;
   late Future<Map<String, dynamic>> _report;
   String get _asOf => _date.toIso8601String().substring(0, 10);
   @override
@@ -24,7 +28,15 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   }
 
   void _load() {
-    _report = widget.api.trialBalance(widget.companyId, _asOf);
+    _report = _balance
+        ? widget.api.balanceSheet(widget.companyId, _asOf)
+        : _profit
+        ? widget.api.profitAndLoss(
+            widget.companyId,
+            _from.toIso8601String().substring(0, 10),
+            _asOf,
+          )
+        : widget.api.trialBalance(widget.companyId, _asOf);
     // Observe immediate failures before the next frame attaches FutureBuilder.
     // FutureBuilder still receives the original future and displays its error.
     _report.ignore();
@@ -37,13 +49,58 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         spacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('Trial balance'),
+          ChoiceChip(
+            label: const Text('Trial balance'),
+            selected: !_statement,
+            onSelected: (_) => setState(() {
+              _profit = false;
+              _balance = false;
+              _load();
+            }),
+          ),
+          ChoiceChip(
+            label: const Text('Profit and loss'),
+            selected: _profit,
+            onSelected: (_) => setState(() {
+              _profit = true;
+              _balance = false;
+              if (_from.isAfter(_date)) _from = DateTime(_date.year);
+              _load();
+            }),
+          ),
+          ChoiceChip(
+            label: const Text('Balance sheet'),
+            selected: _balance,
+            onSelected: (_) => setState(() {
+              _balance = true;
+              _profit = false;
+              _load();
+            }),
+          ),
+          if (_profit)
+            TextButton(
+              onPressed: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _from,
+                  firstDate: DateTime(1900),
+                  lastDate: _date,
+                );
+                if (date != null && mounted) {
+                  setState(() {
+                    _from = date;
+                    _load();
+                  });
+                }
+              },
+              child: Text('From ${_from.toIso8601String().substring(0, 10)}'),
+            ),
           TextButton(
             onPressed: () async {
               final date = await showDatePicker(
                 context: context,
                 initialDate: _date,
-                firstDate: DateTime(1900),
+                firstDate: _profit ? _from : DateTime(1900),
                 lastDate: DateTime(2200),
               );
               if (date != null && mounted) {
@@ -89,8 +146,36 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               child: Column(
                 children: [
                   Text(
-                    '${data['journalCount']} posted journals through ${data['asOf']}',
+                    '${data['journalCount']} posted journals ${_profit ? "from ${data['from']} " : ""}through ${data['asOf']}',
                   ),
+                  if (_profit)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Income: ${data['totalIncome']}   Expenses: ${data['totalExpenses']}   Net profit / loss: ${data['netProfit']}',
+                      ),
+                    ),
+                  if (_balance)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          Text('Assets: ${data['totalAssets']}'),
+                          Text('Liabilities: ${data['totalLiabilities']}'),
+                          Text('Posted equity: ${data['postedEquity']}'),
+                          Text(
+                            'Accumulated earnings: ${data['accumulatedEarnings']}',
+                          ),
+                          Text('Total equity: ${data['totalEquity']}'),
+                          Text(
+                            'Liabilities + equity: ${data['totalLiabilitiesAndEquity']}',
+                          ),
+                          const Text(
+                            'Accumulated earnings include income and expenses not transferred into posted equity.',
+                          ),
+                        ],
+                      ),
+                    ),
                   if (rows.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(20),
@@ -99,11 +184,18 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Account')),
-                        DataColumn(label: Text('Group')),
-                        DataColumn(label: Text('Debit'), numeric: true),
-                        DataColumn(label: Text('Credit'), numeric: true),
+                      columns: [
+                        const DataColumn(label: Text('Account')),
+                        const DataColumn(label: Text('Group')),
+                        DataColumn(
+                          label: Text(_statement ? 'Amount' : 'Debit'),
+                          numeric: true,
+                        ),
+                        if (!_statement)
+                          const DataColumn(
+                            label: Text('Credit'),
+                            numeric: true,
+                          ),
                       ],
                       rows: [
                         for (final row in rows)
@@ -111,18 +203,22 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                             cells: [
                               DataCell(Text('${row['accountName']}')),
                               DataCell(Text('${row['accountGroup']}')),
-                              DataCell(Text('${row['debit']}')),
-                              DataCell(Text('${row['credit']}')),
+                              DataCell(
+                                Text('${row[_statement ? 'amount' : 'debit']}'),
+                              ),
+                              if (!_statement)
+                                DataCell(Text('${row['credit']}')),
                             ],
                           ),
-                        DataRow(
-                          cells: [
-                            const DataCell(Text('Total')),
-                            const DataCell(Text('')),
-                            DataCell(Text('${data['totalDebit']}')),
-                            DataCell(Text('${data['totalCredit']}')),
-                          ],
-                        ),
+                        if (!_statement)
+                          DataRow(
+                            cells: [
+                              const DataCell(Text('Total')),
+                              const DataCell(Text('')),
+                              DataCell(Text('${data['totalDebit']}')),
+                              DataCell(Text('${data['totalCredit']}')),
+                            ],
+                          ),
                       ],
                     ),
                   ),

@@ -94,7 +94,8 @@ class RecordWriteQueue {
         'action': action,
         'expectedVersion': expectedVersion,
         if (recordId != null) 'recordId': recordId,
-        if (action != 'delete' && action != 'post') 'values': values,
+        if (!const ['delete', 'post', 'issue'].contains(action))
+          'values': values,
       });
     } finally {
       _busy = false;
@@ -160,6 +161,19 @@ class RecordWriteQueue {
           'INVALID_PAYMENT',
           'INVALID_REVERSAL',
           'REVERSAL_NOT_AVAILABLE',
+          'INVOICE_EMPTY',
+          'INVOICE_TOTAL_MISMATCH',
+          'INVALID_INVOICE_PREFIX',
+          'INVOICE_SEQUENCE_EXHAUSTED',
+          'INVALID_RECEIPT',
+          'RECEIPT_LOCKED',
+          'RECEIPT_CUSTOMER_INVALID',
+          'RECEIPT_CUSTOMER_MISMATCH',
+          'RECEIPT_CURRENCY_MISMATCH',
+          'INVOICE_NOT_PAYABLE',
+          'INVOICE_BALANCE_INVALID',
+          'RECEIPT_OVERPAYMENT',
+          'RECEIPT_SEQUENCE_EXHAUSTED',
           'PAYMENT_NOT_AVAILABLE',
           'INVALID_PAYMENT_DATE',
           'PERIOD_CLOSED',
