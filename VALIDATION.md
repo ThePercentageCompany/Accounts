@@ -345,3 +345,26 @@ locked. The owner UI selects only open invoices and validates overpayment.
 Full backend suite: **160 passed**. Eight focused Flutter receipt/invoice/queue
 tests and the full **177-test Flutter suite** passed. Static analysis introduced
 no new errors. Not deployed.
+
+# Quotation workflow — 29 September 2026
+
+Added shared quotation draft and line editing with server-calculated totals,
+server numbering and finalized locks. A sent quotation can be converted once;
+the quotation update, draft invoice and copied lines commit atomically and a
+lost-response retry cannot create another invoice. The owner UI supports draft
+editing, finalization and conversion.
+
+Full backend suite: **165 passed**. Two focused quotation editor tests plus the
+record queue suite and the full **179-test Flutter suite** passed. No analyzer
+errors were introduced. Not deployed.
+
+# Payroll workflow — 29 September 2026
+
+Added server-authoritative payroll drafts using employee salary, allowances and
+approved monthly overtime. Approval locks the payroll and posts gross salary
+expense, net salary payable and deduction liability. Payment posts the net
+payable against Cash or Bank. Duplicate periods, forged totals, invalid status
+transitions, closed periods and repeated/lost responses are rejected or replayed.
+
+Full backend suite: **170 passed**. Two focused payroll editor tests and the
+record queue suite and the full **181-test Flutter suite** passed. Not deployed.

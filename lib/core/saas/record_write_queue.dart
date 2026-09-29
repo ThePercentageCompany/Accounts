@@ -94,7 +94,14 @@ class RecordWriteQueue {
         'action': action,
         'expectedVersion': expectedVersion,
         if (recordId != null) 'recordId': recordId,
-        if (!const ['delete', 'post', 'issue'].contains(action))
+        if (!const [
+          'delete',
+          'post',
+          'issue',
+          'send',
+          'convert',
+          'approve',
+        ].contains(action))
           'values': values,
       });
     } finally {
@@ -174,6 +181,22 @@ class RecordWriteQueue {
           'INVOICE_BALANCE_INVALID',
           'RECEIPT_OVERPAYMENT',
           'RECEIPT_SEQUENCE_EXHAUSTED',
+          'INVALID_QUOTATION',
+          'INVALID_QUOTATION_LINE',
+          'QUOTATION_LOCKED',
+          'QUOTATION_EMPTY',
+          'QUOTATION_TOTAL_MISMATCH',
+          'QUOTATION_DERIVED_FIELD',
+          'INVALID_QUOTATION_PREFIX',
+          'QUOTATION_SEQUENCE_EXHAUSTED',
+          'QUOTATION_NOT_CONVERTIBLE',
+          'INVALID_PAYROLL',
+          'PAYROLL_LOCKED',
+          'PAYROLL_EMPLOYEE_INVALID',
+          'PAYROLL_DERIVED_FIELD',
+          'PAYROLL_DUPLICATE',
+          'PAYROLL_TOTAL_MISMATCH',
+          'PAYROLL_NOT_PAYABLE',
           'PAYMENT_NOT_AVAILABLE',
           'INVALID_PAYMENT_DATE',
           'PERIOD_CLOSED',

@@ -10,8 +10,8 @@ The software operator configures the shared infrastructure once.
 
 “Implemented” below means available in local source and, where stated, covered by
 local tests. It does not mean the latest code has been deployed or verified with
-real customer data. No completion percentage is assigned: remaining financial,
-migration and live-validation work is substantial.
+real customer data. This release is a clean launch with no legacy records to
+import. Remaining financial and live-validation work is substantial.
 
 ## 1. Intended software workflow
 
@@ -20,11 +20,8 @@ flowchart TD
     A[Open TPC Accounts] --> B{Owner or employee?}
     B -->|Owner| C[Google sign-in through shared API]
     C --> D[Select company or register company]
-    D --> E{New or existing workspace?}
-    E -->|New| F[Authorize company Google storage]
+    D --> F[Authorize company Google storage]
     F --> G[Create or resume folders, spreadsheet and schema]
-    E -->|Existing| H[Verify ownership, back up and migrate]
-    H --> I[Company ready]
     G --> I
     I --> J[Manage employees, roles and sections]
     J --> K[Issue QR invitation and separate private code]
@@ -41,9 +38,8 @@ flowchart TD
     S --> T[Update workspace, ledger and reports]
 ```
 
-**This diagram is the intended complete workflow.** Existing-workspace migration,
-all business writes, automatic ledger updates and complete reporting are not yet
-implemented in the new flow.
+**This diagram is the intended complete workflow.** The first production release
+creates new company workspaces only. Legacy workspace adoption is outside scope.
 
 ### Owner registration and setup
 
@@ -58,8 +54,8 @@ implemented in the new flow.
 8. Revoked Google access requires reconnection; existing workspace identifiers
    must be preserved.
 
-New registration does **not** import an old company's spreadsheet or local edits.
-Existing companies need the separate migration work listed below.
+New registration creates an empty company workspace. No old spreadsheet, local
+cache, pending edit or legacy invitation is imported.
 
 ### Employee administration and login
 
@@ -107,12 +103,12 @@ or a multi-record accounting transaction engine.
 | Google authorization | Backend OAuth, encrypted refresh credentials, Secret Manager/KMS | Real browser callbacks and reconnect need rollout validation |
 | Background setup | Cloud Tasks and setup worker identity | Requires live retry/recovery verification |
 | Browser sessions | Secure HttpOnly cookies and trusted API origin | Same-site routing must be configured and verified |
-| Local pending edits | Owner/company-scoped storage and stable operation IDs | Legacy queues/data have not been migrated |
+| Local pending edits | Owner/company-scoped storage and stable operation IDs | Applies only to edits created in the new SaaS flow |
 
 The project uses Cloud Storage for the control registry. Firestore appeared in
 the earlier proposal; it is not the registry used by this implementation.
 
-Legacy source files remain for migration/reference. In particular,
+Legacy source files remain for reference only. In particular,
 `lib/core/auth/company_onboarding_view.dart` is not the active onboarding path.
 The obsolete Apps Script backend has been removed. The current owner setup view is
 `lib/core/saas/company_setup_view.dart`.
@@ -149,8 +145,8 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 | Income/expenses | Create/edit unposted entries; post journals; record later full payments; reverse unpaid postings while preserving history | Permitted reads | Partial payments, paid-entry refunds, configurable tax/accounts, attachment UI and live validation |
 | Financial periods | Create/edit open periods and close with restrictions | Permitted reads | Audited reopening workflow |
 | Invoices/receipts | Create/edit drafts and lines; issue with server numbering and atomic receivable/revenue/VAT journal; record partial/final receipts with server allocation, balance update and Cash/Bank-to-AR journal; finalized records lock | Permitted reads | Invoice documents, credit/void/refund and receipt-reversal workflows and live validation |
-| Quotations | Record viewing | Permitted reads | Authoring, issuing and safe conversion to invoice |
-| Payroll/payslips | Record viewing | Permitted reads, subject to record scope | Calculation, approval, payment, documents and postings |
+| Quotations | Create/edit drafts and lines; finalize with server numbering; convert once into a copied draft invoice | Permitted reads | Documents, acceptance/expiry lifecycle and live validation |
+| Payroll/payslips | Create/edit payroll drafts; server derives salary and approved overtime; approval accrues expense/liabilities; payment settles net payable | Permitted reads, subject to record scope | Payslip documents, deduction remittance, attendance locks and live validation |
 | Attendance/overtime | Record viewing | Permitted reads | Authorized write/approval workflows |
 | Fixed assets | Record viewing | Permitted reads | Acquisition, depreciation, disposal and ledger integration |
 | Capital/equity | Record viewing | Permitted reads | Contribution/loan/equity workflows and postings |
@@ -170,7 +166,6 @@ sheet or reporting module.
 | P0 | Connect source transactions to ledger | Invoice, receipt, income, expense, payroll, asset and capital events produce correct postings once, including interrupted/repeated requests |
 | P0 | Implement financial write screens | Supported business workflows work through the shared API, with clear errors and preserved pending edits |
 | P0 | Complete reports/dashboard | Trial balance, P&L, balance sheet and relevant reports reconcile to posted shared records |
-| P0 | Build reviewed legacy migration | Ownership verified; backup and dry run available; records/documents/IDs/pending edits preserved; rollback tested |
 | P0 | Verify live authentication and routing | Trusted app/API origins, HTTPS, OAuth callbacks, cookie behavior, logout and reconnect work in real browsers |
 | P0 | Test two unrelated live companies | Altered company, record, employee and document IDs cannot cross company boundaries |
 | P0 | Validate real employee journey | Owner issues QR; camera/link login works; permissions change promptly; reset/revocation and owner-offline access work |
@@ -179,7 +174,7 @@ sheet or reporting module.
 | P1 | Finish document lifecycle | Recovery/cancellation, retention/deletion policy and content handling decisions are implemented and tested |
 | P1 | Production operations | Monitoring, redacted logs, backup/restore, abuse protection, capacity tests and practical resource limits |
 | P1 | Hosting and cost review | Confirm an appropriate hosting plan, estimate low-volume costs and configure monitoring; zero cost is not guaranteed |
-| Release | Deploy and verify compatible versions | Updated backend first, then configured frontend; migrations reviewed; smoke tests and rollback verified |
+| Release | Deploy and verify compatible versions | Updated backend first, then configured frontend; smoke tests and deployment rollback verified |
 
 P0 items block a complete customer production release. P1 items also need a
 reviewed launch decision; their priority does not mean they can be silently skipped.
@@ -199,10 +194,15 @@ reviewed launch decision; their priority does not mean they can be silently skip
 
 ### Recorded local validation
 
-- Latest full backend run: **160 tests passed**. Receipt tests cover payment
+- Latest full backend run: **170 tests passed**. Payroll tests cover server-derived
+  salary/overtime totals, duplicate and transition guards, balanced approval and
+  payment journals, closed periods, and lost-response replay. The full **181-test
+  Flutter suite** passed. Quotation tests cover authoritative
+  totals, date/prefix validation, finalization locks, yearly numbering, atomic
+  draft-invoice conversion and lost-response replay. Receipt tests cover payment
   limits, customer/currency/date/period checks, partial and final allocation,
   server numbering, balanced journals, write locks and lost-response replay.
-  Eight focused Flutter receipt/invoice/queue tests and the full **177-test Flutter suite** passed. Invoice issuing tests cover yearly
+  Eight focused Flutter receipt/invoice/queue tests and the full **179-test Flutter suite** passed. Invoice issuing tests cover yearly
   server numbering, open periods, prefix validation, balanced journals, locking,
   retries and prevention of duplicate journals. Invoice draft tests cover exact
   line rounding, discount/tax limits, finalized locks, forged totals, atomic header
@@ -266,7 +266,7 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
 - [x] Local money-validation, journal and financial-period safeguards.
 - [ ] Complete source-transaction ledger integration and financial write workflows.
 - [ ] Complete reporting and document/profile integration.
-- [ ] Review and execute a tested legacy migration.
+- [x] Confirm clean launch: no legacy records, queues or invitations will be imported.
 - [ ] Verify real owner and employee journeys across two companies.
 - [ ] Verify infrastructure, backups, monitoring and restore procedures.
 - [ ] Deploy compatible backend/frontend versions and pass live smoke tests.

@@ -88,6 +88,66 @@ test('receipt payment is atomic, server numbered and idempotent after a lost res
   assert.equal(f.data.JournalLines.length, 2);
 });
 
+test('quotation finalization and conversion create one retry-safe draft invoice', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  const customerId = 'c'.repeat(43);
+  Object.assign(f.data, { Customers: [{ companyId: f.companyId, recordId: customerId, name: 'Customer', _row: 2 }],
+    Quotations: [], QuotationItems: [], CompanyProfile: [{ companyId: f.companyId, quotationPrefix: 'TPCQ' }],
+    Invoices: [], InvoiceItems: [] });
+  f.sheets.writeBatch = async (id, changes) => { for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values); };
+  const quotation = await f.business.mutate(f.token, f.companyId, 'Quotations', null, 'create', {
+    expectedVersion: 0, values: { customerId, issueDate: '2026-09-28', validUntil: '2026-10-28', currency: 'AED' },
+  }, 'quotation_create_001');
+  await f.business.mutate(f.token, f.companyId, 'QuotationItems', null, 'create', {
+    expectedVersion: 0, values: { quotationId: quotation.recordId, lineNumber: 1, description: 'Service',
+      quantity: 2, unitPrice: 50, discount: 5, taxRate: 5 },
+  }, 'quotation_line_001');
+  await f.business.mutate(f.token, f.companyId, 'Quotations', quotation.recordId, 'send',
+    { expectedVersion: 2 }, 'quotation_send_001');
+  assert.equal(f.data.Quotations[0].number, 'TPCQ-2026-000001'); assert.equal(f.data.Quotations[0].status, 'SENT');
+  let batches = 0;
+  f.sheets.writeBatch = async (id, changes) => {
+    batches++; for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values);
+    throw new Error('response lost');
+  };
+  const convert = () => f.business.mutate(f.token, f.companyId, 'Quotations', quotation.recordId, 'convert',
+    { expectedVersion: 3 }, 'quotation_convert_001');
+  await assert.rejects(convert()); await convert();
+  assert.equal(batches, 1); assert.equal(f.data.Invoices.length, 1); assert.equal(f.data.InvoiceItems.length, 1);
+  assert.equal(f.data.Invoices[0].status, 'DRAFT'); assert.equal(f.data.Invoices[0].total, 99.75);
+  assert.equal(f.data.Quotations[0].convertedInvoiceId, f.data.Invoices[0].recordId);
+  assert.equal((await f.business.list(f.token, f.companyId, 'QuotationItems'))[0].parentStatus, 'CONVERTED');
+});
+
+test('payroll approval and payment post each journal once', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.sheets.readReferences = f.sheets.read;
+  const employeeId = 'e'.repeat(43);
+  Object.assign(f.data, { Employees: [{ companyId: f.companyId, recordId: employeeId, employmentStatus: 'ACTIVE',
+    basicSalary: 5000, allowances: 500 }], Overtime: [], Payroll: [], PayrollItems: [],
+    Journals: [], JournalLines: [], FinancialPeriods: [] });
+  let batches = 0;
+  f.sheets.writeBatch = async (id, changes) => { batches++; for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values); };
+  const payroll = await f.business.mutate(f.token, f.companyId, 'Payroll', null, 'create', {
+    expectedVersion: 0, values: { month: '2026-09', employeeId, bonus: 250, deductions: 100 },
+  }, 'payroll_create_001');
+  await f.business.mutate(f.token, f.companyId, 'Payroll', payroll.recordId, 'approve',
+    { expectedVersion: 1 }, 'payroll_approve_001');
+  assert.equal(f.data.Payroll[0].status, 'APPROVED'); assert.equal(f.data.Payroll[0].netSalary, 5650);
+  assert.equal(f.data.Journals[0].sourceType, 'Payroll');
+  const write = f.sheets.writeBatch;
+  f.sheets.writeBatch = async (...args) => { await write(...args); throw new Error('response lost'); };
+  const payment = { operations: [{ operationId: 'payroll_payment_001', table: 'Payroll', action: 'payrollPay',
+    recordId: payroll.recordId, expectedVersion: 2,
+    values: { paidDate: '2026-10-01', paymentAccount: 'Bank', paymentReference: 'WPS' } }] };
+  assert.equal((await f.business.sync(f.token, f.companyId, payment)).results[0].status, 'FAILED');
+  assert.equal((await f.business.sync(f.token, f.companyId, payment)).results[0].status, 'APPLIED');
+  assert.equal(f.data.Payroll[0].status, 'PAID'); assert.equal(f.data.Journals.length, 2);
+  assert.equal(batches, 2);
+});
+
 async function cashFixture(table = 'Income', paid = true) {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);

@@ -326,3 +326,32 @@ invoice paid amount/balance/status, and posts Cash/Bank debit and Accounts
 Receivable credit in one batch. Stable operation IDs prevent duplicates after
 uncertain responses. Posted receipts and allocations cannot be edited through
 generic writes. Credit, void, refund, reversal and invoice-document workflows remain.
+
+## Quotation workflow
+
+Quotation headers and lines begin as drafts. Header totals and line tax/total are
+calculated by the server using the invoice decimal rules. The `send` action
+requires at least one line, verifies stored totals, assigns the configured
+quotation prefix (default `QUO`) with `PREFIX-YYYY-NNNNN`, and locks the quotation.
+
+The `convert` action accepts a sent, unconverted quotation and atomically marks it
+converted while creating one draft invoice and copied invoice lines. The new
+invoice retains the customer, currency, totals, notes and payment terms and must
+still pass the normal invoice issuing workflow. Stable operation IDs prevent a
+lost response from creating a second invoice. Acceptance/expiry and quotation
+document workflows remain.
+
+## Payroll workflow
+
+Payroll drafts accept employee, month, bonus and deductions. The server reads the
+employee salary and allowances, includes approved overtime in that month, rejects
+duplicates, and calculates gross and net salary. Payroll detail rows cannot be
+written through generic record operations.
+
+The `approve` action rechecks current source values, uses the month's final date,
+requires an open accounting period, locks the payroll and atomically posts Salary
+Expense against Salary Payable and Payroll Deductions Payable. `payrollPay`
+requires an approved payroll plus payment date and Cash/Bank account, then posts
+Salary Payable against the selected asset account and marks it paid. Stable
+operation IDs prevent duplicate approval or payment journals. Payslip generation,
+deduction remittance and payroll reversal remain.

@@ -24,11 +24,11 @@ Locally implemented: owner identity and registration, Google provisioning,
 employee login/access, owner record CRUD, ordered batch upload, deletion markers,
 business/employee references, bounded field types, draft/posted journal guards,
 private document upload/download, and same-record document attachment checks.
-The latest recorded backend run has 160 passing test runner entries using
+The latest recorded backend run has 170 passing test runner entries using
 substitute cloud adapters. The shared-only Flutter entrypoint connects owner
 setup, employee authentication/administration and shared record screens. Customer,
 income/expense and financial-period owner writes are connected; other financial
-write workflows and complete offline/migration integration remain unfinished.
+write workflows and complete offline integration remain unfinished.
 Registration request keys persist per owner before sending, so a lost response
 can be retried after restarting without requesting a second company.
 
@@ -49,7 +49,7 @@ Local UI update (2026-09-25): the new app opens shared workspaces, implements
 owner employee administration (including issue/reset/revoke), reads permission-
 checked employee records, and creates/edits customers through durable requests.
 Other financial tables are read-only. This does not complete accounting writes
-or migration, and does not establish live cookie/OAuth readiness.
+or establish live cookie/OAuth readiness.
 
 Update 2026-09-26: owner income/expense create/edit forms now use the durable
 record queue. Backend entry validation calculates tax/totals and rejects invalid
@@ -74,7 +74,6 @@ the earlier deployed generic-record API does not calculate these totals.
 - Flutter API session/onboarding integration and repository adapters, preserving
   pending offline edits and reporting per-operation failures.
 - Employee business writes with explicit action permissions.
-- Reviewed legacy migration with backup, dry-run mapping and rollback.
 - Real two-company isolation tests, OAuth callbacks, employee camera login,
   private image rendering, owner-offline access and revoked-connection recovery.
 - Deployment identity, protected secrets, log redaction, monitoring, backup and

@@ -12,6 +12,8 @@ import 'financial_period_editor.dart';
 import 'trial_balance_view.dart';
 import 'invoice_editor.dart';
 import 'receipt_editor.dart';
+import 'quotation_editor.dart';
+import 'payroll_editor.dart';
 
 const workspaceTables = <String, List<String>>{
   'Invoices': ['Invoices', 'InvoiceItems', 'Receipts', 'ReceiptAllocations'],
@@ -231,6 +233,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         'Invoices',
         'InvoiceItems',
         'Receipts',
+        'Quotations',
+        'QuotationItems',
+        'Payroll',
       ].contains(table);
   String get _recordLabel => table == 'FinancialPeriods'
       ? 'financial period'
@@ -242,28 +247,53 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       ? 'invoice line'
       : table == 'Receipts'
       ? 'receipt'
+      : table == 'Quotations'
+      ? 'draft quotation'
+      : table == 'QuotationItems'
+      ? 'quotation line'
+      : table == 'Payroll'
+      ? 'payroll draft'
       : table == 'Expenses'
       ? 'expense'
       : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
     List<Map<String, dynamic>> choices = const [];
-    if (table == 'Invoices' || table == 'InvoiceItems' || table == 'Receipts') {
+    if (table == 'Payroll') {
+      final response = await widget.api.employees(widget.companyId);
+      choices = (response['employees'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .where((item) => item['employmentStatus'] == 'ACTIVE')
+          .toList();
+      if (!mounted) return;
+    }
+    if (const [
+      'Invoices',
+      'InvoiceItems',
+      'Receipts',
+      'Quotations',
+      'QuotationItems',
+    ].contains(table)) {
       final response = await widget.api.records(
         widget.companyId,
-        table == 'Invoices' ? 'Customers' : 'Invoices',
+        const ['Invoices', 'Quotations'].contains(table)
+            ? 'Customers'
+            : table == 'QuotationItems'
+            ? 'Quotations'
+            : 'Invoices',
       );
       choices = (response['records'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where(
             (item) =>
-                table == 'Invoices' ||
+                const ['Invoices', 'Quotations'].contains(table) ||
                 (table == 'InvoiceItems' && item['status'] == 'DRAFT') ||
                 (table == 'Receipts' &&
                     const [
                       'ISSUED',
                       'PARTIALLY_PAID',
                     ].contains(item['status']) &&
-                    (item['balance'] as num? ?? 0) > 0),
+                    (item['balance'] as num? ?? 0) > 0) ||
+                (table == 'QuotationItems' && item['status'] == 'DRAFT'),
           )
           .toList();
       if (!mounted) return;
@@ -276,6 +306,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           ? InvoiceLineEditor(invoices: choices, record: record)
           : table == 'Receipts'
           ? ReceiptEditor(invoices: choices)
+          : table == 'Quotations'
+          ? QuotationEditor(customers: choices, record: record)
+          : table == 'QuotationItems'
+          ? QuotationLineEditor(quotations: choices, record: record)
+          : table == 'Payroll'
+          ? PayrollEditor(employees: choices, record: record)
           : table == 'Customers'
           ? CustomerEditor(record: record)
           : table == 'FinancialPeriods'
@@ -407,6 +443,128 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (mounted) {
         setState(
           () => error = 'Unable to confirm issuing. Retry the pending request.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _quotationAction(
+    Map<String, dynamic> record,
+    String action,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          action == 'send'
+              ? 'Finalize quotation?'
+              : 'Convert to draft invoice?',
+        ),
+        content: Text(
+          action == 'send'
+              ? 'The server will assign the quotation number and lock its contents.'
+              : 'A new draft invoice with the same customer, totals and lines will be created.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              action == 'send' ? 'Finalize quotation' : 'Create draft invoice',
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue(
+        'Quotations',
+        action,
+        {},
+        recordId: record['recordId'] as String,
+        expectedVersion: int.parse('${record['recordVersion']}'),
+      );
+      await widget.writes!.flush();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error =
+              'Unable to confirm quotation action. Retry the pending request.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _payrollAction(
+    Map<String, dynamic> record,
+    String action,
+  ) async {
+    Map<String, Object?> values = {};
+    if (action == 'payrollPay') {
+      final result = await showDialog<Map<String, Object?>>(
+        context: context,
+        builder: (_) => PayrollPaymentEditor(amount: record['netSalary']),
+      );
+      if (result == null || !mounted) return;
+      values = result;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Approve payroll?'),
+          content: const Text(
+            'The server will verify salary totals and post salary expense and liabilities. The payroll cannot be edited afterward.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Approve payroll'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue(
+        'Payroll',
+        action,
+        values,
+        recordId: record['recordId'] as String,
+        expectedVersion: int.parse('${record['recordVersion']}'),
+      );
+      await widget.writes!.flush();
+      if (mounted) await _load();
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error =
+              'Unable to confirm payroll action. Retry the pending request.',
         );
       }
     } finally {
@@ -589,6 +747,40 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     child: const Text('Issue invoice'),
                   ),
                 if (_editable &&
+                    table == 'Quotations' &&
+                    row['status'] == 'DRAFT')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _quotationAction(row, 'send'),
+                    child: const Text('Finalize quotation'),
+                  ),
+                if (_editable &&
+                    table == 'Quotations' &&
+                    row['status'] == 'SENT')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _quotationAction(row, 'convert'),
+                    child: const Text('Create draft invoice'),
+                  ),
+                if (_editable && table == 'Payroll' && row['status'] == 'DRAFT')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _payrollAction(row, 'approve'),
+                    child: const Text('Approve payroll'),
+                  ),
+                if (_editable &&
+                    table == 'Payroll' &&
+                    row['status'] == 'APPROVED')
+                  TextButton(
+                    onPressed: busy || widget.writes!.pending.isNotEmpty
+                        ? null
+                        : () => _payrollAction(row, 'payrollPay'),
+                    child: const Text('Pay payroll'),
+                  ),
+                if (_editable &&
                     const ['Income', 'Expenses'].contains(table) &&
                     row['ledgerStatus'] == 'LINKED' &&
                     row['paymentStatus'] == 'UNPAID')
@@ -626,6 +818,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     (table != 'Invoices' || row['status'] == 'DRAFT') &&
                     (table != 'InvoiceItems' ||
                         row['parentStatus'] == 'DRAFT') &&
+                    (table != 'Quotations' || row['status'] == 'DRAFT') &&
+                    (table != 'QuotationItems' ||
+                        row['parentStatus'] == 'DRAFT') &&
+                    (table != 'Payroll' || row['status'] == 'DRAFT') &&
                     table != 'Receipts')
                   TextButton(
                     onPressed: busy || widget.writes!.pending.isNotEmpty
