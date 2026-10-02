@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 
 class CashReversalEditor extends StatefulWidget {
-  const CashReversalEditor({super.key});
+  const CashReversalEditor({
+    super.key,
+    this.title = 'Reverse unpaid entry',
+    this.explanation =
+        'The original history stays unchanged. An opposite journal will cancel its ledger effect. This entry cannot be paid or reused afterward.',
+    this.actionLabel = 'Reverse entry',
+  });
+  final String title;
+  final String explanation;
+  final String actionLabel;
   @override
   State<CashReversalEditor> createState() => _CashReversalEditorState();
 }
@@ -19,7 +28,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Reverse unpaid entry'),
+    title: Text(widget.title),
     content: SizedBox(
       width: 420,
       child: Form(
@@ -28,9 +37,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'The original history stays unchanged. An opposite journal will cancel its ledger effect. This entry cannot be paid or reused afterward.',
-              ),
+              Text(widget.explanation),
               TextFormField(
                 controller: _date,
                 decoration: const InputDecoration(
@@ -71,7 +78,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
             'description': _reason.text.trim(),
           });
         },
-        child: const Text('Reverse entry'),
+        child: Text(widget.actionLabel),
       ),
     ],
   );

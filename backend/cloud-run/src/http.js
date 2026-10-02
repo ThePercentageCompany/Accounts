@@ -83,6 +83,14 @@ export function createApi(service, config, { log = console.error, workspace, que
       const route = `${request.method} ${url.pathname}`;
       if (documents) {
         const document = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
+        if (document && request.method === 'GET' && !document[3]) {
+          requireThat([...url.searchParams.keys()].every(k => ['section', 'recordId'].includes(k)) &&
+            url.searchParams.getAll('section').length === 1 && url.searchParams.getAll('recordId').length === 1,
+          400, 'INVALID_QUERY', 'Supply one section and recordId.');
+          const employee = document[1] !== 'companies';
+          json(200, { documents: await documents.list(employee ? jar[EMPLOYEE] : token, document[2],
+            url.searchParams.get('section'), url.searchParams.get('recordId'), employee) }); return;
+        }
         if (document && request.method === 'POST' && document[1] === 'companies' && !document[3]) {
           // Authenticate before reading a potentially large document body.
           await service.companyStatus(token, document[2]);
@@ -97,6 +105,13 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (business) {
+        const summaryReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/(dashboard|general-ledger)$/.exec(url.pathname);
+        if (summaryReport && request.method === 'GET') {
+          requireThat([...url.searchParams.keys()].every(k => ['from', 'asOf'].includes(k)) &&
+            url.searchParams.getAll('from').length === 1 && url.searchParams.getAll('asOf').length === 1,
+          400, 'INVALID_QUERY', 'Supply one from and one asOf date.');
+          json(200, await business.report(token, summaryReport[1], summaryReport[2], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
+        }
         const balanceReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/balance-sheet$/.exec(url.pathname);
         if (balanceReport && request.method === 'GET') {
           requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,
@@ -138,6 +153,14 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (employees) {
+        const employeeReport = /^\/v1\/employee\/reports\/(dashboard|general-ledger|trial-balance|profit-and-loss|balance-sheet)$/.exec(url.pathname);
+        if (employeeReport && request.method === 'GET') {
+          const period = ['dashboard', 'general-ledger', 'profit-and-loss'].includes(employeeReport[1]);
+          requireThat([...url.searchParams.keys()].every(k => k === 'asOf' || (period && k === 'from')) &&
+            url.searchParams.getAll('asOf').length === 1 && (!period || url.searchParams.getAll('from').length === 1),
+          400, 'INVALID_QUERY', 'Supply the report dates once.');
+          json(200, await employees.report(jar[EMPLOYEE], employeeReport[1], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
+        }
         if (route === 'POST /v1/employee/login' || route === 'POST /v1/employee/refresh') {
           const input = await body(request);
           const result = route.endsWith('/login') ? await employees.login(input) : await employees.refresh(jar[EMPLOYEE]);

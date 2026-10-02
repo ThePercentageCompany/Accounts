@@ -67,32 +67,44 @@ export async function cashLedgerChanges(sheets, companyId, table, record, system
 }
 
 export async function reverseCashChanges(sheets, companyId, table, record, system, operation, values) {
-  requireThat(record.paymentStatus === 'UNPAID', 409, 'REVERSAL_NOT_AVAILABLE',
-    'Only unpaid entries can be reversed here. Paid entries need a refund workflow.');
+  requireThat(['UNPAID', 'PAID'].includes(record.paymentStatus), 409, 'REVERSAL_NOT_AVAILABLE',
+    'Only posted unpaid or paid entries can be reversed.');
   const data = await sheets.read(companyId, ['Journals', 'JournalLines']);
   const related = data.Journals.filter(j => j.companyId === companyId && j.sourceId === record.recordId &&
     j.isDeleted !== true && j.isDeleted !== 'TRUE' &&
-    [table, `${table}Payment`, `${table}Reversal`].includes(j.sourceType));
-  requireThat(related.length === 1 && related[0].sourceType === table && related[0].status === 'POSTED',
-    409, 'REVERSAL_NOT_AVAILABLE', 'One unreversed posted entry without payments is required.');
-  const original = related[0];
-  requireThat(values.date >= original.date, 400, 'INVALID_REVERSAL', 'Reversal cannot precede the original posting.');
+    [table, `${table}Payment`, `${table}Reversal`, `${table}Refund`].includes(j.sourceType));
+  const originals = related.filter(j => [table, `${table}Payment`].includes(j.sourceType));
+  const expected = record.paymentStatus === 'PAID' ? [table, `${table}Payment`] : [table];
+  requireThat(related.length === expected.length && originals.length === expected.length &&
+    expected.every(type => originals.filter(j => j.sourceType === type && j.status === 'POSTED').length === 1),
+  409, 'REVERSAL_NOT_AVAILABLE', 'The entry requires one matching posting and payment with no prior reversal.');
+  requireThat(originals.every(original => values.date >= original.date), 400, 'INVALID_REVERSAL',
+    'Reversal cannot precede the original posting or payment.');
   // Reuse exact decimal, unique-line and period validation, without changing the
   // original journal. Balanced originals remain balanced when sides are swapped.
-  await validateJournal(sheets, companyId, 'Journals', original.recordId, 'update', { status: 'DRAFT' },
-    { status: 'POSTED', date: values.date, totalDebit: original.totalDebit, totalCredit: original.totalCredit });
-  const lines = data.JournalLines.filter(l => l.companyId === companyId && l.journalId === original.recordId &&
-    l.isDeleted !== true && l.isDeleted !== 'TRUE');
-  requireThat(lines.length <= 98, 409, 'REVERSAL_NOT_AVAILABLE', 'This journal exceeds the supported reversal size.');
-  const id = challenge(`${companyId}:${operation}:reversal`);
-  const row = name => Math.max(1, ...data[name].map(r => r._row)) + 1;
-  return [{ table: 'Journals', row: row('Journals'), values: {
-    ...system, recordId: id, recordVersion: 1, number: `REV-${id}`, date: values.date,
-    description: `Reversal of ${original.recordId}: ${values.description}`, sourceType: `${table}Reversal`,
-    sourceId: record.recordId, totalDebit: original.totalCredit, totalCredit: original.totalDebit, status: 'POSTED',
-  } }, ...lines.map((l, index) => ({ table: 'JournalLines', row: row('JournalLines') + index, values: {
-    ...system, recordId: challenge(`${id}:${index}`), recordVersion: 1, journalId: id, lineNumber: index + 1,
-    accountId: l.accountId, accountName: l.accountName, accountGroup: l.accountGroup,
-    debit: l.credit || 0, credit: l.debit || 0,
-  } }))];
+  const changes = [];
+  let journalRow = Math.max(1, ...data.Journals.map(r => r._row)) + 1;
+  let lineRow = Math.max(1, ...data.JournalLines.map(r => r._row)) + 1;
+  for (const original of originals.sort((a, b) => a.sourceType === table ? 1 : b.sourceType === table ? -1 : 0)) {
+    await validateJournal(sheets, companyId, 'Journals', original.recordId, 'update', { status: 'DRAFT' },
+      { status: 'POSTED', date: values.date, totalDebit: original.totalDebit, totalCredit: original.totalCredit });
+    const lines = data.JournalLines.filter(l => l.companyId === companyId && l.journalId === original.recordId &&
+      l.isDeleted !== true && l.isDeleted !== 'TRUE');
+    requireThat(lines.length > 1 && lines.length <= 98, 409, 'REVERSAL_NOT_AVAILABLE', 'This journal cannot be reversed safely.');
+    const payment = original.sourceType === `${table}Payment`;
+    const kind = payment ? 'refund' : 'reversal';
+    const id = challenge(`${companyId}:${operation}:${kind}`);
+    changes.push({ table: 'Journals', row: journalRow++, values: {
+      ...system, recordId: id, recordVersion: 1, number: `${payment ? 'REF' : 'REV'}-${id}`, date: values.date,
+      description: `${payment ? 'Refund' : 'Reversal'} of ${original.recordId}: ${values.description}`,
+      sourceType: payment ? `${table}Refund` : `${table}Reversal`, sourceId: record.recordId,
+      totalDebit: original.totalCredit, totalCredit: original.totalDebit, status: 'POSTED',
+    } });
+    lines.forEach((l, index) => changes.push({ table: 'JournalLines', row: lineRow++, values: {
+      ...system, recordId: challenge(`${id}:${index}`), recordVersion: 1, journalId: id, lineNumber: index + 1,
+      accountId: l.accountId, accountName: l.accountName, accountGroup: l.accountGroup,
+      debit: l.credit || 0, credit: l.debit || 0,
+    } }));
+  }
+  return changes;
 }

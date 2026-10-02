@@ -40,6 +40,21 @@ async function setup() {
 }
 const denied = e => e.code === 'EMPLOYEE_ACCESS_DENIED';
 
+test('employee reports require company-wide Reports permission and recheck revocation', async () => {
+  const f = await setup();
+  const id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  await assert.rejects(() => f.employees.report(session.token, 'dashboard', '2026-09-01', '2026-09-30'), e => e.code === 'SECTION_FORBIDDEN');
+  const roleId = f.rows.Employees[0].roleId;
+  f.rows.RolePermissions.push({ recordId: opaque(), companyId: f.companyId, roleId, section: 'Reports', action: 'read', fieldName: '*', recordScope: 'COMPANY' });
+  assert.equal((await f.employees.report(session.token, 'dashboard', '2026-09-01', '2026-09-30')).netProfit, '0.00');
+  const read = f.sheets.read;
+  f.sheets.read = async (companyId, names) => {
+    if (names?.includes('Journals')) f.rows.RolePermissions.at(-1).isDeleted = true;
+    return read(companyId, names);
+  };
+  await assert.rejects(() => f.employees.report(session.token, 'general-ledger', '2026-09-01', '2026-09-30'), e => e.code === 'SECTION_FORBIDDEN');
+});
+
 test('conflicting employee retry cannot release the active write reservation', async () => {
   const f = await setup(), read = f.sheets.read;
   let release, entered;

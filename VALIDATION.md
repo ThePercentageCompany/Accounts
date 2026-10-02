@@ -368,3 +368,44 @@ transitions, closed periods and repeated/lost responses are rejected or replayed
 
 Full backend suite: **170 passed**. Two focused payroll editor tests and the
 record queue suite and the full **181-test Flutter suite** passed. Not deployed.
+
+# Fixed-asset workflow — 29 September 2026
+
+Added schema v2 fields for the acquisition funding account and last depreciation
+date. Draft creation validates unique asset codes, purchase values, useful life,
+Cash/Bank funding and straight-line company purchases. Capitalization posts a
+balanced Fixed Assets acquisition journal and locks financial fields. Monthly
+depreciation is calculated server-side, cannot repeat a month, stops at residual
+value and posts a balanced expense/contra-asset journal.
+
+Full backend suite: **174 passed**. Full **181-test Flutter suite** passed. The
+release uses new empty company workspaces; existing-data migration and migration
+rollback validation are intentionally outside scope. Not deployed.
+
+# Capital contribution workflow — 29 September 2026
+
+Added owner forms for shareholders and paid capital-contribution drafts. The
+backend validates same-company shareholder references, dates, positive amounts,
+Cash/Bank destinations, derived status and unique nonempty references. Explicit
+posting requires an open period and atomically records Cash/Bank debit against
+Shareholder Equity credit, then locks the contribution.
+
+Full backend suite: **179 passed**. Full **181-test Flutter suite** and focused
+analysis of the changed SaaS files passed. Shareholder loans and distributions
+remain disabled until their liability/equity workflows are implemented. Not deployed.
+# Reporting/document integration — 2 October 2026
+
+- `node --test` in `backend/cloud-run`: **195 passed**.
+- Full `flutter test`: **188 passed**.
+- Final focused reporting/document/workspace tests: **12 passed**, including the
+  added employee-report route check.
+- `flutter build web --debug --dart-define=SAAS_API_ORIGIN=https://api.example.com`:
+  passed; validation-only origin, no deployment performed.
+- `flutter analyze lib/core/saas test/shared_reporting_documents_test.dart`: passed.
+- New coverage: exact ledger openings/reversals/closings, dashboard reconciliation,
+  report tenant/session/permission checks, document metadata scope and revocation,
+  profile validation, durable upload restart/retry, CSV formula escaping,
+  employee document UI, profile source-only edits, stale dashboard removal,
+  PDF saved-record reads and concurrent-version rejection.
+- This is local validation only. Live Drive delivery, PDF visual review,
+  multilingual font support and document retention/cancellation remain pending.

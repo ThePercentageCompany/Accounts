@@ -32,9 +32,9 @@ function totals(lines) {
 
 export async function invoiceChanges(sheets, companyId, table, id, action, old, values, system, operation) {
   if (!['Invoices', 'InvoiceItems'].includes(table)) return { values, extra: [] };
-  requireThat(['create', 'update', 'delete', 'issue'].includes(action), 400, 'INVALID_INVOICE', 'Unsupported invoice action.');
+  requireThat(['create', 'update', 'delete', 'issue', 'invoiceVoid'].includes(action), 400, 'INVALID_INVOICE', 'Unsupported invoice action.');
   if (table === 'Invoices') {
-    requireThat(!old || old.status === 'DRAFT', 409, 'INVOICE_LOCKED', 'Only draft invoices can be edited.');
+    requireThat(!old || old.status === 'DRAFT' || action === 'invoiceVoid', 409, 'INVOICE_LOCKED', 'Only draft invoices can be edited.');
     if (action === 'issue') {
       const data = await sheets.read(companyId, ['Invoices', 'InvoiceItems', 'CompanyProfile', 'Journals', 'JournalLines']);
       const lines = data.InvoiceItems.filter(line => line.companyId === companyId && line.invoiceId === id && active(line));
@@ -67,6 +67,44 @@ export async function invoiceChanges(sheets, companyId, table, id, action, old, 
           totalDebit: calculated.total, totalCredit: calculated.total, status: 'POSTED' } },
         ...entries.map((entry, index) => ({ table: 'JournalLines', row: lineRow + index, values: {
           ...journalSystem, recordId: challenge(`${journalId}:${index}`), journalId, lineNumber: index + 1, ...entry,
+        } })),
+      ] };
+    }
+    if (action === 'invoiceVoid') {
+      requireThat(Object.keys(values).every(key => ['voidDate', 'voidReason'].includes(key)),
+        400, 'INVALID_INVOICE_VOID', 'Invoice void accepts only a date and reason.');
+      requireThat(old?.status === 'ISSUED' && minor(old.paidAmount) === 0n && minor(old.balance) === minor(old.total),
+        409, 'INVOICE_VOID_NOT_AVAILABLE', 'Reverse every receipt before voiding this invoice.');
+      requireThat(validLedgerDate(values.voidDate) && values.voidDate >= old.issueDate &&
+        typeof values.voidReason === 'string' && values.voidReason.trim().length >= 3 && values.voidReason.trim().length <= 1000,
+      400, 'INVALID_INVOICE_VOID', 'Enter a valid void date and reason.');
+      await assertOpenLedgerDate(sheets, companyId, values.voidDate);
+      const data = await sheets.read(companyId, ['Journals', 'JournalLines', 'ReceiptAllocations', 'Receipts']);
+      const allocations = data.ReceiptAllocations.filter(row => row.companyId === companyId && row.invoiceId === id && active(row));
+      const liveReceipts = new Set(data.Receipts.filter(row => row.companyId === companyId && active(row) && row.status !== 'REVERSED').map(row => row.recordId));
+      requireThat(!allocations.some(row => liveReceipts.has(row.receiptId)), 409, 'INVOICE_VOID_NOT_AVAILABLE', 'Reverse every receipt before voiding this invoice.');
+      const issued = data.Journals.filter(row => row.companyId === companyId && active(row) && row.status === 'POSTED' && row.sourceType === 'Invoice' && row.sourceId === id);
+      const priorVoid = data.Journals.some(row => row.companyId === companyId && active(row) && row.status === 'POSTED' && row.sourceType === 'InvoiceVoid' && row.sourceId === id);
+      requireThat(issued.length === 1 && !priorVoid, 409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
+      const original = data.JournalLines.filter(row => row.companyId === companyId && active(row) && row.journalId === issued[0].recordId)
+        .sort((a, b) => Number(a.lineNumber) - Number(b.lineNumber));
+      requireThat(original.length >= 2 && original.every(row => minor(row.debit) >= 0n && minor(row.credit) >= 0n && (minor(row.debit) === 0n) !== (minor(row.credit) === 0n)),
+        409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
+      const debit = original.reduce((sum, row) => sum + minor(row.credit), 0n);
+      const credit = original.reduce((sum, row) => sum + minor(row.debit), 0n);
+      requireThat(debit === credit && debit === minor(old.total), 409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
+      const journalId = challenge(`${companyId}:${operation}:invoice-void`);
+      const journalRow = Math.max(1, ...data.Journals.map(row => row._row)) + 1;
+      const lineRow = Math.max(1, ...data.JournalLines.map(row => row._row)) + 1;
+      const journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
+      return { values: { voidDate: values.voidDate, voidReason: values.voidReason.trim(), status: 'VOID', balance: 0 }, extra: [
+        { table: 'Journals', row: journalRow, values: { ...journalSystem, recordId: journalId, number: `AUTO-${journalId}`,
+          date: values.voidDate, description: `Void invoice ${old.number}: ${values.voidReason.trim()}`, sourceType: 'InvoiceVoid', sourceId: id,
+          totalDebit: dollars(debit), totalCredit: dollars(credit), status: 'POSTED' } },
+        ...original.map((entry, index) => ({ table: 'JournalLines', row: lineRow + index, values: {
+          ...journalSystem, recordId: challenge(`${journalId}:${index}`), journalId, lineNumber: index + 1,
+          accountId: entry.accountId, accountName: entry.accountName, accountGroup: entry.accountGroup,
+          debit: entry.credit, credit: entry.debit,
         } })),
       ] };
     }

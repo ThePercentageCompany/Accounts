@@ -5,7 +5,7 @@ import { BusinessSheets } from './business-sheets.js';
 import { decodeContent, validateContent, contentHash } from './document-content.js';
 
 const FOLDERS = { CompanyProfile: 'Company Logo', Invoices: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
-  Expenses: 'Expenses', Employees: 'Employee Documents', Payslips: 'Payslips', Assets: 'Assets' };
+  Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 export class DocumentSheets extends BusinessSheets {
   table(name) {
@@ -29,6 +29,31 @@ export class DocumentService {
     const rows = await this.business.sheets.readReferences(companyId, [table]);
     requireThat(rows[table].some(row => row.recordId === id && row.companyId === companyId && active(row)),
       404, 'DOCUMENT_RECORD_NOT_FOUND', 'The document record is unavailable.');
+  }
+  async list(token, companyId, section, recordId, employee = false) {
+    requireThat(Object.hasOwn(FOLDERS, section) && typeof recordId === 'string' &&
+      (/^[A-Za-z0-9_-]{43}$/.test(recordId) || (section === 'CompanyProfile' && recordId === 'company')),
+    400, 'INVALID_DOCUMENT', 'Select a supported document record.');
+    const authorize = async () => {
+      if (employee) {
+        requireThat((await this.employees.principal(token)).companyId === companyId, 403, 'DOCUMENT_FORBIDDEN', 'Document unavailable.');
+        requireThat((await this.employees.records(token, section)).some(r => r.recordId === recordId),
+          403, 'DOCUMENT_FORBIDDEN', 'Document unavailable.');
+      } else {
+        this.owner((await this.registry.read()).state, token, companyId);
+        await this.target(companyId, section, recordId);
+      }
+    };
+    await authorize();
+    const rows = (await this.sheets.read(companyId, ['DocumentRegistry'])).DocumentRegistry;
+    await authorize();
+    const state = (await this.registry.read()).state;
+    return rows.filter(row => {
+      const doc = state.companies[companyId]?.documents?.[row.recordId];
+      return row.companyId === companyId && active(row) && row.status === 'READY' &&
+        row.relatedSection === section && row.relatedRecordId === recordId && doc?.status === 'READY' &&
+        doc.relatedSection === section && doc.relatedRecordId === recordId;
+    }).map(row => ({ documentId: row.recordId, name: row.name, mimeType: row.mimeType, byteLength: row.byteLength }));
   }
   async upload(token, companyId, input, key) {
     this.owner((await this.registry.read()).state, token, companyId, digest(`document:${key}`));

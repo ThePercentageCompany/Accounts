@@ -24,11 +24,12 @@ Locally implemented: owner identity and registration, Google provisioning,
 employee login/access, owner record CRUD, ordered batch upload, deletion markers,
 business/employee references, bounded field types, draft/posted journal guards,
 private document upload/download, and same-record document attachment checks.
-The latest recorded backend run has 170 passing test runner entries using
+The latest recorded backend run has 187 passing test runner entries using
 substitute cloud adapters. The shared-only Flutter entrypoint connects owner
 setup, employee authentication/administration and shared record screens. Customer,
-income/expense and financial-period owner writes are connected; other financial
-write workflows and complete offline integration remain unfinished.
+income/expense, period, invoice/receipt, quotation, payroll, fixed-asset and paid
+capital-contribution owner writes are connected. Shareholder-loan posting and
+full repayment are connected; durable requests reconcile uncertain responses.
 Registration request keys persist per owner before sending, so a lost response
 can be retried after restarting without requesting a second company.
 
@@ -43,7 +44,8 @@ Release-blocking work:
 Update 2026-09-26: financial period management is connected to owner forms.
 Backend rules validate dates, prevent overlapping periods, stamp closing identity,
 block closing with drafts, and prevent journal posting in closed periods. Closed
-period reopening and full source-transaction ledger posting remain unimplemented.
+period reopening remains unimplemented. The initial supported source-transaction
+ledger scope is implemented locally.
 
 Local UI update (2026-09-25): the new app opens shared workspaces, implements
 owner employee administration (including issue/reset/revoke), reads permission-
@@ -61,8 +63,12 @@ records then lock. Later full payments are supported through a separate atomic
 settlement action. Unpaid entries can be reversed with an opposite journal while
 preserving original history. Invoice receipts support partial and final customer
 payments with server numbering, allocation, balance updates and Cash/Bank-to-AR
-posting in one retry-safe batch. Paid-entry refunds, receipt reversals,
-configurable accounts and tax treatment remain unfinished. Other financial writes remain blocked.
+posting in one retry-safe batch. Payroll approval/payment and paid asset acquisition/
+monthly depreciation plus Cash/Bank capital contributions are also implemented
+locally. Paid-entry refunds, receipt reversals, invoice voids, payroll reversals,
+asset disposal, and interest-free shareholder-loan receipt/full repayment are
+implemented locally. Partial credit notes, configurable accounts/tax treatment,
+interest accrual and partial loan repayments remain outside the initial scope.
 Deploy the updated backend policy before enabling these frontend entry forms:
 the earlier deployed generic-record API does not calculate these totals.
 

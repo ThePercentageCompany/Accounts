@@ -82,3 +82,42 @@ export function balanceSheet(companyId, asOf, data) {
     totalLiabilities: money(liabilities), postedEquity: money(equity), accumulatedEarnings: money(earnings),
     totalEquity: money(totalEquity), totalLiabilitiesAndEquity: money(liabilities + totalEquity), balanced: true };
 }
+
+export function dashboard(companyId, from, asOf, data) {
+  const profit = profitAndLoss(companyId, from, asOf, data);
+  const balance = balanceSheet(companyId, asOf, data);
+  const amount = id => balance.accounts.find(a => a.accountId === id)?.amount ?? '0.00';
+  return { from, asOf, journalCount: balance.journalCount, totalIncome: profit.totalIncome,
+    totalExpenses: profit.totalExpenses, netProfit: profit.netProfit, totalAssets: balance.totalAssets,
+    totalLiabilities: balance.totalLiabilities, totalEquity: balance.totalEquity,
+    cash: amount('cash_in_hand'), bank: amount('bank_account'), receivables: amount('accounts_receivable'),
+    payables: amount('accounts_payable'), balanced: balance.balanced };
+}
+
+// Validate the full ledger through the cutoff before exposing any detail.
+// Balances use debit-positive signs, including liability and income accounts.
+export function generalLedger(companyId, from, asOf, data) {
+  requireThat(validLedgerDate(from) && from <= asOf, 400, 'INVALID_REPORT_DATE', 'Supply an ordered report period.');
+  const trial = trialBalance(companyId, asOf, data);
+  const journals = new Map(data.Journals.filter(j => j.companyId === companyId && active(j) &&
+    j.status === 'POSTED' && j.date <= asOf).map(j => [j.recordId, j]));
+  const lines = data.JournalLines.filter(l => l.companyId === companyId && active(l) && journals.has(l.journalId))
+    .sort((a, b) => journals.get(a.journalId).date.localeCompare(journals.get(b.journalId).date) ||
+      a.journalId.localeCompare(b.journalId) || a.lineNumber - b.lineNumber);
+  const accounts = trial.accounts.map(account => {
+    let opening = 0n, balance = 0n, debit = 0n, credit = 0n;
+    const entries = [];
+    for (const line of lines.filter(l => l.accountId === account.accountId)) {
+      const journal = journals.get(line.journalId), amount = lineAmounts(line);
+      balance += amount.debit - amount.credit;
+      if (journal.date < from) { opening = balance; continue; }
+      debit += amount.debit; credit += amount.credit;
+      entries.push({ date: journal.date, journalId: journal.recordId, number: journal.number || '',
+        description: journal.description || '', sourceType: journal.sourceType || '',
+        debit: money(amount.debit), credit: money(amount.credit), balance: money(balance) });
+    }
+    return { accountId: account.accountId, accountName: account.accountName, accountGroup: account.accountGroup,
+      opening: money(opening), debit: money(debit), credit: money(credit), closing: money(balance), entries };
+  });
+  return { from, asOf, journalCount: [...journals.values()].filter(j => j.date >= from).length, accounts };
+}

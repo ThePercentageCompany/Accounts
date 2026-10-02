@@ -38,6 +38,28 @@ test('document upload returns opaque identity, persists metadata and replays wit
   assert.deepEqual(downloaded.bytes, bytes);
   await assert.rejects(() => f.documents.upload(f.token, f.companyId, { ...input, name: 'other.pdf' }, key), e => e.code === 'IDEMPOTENCY_CONFLICT');
 });
+
+test('document listing exposes only ready metadata for the authorized parent', async () => {
+  const f = await setup();
+  const doc = await f.documents.upload(f.token, f.companyId, input, 'document_list_0001');
+  const result = await f.documents.list(f.token, f.companyId, 'Invoices', input.relatedRecordId);
+  assert.deepEqual(result, [{ documentId: doc.documentId, name: input.name, mimeType: input.mimeType, byteLength: bytes.length }]);
+  const other = await f.login('other');
+  await assert.rejects(() => f.documents.list(other, f.companyId, 'Invoices', input.relatedRecordId));
+  assert.deepEqual(await f.documents.list('employee', f.companyId, 'Invoices', input.relatedRecordId, true), result);
+  f.employees.records = async () => [];
+  await assert.rejects(() => f.documents.list('employee', f.companyId, 'Invoices', input.relatedRecordId, true), e => e.code === 'DOCUMENT_FORBIDDEN');
+  f.rows[0].isDeleted = true;
+  assert.deepEqual(await f.documents.list(f.token, f.companyId, 'Invoices', input.relatedRecordId), []);
+});
+
+test('document listing rechecks employee permissions after metadata read', async () => {
+  const f = await setup();
+  await f.documents.upload(f.token, f.companyId, input, 'document_list_0002');
+  const read = f.sheets.read;
+  f.sheets.read = async (...args) => { const rows = await read(...args); f.employees.records = async () => []; return rows; };
+  await assert.rejects(() => f.documents.list('employee', f.companyId, 'Invoices', input.relatedRecordId, true), e => e.code === 'DOCUMENT_FORBIDDEN');
+});
 test('uncertain Drive and Sheets outcomes reuse durable file and row identities', async () => {
   const f = await setup(), key = 'document_upload_0002', original = f.drive.ensure;
   f.drive.ensure = async (...args) => { await original(...args); throw Error('lost upload response'); };

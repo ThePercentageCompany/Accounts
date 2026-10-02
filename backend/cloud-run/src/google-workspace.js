@@ -1,6 +1,6 @@
 import { ApiError, requireThat } from './errors.js';
 import { ReconnectRequired } from './google-connection.js';
-import { TABLES, seedRows } from './company-schema.js';
+import { TABLES, SCHEMA_VERSION, seedRows } from './company-schema.js';
 
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 export const SHEET_MIME = 'application/vnd.google-apps.spreadsheet';
@@ -119,6 +119,6 @@ export class GoogleWorkspace {
       409, 'SCHEMA_MISMATCH', 'Spreadsheet schema verification failed.'));
     const identities = await this.rows(token, id, ["'SystemConfiguration'!A2:L2", "'CompanyProfile'!A2:B2", "'OwnersUsers'!A2:B2"]);
     requireThat(identities.every(rows => rows[0]?.[1] === company.id) && identities[0][0][10] === 'schemaVersion' &&
-      Number(identities[0][0][11]) === 1, 409, 'SCHEMA_MISMATCH', 'Workspace identity verification failed.');
+      Number(identities[0][0][11]) === SCHEMA_VERSION, 409, 'SCHEMA_MISMATCH', 'Workspace identity verification failed.');
   }
 }

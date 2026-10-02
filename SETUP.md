@@ -2,7 +2,7 @@
 
 The application now starts with the Cloud Run API flow. There is no Apps Script,
 GoogleSession or direct-Sheets login fallback in `lib/main.dart`. Old local
-records are retained; this cutover does not migrate them into a new company.
+records are outside this release. New SaaS companies receive empty workspaces.
 
 ## Operator configuration
 
@@ -39,13 +39,12 @@ Employee administration and shared record views are connected. Owners can manage
 employee access, create/edit customers and income/expense entries, and manage
 financial periods. Most other financial modules remain read-only in the new app.
 Full accounting/ledger integration, reports, document UI and legacy offline/data
-migration remain required. Legacy invitations need reissuing through the backend
-after verified company migration. No customer should deploy scripts.
+live verification remains required. No customer should deploy scripts.
 
 See [Software workflow and delivery status](SOFTWARE_WORKFLOW_AND_STATUS.md) for
 the consolidated completed/pending checklist dated 26 September 2026.
 
-Retained legacy source and tests are migration references, not active routes.
+Retained legacy source and tests are historical references, not active routes.
 Cloud resources and the live website have not been changed by this local cutover.
 
 ## Deployment access and routing verification

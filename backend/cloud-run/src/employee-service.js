@@ -1,4 +1,5 @@
 import { opaque, digest } from './crypto.js';
+import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger } from './ledger-report.js';
 import { requireThat, ApiError } from './errors.js';
 import { PrivateCode } from './private-code.js';
 import { SECTIONS, ROLES, scopeFor, principalFromRows, SECTION_TABLES, CHILDREN, visible, projectRecord } from './employee-policy.js';
@@ -243,5 +244,16 @@ export class EmployeeService {
     return rows[table].filter(r => visible(latest, table, r, rows)).map(r => {
       const value = projectRecord(latest, table, r); delete value._row; return value;
     });
+  }
+  async report(token, kind, from, asOf) {
+    const authorize = p => requireThat(p.permissions.Reports === 'COMPANY',
+      403, 'SECTION_FORBIDDEN', 'Company-wide reporting is not assigned to you.');
+    const p = await this.principal(token); authorize(p);
+    const rows = await this.sheets.read(p.companyId, ['Journals', 'JournalLines', 'Employees', 'Roles', 'RolePermissions']);
+    authorize(principalFromRows(p.companyId, p.employeeId, rows, this.now()));
+    this.session((await this.registry.read()).state, token);
+    if (kind === 'trial-balance') return trialBalance(p.companyId, asOf, rows);
+    if (kind === 'balance-sheet') return balanceSheet(p.companyId, asOf, rows);
+    return ({ dashboard, 'general-ledger': generalLedger, 'profit-and-loss': profitAndLoss })[kind](p.companyId, from, asOf, rows);
   }
 }

@@ -66,7 +66,7 @@ test('offline connection persists only ciphertext, queues setup and reaches READ
   assert.equal(f.counts.folder, FOLDERS.length + 1);
   assert.equal(f.counts.spreadsheet, 1);
   assert.deepEqual(Object.keys(f.current().resources.folders), FOLDERS);
-  assert.equal(f.current().schemaVersion, 1);
+  assert.equal(f.current().schemaVersion, 7);
   assert.ok(TABLES.some(t => t.title === 'InvoiceItems'));
   assert.ok(TABLES.some(t => t.title === 'ReceiptAllocations'));
   assert.ok(TABLES.every(t => t.headers.includes('recordVersion') && t.headers.includes('companyId')));

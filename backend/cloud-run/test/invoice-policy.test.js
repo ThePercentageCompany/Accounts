@@ -78,3 +78,38 @@ test('issuing rejects empty, stale, closed-period and invalid-prefix invoices', 
   f.data.FinancialPeriods.length = 0; f.data.CompanyProfile[0].invoicePrefix = 'bad prefix';
   await assert.rejects(issue(), e => e.code === 'INVALID_INVOICE_PREFIX');
 });
+
+test('voiding an unpaid invoice reverses its exact posting and preserves history', async () => {
+  const f = fixture();
+  Object.assign(f.parent, { status: 'ISSUED', number: 'INV-2026-000001', issueDate: '2026-09-01', total: 105, paidAmount: 0, balance: 105 });
+  Object.assign(f.data, {
+    FinancialPeriods: [], Receipts: [], ReceiptAllocations: [],
+    Journals: [{ companyId: 'c', recordId: 'issue-journal', _row: 2, status: 'POSTED', sourceType: 'Invoice', sourceId: 'invoice' }],
+    JournalLines: [
+      { companyId: 'c', recordId: 'l1', _row: 2, journalId: 'issue-journal', lineNumber: 1, accountId: 'ar', accountName: 'Accounts Receivable', accountGroup: 'Asset', debit: 105, credit: 0 },
+      { companyId: 'c', recordId: 'l2', _row: 3, journalId: 'issue-journal', lineNumber: 2, accountId: 'revenue', accountName: 'Revenue', accountGroup: 'Income', debit: 0, credit: 100 },
+      { companyId: 'c', recordId: 'l3', _row: 4, journalId: 'issue-journal', lineNumber: 3, accountId: 'vat', accountName: 'Output VAT', accountGroup: 'Liability', debit: 0, credit: 5 },
+    ],
+  });
+  const result = await invoiceChanges(f.sheets, 'c', 'Invoices', 'invoice', 'invoiceVoid', f.parent,
+    { voidDate: '2026-09-30', voidReason: 'Customer order cancelled' },
+    { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKey: 'void', isDeleted: false, syncStatus: 'SYNCED' }, 'void-op');
+  assert.equal(result.values.status, 'VOID'); assert.equal(result.values.balance, 0);
+  assert.equal(result.extra[0].values.sourceType, 'InvoiceVoid');
+  const reversed = result.extra.slice(1).map(change => change.values);
+  assert.deepEqual(reversed.map(row => [row.debit, row.credit]), [[0, 105], [100, 0], [5, 0]]);
+  assert.equal(reversed.reduce((sum, row) => sum + Math.round(row.debit * 100), 0), 10500);
+  assert.equal(reversed.reduce((sum, row) => sum + Math.round(row.credit * 100), 0), 10500);
+});
+
+test('invoice void requires zero payment activity and valid ledger history', async () => {
+  const f = fixture();
+  Object.assign(f.parent, { status: 'ISSUED', number: 'INV-1', issueDate: '2026-09-01', total: 100, paidAmount: 10, balance: 90 });
+  Object.assign(f.data, { FinancialPeriods: [], Receipts: [], ReceiptAllocations: [], Journals: [], JournalLines: [] });
+  const voidInvoice = values => invoiceChanges(f.sheets, 'c', 'Invoices', 'invoice', 'invoiceVoid', f.parent, values, {}, 'void');
+  await assert.rejects(voidInvoice({ voidDate: '2026-09-30', voidReason: 'Cancelled order' }), e => e.code === 'INVOICE_VOID_NOT_AVAILABLE');
+  Object.assign(f.parent, { paidAmount: 0, balance: 100 });
+  await assert.rejects(voidInvoice({ voidDate: '2026-08-31', voidReason: 'Cancelled order' }), e => e.code === 'INVALID_INVOICE_VOID');
+  await assert.rejects(voidInvoice({ voidDate: '2026-09-30', voidReason: 'Cancelled order', total: 0 }), e => e.code === 'INVALID_INVOICE_VOID');
+  await assert.rejects(voidInvoice({ voidDate: '2026-09-30', voidReason: 'Cancelled order' }), e => e.code === 'INVOICE_LEDGER_MISMATCH');
+});

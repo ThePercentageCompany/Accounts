@@ -28,7 +28,45 @@ function calculated(employee, overtime, values) {
 export async function payrollChanges(sheets, companyId, table, id, action, old, values, system, operation) {
   if (table === 'PayrollItems') requireThat(false, 409, 'PAYROLL_LOCKED', 'Payroll details are controlled by the payroll workflow.');
   if (table !== 'Payroll') return { values, extra: [] };
-  requireThat(['create', 'update', 'delete', 'approve', 'payrollPay'].includes(action), 400, 'INVALID_PAYROLL', 'Unsupported payroll action.');
+  requireThat(['create', 'update', 'delete', 'approve', 'payrollPay', 'payrollReverse'].includes(action), 400, 'INVALID_PAYROLL', 'Unsupported payroll action.');
+  if (action === 'payrollReverse') {
+    requireThat(Object.keys(values).every(key => ['reversalDate', 'reversalReason'].includes(key)) &&
+      ['APPROVED', 'PAID'].includes(old?.status) && validLedgerDate(values.reversalDate) &&
+      typeof values.reversalReason === 'string' && values.reversalReason.trim().length >= 3 && values.reversalReason.trim().length <= 1000,
+    409, 'PAYROLL_NOT_REVERSIBLE', 'Choose approved or paid payroll and enter a valid reversal date and reason.');
+    await assertOpenLedgerDate(sheets, companyId, values.reversalDate);
+    const data = await sheets.read(companyId, ['Journals', 'JournalLines']);
+    const related = data.Journals.filter(row => row.companyId === companyId && active(row) && row.sourceId === id &&
+      ['Payroll', 'PayrollPayment', 'PayrollReversal', 'PayrollRefund'].includes(row.sourceType));
+    const expected = old.status === 'PAID' ? ['Payroll', 'PayrollPayment'] : ['Payroll'];
+    const originals = related.filter(row => expected.includes(row.sourceType));
+    requireThat(related.length === expected.length && originals.length === expected.length && expected.every(type =>
+      originals.filter(row => row.sourceType === type && row.status === 'POSTED').length === 1),
+    409, 'PAYROLL_NOT_REVERSIBLE', 'Payroll ledger history cannot be reversed safely.');
+    requireThat(originals.every(row => values.reversalDate >= row.date), 400, 'PAYROLL_NOT_REVERSIBLE',
+      'Reversal cannot precede payroll approval or payment.');
+    let journalRow = nextRow(data.Journals), lineRow = nextRow(data.JournalLines);
+    const extra = [], journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
+    for (const original of originals.sort((a, b) => a.sourceType === 'Payroll' ? 1 : b.sourceType === 'Payroll' ? -1 : 0)) {
+      const lines = data.JournalLines.filter(row => row.companyId === companyId && active(row) && row.journalId === original.recordId)
+        .sort((a, b) => Number(a.lineNumber) - Number(b.lineNumber));
+      const debit = lines.reduce((sum, row) => sum + minor(row.credit), 0n);
+      const credit = lines.reduce((sum, row) => sum + minor(row.debit), 0n);
+      requireThat(lines.length >= 2 && debit === credit && debit === minor(original.totalDebit),
+        409, 'PAYROLL_NOT_REVERSIBLE', 'Payroll ledger history cannot be reversed safely.');
+      const payment = original.sourceType === 'PayrollPayment', journalId = challenge(`${companyId}:${operation}:${payment ? 'payroll-refund' : 'payroll-reversal'}`);
+      extra.push({ table: 'Journals', row: journalRow++, values: { ...journalSystem, recordId: journalId,
+        number: `AUTO-${journalId}`, date: values.reversalDate, description: `${payment ? 'Refund' : 'Reversal'} payroll ${old.month}: ${values.reversalReason.trim()}`,
+        sourceType: payment ? 'PayrollRefund' : 'PayrollReversal', sourceId: id,
+        totalDebit: money(debit), totalCredit: money(credit), status: 'POSTED' } });
+      lines.forEach((line, index) => extra.push({ table: 'JournalLines', row: lineRow++, values: {
+        ...journalSystem, recordId: challenge(`${journalId}:${index}`), journalId, lineNumber: index + 1,
+        accountId: line.accountId, accountName: line.accountName, accountGroup: line.accountGroup,
+        debit: line.credit, credit: line.debit,
+      } }));
+    }
+    return { values: { reversalDate: values.reversalDate, reversalReason: values.reversalReason.trim(), status: 'REVERSED' }, extra };
+  }
   if (action === 'payrollPay') {
     requireThat(old?.status === 'APPROVED' && Object.keys(values).every(key =>
       ['paidDate', 'paymentAccount', 'paymentReference'].includes(key)) && validLedgerDate(values.paidDate) &&

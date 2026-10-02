@@ -1,6 +1,6 @@
 # TPC Accounts — software workflow and delivery status
 
-Updated: 26 September 2026. Based on the repository and recorded validation results.
+Updated: 2 October 2026. Based on the repository and recorded validation results.
 
 **Overall status: shared-backend SaaS under implementation; not ready for customer production use.**
 
@@ -99,7 +99,7 @@ or a multi-record accounting transaction engine.
 | Shared API | Node backend in `backend/cloud-run` | Latest local changes are not confirmed deployed |
 | Company registry | Private Cloud Storage registry with generation checks | Whole-object size and contention need capacity testing |
 | Company records | Company-owned Google Sheets | Full-table reads and manual Sheet edits limit concurrency guarantees |
-| Documents | Private Google Drive files through authorized API access | Live delivery, profile display and lifecycle work remain |
+| Documents | Private Google Drive files, record attachment browser, profile/logo editing and PDF creation through authorized API access | Live delivery, multilingual PDF fonts and lifecycle work remain |
 | Google authorization | Backend OAuth, encrypted refresh credentials, Secret Manager/KMS | Real browser callbacks and reconnect need rollout validation |
 | Background setup | Cloud Tasks and setup worker identity | Requires live retry/recovery verification |
 | Browser sessions | Secure HttpOnly cookies and trusted API origin | Same-site routing must be configured and verified |
@@ -129,7 +129,7 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 | Income and expenses | Owner create/edit; server tax/total calculation; valid dates/payment status | Exact rounding and save/retry tests |
 | Financial periods | Create/edit open periods; confirmed closing; server closing metadata | Period policy and form tests |
 | Period restrictions | Closed-period posting blocked; drafts block closing; overlaps rejected; periods containing journals cannot be resized/deleted | Backend tests |
-| Journal foundation | Draft-first journals, balanced line validation, locked posted journals/lines | Backend tests; complete posting UI/source integration pending |
+| Journal foundation | Draft-first manual journals, balanced line validation, locked posted journals/lines, and server-owned source postings | Backend policy, report and retry tests |
 | Record API | Version checks, scoped records, references, deletion markers and ordered batches | Backend tests |
 | Pending writes | Retain uncertain requests; acknowledge applied results; explicit recovery for eligible rejected edits | Restart and partial-failure tests |
 | Document API | Bounded private upload/download, retry reconciliation and same-record attachment checks | Local tests; complete UI/live verification pending |
@@ -139,20 +139,20 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 
 | Module | Owner experience in new workspace | Employee experience | Remaining work |
 | --- | --- | --- | --- |
-| Company setup | Sign in, create/select, connect Google, refresh/retry | Not an employee action | Existing-workspace adoption and live verification |
+| Company setup | Sign in, create/select, connect Google, refresh/retry | Not an employee action | Live clean-workspace verification |
 | Employees | Administration and QR/code management | Permitted record reads | Live end-to-end test; broader HR editing integration |
 | Customers | Create, edit and read | Permitted reads | Complete business workflow integration |
-| Income/expenses | Create/edit unposted entries; post journals; record later full payments; reverse unpaid postings while preserving history | Permitted reads | Partial payments, paid-entry refunds, configurable tax/accounts, attachment UI and live validation |
+| Income/expenses | Create/edit unposted entries; post accrual/payment journals; record later full payments; reverse unpaid entries; refund and reverse paid entries | Permitted reads | Partial settlements, configurable tax/accounts, live attachment verification |
 | Financial periods | Create/edit open periods and close with restrictions | Permitted reads | Audited reopening workflow |
-| Invoices/receipts | Create/edit drafts and lines; issue with server numbering and atomic receivable/revenue/VAT journal; record partial/final receipts with server allocation, balance update and Cash/Bank-to-AR journal; finalized records lock | Permitted reads | Invoice documents, credit/void/refund and receipt-reversal workflows and live validation |
-| Quotations | Create/edit drafts and lines; finalize with server numbering; convert once into a copied draft invoice | Permitted reads | Documents, acceptance/expiry lifecycle and live validation |
-| Payroll/payslips | Create/edit payroll drafts; server derives salary and approved overtime; approval accrues expense/liabilities; payment settles net payable | Permitted reads, subject to record scope | Payslip documents, deduction remittance, attendance locks and live validation |
+| Invoices/receipts | Create/edit drafts and lines; issue with server numbering and atomic receivable/revenue/VAT journal; record partial/final receipts; reverse receipts; void zero-paid issued invoices with exact journal reversal | Permitted reads | Partial credit notes and live document verification |
+| Quotations | Create/edit drafts and lines; finalize with server numbering; convert once into a copied draft invoice | Permitted reads | Acceptance/expiry lifecycle and live document verification |
+| Payroll/payslips | Create/edit payroll drafts; server derives salary and approved overtime; approval/payment journals; approved or paid payroll reversal/refund | Permitted reads, subject to record scope | Deduction remittance, attendance locks and live document verification |
+| Fixed assets | Create/edit drafts; capitalize paid purchases; post straight-line depreciation; dispose with proceeds and gain/loss journal | Permitted reads, subject to record scope | Impairment, transfers, alternative depreciation and live document verification |
 | Attendance/overtime | Record viewing | Permitted reads | Authorized write/approval workflows |
-| Fixed assets | Record viewing | Permitted reads | Acquisition, depreciation, disposal and ledger integration |
-| Capital/equity | Record viewing | Permitted reads | Contribution/loan/equity workflows and postings |
-| Journals/balance sheet | Underlying records viewable; backend journal rules exist | Permitted reads | Complete posting workflow and calculated financial statements |
-| Company profile/logo | Profile records viewable; backend document support exists | Subject to settings permission | Editing/upload/display integration and verification |
-| Dashboard/reports | Owner trial balance, period profit/loss and balance sheet from posted journals, with date controls and integrity checks | Reports not yet connected for employees | Dashboard, exports, remaining reports and full transaction coverage |
+| Capital/equity | Create/edit shareholders, post Cash/Bank contributions, record interest-free shareholder loans and full repayments | Permitted reads | Distributions, interest accrual, partial loan repayment and percentage-history workflows |
+| Journals/balance sheet | Source postings and manual draft/post rules; trial balance, profit/loss and balance sheet calculated from posted journals | Permitted reads | Manual journal editor and export/live validation |
+| Company profile/logo | Durable profile editing; upload, select, remove and display private logos; profile and logo included in generated PDFs | Read/display subject to settings permission | Live verification and multilingual PDF fonts |
+| Dashboard/reports | Dashboard, trial balance, period profit/loss, balance sheet and general ledger with opening/running/closing balances; date controls and CSV exports | Company-wide Reports permission required; server rechecks current permission | Live reconciliation and specialized aging/cash-flow reports outside this initial scope |
 
 Granting a section does not implement missing screens or authorize writes that
 the API does not support. Readable journal records are not a completed balance
@@ -162,14 +162,14 @@ sheet or reporting module.
 
 | Priority | Work | Completion evidence required |
 | --- | --- | --- |
-| P0 | Complete accounting transaction contracts | Authoritative totals, account validation, finalized-record controls, payment limits and recoverable multi-record operations |
-| P0 | Connect source transactions to ledger | Invoice, receipt, income, expense, payroll, asset and capital events produce correct postings once, including interrupted/repeated requests |
-| P0 | Implement financial write screens | Supported business workflows work through the shared API, with clear errors and preserved pending edits |
-| P0 | Complete reports/dashboard | Trial balance, P&L, balance sheet and relevant reports reconcile to posted shared records |
+| Done | Complete accounting transaction contracts | Authoritative totals, finalized-record controls, payment limits and retry-safe multi-record operations are covered by backend tests |
+| Done | Connect supported source transactions to ledger | Invoice, receipt, income, expense, payroll, asset, capital and shareholder-loan events post once, including corrections and interrupted requests |
+| Done | Implement supported financial write screens | Owner actions use the shared API and durable queue, with correction dialogs and recoverable errors |
+| Done locally | Complete initial reports/dashboard | Dashboard, trial balance, P&L, balance sheet and general ledger derive from validated posted journals; CSV export and employee Reports access are connected |
 | P0 | Verify live authentication and routing | Trusted app/API origins, HTTPS, OAuth callbacks, cookie behavior, logout and reconnect work in real browsers |
 | P0 | Test two unrelated live companies | Altered company, record, employee and document IDs cannot cross company boundaries |
 | P0 | Validate real employee journey | Owner issues QR; camera/link login works; permissions change promptly; reset/revocation and owner-offline access work |
-| P1 | Complete private document UI | Logos/profile images and accounting documents upload, attach and display through authorized access |
+| Done locally | Complete initial private document/profile UI | Profile editor, private logo display, record document lists, bounded uploads, durable upload retries, image viewing and web downloads; English PDF generation for invoices, quotations, receipts, payroll and assets |
 | P1 | Add employee business writes | Explicit action permissions, field/record restrictions and audit coverage for each supported action |
 | P1 | Finish document lifecycle | Recovery/cancellation, retention/deletion policy and content handling decisions are implemented and tested |
 | P1 | Production operations | Monitoring, redacted logs, backup/restore, abuse protection, capacity tests and practical resource limits |
@@ -194,7 +194,7 @@ reviewed launch decision; their priority does not mean they can be silently skip
 
 ### Recorded local validation
 
-- Latest full backend run: **170 tests passed**. Payroll tests cover server-derived
+- Latest full backend run: **187 tests passed**. Payroll, fixed-asset and capital tests cover server-derived
   salary/overtime totals, duplicate and transition guards, balanced approval and
   payment journals, closed periods, and lost-response replay. The full **181-test
   Flutter suite** passed. Quotation tests cover authoritative
@@ -226,11 +226,12 @@ reviewed launch decision; their priority does not mean they can be silently skip
   tests passed. Explicit owner cash-entry posting
   saves source and journals atomically, validates both accounting dates, and
   reconciles lost responses without duplicate posting. Five focused Flutter
-  queue/editor tests passed in the preceding milestone. Paid-entry refunds and receipt reversal remain unfinished.
+  queue/editor tests passed in the preceding milestone. Paid-entry refunds, receipt reversal,
+  invoice voiding, payroll reversal, asset disposal and shareholder-loan workflows now have server policies and tests.
   Linked income/expense entries
   reject standalone edits and deletion until coordinated correction is available.
   The obsolete Apps Script backend and its own tests have been removed; active
-  Cloud Run code and legacy accounting migration references remain.
+  Cloud Run code and historical legacy accounting references remain.
   The internal Sheets writer can
   submit multiple records in one atomic batch, rejects invalid members before
   submission, and preserves uncertain-response handling. Explicit income/expense
@@ -240,9 +241,7 @@ reviewed launch decision; their priority does not mean they can be silently skip
 - Latest financial-period work: **four focused Flutter tests passed**, with
   targeted analyzer checks passing.
 - Income/expense work: **five focused Flutter tests passed**; debug web compilation succeeded.
-- Earlier shared-only cutover: **158 full Flutter tests passed**. This is a
-  historical full-suite result, not a claim that every later change had a fresh
-  full-suite run. Do not add counts from overlapping runs together.
+- Latest full Flutter run: **181 tests passed** after the source-transaction UI changes.
 - Substitute cloud adapters and local tests do not establish production readiness.
 
 ## 7. Operator work versus customer work
@@ -264,15 +263,38 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
 - [x] Local company setup and employee administration implementation.
 - [x] Shared record reads and supported owner writes.
 - [x] Local money-validation, journal and financial-period safeguards.
-- [ ] Complete source-transaction ledger integration and financial write workflows.
-- [ ] Complete reporting and document/profile integration.
+- [x] Complete source-transaction ledger integration and financial write workflows for the initial supported accounting scope.
+- [x] Complete initial local reporting and document/profile integration (scope and validation limits below).
 - [x] Confirm clean launch: no legacy records, queues or invitations will be imported.
 - [ ] Verify real owner and employee journeys across two companies.
+  Public health/authentication-boundary/CORS checks pass; authenticated verification
+  is blocked because no browser is connected. See [live test matrix](LIVE_JOURNEY_VERIFICATION.md).
 - [ ] Verify infrastructure, backups, monitoring and restore procedures.
 - [ ] Deploy compatible backend/frontend versions and pass live smoke tests.
 - [ ] Remove the preview restriction only after the release checks pass.
 
 ## Source files and supporting documents
+
+### Reporting and document integration validation — 2 October 2026
+
+- Backend: **195 tests passed**. Includes exact general-ledger opening/closing
+  reconciliation, dashboard totals, employee report permission revocation,
+  private document listing, and profile validation/currency locking.
+- Full Flutter suite: **188 tests passed** before the additional employee-report
+  routing check; targeted analyzer passed. Final focused checks are recorded in
+  `VALIDATION.md`.
+- Documents attach through the private registry's parent-record relationship,
+  including finalized transactions, without changing locked financial values.
+  Payroll PDFs attach directly to Payroll and inherit its employee record scope.
+- Upload contents and the original request ID persist locally, scoped to owner
+  and company, until acknowledged. Uncertain uploads must be retried; cancellation,
+  retention/deletion and broader document lifecycle remain separate pending work.
+- Generated documents use saved totals, profile/bank details and the private logo.
+  They are version-labelled snapshots, not immutable server-signed originals.
+  Automatic PDF generation currently accepts English/ASCII text; other scripts
+  require uploading a prepared PDF. Downloads/CSV exports currently target web.
+- PDF visual layout review and real Google Drive delivery remain live release
+  checks. Local tests and compilation do not establish production readiness.
 
 - [Current setup instructions](SETUP.md)
 - [Backend release status](backend/cloud-run/RELEASE_STATUS.md)

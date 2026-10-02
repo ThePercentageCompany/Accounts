@@ -1,0 +1,16 @@
+﻿.git
+.vercel
+.dart_tool
+build
+backend
+android
+ios
+linux
+macos
+windows
+test
+coverage
+*.md
+.env*
+config/google*.json
+*client_secret*.json

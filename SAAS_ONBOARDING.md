@@ -4,8 +4,8 @@ Status: Phases 1–3 of the shared backend are implemented in `backend/cloud-run
 automated tests. It is not deployed or connected to Flutter yet. Owner identity,
 sessions, company registration, separate Google connection, resumable workspace
 provisioning, reconnect, employee management, private-code login and current
-permission enforcement are implemented. Business writes/sync, document endpoints,
-Flutter integration and migration remain subsequent phases. Uncertain spreadsheet creation is reconciled without duplicate
+permission enforcement are implemented. Business writes, documents and Flutter
+integration are tracked in the consolidated delivery status. Uncertain spreadsheet creation is reconciled without duplicate
 creation; an unresolved outcome needs operator review (see the backend README).
 The existing app automatically creates company Sheets and Drive storage, but its
 employee gateway is configured for a single owner and spreadsheet. Sharing that
@@ -31,8 +31,8 @@ Keep the Flutter website on Vercel and deploy one shared API on Cloud Run.
 Use Secret Manager for operator secrets and Cloud KMS for encrypted refresh tokens.
 Use a private Cloud Storage control store with generation-based atomic updates for
 registration and session metadata; add a normalized private Sheets control registry
-projection. Do not use Firestore. Retain each company's existing Sheets/Drive data.
-This avoids combining a login migration with an accounting database migration.
+projection. Do not use Firestore. The initial release creates a new empty
+company-owned Sheets/Drive workspace for every registered company.
 
 The SaaS operator configures the backend, OAuth client, app domain, encryption
 keys, database permissions and monitoring once. Customers do not configure these.
@@ -59,8 +59,6 @@ References: [Google server-side OAuth and offline access](https://developers.goo
   spreadsheet, schema, ready. Authorize retries and resume existing resources.
   Persist external resource IDs immediately and use operation identifiers to
   reconcile uncertain API outcomes before creating replacements.
-- Existing users explicitly connect their current workspace. Verify ownership
-  before adoption; preserve records, document references and pending edits.
 - Authorize every employee and owner operation against current tenant membership
   and permissions. A submitted company ID, sheet ID, role or allowed-section list
   never grants authority. Backend service-account IAM does not replace these checks.
@@ -103,8 +101,8 @@ must be associated with the authenticated owner's server-side company registry.
   revocation without recreating the workspace.
 - Reset codes, expired sessions, permission changes, brute-force protection,
   restricted fields and private document downloads are enforced by the API.
-- Existing company data, uploaded logos, offline pending changes and accounting
-  results survive migration. Reissue legacy employee invites after registration.
+- New companies start without sample financial records, inherited invitations or
+  data from another tenant.
 
 Cloud Run is the selected provider. The operator's project and canonical API/app
 origins are still required for live validation. Setting a dummy gateway URL or
@@ -118,6 +116,5 @@ Implementation details:
 - [Control registry, normalized company schema and Drive structure](backend/cloud-run/CONTROL_REGISTRY.md)
 - [Employee permissions and operator handoff](backend/cloud-run/EMPLOYEE_ACCESS.md)
 
-No production deployment or destructive migration has been performed. Those
-actions require the owner's approval. Current customer workspaces and legacy
-invites remain on the existing flow until a reviewed migration is implemented.
+No production deployment has been performed. Legacy workspace adoption is outside
+this release; every company begins with a newly provisioned empty workspace.

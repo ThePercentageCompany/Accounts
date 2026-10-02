@@ -7,7 +7,7 @@ import 'saas_api.dart';
 /// are removed; an HTTP 200 batch can still contain a failed operation.
 class RecordWriteQueue {
   RecordWriteQueue(this.api, this.preferences, String ownerId, this.companyId)
-    : storageKey = 'saas_records_${ownerId}_$companyId';
+      : storageKey = 'saas_records_${ownerId}_$companyId';
   final SaasApi api;
   final SharedPreferences preferences;
   final String companyId;
@@ -44,18 +44,17 @@ class RecordWriteQueue {
     }
   }
 
-  List<Map<String, Object?>> get pending =>
-      (preferences
-              .getKeys()
-              .where((key) => key.startsWith('${storageKey}_'))
-              .toList()
-            ..sort())
-          .map(
-            (key) => Map<String, Object?>.from(
-              jsonDecode(preferences.getString(key)!) as Map,
-            ),
-          )
-          .toList();
+  List<Map<String, Object?>> get pending => (preferences
+          .getKeys()
+          .where((key) => key.startsWith('${storageKey}_'))
+          .toList()
+        ..sort())
+      .map(
+        (key) => Map<String, Object?>.from(
+          jsonDecode(preferences.getString(key)!) as Map,
+        ),
+      )
+      .toList();
   Future<void> _store(Map<String, Object?> operation) async {
     if (!await preferences.setString(
       '${storageKey}_${operation['operationId']}',
@@ -101,6 +100,9 @@ class RecordWriteQueue {
           'send',
           'convert',
           'approve',
+          'capitalize',
+          'capitalPost',
+          'loanPost',
         ].contains(action))
           'values': values,
       });
@@ -146,9 +148,8 @@ class RecordWriteQueue {
           .where((r) => r['status'] == 'APPLIED')
           .map((r) => r['operationId'])
           .toSet();
-      operations = operations
-          .where((r) => !applied.contains(r['operationId']))
-          .toList();
+      operations =
+          operations.where((r) => !applied.contains(r['operationId'])).toList();
       for (final id in applied) {
         if (!await preferences.remove('${storageKey}_$id')) {
           throw const SaasApiException(
@@ -162,6 +163,9 @@ class RecordWriteQueue {
         final error = failed['error'] as Map;
         if (const [
           'VERSION_CONFLICT',
+          'INVALID_COMPANY_PROFILE',
+          'COMPANY_CURRENCY_LOCKED',
+          'DOCUMENT_REFERENCE_INVALID',
           'CASH_TOTAL_MISMATCH',
           'CASH_ENTRY_LINKED',
           'INVALID_PAYMENT_ACCOUNT',
@@ -172,6 +176,9 @@ class RecordWriteQueue {
           'INVOICE_TOTAL_MISMATCH',
           'INVALID_INVOICE_PREFIX',
           'INVOICE_SEQUENCE_EXHAUSTED',
+          'INVALID_INVOICE_VOID',
+          'INVOICE_VOID_NOT_AVAILABLE',
+          'INVOICE_LEDGER_MISMATCH',
           'INVALID_RECEIPT',
           'RECEIPT_LOCKED',
           'RECEIPT_CUSTOMER_INVALID',
@@ -197,6 +204,29 @@ class RecordWriteQueue {
           'PAYROLL_DUPLICATE',
           'PAYROLL_TOTAL_MISMATCH',
           'PAYROLL_NOT_PAYABLE',
+          'PAYROLL_NOT_REVERSIBLE',
+          'INVALID_ASSET',
+          'ASSET_LOCKED',
+          'ASSET_DERIVED_FIELD',
+          'ASSET_CODE_DUPLICATE',
+          'ASSET_NOT_CAPITALIZABLE',
+          'ASSET_NOT_DEPRECIABLE',
+          'ASSET_DEPRECIATION_DUPLICATE',
+          'ASSET_FULLY_DEPRECIATED',
+          'ASSET_NOT_DISPOSABLE',
+          'ASSET_BOOK_VALUE_INVALID',
+          'INVALID_SHAREHOLDER',
+          'INVALID_CAPITAL_TRANSACTION',
+          'CAPITAL_LOCKED',
+          'CAPITAL_DERIVED_FIELD',
+          'CAPITAL_REFERENCE_DUPLICATE',
+          'CAPITAL_NOT_POSTABLE',
+          'INVALID_SHAREHOLDER_LOAN',
+          'SHAREHOLDER_LOAN_LOCKED',
+          'SHAREHOLDER_LOAN_DERIVED_FIELD',
+          'SHAREHOLDER_LOAN_NOT_POSTABLE',
+          'SHAREHOLDER_LOAN_NOT_REPAYABLE',
+          'RECEIPT_NOT_REVERSIBLE',
           'PAYMENT_NOT_AVAILABLE',
           'INVALID_PAYMENT_DATE',
           'PERIOD_CLOSED',

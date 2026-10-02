@@ -23,7 +23,7 @@
 
 ## Existing gateway security limitations
 
-These are migration constraints; existing permission checks must be preserved.
+These are historical gateway limitations addressed by the new shared backend.
 
 - Its configured spreadsheet/folder and effective Apps Script owner represent one
   company. Reusing it as a public shared endpoint cannot isolate arbitrary tenants.
@@ -66,7 +66,7 @@ resumable provisioning, normalized schema, authenticated tasks and integrity che
 Phase 3 adds `employee-service.js`, `employee-sheets.js`, `employee-policy.js` and
 `private-code.js` for employee CRUD/access, live Sheets authorization, privacy
 policies and scrypt codes. Subsequent phases add business writes, documents, sync
-and Flutter migration.
+and Flutter integration.
 Secrets and Google resource IDs are never part of frontend-facing company models.
 
 ## Existing files affected
@@ -90,7 +90,7 @@ Planned Flutter integration touches:
   relationships require changes; accounting calculations stay intact.
 - `lib/main.dart`, frontend build/config examples and `vercel-build.sh`: trusted
   fixed API origin and new session/navigation wiring once the backend is ready.
-- Existing tests plus migration and cross-tenant integration tests.
+- Existing tests plus clean-workspace and cross-tenant integration tests.
 
 ## Phases and acceptance gates
 
@@ -113,13 +113,14 @@ Planned Flutter integration touches:
    expected versions, soft deletion, stable operation keys and deterministic
    uncertain-write recovery, ordered batch upload and tombstone downloads are implemented. Relationship/accounting
    invariant validation, documents and employee business writes remain.
-5. **Flutter integration and reviewed migration.** Connect API auth/onboarding,
+5. **Flutter integration for clean workspaces.** Connect API auth/onboarding,
    progress/reconnect screens, repository adapters, opaque invites, local-cache and
-   queue mapping, adoption dry run and backup. Verify legacy data and reissue invites.
+   queue mapping. New companies start empty; legacy workspace adoption is outside
+   this release.
 6. **Preproduction verification and approved release.** Two real tenants, owner
    offline access, revoked Google connection recovery, real camera QR, private images,
    load/contention, IAM, logging, abuse controls and restoration tests.
 
 Registration alone does not create company Google files. Phase 2 queues their
-creation after owner Google consent. Existing workspace migration is still pending.
-Production deployment and destructive migration require explicit approval.
+creation after owner Google consent. This release provisions new empty workspaces
+and does not migrate legacy accounting data.

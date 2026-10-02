@@ -63,6 +63,25 @@ test('public health uses /health and requires no session', async t => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', phase: 4 });
 });
+
+test('new reporting and document listing routes validate queries and preserve session routing', async t => {
+  const calls = [];
+  const f = await running(t, {
+    business: { async report(...args) { calls.push(args); return {}; } },
+    employees: { async report(...args) { calls.push(args); return {}; } },
+    documents: { async list(...args) { calls.push(args); return []; } },
+  });
+  for (const path of [`/v1/companies/${'c'.repeat(43)}/reports/dashboard`, '/v1/employee/reports/general-ledger']) {
+    assert.equal((await f.request(path + '?asOf=2026-09-30')).status, 400);
+    const response = await f.request(path + '?from=2026-09-01&asOf=2026-09-30', { headers: { Cookie: '__Host-tpc_employee=employee-token' } });
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+  assert.equal(calls[1][0], 'employee-token');
+  const path = `/v1/employee/companies/${'c'.repeat(43)}/documents`;
+  assert.equal((await f.request(path + '?section=Invoices')).status, 400);
+  assert.equal((await f.request(path + `?section=Invoices&recordId=${'r'.repeat(43)}`, { headers: { Cookie: '__Host-tpc_employee=employee-token' } })).status, 200);
+  assert.equal(calls[2][0], 'employee-token'); assert.equal(calls[2][4], true);
+});
 test('document HTTP routes authenticate uploads and deliver private bytes with no-store headers', async t => {
   const documentId = 'd'.repeat(43); let uploads = 0;
   const documents = {

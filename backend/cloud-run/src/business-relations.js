@@ -20,7 +20,7 @@ const REQUIRED = {
   InvoiceItems: ['invoiceId'], QuotationItems: ['quotationId'], ReceiptAllocations: ['receiptId', 'invoiceId'],
   ExpenseAttachments: ['expenseId'], PayrollItems: ['payrollId'], Payslips: ['payrollId', 'employeeId'],
   Payroll: ['employeeId'], Attendance: ['employeeId'], Overtime: ['employeeId'],
-  JournalLines: ['journalId'], ShareholderEquity: ['shareholderId'], ShareholderLoans: ['shareholderId'],
+  JournalLines: ['journalId'], CapitalTransactions: ['shareholderId'], ShareholderEquity: ['shareholderId'], ShareholderLoans: ['shareholderId'],
 };
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 

@@ -215,7 +215,6 @@ Document cancellation, deletion and retention workflows remain unimplemented.
 
 | Phase | Routes | Contract requirements |
 | --- | --- | --- |
-| 5 | Reviewed legacy workspace adoption | Owner verification, dry run, backup, resumable migration, mapping and invite reissue; approval before destructive steps. |
 
 Sheets does not provide multi-row compare-and-swap transactions. Phase 4 needs a
 durable operation journal with deterministic application/recovery before claiming
@@ -237,8 +236,8 @@ source marker. A different request cannot post a linked source again.
 Posting recognizes the entry on its date against receivables/payables. PAID
 entries additionally settle that control account on paidDate against Cash or Bank;
 payment before entry date is rejected. Income tax uses output VAT payable; expense
-tax uses input VAT. Tax recoverability choices, custom accounts/currencies,
-partial payments and paid-entry refunds remain unsupported. Both dates
+tax uses input VAT. Tax recoverability choices, custom accounts/currencies and
+partial settlements remain unsupported. Both dates
 must pass the open-period checks. Income/Expenses reads expose derived
 `ledgerStatus: UNPOSTED|LINKED`, never accepted as client write authority.
 
@@ -250,14 +249,16 @@ then atomically saves PAID and a payment journal. The original accrual is unchan
 Only the payment date needs an open period; a closed original period is allowed.
 Stable operation IDs recover lost responses without repeating payment.
 
-Owners can reverse an unpaid posted Income/Expenses entry with sync action
+Owners can reverse a posted Income/Expenses entry with sync action
 `reverse`, current expectedVersion, and values `{date, description}` (reversal date
 and required reason, max 500 characters). The date must be in an open period and
 cannot precede the original posting. Original source financial fields and journals
 remain unchanged; a POSTED opposite journal and updated source version commit
 together. Reads show `ledgerStatus: REVERSED`; subsequent payment, reposting and
-ordinary edits are denied. Paid entries require a separate refund workflow and
-are rejected here. Reversal dates do not reopen the original accounting period.
+ordinary edits are denied. A paid entry atomically receives an opposite payment
+journal (`IncomeRefund` or `ExpensesRefund`) before its accrual reversal, cancelling
+both Cash/Bank and control-account effects. Reversal dates do not reopen the
+original accounting period.
 # Owner trial balance
 
 Owner balance sheet uses GET `/v1/companies/:companyId/reports/balance-sheet?asOf=YYYY-MM-DD`.
@@ -316,6 +317,12 @@ The invoice becomes ISSUED and its accounts-receivable debit, net-revenue credit
 and output-VAT credit are saved in the same Sheets batch. The source marker makes
 a lost-response retry return the existing issue result without allocating another
 number or journal. Issued invoices and lines are immutable through generic editing.
+
+An ISSUED invoice with zero paid amount and its full balance can be voided with
+`invoiceVoid` and `{voidDate, voidReason}`. The date must be on or after issue and
+in an open period. Every receipt must first be reversed. The server verifies the
+single original invoice journal and writes its exact opposite as `InvoiceVoid`,
+then marks the invoice VOID while preserving all original records.
 ## Customer receipt posting
 
 The `receive` action on `Receipts` accepts an invoice, customer, payment date,
@@ -325,7 +332,9 @@ overpayments. It assigns `REC-YYYY-NNNNNN`, creates the allocation, updates the
 invoice paid amount/balance/status, and posts Cash/Bank debit and Accounts
 Receivable credit in one batch. Stable operation IDs prevent duplicates after
 uncertain responses. Posted receipts and allocations cannot be edited through
-generic writes. Credit, void, refund, reversal and invoice-document workflows remain.
+generic writes. `receiptReverse` restores the allocated invoice balance/status and
+posts Accounts Receivable against the original Cash/Bank account. Partial credit
+notes and invoice-document workflows remain outside the initial scope.
 
 ## Quotation workflow
 
@@ -353,5 +362,59 @@ requires an open accounting period, locks the payroll and atomically posts Salar
 Expense against Salary Payable and Payroll Deductions Payable. `payrollPay`
 requires an approved payroll plus payment date and Cash/Bank account, then posts
 Salary Payable against the selected asset account and marks it paid. Stable
-operation IDs prevent duplicate approval or payment journals. Payslip generation,
-deduction remittance and payroll reversal remain.
+operation IDs prevent duplicate approval or payment journals. `payrollReverse`
+requires an open reversal date and exact approval history; paid payroll also gets
+a Cash/Bank refund journal before the accrual reversal. Payslip generation and
+deduction remittance remain.
+
+## Fixed-asset workflow
+
+Asset drafts accept identity, purchase date, cost, residual value, useful life in
+months, location, serial number and a Cash/Bank funding account. The first release
+supports paid company purchases and straight-line depreciation. The server owns
+status, accumulated depreciation, net book value and journal references.
+
+The `capitalize` action requires an open purchase-date period, locks the financial
+details and atomically debits Fixed Assets and credits Cash or Bank. `depreciate`
+accepts a posting date, prevents a second posting in the same or an earlier month,
+calculates the monthly amount in minor units, stops at residual value and posts
+Depreciation Expense against Accumulated Depreciation. `assetDispose` removes cost
+and accumulated depreciation, records Cash/Bank proceeds and posts the resulting
+gain or loss. Impairment, transfers and contributed assets remain outside the
+initial release.
+
+## Capital contribution workflow
+
+Owners can create shareholders and paid capital-contribution drafts. A draft
+requires an active same-company shareholder, posting date, positive amount and a
+Cash or Bank destination. Status is server controlled and an optional nonempty
+reference must be unique within the company.
+
+The `capitalPost` action requires an open accounting period, locks the source and
+atomically debits Cash or Bank and credits Shareholder Equity. Stable operation
+IDs prevent repeated requests or lost responses from creating duplicate journals.
+Interest-free `LOAN_TO_COMPANY` drafts can be posted from Cash/Bank to Shareholder
+Loan liability and repaid in full through `loanRepay`. Interest accrual, partial
+repayment, distributions, equity-percentage history and non-cash contributions
+remain outside the initial scope.
+# Reporting and document integration — 2 October 2026
+
+- `GET /v1/companies/:companyId/reports/dashboard?from=YYYY-MM-DD&asOf=YYYY-MM-DD`
+  returns period income/expenses/profit and cumulative cash, bank, receivables,
+  payables, assets, liabilities and equity from validated posted journals.
+- `GET /v1/companies/:companyId/reports/general-ledger?from=YYYY-MM-DD&asOf=YYYY-MM-DD`
+  returns per-account opening balance, period debits/credits, dated journal entries
+  with running balances, and closing balance. Balances are debit-positive.
+- Employee equivalents are `/v1/employee/reports/:kind`, using the employee cookie
+  and its company. Supported kinds: dashboard, general-ledger, trial-balance,
+  profit-and-loss, balance-sheet. Company-wide `Reports` read permission is required
+  and rechecked after reading. Trial balance/balance sheet take only `asOf`;
+  the other reports require both dates. Responses remain `no-store`.
+- `GET /v1/companies/:companyId/documents?section=:table&recordId=:recordId`
+  lists ready documents for one authorized parent record. The employee equivalent
+  is `/v1/employee/companies/:companyId/documents` and enforces current parent scope.
+  Metadata includes `documentId`, `name`, `mimeType`, `byteLength`; no Drive IDs.
+  Payroll is an upload target using the existing Payslips folder.
+- CompanyProfile updates validate company name, email and document prefixes.
+  Established accounting currency cannot change after posted journals exist.
+  Private logos continue to require a ready same-record document reference.

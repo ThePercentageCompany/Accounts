@@ -27,7 +27,40 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
     requireThat(false, 409, 'RECEIPT_LOCKED', 'Receipt allocations are created by the payment workflow.');
   }
   if (table !== 'Receipts') return { values, extra: [] };
-  requireThat(action === 'receive' && !old, 409, 'RECEIPT_LOCKED', 'Posted receipts cannot be edited or deleted.');
+  requireThat((action === 'receive' && !old) || action === 'receiptReverse', 409, 'RECEIPT_LOCKED', 'Posted receipts cannot be edited or deleted.');
+  if (action === 'receiptReverse') {
+    requireThat(old?.status === 'POSTED' && Object.keys(values).every(key => ['reversalDate', 'reversalReason'].includes(key)) &&
+      validLedgerDate(values.reversalDate) && values.reversalDate >= old.paymentDate && typeof values.reversalReason === 'string' &&
+      values.reversalReason.trim().length > 0 && values.reversalReason.length <= 500,
+    409, 'RECEIPT_NOT_REVERSIBLE', 'Choose a valid reversal date and reason for a posted receipt.');
+    await assertOpenLedgerDate(sheets, companyId, values.reversalDate);
+    const data = await sheets.read(companyId, ['Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+    const allocation = data.ReceiptAllocations.filter(row => row.companyId === companyId && row.receiptId === id && active(row));
+    requireThat(allocation.length === 1, 409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt allocation is missing or inconsistent.');
+    const invoice = data.Invoices.find(row => row.companyId === companyId && row.recordId === allocation[0].invoiceId && active(row));
+    const amount = minor(old.amount), paid = minor(invoice?.paidAmount ?? 0), balance = minor(invoice?.balance ?? 0), total = minor(invoice?.total ?? 0);
+    requireThat(invoice && paid >= amount && paid + balance === total && ['PAID', 'PARTIALLY_PAID'].includes(invoice.status),
+      409, 'RECEIPT_NOT_REVERSIBLE', 'Invoice payment totals are inconsistent.');
+    const original = data.Journals.filter(row => row.companyId === companyId && row.sourceType === 'Receipt' && row.sourceId === id && active(row));
+    const previous = data.Journals.some(row => row.companyId === companyId && row.sourceType === 'ReceiptReversal' && row.sourceId === id && active(row));
+    requireThat(original.length === 1 && original[0].status === 'POSTED' && !previous,
+      409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt journal is missing, duplicated or already reversed.');
+    const newPaid = paid - amount, newBalance = balance + amount, journalId = challenge(`${companyId}:${operation}:receipt-reversal`);
+    const meta = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
+    const accountId = old.paymentAccount === 'Cash' ? 'cash' : 'bank';
+    return { values: { status: 'REVERSED', reversalDate: values.reversalDate, reversalReason: values.reversalReason.trim() }, extra: [
+      { table: 'Invoices', row: invoice._row, values: { paidAmount: money(newPaid), balance: money(newBalance),
+        status: newPaid === 0n ? 'ISSUED' : 'PARTIALLY_PAID', updatedAt: system.updatedAt, updatedBy: system.updatedBy,
+        recordVersion: Number(invoice.recordVersion) + 1, syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey } },
+      { table: 'Journals', row: nextRow(data.Journals), values: { ...meta, recordId: journalId, number: `AUTO-${journalId}`,
+        date: values.reversalDate, description: `Reverse ${old.number}: ${values.reversalReason.trim()}`,
+        sourceType: 'ReceiptReversal', sourceId: id, totalDebit: money(amount), totalCredit: money(amount), status: 'POSTED' } },
+      { table: 'JournalLines', row: nextRow(data.JournalLines), values: { ...meta, recordId: challenge(`${journalId}:0`),
+        journalId, lineNumber: 1, accountId: 'accounts_receivable', accountName: 'Accounts Receivable', accountGroup: 'Asset', debit: money(amount), credit: 0 } },
+      { table: 'JournalLines', row: nextRow(data.JournalLines) + 1, values: { ...meta, recordId: challenge(`${journalId}:1`),
+        journalId, lineNumber: 2, accountId, accountName: old.paymentAccount, accountGroup: 'Asset', debit: 0, credit: money(amount) } },
+    ] };
+  }
   const { invoiceId, ...receipt } = values;
   const data = await sheets.read(companyId, ['Customers', 'Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines']);
   const customer = data.Customers.find(row => row.companyId === companyId && row.recordId === receipt.customerId && active(row));
@@ -54,7 +87,7 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
   const newPaid = paid + amount, newBalance = balance - amount;
   const accountId = receipt.paymentAccount === 'Cash' ? 'cash' : 'bank';
   const accountName = receipt.paymentAccount === 'Cash' ? 'Cash' : 'Bank';
-  return { values: { ...receipt, number, status: 'POSTED' }, extra: [
+  return { values: { ...receipt, number, status: 'POSTED', reversalDate: '', reversalReason: '' }, extra: [
     { table: 'ReceiptAllocations', row: nextRow(data.ReceiptAllocations), values: {
       ...journalSystem, recordId: allocationId, receiptId: id, invoiceId, amount: money(amount),
     } },

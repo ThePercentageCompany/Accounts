@@ -23,8 +23,8 @@ class SaasApiException implements Exception {
 /// Authentication lives in secure HttpOnly cookies, not local preferences.
 class SaasApi {
   SaasApi({String origin = configuredSaasApiOrigin, http.Client? client})
-    : origin = _origin(origin),
-      _client = client ?? createSaasTransport();
+      : origin = _origin(origin),
+        _client = client ?? createSaasTransport();
 
   final Uri origin;
   final http.Client _client;
@@ -183,28 +183,66 @@ class SaasApi {
 
   Future<Uri> startSignIn() => _authorization('/v1/auth/google/start');
   Future<Map<String, dynamic>> me() => _json('GET', '/v1/me');
+  Future<Map<String, dynamic>> employeeReport(
+      String kind, String from, String asOf) {
+    if (!const [
+      'dashboard',
+      'general-ledger',
+      'trial-balance',
+      'profit-and-loss',
+      'balance-sheet'
+    ].contains(kind)) {
+      throw const SaasApiException('INVALID_REPORT', 'Invalid report.');
+    }
+    final period =
+        const ['dashboard', 'general-ledger', 'profit-and-loss'].contains(kind);
+    return _json('GET',
+        '/v1/employee/reports/$kind?asOf=${Uri.encodeQueryComponent(asOf)}${period ? '&from=${Uri.encodeQueryComponent(from)}' : ''}');
+  }
+
+  Future<Map<String, dynamic>> report(
+    String companyId,
+    String kind,
+    String from,
+    String asOf,
+  ) {
+    if (!const ['dashboard', 'general-ledger'].contains(kind)) {
+      throw const SaasApiException('INVALID_REPORT', 'Invalid report.');
+    }
+    return _json('GET',
+        '/v1/companies/${_id(companyId)}/reports/$kind?from=${Uri.encodeQueryComponent(from)}&asOf=${Uri.encodeQueryComponent(asOf)}');
+  }
+
+  Future<Map<String, dynamic>> documents(
+          String companyId, String section, String recordId,
+          {bool employee = false}) =>
+      _json('GET',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents?section=${Uri.encodeQueryComponent(section)}&recordId=${Uri.encodeQueryComponent(recordId)}');
   Future<Map<String, dynamic>> balanceSheet(
     String companyId,
     String asOf,
-  ) => _json(
-    'GET',
-    '/v1/companies/$companyId/reports/balance-sheet?asOf=${Uri.encodeQueryComponent(asOf)}',
-  );
+  ) =>
+      _json(
+        'GET',
+        '/v1/companies/$companyId/reports/balance-sheet?asOf=${Uri.encodeQueryComponent(asOf)}',
+      );
   Future<Map<String, dynamic>> profitAndLoss(
     String companyId,
     String from,
     String asOf,
-  ) => _json(
-    'GET',
-    '/v1/companies/$companyId/reports/profit-and-loss?from=${Uri.encodeQueryComponent(from)}&asOf=${Uri.encodeQueryComponent(asOf)}',
-  );
+  ) =>
+      _json(
+        'GET',
+        '/v1/companies/$companyId/reports/profit-and-loss?from=${Uri.encodeQueryComponent(from)}&asOf=${Uri.encodeQueryComponent(asOf)}',
+      );
   Future<Map<String, dynamic>> trialBalance(
     String companyId,
     String asOf,
-  ) => _json(
-    'GET',
-    '/v1/companies/$companyId/reports/trial-balance?asOf=${Uri.encodeQueryComponent(asOf)}',
-  );
+  ) =>
+      _json(
+        'GET',
+        '/v1/companies/$companyId/reports/trial-balance?asOf=${Uri.encodeQueryComponent(asOf)}',
+      );
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
   Future<Map<String, dynamic>> createCompany(String name, String operationId) =>
       _json(
@@ -223,11 +261,12 @@ class SaasApi {
   Future<Map<String, dynamic>> employeeLogin(
     String inviteId,
     String privateCode,
-  ) => _json(
-    'POST',
-    '/v1/employee/login',
-    data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
-  );
+  ) =>
+      _json(
+        'POST',
+        '/v1/employee/login',
+        data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
+      );
   Future<Map<String, dynamic>> employeeMe() => _json('GET', '/v1/employee/me');
   Future<Map<String, dynamic>> employeeLogout() =>
       _json('POST', '/v1/employee/logout');
@@ -238,12 +277,13 @@ class SaasApi {
     String? employeeId,
     Map<String, Object?> values,
     String operationId,
-  ) => _json(
-    employeeId == null ? 'POST' : 'PATCH',
-    '/v1/companies/${_id(companyId)}/employees${employeeId == null ? '' : '/${_id(employeeId)}'}',
-    data: values,
-    operationId: operationId,
-  );
+  ) =>
+      _json(
+        employeeId == null ? 'POST' : 'PATCH',
+        '/v1/companies/${_id(companyId)}/employees${employeeId == null ? '' : '/${_id(employeeId)}'}',
+        data: values,
+        operationId: operationId,
+      );
   Future<Map<String, dynamic>> employeeAccess(
     String companyId,
     String employeeId,
@@ -279,11 +319,12 @@ class SaasApi {
   Future<Map<String, dynamic>> sync(
     String companyId,
     List<Map<String, Object?>> operations,
-  ) => _json(
-    'POST',
-    '/v1/companies/${_id(companyId)}/sync',
-    data: {'operations': operations},
-  );
+  ) =>
+      _json(
+        'POST',
+        '/v1/companies/${_id(companyId)}/sync',
+        data: {'operations': operations},
+      );
 
   Future<Map<String, dynamic>> upload(
     String companyId, {
@@ -293,27 +334,30 @@ class SaasApi {
     required String relatedSection,
     required String relatedRecordId,
     required Uint8List bytes,
-  }) => _json(
-    'POST',
-    '/v1/companies/${_id(companyId)}/documents',
-    operationId: operationId,
-    data: {
-      'name': name,
-      'mimeType': mimeType,
-      'relatedSection': relatedSection,
-      'relatedRecordId': relatedRecordId,
-      'data': base64Encode(bytes),
-    },
-  );
+  }) =>
+      _json(
+        'POST',
+        '/v1/companies/${_id(companyId)}/documents',
+        operationId: operationId,
+        data: {
+          'name': name,
+          'mimeType': mimeType,
+          'relatedSection': relatedSection,
+          'relatedRecordId': relatedRecordId,
+          'data': base64Encode(bytes),
+        },
+      );
 
   Future<Uint8List> document(
     String companyId,
     String documentId, {
     bool employee = false,
-  }) async => (await _send(
-    'GET',
-    '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents/${_id(documentId)}',
-  )).bodyBytes;
+  }) async =>
+      (await _send(
+        'GET',
+        '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents/${_id(documentId)}',
+      ))
+          .bodyBytes;
 
   void close() => _client.close();
 }

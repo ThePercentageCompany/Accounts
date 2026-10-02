@@ -22,6 +22,32 @@ async function setup() {
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
 
+test('company profile validates identity and locks established currency after posting', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.data.CompanyProfile = [{ recordId: 'company', companyId: f.companyId, name: 'Business', currency: 'AED', recordVersion: 1, _row: 2 }];
+  f.data.Journals = [{ companyId: f.companyId, status: 'POSTED' }];
+  for (const [values, code] of [[{ name: '' }, 'INVALID_COMPANY_PROFILE'], [{ invoicePrefix: 'bad prefix' }, 'INVALID_COMPANY_PROFILE'],
+    [{ currency: 'USD' }, 'COMPANY_CURRENCY_LOCKED']]) {
+    await assert.rejects(() => f.business.mutate(f.token, f.companyId, 'CompanyProfile', 'company', 'update',
+      { expectedVersion: 1, values }, `profile_invalid_${code}`), e => e.code === code);
+  }
+  await f.business.mutate(f.token, f.companyId, 'CompanyProfile', 'company', 'update',
+    { expectedVersion: 1, values: { name: 'Updated', invoicePrefix: 'TPC', currency: 'AED' } }, 'profile_valid_0001');
+  assert.equal(f.data.CompanyProfile[0].name, 'Updated'); assert.equal(f.data.CompanyProfile[0].recordVersion, 2);
+});
+
+test('dashboard and general ledger reject foreign owners and pending writes', async () => {
+  const f = await setup(), other = await f.login('other');
+  for (const kind of ['dashboard', 'general-ledger']) {
+    await assert.rejects(() => f.business.report(other, f.companyId, kind, '2026-09-01', '2026-09-30'));
+    const report = await f.business.report(f.token, f.companyId, kind, '2026-09-01', '2026-09-30');
+    assert.equal(report.journalCount, 0);
+  }
+  await f.registry.transact(state => { state.companies[f.companyId].businessWrite = 'pending'; });
+  await assert.rejects(() => f.business.report(f.token, f.companyId, 'dashboard', '2026-09-01', '2026-09-30'), e => e.code === 'BUSINESS_WRITE_PENDING');
+});
+
 test('invoice line retry reconciles atomic header totals without a duplicate parent update', async () => {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);
@@ -60,6 +86,13 @@ test('invoice line retry reconciles atomic header totals without a duplicate par
   assert.equal(batches, 2); assert.equal(f.data.Journals.length, 1);
   await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'issue',
     { expectedVersion: 3 }, 'invoice_issue_again'), e => e.code === 'INVOICE_LOCKED');
+  const write = f.sheets.writeBatch;
+  f.sheets.writeBatch = async (...args) => { await write(...args); throw new Error('response lost'); };
+  const voidInput = { expectedVersion: 3, values: { voidDate: '2026-09-30', voidReason: 'Customer cancelled order' } };
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'invoiceVoid', voidInput, 'invoice_void_001x'));
+  const voided = await f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'invoiceVoid', voidInput, 'invoice_void_001x');
+  assert.equal(voided.version, 4); assert.equal(f.data.Invoices[0].status, 'VOID');
+  assert.equal(f.data.Journals.length, 2); assert.equal(f.data.JournalLines.length, 6); assert.equal(batches, 3);
 });
 
 test('receipt payment is atomic, server numbered and idempotent after a lost response', async () => {
@@ -148,6 +181,28 @@ test('payroll approval and payment post each journal once', async () => {
   assert.equal(batches, 2);
 });
 
+test('capital contribution posts once after a lost response', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  Object.assign(f.data, { Shareholders: [], CapitalTransactions: [], Journals: [], JournalLines: [], FinancialPeriods: [] });
+  f.sheets.writeBatch = async (id, changes) => { for (const change of changes) await f.sheets.write(id, change.table, change.row, change.values); };
+  const shareholder = await f.business.mutate(f.token, f.companyId, 'Shareholders', null, 'create', {
+    expectedVersion: 0, values: { name: 'Founder', email: '', phone: '', role: 'Founder', status: 'ACTIVE', agreedCapital: 25000, investmentDate: '2026-09-01' },
+  }, 'shareholder_create_001');
+  const contribution = await f.business.mutate(f.token, f.companyId, 'CapitalTransactions', null, 'create', {
+    expectedVersion: 0, values: { date: '2026-09-29', capitalAccountId: '', shareholderId: shareholder.recordId,
+      kind: 'CAPITAL_CONTRIBUTION', amount: 25000, method: 'PAID', destinationAccount: 'Bank', assetId: '', reference: 'CAP-001' },
+  }, 'capital_create_001');
+  const write = f.sheets.writeBatch; let batches = 0;
+  f.sheets.writeBatch = async (...args) => { batches++; await write(...args); throw new Error('response lost'); };
+  const operation = { operations: [{ operationId: 'capital_post_001', table: 'CapitalTransactions', action: 'capitalPost',
+    recordId: contribution.recordId, expectedVersion: 1 }] };
+  assert.equal((await f.business.sync(f.token, f.companyId, operation)).results[0].status, 'FAILED');
+  assert.equal((await f.business.sync(f.token, f.companyId, operation)).results[0].status, 'APPLIED');
+  assert.equal(batches, 1); assert.equal(f.data.CapitalTransactions[0].status, 'POSTED');
+  assert.equal(f.data.Journals.length, 1); assert.equal(f.data.JournalLines.length, 2);
+});
+
 async function cashFixture(table = 'Income', paid = true) {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);
@@ -222,9 +277,21 @@ test('unpaid reversal preserves history and negates each account without changin
   }
 });
 
-test('reversals reject paid/unposted entries and invalid/closed dates before any write', async () => {
-  const paid = await cashFixture(); await paid.post();
-  assert.equal((await reverse(paid)).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
+test('paid entry reversal refunds settlement and cancels accrual exactly once', async () => {
+  for (const table of ['Income', 'Expenses']) {
+    const f = await cashFixture(table); await f.post();
+    assert.equal((await reverse(f, table)).results[0].status, 'APPLIED');
+    assert.deepEqual(f.data.Journals.map(row => row.sourceType),
+      [table, `${table}Payment`, `${table}Refund`, `${table}Reversal`]);
+    const balances = {};
+    for (const line of f.data.JournalLines) balances[line.accountId] = (balances[line.accountId] || 0) + Math.round(line.debit * 100) - Math.round(line.credit * 100);
+    assert.ok(Object.values(balances).every(n => n === 0));
+    assert.equal((await reverse(f, table, {}, 3, `paid_reverse_again_${table}`)).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
+    assert.equal(f.batchCount, 2);
+  }
+});
+
+test('reversals reject unposted entries and invalid or closed dates before any write', async () => {
   const f = await cashFixture('Income', false);
   assert.equal((await reverse(f, 'Income', {}, 1)).results[0].error.code, 'REVERSAL_NOT_AVAILABLE');
   await f.post();
@@ -402,7 +469,7 @@ test('seeded company profile is editable but cannot be duplicated or deleted', a
 test('document links require a completed upload bound to the same record', async () => {
   const f = await setup(), docId = 'd'.repeat(43);
   f.sheets.table = name => TABLES.find(t => t.title === name);
-  f.data.CompanyProfile = [{ recordId: 'company', companyId: f.companyId, recordVersion: 1, _row: 2 }];
+  f.data.CompanyProfile = [{ recordId: 'company', companyId: f.companyId, name: 'Business', recordVersion: 1, _row: 2 }];
   const input = { expectedVersion: 1, values: { logoDocumentId: docId } };
   await assert.rejects(() => f.business.mutate(f.token, f.companyId, 'CompanyProfile', 'company', 'update', input,
     'company_logo_update_001'), e => e.code === 'DOCUMENT_REFERENCE_INVALID');

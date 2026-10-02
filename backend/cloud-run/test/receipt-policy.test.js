@@ -59,3 +59,22 @@ test('receipt rejects overpayment, mismatches, closed periods and direct edits',
   await assert.rejects(receiptChanges(f.sheets, 'tenant', 'ReceiptAllocations', 'a'.repeat(43), 'create', null, {}, system, 'operation'),
     error => error.code === 'RECEIPT_LOCKED');
 });
+
+test('receipt reversal restores invoice balance and posts the opposite journal', async () => {
+  const f = fixture(), receiptId = 'r'.repeat(43);
+  Object.assign(f.data.Invoices[0], { paidAmount: 40.25, balance: 60.25, status: 'PARTIALLY_PAID', recordVersion: 4 });
+  f.data.ReceiptAllocations.push({ companyId: 'tenant', recordId: 'a', receiptId, invoiceId, amount: 40.25 });
+  f.data.Journals.push({ companyId: 'tenant', recordId: 'j', sourceType: 'Receipt', sourceId: receiptId, status: 'POSTED' });
+  const old = { companyId: 'tenant', recordId: receiptId, number: 'REC-2026-000001', paymentDate: input.paymentDate,
+    paymentAccount: 'Bank', amount: 40.25, status: 'POSTED' };
+  const result = await receiptChanges(f.sheets, 'tenant', 'Receipts', receiptId, 'receiptReverse', old,
+    { reversalDate: '2026-10-01', reversalReason: 'Payment returned' }, system, 'reverse');
+  assert.equal(result.values.status, 'REVERSED'); assert.equal(result.extra[0].values.paidAmount, 0);
+  assert.equal(result.extra[0].values.balance, 100.5); assert.equal(result.extra[0].values.status, 'ISSUED');
+  assert.equal(result.extra[1].values.sourceType, 'ReceiptReversal');
+  assert.equal(result.extra[2].values.accountId, 'accounts_receivable'); assert.equal(result.extra[2].values.debit, 40.25);
+  assert.equal(result.extra[3].values.accountId, 'bank'); assert.equal(result.extra[3].values.credit, 40.25);
+  f.data.Journals.push({ companyId: 'tenant', sourceType: 'ReceiptReversal', sourceId: receiptId });
+  await assert.rejects(receiptChanges(f.sheets, 'tenant', 'Receipts', receiptId, 'receiptReverse', old,
+    { reversalDate: '2026-10-01', reversalReason: 'Again' }, system, 'again'), e => e.code === 'RECEIPT_NOT_REVERSIBLE');
+});
