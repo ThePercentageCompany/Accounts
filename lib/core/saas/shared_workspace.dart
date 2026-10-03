@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/appearance_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'employee_admin_controller.dart';
 import 'employee_admin_view.dart';
@@ -115,104 +116,189 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     ];
     final selected =
         sections.contains(_selected) ? _selected : sections.firstOrNull;
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        actions: const [AppearanceSelector(), SizedBox(width: 12)],
         leading: IconButton(
           onPressed: widget.onBack,
           tooltip: 'Back to account',
           icon: const Icon(Icons.arrow_back),
         ),
       ),
-      body: Column(
-        children: [
-          if (_uploads != null)
-            ListenableBuilder(
-                listenable: _uploads,
-                builder: (context, _) {
-                  final pending = _uploads.pending;
-                  if (pending == null) return const SizedBox.shrink();
-                  return ListTile(
-                      title: Text('Pending upload: ${pending['name']}'),
-                      subtitle: Text(
-                          '${pending['section']} — retry before other company changes.'),
-                      trailing: TextButton(
-                          onPressed: _uploads.busy
-                              ? null
-                              : () async {
-                                  try {
-                                    await _uploads.flush();
-                                    if (mounted) setState(() {});
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                              content: Text(e
-                                                      is SaasApiException
-                                                  ? e.message
-                                                  : 'Upload not confirmed. Retry.')));
+      body: Row(children: [
+        if (wide) SizedBox(width: 240, child: _navigation(sections, selected)),
+        Expanded(
+            child: Column(
+          children: [
+            if (_uploads != null)
+              ListenableBuilder(
+                  listenable: _uploads,
+                  builder: (context, _) {
+                    final pending = _uploads.pending;
+                    if (pending == null) return const SizedBox.shrink();
+                    return ListTile(
+                        title: Text('Pending upload: ${pending['name']}'),
+                        subtitle: Text(
+                            '${pending['section']} — retry before other company changes.'),
+                        trailing: TextButton(
+                            onPressed: _uploads.busy
+                                ? null
+                                : () async {
+                                    try {
+                                      await _uploads.flush();
+                                      if (mounted) setState(() {});
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                                content: Text(e
+                                                        is SaasApiException
+                                                    ? e.message
+                                                    : 'Upload not confirmed. Retry.')));
+                                      }
                                     }
-                                  }
-                                },
-                          child: const Text('Retry upload')));
-                }),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final section in sections)
-                  ChoiceChip(
-                    label: Text(section),
-                    selected: section == selected,
-                    onSelected: (_) => setState(() => _selected = section),
-                  ),
-              ],
+                                  },
+                            child: const Text('Retry upload')));
+                  }),
+            if (!wide)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  decoration: const InputDecoration(
+                      labelText: 'Workspace section',
+                      prefixIcon: Icon(Icons.grid_view_outlined)),
+                  items: [
+                    for (final section in sections)
+                      DropdownMenuItem(value: section, child: Text(section))
+                  ],
+                  onChanged: (value) => setState(() => _selected = value),
+                ),
+              ),
+            Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            selected == 'Reports'
+                                ? 'Business overview'
+                                : selected ?? 'Workspace',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text('Your company, clearly organised.',
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant)),
+                      ]),
+                )),
+            Expanded(
+              child: selected == null
+                  ? const Center(
+                      child: Text(
+                        'No record sections are assigned. Contact your company owner.',
+                      ),
+                    )
+                  : selected == 'Reports'
+                      ? TrialBalanceView(
+                          key: ValueKey(widget.companyId),
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee != null,
+                          initialDashboard: true,
+                        )
+                      : selected == 'Employees' && _employees != null
+                          ? EmployeeAdminView(
+                              controller: _employees,
+                              onDocuments: (row) {
+                                showDialog<void>(
+                                    context: context,
+                                    builder: (_) => RecordDocumentsView(
+                                        api: widget.api,
+                                        companyId: widget.companyId,
+                                        section: 'Employees',
+                                        record: row,
+                                        uploads: _uploads,
+                                        writes: _writes));
+                              })
+                          : _RecordsPanel(
+                              key: ValueKey((widget.companyId, selected)),
+                              api: widget.api,
+                              companyId: widget.companyId,
+                              employee: widget.employee != null,
+                              writes: _writes,
+                              uploads: _uploads,
+                              tables: selected == 'Employees'
+                                  ? ['Employees']
+                                  : workspaceTables[selected]!,
+                            ),
             ),
-          ),
-          Expanded(
-            child: selected == null
-                ? const Center(
-                    child: Text(
-                      'No record sections are assigned. Contact your company owner.',
-                    ),
-                  )
-                : selected == 'Reports'
-                    ? TrialBalanceView(
-                        key: ValueKey(widget.companyId),
-                        api: widget.api,
-                        companyId: widget.companyId,
-                        employee: widget.employee != null,
-                      )
-                    : selected == 'Employees' && _employees != null
-                        ? EmployeeAdminView(
-                            controller: _employees,
-                            onDocuments: (row) {
-                              showDialog<void>(
-                                  context: context,
-                                  builder: (_) => RecordDocumentsView(
-                                      api: widget.api,
-                                      companyId: widget.companyId,
-                                      section: 'Employees',
-                                      record: row,
-                                      uploads: _uploads,
-                                      writes: _writes));
-                            })
-                        : _RecordsPanel(
-                            key: ValueKey((widget.companyId, selected)),
-                            api: widget.api,
-                            companyId: widget.companyId,
-                            employee: widget.employee != null,
-                            writes: _writes,
-                            uploads: _uploads,
-                            tables: selected == 'Employees'
-                                ? ['Employees']
-                                : workspaceTables[selected]!,
-                          ),
-          ),
-        ],
-      ),
+          ],
+        )),
+      ]),
+    );
+  }
+
+  Widget _navigation(List<String> sections, String? selected) {
+    final colors = Theme.of(context).colorScheme;
+    const icons = <String, IconData>{
+      'Reports': Icons.space_dashboard_outlined,
+      'Employees': Icons.badge_outlined,
+      'Invoices': Icons.receipt_long_outlined,
+      'Quotations': Icons.request_quote_outlined,
+      'Customers': Icons.people_outline,
+      'Income & Expenses': Icons.swap_horiz,
+      'Payroll': Icons.payments_outlined,
+      'Office & Attendance': Icons.event_available_outlined,
+      'Fixed Assets': Icons.business_outlined,
+      'Capital & Equity': Icons.account_balance_outlined,
+      'Balance Sheet': Icons.balance_outlined,
+      'Settings': Icons.settings_outlined,
+    };
+    return Container(
+      decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(right: BorderSide(color: colors.outlineVariant))),
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        Padding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+            child: Row(children: [
+              Icon(Icons.auto_graph, color: colors.primary),
+              const SizedBox(width: 12),
+              const Text('TPC Accounts',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+            ])),
+        const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('WORKSPACE',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5))),
+        for (final section in sections)
+          Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                selected: selected == section,
+                selectedTileColor: colors.primaryContainer,
+                selectedColor: colors.primary,
+                leading: Icon(icons[section], size: 21),
+                title: Text(section,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                onTap: () => setState(() => _selected = section),
+              )),
+      ]),
     );
   }
 }
@@ -240,6 +326,13 @@ class _RecordsPanel extends StatefulWidget {
 class _RecordsPanelState extends State<_RecordsPanel> {
   late String table = widget.tables.first;
   List<Map<String, dynamic>> rows = [];
+  String _search = '';
+  List<Map<String, dynamic>> get _visibleRows => rows
+      .where((row) => [_title(row), row['status'] ?? '']
+          .join(' ')
+          .toLowerCase()
+          .contains(_search.toLowerCase()))
+      .toList();
   bool busy = false;
   String? error;
   int _request = 0;
@@ -1084,6 +1177,19 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               _editable ? 'Company records' : 'Online records · viewing only',
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: TextField(
+              decoration: const InputDecoration(
+                  hintText: 'Search records by name, number or status',
+                  prefixIcon: Icon(Icons.search)),
+              onChanged: (value) => setState(() => _search = value),
+            ),
+          ),
+          if (!busy && error == null && rows.isNotEmpty && _visibleRows.isEmpty)
+            const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No records match your search.')),
           if (busy) const LinearProgressIndicator(),
           if (error != null)
             Padding(
@@ -1097,9 +1203,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             ),
           Expanded(
             child: ListView.builder(
-              itemCount: rows.length,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              itemCount: _visibleRows.length,
               itemBuilder: (context, index) {
-                final row = rows[index];
+                final row = _visibleRows[index];
                 return ExpansionTile(
                   title: Text(_title(row)),
                   subtitle:

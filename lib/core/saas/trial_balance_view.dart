@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'saas_api.dart';
+import 'workspace_dashboard.dart';
 import 'report_export.dart';
 import '../utils/file_download.dart';
 
@@ -9,10 +10,12 @@ class TrialBalanceView extends StatefulWidget {
     required this.api,
     required this.companyId,
     this.employee = false,
+    this.initialDashboard = false,
   });
   final SaasApi api;
   final String companyId;
   final bool employee;
+  final bool initialDashboard;
   @override
   State<TrialBalanceView> createState() => _TrialBalanceViewState();
 }
@@ -39,6 +42,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDashboard) _extra = 'dashboard';
     _load();
   }
 
@@ -218,33 +222,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       if (_extra == 'dashboard')
                         Text(
                             'Income and expenses: ${data['from']} through ${data['asOf']}. Other balances are cumulative.'),
-                      if (_extra == 'dashboard')
-                        Wrap(spacing: 12, runSpacing: 12, children: [
-                          for (final field in {
-                            'totalIncome': 'Period income',
-                            'totalExpenses': 'Period expenses',
-                            'netProfit': 'Period profit / loss',
-                            'cash': 'Cash',
-                            'bank': 'Bank',
-                            'receivables': 'Receivables',
-                            'payables': 'Payables',
-                            'totalAssets': 'Assets',
-                            'totalLiabilities': 'Liabilities',
-                            'totalEquity': 'Equity'
-                          }.entries)
-                            SizedBox(
-                                width: 210,
-                                child: Card(
-                                    child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Column(children: [
-                                          Text(field.value),
-                                          Text('${data[field.key]}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .headlineSmall)
-                                        ])))),
-                        ]),
+                      if (_extra == 'dashboard') WorkspaceDashboard(data: data),
                       if (_extra == 'general-ledger')
                         for (final account in rows)
                           ExpansionTile(

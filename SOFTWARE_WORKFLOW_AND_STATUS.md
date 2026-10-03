@@ -339,3 +339,13 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
 Some older documents describe earlier milestones. Use this dated consolidated
 status together with the latest source and validation entries, rather than treating
 historical “pending” statements as the current status.
+
+### UI refresh — 4 October 2026
+
+- Active shared workspace uses a responsive desktop sidebar and mobile section selector.
+- Appearance menu on owner/employee entry screens and workspace provides Light, Dark and System; choice persists locally.
+- Workspace reports open with a financial quick view using server dashboard totals. Cards group period performance and cumulative cash/financial position, with formatted amounts and no fabricated trends.
+- Shared records support filtering by displayed name, number and status. Global themes update cards, controls and app bars across screens.
+- Validation: existing full Flutter suite passed (189 tests); five new theme/layout checks passed; eight focused workspace, employee access and design checks passed after the final search changes. Changed files pass analyzer. Full-project analyzer reports existing issues outside changed files.
+- These are local source changes; no deployment or authenticated browser visual review is claimed.
+- Release web build succeeded with the configured shared API origin.

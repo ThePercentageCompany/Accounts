@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'employee_qr_scanner.dart';
+import '../widgets/appearance_selector.dart';
 import 'saas_api.dart';
 import 'saas_session.dart';
 import 'shared_workspace.dart';
@@ -133,6 +134,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Employee access'),
+        actions: const [AppearanceSelector()],
         leading: IconButton(
           onPressed: busy || employee != null ? null : widget.onBack,
           tooltip: 'Back to sign-in',
@@ -222,9 +224,8 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() => _workspace = true),
+                    onPressed:
+                        busy ? null : () => setState(() => _workspace = true),
                     child: const Text('Open workspace'),
                   ),
                   OutlinedButton(

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'company_setup_view.dart';
+import '../widgets/appearance_selector.dart';
 import 'employee_access_view.dart';
 import 'saas_api.dart';
 import 'saas_session.dart';
@@ -115,6 +116,7 @@ class _SaasAppState extends State<SaasApp> {
       appBar: AppBar(
         title: const Text('TPC Accounts'),
         actions: [
+          const AppearanceSelector(),
           TextButton.icon(
             onPressed: () => setState(() => _employee = true),
             icon: const Icon(Icons.badge_outlined),
