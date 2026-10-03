@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'workspace_record_cache.dart';
 import 'package:flutter/material.dart';
 import '../widgets/appearance_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -116,10 +118,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     ];
     final selected =
         sections.contains(_selected) ? _selected : sections.firstOrNull;
-    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final wide = MediaQuery.sizeOf(context).width >= 900;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: const [AppearanceSelector(), SizedBox(width: 12)],
         leading: IconButton(
           onPressed: widget.onBack,
@@ -167,6 +169,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 padding: const EdgeInsets.all(16),
                 child: DropdownButtonFormField<String>(
                   initialValue: selected,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                       labelText: 'Workspace section',
                       prefixIcon: Icon(Icons.grid_view_outlined)),
@@ -236,6 +239,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                               employee: widget.employee != null,
                               writes: _writes,
                               uploads: _uploads,
+                              cache: widget.employee == null
+                                  ? WorkspaceRecordCache(widget.preferences!,
+                                      '${widget.api.origin}_${widget.ownerId}_${widget.companyId}')
+                                  : null,
                               tables: selected == 'Employees'
                                   ? ['Employees']
                                   : workspaceTables[selected]!,
@@ -312,7 +319,9 @@ class _RecordsPanel extends StatefulWidget {
     required this.tables,
     this.writes,
     this.uploads,
+    this.cache,
   });
+  final WorkspaceRecordCache? cache;
   final SaasApi api;
   final String companyId;
   final bool employee;
@@ -336,6 +345,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   bool busy = false;
   String? error;
   int _request = 0;
+  Timer? _refreshTimer;
+  bool _savedData = false;
   Future<void> _discardRejected() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1088,13 +1099,30 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   void initState() {
     super.initState();
     _load();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!busy &&
+          widget.writes?.pending.isNotEmpty != true &&
+          widget.uploads?.pending == null) {
+        _load();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
+    if (busy) return;
+    final requestedTable = table;
     final request = ++_request;
     setState(() {
       busy = true;
-      rows = [];
+      final cached = widget.cache?.read(requestedTable);
+      rows = cached ?? rows;
+      _savedData = cached != null;
       error = null;
     });
     try {
@@ -1104,16 +1132,38 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         employee: widget.employee,
       );
       if (!mounted || request != _request) return;
-      setState(
-        () => rows = (result['records'] as List)
-            .map((r) => Map<String, dynamic>.from(r as Map))
-            .toList(),
-      );
+      final fresh = (result['records'] as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      setState(() {
+        rows = fresh;
+        _savedData = false;
+      });
+      try {
+        await widget.cache?.save(requestedTable, fresh);
+      } catch (_) {}
     } on SaasApiException catch (e) {
-      if (mounted && request == _request) setState(() => error = e.message);
+      if (mounted && request == _request) {
+        if (e.status == 401 || e.status == 403) {
+          setState(() => rows = []);
+          try {
+            await widget.cache?.clear(requestedTable);
+          } catch (_) {}
+        }
+        if (mounted) {
+          setState(() {
+            error = e.message;
+            _savedData = rows.isNotEmpty;
+          });
+        }
+      }
     } catch (_) {
       if (mounted && request == _request) {
-        setState(() => error = 'Unable to load records. Retry when connected.');
+        setState(() {
+          if (widget.employee) rows = [];
+          _savedData = rows.isNotEmpty;
+          error = 'Unable to load records. Retry when connected.';
+        });
       }
     } finally {
       if (mounted && request == _request) setState(() => busy = false);
@@ -1128,7 +1178,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   Widget build(BuildContext context) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24),
             child: Wrap(
               spacing: 12,
               children: [
@@ -1142,6 +1193,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   onChanged: busy
                       ? null
                       : (v) {
+                          rows = [];
                           table = v!;
                           _load();
                         },
@@ -1174,7 +1226,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Text(
-              _editable ? 'Company records' : 'Online records · viewing only',
+              _savedData
+                  ? 'Saved data - syncing when connected'
+                  : _editable
+                      ? 'Company records'
+                      : 'Online records - viewing only',
             ),
           ),
           Padding(
@@ -1208,7 +1264,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               itemBuilder: (context, index) {
                 final row = _visibleRows[index];
                 return ExpansionTile(
-                  title: Text(_title(row)),
+                  title: Text(_title(row),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle:
                       row['status'] == null ? null : Text('${row['status']}'),
                   children: [

@@ -349,3 +349,11 @@ historical “pending” statements as the current status.
 - Validation: existing full Flutter suite passed (189 tests); five new theme/layout checks passed; eight focused workspace, employee access and design checks passed after the final search changes. Changed files pass analyzer. Full-project analyzer reports existing issues outside changed files.
 - These are local source changes; no deployment or authenticated browser visual review is claimed.
 - Release web build succeeded with the configured shared API origin.
+
+### Responsive record caching - 4 October 2026
+
+- Laptop sidebar begins at 900px; narrow layouts use an expanded section selector, compact record toolbar padding, and bounded title wrapping.
+- Owner record tables show persisted snapshots immediately and refresh through the authorized API every 60 seconds while the panel is open. Refresh retains visible records and reports saved-data status after connection failures.
+- Cache keys include API origin, owner and company; snapshots expire after 24 hours and are bounded to 512 KiB per table. Employee records, reports, sessions and document bytes are not persisted by this cache. Authorization rejection clears the current snapshot.
+- Pending financial writes retain the existing explicit retry workflow. Background refresh pauses while writes or uploads are pending. This is record caching, not a complete offline accounting workspace.
+- Validation: 16 focused Flutter tests passed, including cache persistence, isolation, expiry, employee access and responsive dashboard checks. Local changes only; no deployment claimed.
