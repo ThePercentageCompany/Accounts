@@ -23,7 +23,7 @@ const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 const publicRecord = row => Object.fromEntries(Object.entries(row).filter(([key]) => key !== '_row' && key !== 'idempotencyKey'));
 
 export class BusinessService {
-  constructor({ accounts, sheets, now = Date.now }) { Object.assign(this, { accounts, sheets, now }); this.registry = accounts.registry; }
+  constructor({ accounts, sheets, now = Date.now, authorizeWrite = async () => {} }) { Object.assign(this, { accounts, sheets, now, authorizeWrite }); this.registry = accounts.registry; }
   owner(state, token, companyId, allowPending = false) {
     const owner = this.accounts.companyOwner(state, token, companyId), company = state.companies[companyId];
     requireThat(company.stage === 'READY', 409, company.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_REQUIRED' : 'WORKSPACE_NOT_READY', 'Company workspace is not ready.');
@@ -131,6 +131,7 @@ export class BusinessService {
   }
   async mutate(token, companyId, tableName, recordId, action, input, key) {
     this.sheets.table(tableName);
+    await this.authorizeWrite(token, companyId, tableName);
     requireThat(validKey(key), 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
     requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(action) &&
       (!['post', 'pay', 'reverse'].includes(action) || ['Income', 'Expenses'].includes(tableName)), 400, 'INVALID_RECORD', 'Invalid record action.');
@@ -226,6 +227,7 @@ export class BusinessService {
         const ledger = action === 'reverse' ? await reverseCashChanges(this.sheets, companyId, tableName,
           old, { ...system, createdAt: now, createdBy: actor }, opKey, values) : ['post', 'pay'].includes(action) ? await cashLedgerChanges(this.sheets, companyId, tableName,
           { ...old, ...writeValues }, { ...system, createdAt: now, createdBy: actor }, opKey, action === 'pay') : null;
+        await this.authorizeWrite(token, companyId, tableName);
         await this.registry.transact(state => { const { company } = this.owner(state, token, companyId, true);
           requireThat(company.businessWrite === opKey && company.businessOps[opKey]?.reservation === op.reservation && !company.businessOps[opKey].submitted, 409, 'BUSINESS_WRITE_PENDING', 'Business update changed.');
           company.businessOps[opKey].submitted = true; });

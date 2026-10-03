@@ -69,8 +69,7 @@ cache, pending edit or legacy invitation is imported.
 8. Owner can edit permissions, reset the code or revoke access.
 
 Employees do not need Google accounts. QR codes do not contain trusted roles,
-passwords or an arbitrary backend address. Employee business writes remain pending;
-current shared employee record screens are read-only.
+passwords or an arbitrary backend address. Admins retain owner access to supported actions. Employees receive view-only access by default; admins can enable view-and-edit per supported company-wide section. The server rechecks current grants before submitting writes and records the employee as the actor. Self-scoped sections remain view-only.
 
 ### Save, retry and conflict handling
 
@@ -170,7 +169,7 @@ sheet or reporting module.
 | P0 | Test two unrelated live companies | Altered company, record, employee and document IDs cannot cross company boundaries |
 | P0 | Validate real employee journey | Owner issues QR; camera/link login works; permissions change promptly; reset/revocation and owner-offline access work |
 | Done locally | Complete initial private document/profile UI | Profile editor, private logo display, record document lists, bounded uploads, durable upload retries, image viewing and web downloads; English PDF generation for invoices, quotations, receipts, payroll and assets |
-| P1 | Add employee business writes | Explicit action permissions, field/record restrictions and audit coverage for each supported action |
+| Done locally | Admin-controlled employee writes | Explicit section edit grants for supported company-wide actions; server rechecks grants and session, employee audit identity and isolated durable retries. Self-scoped writes remain unsupported. |
 | P1 | Finish document lifecycle | Recovery/cancellation, retention/deletion policy and content handling decisions are implemented and tested |
 | P1 | Production operations | Monitoring, redacted logs, backup/restore, abuse protection, capacity tests and practical resource limits |
 | P1 | Hosting and cost review | Confirm an appropriate hosting plan, estimate low-volume costs and configure monitoring; zero cost is not guaranteed |
@@ -365,3 +364,7 @@ historical “pending” statements as the current status.
 - Verified owner cached records render before a delayed API response and are replaced by fresh records. Existing owner-scoped, bounded, 24-hour snapshots and 60-second foreground background refresh remain in use; financial writes still follow explicit retry and reports remain authoritative online reads.
 - New widget checks cover 320px, 390px, 1024px and 1366px widths, mobile section switching, and delayed-response caching. Thirteen focused tests passed; changed source and new tests pass analysis. No deployment or live browser visual review claimed.
 - Full Flutter regression suite after this refinement: **201 tests passed**.
+
+### Permission fix ? 4 October 2026
+
+Employee administration now includes a view/edit switch for supported company-wide sections. Existing assignments remain view-only until an admin enables editing. Owners retain all supported actions; generated ledger/child tables and modules without editors remain subject to accounting workflow restrictions. Updated frontend and backend require deployment together. Employee attachment uploads and self-scoped writes remain pending.

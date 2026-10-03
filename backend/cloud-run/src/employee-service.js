@@ -1,8 +1,9 @@
+import { BusinessService } from './business-service.js';
 import { opaque, digest } from './crypto.js';
 import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger } from './ledger-report.js';
 import { requireThat, ApiError } from './errors.js';
 import { PrivateCode } from './private-code.js';
-import { SECTIONS, ROLES, scopeFor, principalFromRows, SECTION_TABLES, CHILDREN, visible, projectRecord } from './employee-policy.js';
+import { SECTIONS, WRITE_SECTIONS, ROLES, scopeFor, principalFromRows, SECTION_TABLES, CHILDREN, visible, projectRecord } from './employee-policy.js';
 
 const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 const keyRequired = key => requireThat(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key),
@@ -14,11 +15,11 @@ export class EmployeeService {
   constructor({ accounts, sheets, codes = new PrivateCode(), now = Date.now }) {
     Object.assign(this, { accounts, sheets, codes, now }); this.registry = accounts.registry;
   }
-  ready(state, companyId, allowWrite = false) {
+  ready(state, companyId, allowWrite = false, allowBusiness = false) {
     const c = state.companies[companyId];
     requireThat(c && !c.deleted && c.stage === 'READY', 409, c?.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_REQUIRED' : 'WORKSPACE_NOT_READY', 'Company workspace is not ready.');
     requireThat(allowWrite || !c.employeeWrite, 409, 'EMPLOYEE_UPDATE_PENDING', 'An employee update is being confirmed. Retry shortly.');
-    requireThat(!c.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'A business update is being confirmed. Retry shortly.');
+    requireThat(allowBusiness || !c.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'A business update is being confirmed. Retry shortly.');
     requireThat(!c.documentWrite, 409, 'DOCUMENT_WRITE_PENDING', 'A document upload is being confirmed. Retry shortly.');
     return c;
   }
@@ -30,10 +31,11 @@ export class EmployeeService {
     const rows = await this.sheets.read(companyId);
     return rows.Employees.filter(e => e.isDeleted !== true && e.isDeleted !== 'TRUE').map(e => ({ ...cleanEmployee(e),
       role: rows.Roles.find(r => r.recordId === e.roleId)?.roleName || '',
-      allowedSections: rows.RolePermissions.filter(p => p.roleId === e.roleId && p.action === 'read' && p.isDeleted !== true && p.isDeleted !== 'TRUE').map(p => p.section) }));
+      allowedSections: rows.RolePermissions.filter(p => p.roleId === e.roleId && ['read', 'write'].includes(p.action) && p.isDeleted !== true && p.isDeleted !== 'TRUE').map(p => p.section),
+      writableSections: rows.RolePermissions.filter(p => p.roleId === e.roleId && p.action === 'write' && ![true, 'TRUE'].includes(p.isDeleted)).map(p => p.section) }));
   }
   input(input) {
-    const allowed = ['fullName', 'email', 'phone', 'department', 'designation', 'employmentStatus', 'role', 'allowedSections', 'expectedVersion'];
+    const allowed = ['fullName', 'email', 'phone', 'department', 'designation', 'employmentStatus', 'role', 'allowedSections', 'writableSections', 'expectedVersion'];
     requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => allowed.includes(k)), 400, 'INVALID_EMPLOYEE', 'Unsupported employee fields.');
     requireThat(typeof input.fullName === 'string' && input.fullName.trim().length > 0 && input.fullName.length <= 160 && !/[\x00-\x1f]/.test(input.fullName) &&
       ROLES.includes(input.role) && ['ACTIVE', 'INACTIVE'].includes(input.employmentStatus) &&
@@ -41,7 +43,9 @@ export class EmployeeService {
       Array.isArray(input.allowedSections) && input.allowedSections.every(s => SECTIONS.includes(s)) &&
       new Set(input.allowedSections).size === input.allowedSections.length,
     400, 'INVALID_EMPLOYEE', 'Supply a name, valid role/status, sections and expectedVersion.');
-    const value = { fullName: input.fullName.trim(), role: input.role, employmentStatus: input.employmentStatus,
+    const writableSections = input.writableSections ?? [];
+    requireThat(Array.isArray(writableSections) && new Set(writableSections).size === writableSections.length && writableSections.every(s => WRITE_SECTIONS.includes(s) && input.allowedSections.includes(s) && scopeFor(input.role, s) === 'COMPANY'), 400, 'INVALID_EMPLOYEE', 'Edit access requires an assigned company-wide section.');
+    const value = { writableSections, fullName: input.fullName.trim(), role: input.role, employmentStatus: input.employmentStatus,
       allowedSections: SECTIONS.filter(s => input.allowedSections.includes(s)), expectedVersion: input.expectedVersion };
     for (const key of ['email', 'phone', 'department', 'designation']) {
       if (!Object.hasOwn(input, key)) continue;
@@ -112,7 +116,7 @@ export class EmployeeService {
       for (const section of SECTIONS) {
         const id = permissionId(section), previous = rows.RolePermissions.find(p => p.recordId === id);
         changes.push({ table: 'RolePermissions', row: previous?._row || permissionRow++, values: {
-          ...common(id, previous), roleId, section, action: values.allowedSections.includes(section) ? 'read' : 'none',
+          ...common(id, previous), roleId, section, action: values.writableSections.includes(section) ? 'write' : values.allowedSections.includes(section) ? 'read' : 'none',
           recordScope: scopeFor(values.role, section), fieldName: '*', isDeleted: !values.allowedSections.includes(section) } });
       }
       await this.registry.transact(state => {
@@ -206,18 +210,18 @@ export class EmployeeService {
     });
     return { token, expiresAt, employee: this.publicPrincipal(principal) };
   }
-  session(state, token) {
+  session(state, token, allowBusiness = false) {
     const session = validId(token) && state.employeeSessions?.[digest(token)];
     if (!session || session.expiresAt <= this.now() || session.absoluteExpiresAt <= this.now()) throw accessDenied();
-    const c = this.ready(state, session.companyId), access = c.employeeAccess?.[session.employeeId];
+    const c = this.ready(state, session.companyId, false, allowBusiness), access = c.employeeAccess?.[session.employeeId];
     if (!access || access.status !== 'ACTIVE' || access.version !== session.version) throw accessDenied();
     return session;
   }
-  publicPrincipal(p) { return { companyId: p.companyId, employeeId: p.employeeId, name: p.name, role: p.role, allowedSections: p.allowedSections }; }
-  async principal(token) {
-    const session = this.session((await this.registry.read()).state, token);
+  publicPrincipal(p) { return { companyId: p.companyId, employeeId: p.employeeId, name: p.name, role: p.role, allowedSections: p.allowedSections, writableSections: p.writableSections }; }
+  async principal(token, allowBusiness = false) {
+    const session = this.session((await this.registry.read()).state, token, allowBusiness);
     const principal = principalFromRows(session.companyId, session.employeeId, await this.sheets.read(session.companyId), this.now());
-    this.session((await this.registry.read()).state, token);
+    this.session((await this.registry.read()).state, token, allowBusiness);
     return principal;
   }
   async refresh(token) {
@@ -232,6 +236,26 @@ export class EmployeeService {
   }
   async logout(token) {
     await this.registry.transact(state => { if (validId(token)) delete (state.employeeSessions || {})[digest(token)]; });
+  }
+  async sync(token, input, business) {
+    const principal = await this.principal(token, true);
+    const authorizeWrite = async (_token, companyId, table) => {
+      const latest = await this.principal(token, true);
+      requireThat(latest.companyId === companyId && latest.writableSections.includes(SECTION_TABLES[table]),
+        403, 'WRITE_FORBIDDEN', 'Your administrator has not granted edit access to this section.');
+    };
+    const accounts = { registry: this.registry, companyOwner: (state, _token, companyId) => {
+      const session = this.session(state, token, true);
+      requireThat(session.companyId === companyId, 403, 'WRITE_FORBIDDEN', 'Company access denied.');
+      return { id: session.employeeId };
+    } };
+    const writer = new BusinessService({ accounts, sheets: business.sheets, now: this.now, authorizeWrite });
+    requireThat(Array.isArray(input?.operations), 400, 'INVALID_BATCH', 'Supply record operations.');
+    const original = input.operations;
+    requireThat(original.every(op => op && typeof op.operationId === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(op.operationId)), 400, 'INVALID_BATCH', 'Invalid operation ID.');
+    const operations = original.map(op => ({ ...op, operationId: digest('employee:' + principal.employeeId + ':' + op.operationId) }));
+    const result = await writer.sync(token, principal.companyId, { ...input, operations });
+    return { results: result.results.map((r, i) => ({ ...r, operationId: original[i].operationId })) };
   }
   async records(token, table) {
     requireThat(Object.hasOwn(SECTION_TABLES, table), 403, 'TABLE_FORBIDDEN', 'This table is not available to employees.');

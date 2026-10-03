@@ -318,11 +318,12 @@ class SaasApi {
 
   Future<Map<String, dynamic>> sync(
     String companyId,
-    List<Map<String, Object?>> operations,
-  ) =>
+    List<Map<String, Object?>> operations, {
+    bool employee = false,
+  }) =>
       _json(
         'POST',
-        '/v1/companies/${_id(companyId)}/sync',
+        employee ? '/v1/employee/sync' : '/v1/companies/${_id(companyId)}/sync',
         data: {'operations': operations},
       );
 

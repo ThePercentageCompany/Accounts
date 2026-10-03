@@ -2,6 +2,7 @@ import { requireThat } from './errors.js';
 
 export const SECTIONS = Object.freeze(['Dashboard', 'Invoices', 'Quotations', 'Income & Expenses', 'Capital & Equity',
   'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance']);
+export const WRITE_SECTIONS = Object.freeze(['Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
 export const SECTION_TABLES = {
   CompanyProfile: 'Settings', Customers: 'Customers', ProductsServices: 'Invoices', Invoices: 'Invoices', InvoiceItems: 'Invoices',
@@ -29,12 +30,13 @@ export function principalFromRows(companyId, employeeId, rows, now) {
   const role = rows.Roles.find(r => r.recordId === employee.roleId && r.companyId === companyId && !deleted(r));
   requireThat(role && ROLES.includes(role.roleName), 401, 'EMPLOYEE_ACCESS_DENIED', 'Employee access is unavailable.');
   const grants = rows.RolePermissions.filter(p => p.companyId === companyId && p.roleId === role.recordId && !deleted(p) &&
-    p.action === 'read' && p.fieldName === '*' && SECTIONS.includes(p.section) && ['SELF', 'COMPANY'].includes(p.recordScope));
+    ['read', 'write'].includes(p.action) && p.fieldName === '*' && SECTIONS.includes(p.section) && ['SELF', 'COMPANY'].includes(p.recordScope));
   // A role's privacy limits still apply if a sheet permission is broadened.
   const permissions = Object.fromEntries(grants.map(p => [p.section,
     p.recordScope === 'SELF' || scopeFor(role.roleName, p.section) === 'SELF' ? 'SELF' : 'COMPANY']));
   return { companyId, employeeId, role: role.roleName, name: employee.fullName,
-    allowedSections: SECTIONS.filter(s => permissions[s]), permissions };
+    allowedSections: SECTIONS.filter(s => permissions[s]), permissions,
+    writableSections: WRITE_SECTIONS.filter(s => permissions[s] === 'COMPANY' && grants.some(g => g.section === s && g.action === 'write' && g.recordScope === 'COMPANY')) };
 }
 export function visible(principal, table, row, parentRows = {}) {
   const section = SECTION_TABLES[table], scope = principal.permissions[section];

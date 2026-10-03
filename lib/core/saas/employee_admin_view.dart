@@ -266,6 +266,27 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
   late final Set<String> sections = Set<String>.from(
     widget.employee?['allowedSections'] as List? ?? [],
   );
+  late final Set<String> writableSections = Set<String>.from(
+    widget.employee?['writableSections'] as List? ?? [],
+  );
+  bool canGrantEdit(String section) =>
+      const [
+        'Customers',
+        'Invoices',
+        'Quotations',
+        'Income & Expenses',
+        'Payroll',
+        'Fixed Assets',
+        'Capital & Equity',
+        'Balance Sheet',
+        'Settings',
+      ].contains(section) &&
+      !(role == 'Staff' &&
+          const [
+            'Income & Expenses',
+            'Payroll',
+            'Fixed Assets',
+          ].contains(section));
   @override
   void dispose() {
     name.dispose();
@@ -312,7 +333,10 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                       for (final r in ['Staff', 'Manager', 'Accountant'])
                         DropdownMenuItem(value: r, child: Text(r)),
                     ],
-                    onChanged: (v) => setState(() => role = v!),
+                    onChanged: (v) => setState(() {
+                      role = v!;
+                      writableSections.removeWhere((s) => !canGrantEdit(s));
+                    }),
                   ),
                   DropdownButtonFormField<String>(
                     initialValue: status,
@@ -327,18 +351,35 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Assigned sections. Staff access remains limited to their own records where required.',
+                    'Select sections to allow viewing; enable the switch to allow editing. Staff access remains limited to their own records where required.',
                   ),
                   for (final section in employeeSections)
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(section),
                       value: sections.contains(section),
+                      subtitle: Text(writableSections.contains(section)
+                          ? 'View and edit'
+                          : 'View only'),
+                      secondary:
+                          canGrantEdit(section) && sections.contains(section)
+                              ? Switch(
+                                  value: writableSections.contains(section),
+                                  onChanged: (value) => setState(() {
+                                    if (value) {
+                                      writableSections.add(section);
+                                    } else {
+                                      writableSections.remove(section);
+                                    }
+                                  }),
+                                )
+                              : null,
                       onChanged: (v) => setState(() {
                         if (v == true) {
                           sections.add(section);
                         } else {
                           sections.remove(section);
+                          writableSections.remove(section);
                         }
                       }),
                     ),
@@ -361,6 +402,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                   'role': role,
                   'employmentStatus': status,
                   'allowedSections': sections.toList(),
+                  'writableSections': writableSections.toList(),
                   'expectedVersion': widget.employee == null
                       ? 0
                       : int.parse('${widget.employee!['recordVersion']}'),

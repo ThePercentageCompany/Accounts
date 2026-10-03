@@ -8,6 +8,33 @@ import 'package:tpc_invoice/core/saas/record_write_queue.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('employee pending writes use employee endpoint and isolated storage',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async {
+          expect(request.url.path, '/v1/employee/sync');
+          final op = jsonDecode(request.body)['operations'][0];
+          return http.Response(
+              jsonEncode({
+                'results': [
+                  {'operationId': op['operationId'], 'status': 'APPLIED'}
+                ]
+              }),
+              200);
+        }));
+    final employee =
+        RecordWriteQueue(api, prefs, 'employee_e', 'c' * 43, employee: true);
+    final owner = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+    await employee.enqueue('Customers', 'create', {'name': 'Customer'},
+        expectedVersion: 0);
+    expect(owner.pending, isEmpty);
+    await employee.flush();
+    expect(employee.pending, isEmpty);
+    api.close();
+  });
   test(
     'receipt payment retains the server-validated allocation inputs',
     () async {
@@ -37,15 +64,19 @@ void main() {
         }),
       );
       final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-      await queue.enqueue('Receipts', 'receive', {
-        'invoiceId': 'i' * 43,
-        'customerId': 'u' * 43,
-        'paymentDate': '2026-09-28',
-        'amount': 25.0,
-        'currency': 'AED',
-        'paymentAccount': 'Bank',
-        'reference': 'Transfer',
-      }, expectedVersion: 0);
+      await queue.enqueue(
+          'Receipts',
+          'receive',
+          {
+            'invoiceId': 'i' * 43,
+            'customerId': 'u' * 43,
+            'paymentDate': '2026-09-28',
+            'amount': 25.0,
+            'currency': 'AED',
+            'paymentAccount': 'Bank',
+            'reference': 'Transfer',
+          },
+          expectedVersion: 0);
       await queue.flush();
       expect(queue.pending, isEmpty);
       api.close();
@@ -216,9 +247,13 @@ void main() {
       }),
     );
     final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-    await queue.enqueue('Customers', 'create', {
-      'name': 'Customer',
-    }, expectedVersion: 0);
+    await queue.enqueue(
+        'Customers',
+        'create',
+        {
+          'name': 'Customer',
+        },
+        expectedVersion: 0);
     await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
     expect(queue.canDiscardRejected, isFalse);
     await expectLater(

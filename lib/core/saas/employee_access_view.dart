@@ -126,6 +126,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
         api: _api!,
         companyId: employee['companyId'] as String,
         employee: employee,
+        preferences: session!.preferences,
         title: 'Your company workspace',
         onBack: () => setState(() => _workspace = false),
       );
@@ -157,7 +158,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Scan your manager’s QR or paste your invitation link, then enter your private login code.',
+                    'Scan your managerâ€™s QR or paste your invitation link, then enter your private login code.',
                   ),
                   const SizedBox(height: 24),
                   OutlinedButton.icon(

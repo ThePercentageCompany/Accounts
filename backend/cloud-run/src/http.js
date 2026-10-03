@@ -174,6 +174,9 @@ export function createApi(service, config, { log = console.error, workspace, que
         if (route === 'GET /v1/employee/me') {
           json(200, { employee: employees.publicPrincipal(await employees.principal(jar[EMPLOYEE])) }); return;
         }
+        if (route === 'POST /v1/employee/sync') {
+          json(200, await employees.sync(jar[EMPLOYEE], await body(request), business)); return;
+        }
         const records = /^\/v1\/employee\/records\/([A-Za-z]+)$/.exec(url.pathname);
         if (request.method === 'GET' && records) {
           json(200, { records: await employees.records(jar[EMPLOYEE], records[1]) }); return;

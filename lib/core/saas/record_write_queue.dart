@@ -6,8 +6,10 @@ import 'saas_api.dart';
 /// One durable owner/company queue. Only individually acknowledged operations
 /// are removed; an HTTP 200 batch can still contain a failed operation.
 class RecordWriteQueue {
-  RecordWriteQueue(this.api, this.preferences, String ownerId, this.companyId)
+  RecordWriteQueue(this.api, this.preferences, String ownerId, this.companyId,
+      {this.employee = false})
       : storageKey = 'saas_records_${ownerId}_$companyId';
+  final bool employee;
   final SaasApi api;
   final SharedPreferences preferences;
   final String companyId;
@@ -121,7 +123,7 @@ class RecordWriteQueue {
       var operations = pending;
       if (operations.isEmpty) return;
       final batch = operations.take(20).toList();
-      final response = await api.sync(companyId, batch);
+      final response = await api.sync(companyId, batch, employee: employee);
       final results = response['results'];
       if (results is! List || results.length != batch.length) {
         throw const SaasApiException(

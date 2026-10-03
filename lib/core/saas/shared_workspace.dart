@@ -83,12 +83,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       ? DocumentUploadQueue(
           widget.api, widget.preferences!, widget.ownerId!, widget.companyId)
       : null;
-  late final RecordWriteQueue? _writes = widget.employee == null
+  late final RecordWriteQueue? _writes = widget.preferences != null
       ? RecordWriteQueue(
           widget.api,
           widget.preferences!,
-          widget.ownerId!,
+          widget.ownerId ?? 'employee_${widget.employee!['employeeId']}',
           widget.companyId,
+          employee: widget.employee != null,
         )
       : null;
   late final EmployeeAdminController? _employees = widget.employee == null
@@ -248,7 +249,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                               api: widget.api,
                               companyId: widget.companyId,
                               employee: widget.employee != null,
-                              writes: _writes,
+                              writes: widget.employee == null ||
+                                      (widget.employee!['writableSections']
+                                                  as List? ??
+                                              [])
+                                          .contains(selected)
+                                  ? _writes
+                                  : null,
                               uploads: _uploads,
                               cache: widget.employee == null
                                   ? WorkspaceRecordCache(widget.preferences!,
@@ -1288,7 +1295,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   ? 'Saved data - syncing when connected'
                   : _editable
                       ? 'Company records'
-                      : 'Online records - viewing only',
+                      : widget.employee
+                          ? 'Online records - read access assigned by admin'
+                          : 'Company records',
             ),
           ),
           Padding(

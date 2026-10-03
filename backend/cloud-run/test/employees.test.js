@@ -242,3 +242,42 @@ test('real private codes use independent salts and memory-hard verification', as
   assert.equal(await codes.verify(first.code, first.credential), true);
   assert.equal(await codes.verify('wrong', first.credential), false);
 });
+
+
+test('admin controls employee editing; writes audit the employee and recheck revocation', async () => {
+  const f = await setup();
+  f.input.allowedSections.push('Customers');
+  const id = await f.create(), login = await f.loginEmployee(await f.issue(id));
+  const data = [];
+  const businessSheets = {
+    table: () => ({ headers: ['recordId', 'companyId', 'name'] }),
+    read: async (_id, names) => Object.fromEntries(names.map(n => [n, n === 'Customers' ? structuredClone(data) : []])),
+    write: async (_id, _table, row, values) => { data.push({ ...values, _row: row }); },
+  };
+  const operation = { operationId: 'employee_business_001', table: 'Customers', action: 'create', expectedVersion: 0, values: { name: 'Customer' } };
+  const run = op => f.employees.sync(login.token, { operations: [op] }, { sheets: businessSheets });
+  assert.equal((await run(operation)).results[0].error.code, 'WRITE_FORBIDDEN');
+  await f.employees.save(f.owner, f.companyId, id, { ...f.input, writableSections: ['Customers'], expectedVersion: 1 }, 'grant_customer_edit_001');
+  assert.deepEqual((await f.employees.principal(login.token)).writableSections, ['Customers']);
+  const result = await run(operation);
+  assert.equal(result.results[0].status, 'APPLIED');
+  assert.equal(result.results[0].operationId, operation.operationId);
+  assert.equal(data[0].createdBy, id);
+  assert.equal((await run(operation)).results[0].replayed, true);
+  assert.equal(data.length, 1);
+  const read = businessSheets.read;
+  businessSheets.read = async (...args) => {
+    const grant = f.rows.RolePermissions.find(p => p.section === 'Customers');
+    grant.action = 'read';
+    return read(...args);
+  };
+  assert.equal((await run({ ...operation, operationId: 'employee_business_002' })).results[0].error.code, 'WRITE_FORBIDDEN');
+  assert.equal(data.length, 1);
+  assert.equal(f.company().businessWrite, undefined);
+});
+
+test('self-only employee sections cannot receive write grants', async () => {
+  const f = await setup();
+  await assert.rejects(() => f.employees.save(f.owner, f.companyId, null,
+    { ...f.input, writableSections: ['Payroll'] }, 'invalid_self_write_001'), e => e.code === 'INVALID_EMPLOYEE');
+});

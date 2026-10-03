@@ -3,7 +3,7 @@
 Implemented locally; not deployed or connected to Flutter. Owners can manage
 employees, assign Staff/Manager/Accountant roles and sections, issue/reset/revoke
 access, and employees can log in without Google, rotate/logout sessions, read
-their current permissions and fetch permitted records through read-only routes.
+their current permissions and fetch permitted records through scoped read routes. Admins can grant section edit access for supported company-wide actions through `POST /v1/employee/sync`.
 
 ## Storage and authorization
 
@@ -46,9 +46,7 @@ was lost, reset with a new key. Codes cannot be retrieved from stored credential
 
 ## Role and field limits
 
-Section assignment grants read access in this phase. There are no employee business
-write endpoints yet; Phase 4 must authorize those separately. Owner management
-endpoints require an owner session; the Manager employee role is not an owner.
+Section assignment grants read access by default. Explicit edit grants enable supported company-wide business writes through the employee sync endpoint. Owner management endpoints require an owner session; the Manager employee role is not an owner.
 
 - Staff sees only their own employee, attendance, overtime, payroll and payslip
   rows; only assigned assets; and their own income/expense records. Child payroll
@@ -102,3 +100,7 @@ Live checks then need two separate test-owner Google accounts to confirm file
 isolation, real refresh/reconnect, task delivery, and employee login after owner logout.
 Real QR scanning in the Flutter UI follows Phase 5 integration. Do not publish this
 backend as the completed SaaS product before those remaining phases and checks.
+
+## Admin-controlled editing
+
+Employee save input accepts optional `writableSections`, a subset of `allowedSections`. Supported sections are Customers, Invoices, Quotations, Income & Expenses, Payroll, Fixed Assets, Capital & Equity, Balance Sheet and Settings. Self-scoped sections cannot be granted editing. RolePermissions action `write` includes read access. Existing read grants remain read-only. Every mutation rechecks live permissions before submission, uses the employee audit identity and retains accounting validation. Owner routes continue to require owner authentication. Employee operation IDs and local queues are isolated by employee. Attachment uploads and employee administration remain owner-only.
