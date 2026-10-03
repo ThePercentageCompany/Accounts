@@ -409,3 +409,18 @@ remain disabled until their liability/equity workflows are implemented. Not depl
   PDF saved-record reads and concurrent-version rejection.
 - This is local validation only. Live Drive delivery, PDF visual review,
   multilingual font support and document retention/cancellation remain pending.
+
+# Infrastructure recovery verification — 4 October 2026
+
+- Cloud Run revision `tpc-accounts-api-00003-rqx` was Ready with 100% traffic;
+  public health/authentication-boundary/CORS checks passed.
+- Control bucket public-access prevention, uniform access, object versioning and
+  seven-day soft deletion were verified. Two registry generations downloaded and
+  passed JSON/schema checks; temporary copies were removed without cloud writes.
+- Secret/KMS/task service-account bindings and key/secret enabled states passed
+  read-only inspection. Three immutable backend image digests remain available.
+- Default logs retain 30 days and no severity ERROR service entries were found in
+  the sampled seven days. No alert policies, uptime checks or dashboards exist.
+- No independent scheduled registry backup or company Sheets/Drive backup exists.
+  No production write restore was attempted; blind rollback is unsafe because it
+  can restore stale authorization state. The release checklist remains open.

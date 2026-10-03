@@ -270,6 +270,10 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
   Public health/authentication-boundary/CORS checks pass; authenticated verification
   is blocked because no browser is connected. See [live test matrix](LIVE_JOURNEY_VERIFICATION.md).
 - [ ] Verify infrastructure, backups, monitoring and restore procedures.
+  Live runtime, IAM boundaries, registry versioning/soft deletion and read-only
+  generation recovery were checked on 4 October 2026. Monitoring, independent
+  backups, company-data recovery and a safe write-restore drill are not complete.
+  See [verification evidence](INFRASTRUCTURE_BACKUP_MONITORING_VERIFICATION.md).
 - [ ] Deploy compatible backend/frontend versions and pass live smoke tests.
 - [ ] Remove the preview restriction only after the release checks pass.
 
