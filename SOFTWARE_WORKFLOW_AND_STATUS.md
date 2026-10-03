@@ -1,6 +1,6 @@
 # TPC Accounts — software workflow and delivery status
 
-Updated: 2 October 2026. Based on the repository and recorded validation results.
+Updated: 4 October 2026. Based on the repository and recorded validation results.
 
 **Overall status: shared-backend SaaS under implementation; not ready for customer production use.**
 
@@ -96,7 +96,7 @@ or a multi-record accounting transaction engine.
 | Layer | Current implementation | Important limit |
 | --- | --- | --- |
 | Flutter entrypoint | `lib/main.dart` starts `SaasApp` | No active Apps Script/direct-Sheets login fallback |
-| Shared API | Node backend in `backend/cloud-run` | Latest local changes are not confirmed deployed |
+| Shared API | Node backend in `backend/cloud-run` | Current source deployed 4 October; authenticated live validation remains |
 | Company registry | Private Cloud Storage registry with generation checks | Whole-object size and contention need capacity testing |
 | Company records | Company-owned Google Sheets | Full-table reads and manual Sheet edits limit concurrency guarantees |
 | Documents | Private Google Drive files, record attachment browser, profile/logo editing and PDF creation through authorized API access | Live delivery, multilingual PDF fonts and lifecycle work remain |
@@ -133,7 +133,7 @@ The obsolete Apps Script backend has been removed. The current owner setup view 
 | Record API | Version checks, scoped records, references, deletion markers and ordered batches | Backend tests |
 | Pending writes | Retain uncertain requests; acknowledge applied results; explicit recovery for eligible rejected edits | Restart and partial-failure tests |
 | Document API | Bounded private upload/download, retry reconciliation and same-record attachment checks | Local tests; complete UI/live verification pending |
-| Build/setup | Shared build script, updated setup instructions and explicit preview restriction | Script checks and debug web compilation |
+| Build/setup | Shared release build script and updated setup instructions; preview gate removed 4 October | Trusted HTTPS API origin remains required |
 
 ## 4. Current module availability
 
@@ -181,7 +181,7 @@ reviewed launch decision; their priority does not mean they can be silently skip
 
 ## 6. Deployment and testing status
 
-### Last recorded cloud verification
+### Historical cloud verification (superseded by the release below)
 
 - Google project: `accounts-508118`, project number `110697421185`.
 - Cloud Run: `tpc-accounts-api`, region `me-central1`.
@@ -192,7 +192,33 @@ reviewed launch decision; their priority does not mean they can be silently skip
 - No load balancer was reported created. Same-site API routing and live OAuth
   remain unverified. This document does not independently recheck current cloud state.
 
-### Recorded local validation
+### Release verification — 4 October 2026 (Asia/Dubai)
+
+Backend and frontend were deployed from clean source commit `ebe4196` (backend first).
+This is an operator-validation release; the outstanding P0 customer-release checks
+remain open. Existing Cloud Run environment, identities and infrastructure were preserved.
+
+- Cloud Build: `91ca0bfe-19a0-4087-9fda-af902284ac56`, successful; backend tests also ran in the build.
+- Cloud Run: `tpc-accounts-api-00004-4b6`, serving 100% of traffic.
+- Immutable API image: `me-central1-docker.pkg.dev/accounts-508118/tpc-backend-v2/api@sha256:a034549849a2e7bf3557b40ff39aa5cf35ea38826ebfdc3f09c9835ddcfc05f4`.
+- Vercel deployment: `dpl_6pa8nb5toHZtuNDW15jeDfCLgfEy`, READY, production target.
+- Website: https://accounts.thepercentagecompany.com ; frontend built with this same `SAAS_API_ORIGIN`.
+- Local validation: **195 backend tests passed**, **189 Flutter tests passed**, release web build succeeded.
+- Live HTTP smoke checks passed: phase-4 health; owner JSON 401 and private no-store/CORS headers;
+  employee JSON 401 (`EMPLOYEE_ACCESS_DENIED`); credentialed employee-login preflight;
+  untrusted-origin 403; missing-CSRF 403; OAuth initiation with the exact website callback
+  and Secure/HttpOnly/host-scoped/Lax binding cookie. OAuth state/cookie values were not logged.
+- Live `/`, `/flutter_bootstrap.js` and `/main.dart.js` matched local release assets by SHA-256.
+  Compiled JavaScript SHA-256: `7bef31538275d5d0aa7e87a8f99405e3663937486ce12d150a762ba0d4272492`.
+- Browser automation was unavailable. Completed Google sign-in/callback, session persistence,
+  logout/reconnect, two-company isolation, provisioning and employee journeys were **not verified**.
+- Rollback execution was **not tested**. Prior API revision `tpc-accounts-api-00003-rqx`
+  is the recorded backend rollback target. Backend rollback command:
+  `gcloud run services update-traffic tpc-accounts-api --to-revisions=tpc-accounts-api-00003-rqx=100 --region=me-central1 --project=accounts-508118`.
+  Coordinate any frontend rollback through Vercel deployment history; do not assume an older
+  frontend remains compatible with this release's API.
+
+### Recorded local validation (historical)
 
 - Latest full backend run: **187 tests passed**. Payroll, fixed-asset and capital tests cover server-derived
   salary/overtime totals, duplicate and transition guards, balanced approval and
@@ -275,7 +301,7 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
   backups, company-data recovery and a safe write-restore drill are not complete.
   See [verification evidence](INFRASTRUCTURE_BACKUP_MONITORING_VERIFICATION.md).
 - [ ] Deploy compatible backend/frontend versions and pass live smoke tests.
-- [ ] Remove the preview restriction only after the release checks pass.
+- [x] Remove the preview build restriction (4 October, operator request); outstanding live release checks remain tracked above.
 
 ## Source files and supporting documents
 

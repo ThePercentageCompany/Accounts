@@ -14,15 +14,14 @@ records are outside this release. New SaaS companies receive empty workspaces.
    Google connection, company provisioning and live tenant isolation.
 3. Set `SAAS_API_ORIGIN` to that verified HTTPS origin. No OAuth client secret
    is compiled into Flutter. Do not put a Cloud Run URL in EMPLOYEE_GATEWAY_URL.
-4. For operator testing, set `SHARED_WORKSPACE_PREVIEW=1` and run:
+4. Set `SAAS_API_ORIGIN` and run the release build:
 
 ```bash
 bash scripts/build-shared-web.sh
 ```
 
-The Vercel build delegates to the same script. The script intentionally blocks
-an ordinary production build until the remaining workspace integration is
-finished. Do not deploy this preview over a working accounting site.
+The Vercel build delegates to the same script. Release builds require a trusted
+HTTPS `SAAS_API_ORIGIN`; no preview opt-in is required.
 
 ## New flow
 
@@ -79,7 +78,7 @@ Remove-Item Env:SAAS_API_ORIGIN
 ```
 
 Passing these checks does not establish accounting correctness or tenant isolation.
-The production build restriction remains until the outstanding integration and
-live verification in `SOFTWARE_WORKFLOW_AND_STATUS.md` are complete. New company
+Outstanding integration and live verification are tracked in
+`SOFTWARE_WORKFLOW_AND_STATUS.md`. New company
 provisioning creates schema and actual company/owner metadata, with no sample
 customers, employees or accounting transactions.

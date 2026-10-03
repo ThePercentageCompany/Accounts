@@ -17,4 +17,4 @@ flutter config --no-analytics
 flutter config --enable-web
 
 bash scripts/build-shared-web.sh
-echo 'Shared-backend preview build complete.'
+echo 'Shared-backend release build complete.'
