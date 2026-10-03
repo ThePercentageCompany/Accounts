@@ -357,3 +357,11 @@ historical “pending” statements as the current status.
 - Cache keys include API origin, owner and company; snapshots expire after 24 hours and are bounded to 512 KiB per table. Employee records, reports, sessions and document bytes are not persisted by this cache. Authorization rejection clears the current snapshot.
 - Pending financial writes retain the existing explicit retry workflow. Background refresh pauses while writes or uploads are pending. This is record caching, not a complete offline accounting workspace.
 - Validation: 16 focused Flutter tests passed, including cache persistence, isolation, expiry, employee access and responsive dashboard checks. Local changes only; no deployment claimed.
+
+### Minimal mobile workspace refinement - 4 October 2026
+
+- Replaced the mobile section dropdown with bottom navigation and a scrollable More sheet containing only assigned sections. Laptops retain the sidebar from 900px.
+- Reduced the mobile header, shortened search prompts, added safe-area spacing and pull-to-refresh, and constrained record selectors and sidebar titles to prevent overflow.
+- Verified owner cached records render before a delayed API response and are replaced by fresh records. Existing owner-scoped, bounded, 24-hour snapshots and 60-second foreground background refresh remain in use; financial writes still follow explicit retry and reports remain authoritative online reads.
+- New widget checks cover 320px, 390px, 1024px and 1366px widths, mobile section switching, and delayed-response caching. Thirteen focused tests passed; changed source and new tests pass analysis. No deployment or live browser visual review claimed.
+- Full Flutter regression suite after this refinement: **201 tests passed**.
