@@ -173,6 +173,31 @@ class SaasSession extends ChangeNotifier {
         );
       });
 
+  Future<void> deleteCompany() => _run(() async {
+        if (company == null || owner == null) return;
+        final id = company!['companyId'] as String;
+        try {
+          await api.deleteCompany(id);
+        } on SaasApiException catch (failure) {
+          // A previous deletion may have succeeded with its response lost.
+          if (failure.code != 'COMPANY_NOT_FOUND' || failure.status != 404) {
+            rethrow;
+          }
+        }
+        await api.clearWorkspace();
+        for (final key in preferences
+            .getKeys()
+            .where((key) =>
+                key.contains(id) &&
+                (key.startsWith('saas_') ||
+                    key.startsWith('tpc_workspace_cache_')))
+            .toList()) {
+          await preferences.remove(key);
+        }
+        companies.removeWhere((entry) => entry['companyId'] == id);
+        company = companies.isEmpty ? null : companies.first;
+      });
+
   Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
         await navigate(await api.startSignIn());
       });
@@ -194,7 +219,10 @@ class SaasSession extends ChangeNotifier {
   Future<void> signOut() => _run(() async {
         // Purge optional read snapshots before logout; preserve the existing
         // authenticated session/error behavior if remote logout fails.
-        for (final key in preferences.getKeys().where((k) => k.startsWith('tpc_workspace_cache_v1_')).toList()) {
+        for (final key in preferences
+            .getKeys()
+            .where((k) => k.startsWith('tpc_workspace_cache_v1_'))
+            .toList()) {
           await preferences.remove(key);
         }
         if (employee != null) await api.employeeLogout();

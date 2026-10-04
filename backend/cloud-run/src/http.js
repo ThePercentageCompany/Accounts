@@ -241,6 +241,10 @@ export function createApi(service, config, { log = console.error, workspace, que
         json(result.replayed ? 200 : 201, result); return;
       }
       const statusMatch = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/setup$/.exec(url.pathname);
+      const deleteMatch = /^\/v1\/companies\/([A-Za-z0-9_-]{43})$/.exec(url.pathname);
+      if (request.method === 'DELETE' && deleteMatch) {
+        json(200, await workspace.deleteCompany(token, deleteMatch[1])); return;
+      }
       if (request.method === 'GET' && statusMatch) {
         json(200, { company: await service.companyStatus(token, statusMatch[1]) }); return;
       }

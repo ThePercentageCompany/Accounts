@@ -32,6 +32,26 @@ export class GoogleWorkspace {
     503, 'GOOGLE_RESPONSE_INVALID', 'Google did not return valid resource identifiers.');
     return result.ids;
   }
+  async deleteCompanyFiles(token, companyId) {
+    // Query app-owned resources by tenant tag, including moved documents.
+    const query = new URLSearchParams({
+      q: `appProperties has { key='tpcCompany' and value='${companyId}' }`,
+      fields: 'files(id,ownedByMe),nextPageToken', pageSize: '1000',
+    });
+    const files = [];
+    do {
+      const result = await this.request(token, `https://www.googleapis.com/drive/v3/files?${query}`);
+      files.push(...(result.files || []));
+      if (!result.nextPageToken) break;
+      query.set('pageToken', result.nextPageToken);
+    } while (true);
+    for (const file of files) {
+      requireThat(file.ownedByMe === true, 409, 'RESOURCE_MISMATCH', 'Workspace file ownership changed.');
+      try {
+        await this.request(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, 'DELETE');
+      } catch (error) { if (error.googleStatus !== 404) throw error; }
+    }
+  }
   async file(token, id) {
     try { return await this.request(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${FILE_FIELDS}`); }
     catch (error) { if (error.googleStatus === 404) return null; throw error; }

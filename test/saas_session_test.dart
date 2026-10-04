@@ -9,6 +9,34 @@ import 'package:tpc_invoice/core/saas/saas_session.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('workspace deletion clears tenant queues and preserves other workspaces',
+      () async {
+    final id = 'c' * 43;
+    SharedPreferences.setMockInitialValues({
+      'saas_records_owner_${id}_op': '{}',
+      'saas_document_owner_$id': '{}',
+      'saas_employee_write_owner_$id': '{}',
+      'saas_records_owner_other_op': '{}',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async {
+          expect(request.method, 'DELETE');
+          expect(request.url.path, '/v1/companies/$id');
+          return http.Response('{"deleted":true}', 200);
+        }));
+    final session = SaasSession(api, prefs);
+    session.owner = {'ownerId': 'owner'};
+    session.company = {'companyId': id, 'name': 'Company', 'stage': 'READY'};
+    session.companies = [session.company!];
+    await session.deleteCompany();
+    expect(session.company, isNull);
+    expect(session.companies, isEmpty);
+    expect(prefs.getKeys(), {'saas_records_owner_other_op'});
+    session.dispose();
+    api.close();
+  });
   final companyId = 'c' * 43;
   final company = {'companyId': companyId, 'name': 'Company', 'stage': 'READY'};
   http.Response json(Object body, [int status = 200]) =>

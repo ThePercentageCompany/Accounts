@@ -16,6 +16,7 @@ export class WorkspaceService {
     const stateToken = opaque(), binding = opaque(), nonce = opaque(), verifier = opaque(), attempt = opaque();
     const owner = await this.registry.transact(state => {
       const owner = this.accounts.companyOwner(state, token, companyId);
+      requireThat(state.companies[companyId].stage !== 'DELETING', 409, 'WORKSPACE_DELETING', 'Retry workspace deletion first.');
       requireThat(Object.keys(state.oauth).length < 1000, 429, 'SIGN_IN_BUSY', 'Please try connecting later.');
       state.companies[companyId].connectionAttempt = attempt;
       state.oauth[digest(stateToken)] = { kind: 'connection', companyId, ownerId: owner.id,
@@ -25,6 +26,33 @@ export class WorkspaceService {
     });
     return { binding, authorizationUrl: this.connection.authorizationUrl({ state: stateToken,
       nonce, challenge: challenge(verifier), email: owner.email }) };
+  }
+  async deleteCompany(token, companyId) {
+    const company = await this.registry.transact(state => {
+      this.accounts.companyOwner(state, token, companyId);
+      const c = state.companies[companyId];
+      requireThat(!c.businessWrite && !c.employeeWrite && !c.documentWrite &&
+        (!c.lease || c.lease.expiresAt <= this.now()), 409, 'WORKSPACE_BUSY',
+      'Confirm pending changes and wait for setup before deleting the workspace.');
+      c.stage = 'DELETING';
+      return structuredClone(c);
+    });
+    if (company.connection) {
+      const refresh = await this.vault.decrypt(company.connection.ciphertext, company.connection.ownerId, companyId);
+      const access = await this.connection.accessToken(refresh);
+      await this.google.deleteCompanyFiles(access, companyId);
+    }
+    await this.registry.transact(state => {
+      this.accounts.companyOwner(state, token, companyId);
+      for (const collection of Object.values(state)) {
+        if (!collection || typeof collection !== 'object' || Array.isArray(collection)) continue;
+        for (const [key, value] of Object.entries(collection)) {
+          if (value?.companyId === companyId) delete collection[key];
+        }
+      }
+      delete state.companies[companyId];
+    });
+    return { deleted: true };
   }
   async finishConnection(token, stateToken, binding, code) {
     requireThat(isToken(stateToken) && isToken(binding) && typeof code === 'string' && code.length > 0 && code.length <= 4096,
@@ -44,6 +72,7 @@ export class WorkspaceService {
     const company = await this.registry.transact(state => {
       this.accounts.companyOwner(state, token, tx.companyId);
       const c = state.companies[tx.companyId];
+      requireThat(c.stage !== 'DELETING', 409, 'WORKSPACE_DELETING', 'Retry workspace deletion first.');
       requireThat(c.connectionAttempt === tx.attempt, 409, 'CONNECTION_SUPERSEDED', 'A newer Google connection was started.');
       c.connection = { ownerId: tx.ownerId, googleSub: grant.sub, ciphertext, scopes: grant.scopes,
         version: (c.connection?.version || 0) + 1, connectedAt: this.now() };
@@ -61,6 +90,7 @@ export class WorkspaceService {
     const { state } = await this.registry.read();
     this.accounts.companyOwner(state, token, companyId);
     const c = state.companies[companyId];
+    requireThat(c.stage !== 'DELETING', 409, 'WORKSPACE_DELETING', 'Retry workspace deletion first.');
     requireThat(c.connection && c.stage !== 'RECONNECT_REQUIRED', 409, 'RECONNECT_REQUIRED', 'Connect or reconnect Google to continue.');
     if (c.stage !== 'READY') await this.queue.enqueue(c.id, c.version, opaque());
     return publicCompany(c);
@@ -98,7 +128,7 @@ export class WorkspaceService {
     let company = await this.registry.transact(state => {
       const c = state.companies[companyId];
       requireThat(c && !c.deleted, 404, 'COMPANY_NOT_FOUND', 'Company not found.');
-      if (c.stage === 'READY' || c.stage === 'RECONNECT_REQUIRED') return null;
+      if (['READY', 'RECONNECT_REQUIRED', 'DELETING'].includes(c.stage)) return null;
       const owner = state.owners[c.connection?.ownerId];
       const membership = owner && state.memberships[digest(`${owner.id}:${companyId}`)];
       requireThat(owner?.status === 'ACTIVE' && membership?.status === 'ACTIVE' && membership.role === 'OWNER',

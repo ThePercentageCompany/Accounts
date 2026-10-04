@@ -4,7 +4,7 @@ import { requireThat } from './errors.js';
 export const STAGES = Object.freeze([
   'REGISTERED', 'GOOGLE_CONNECTION_REQUIRED', 'GOOGLE_CONNECTED', 'CREATING_FOLDER',
   'FOLDER_READY', 'CREATING_SPREADSHEET', 'SPREADSHEET_READY', 'CREATING_SCHEMA',
-  'VERIFYING_SCHEMA', 'READY', 'RECONNECT_REQUIRED', 'RECOVERABLE_FAILURE',
+  'VERIFYING_SCHEMA', 'READY', 'RECONNECT_REQUIRED', 'RECOVERABLE_FAILURE', 'DELETING',
 ]);
 const validToken = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 const publicOwner = owner => ({ ownerId: owner.id, email: owner.email, name: owner.name });

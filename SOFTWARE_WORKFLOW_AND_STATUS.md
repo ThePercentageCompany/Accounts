@@ -2,6 +2,19 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Workspace deletion - 4 October 2026
+
+Company setup now offers an owner-only Delete workspace action with explicit
+permanent-deletion confirmation. DELETE /v1/companies/:companyId blocks active
+setup/writes, marks the workspace DELETING, permanently removes Google Drive
+resources tagged for that company (including moved uploads), then removes the
+company and its memberships, employee sessions, OAuth transactions and registration
+entries from the control registry. Failed Drive cleanup retains the workspace for
+retry; normal setup and writes cannot resume during deletion. Local workspace
+caches and owner write/upload/employee queues are removed after server completion.
+Other companies and the owner's sign-in account remain available. Deploy the
+backend before the frontend to enable this endpoint.
+
 ### Saved invoice grey-screen fix - 4 October 2026
 
 Reproduced the saved-record expansion failure in a widget regression test:

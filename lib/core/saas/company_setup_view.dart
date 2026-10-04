@@ -22,6 +22,27 @@ class CompanySetupView extends StatefulWidget {
 class _CompanySetupViewState extends State<CompanySetupView> {
   final _name = TextEditingController();
 
+  Future<void> _deleteWorkspace() async {
+    final company = widget.session.company;
+    if (company == null) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Permanently delete workspace?'),
+              content: Text(
+                  'Delete ${company['name']} and all its invoices, quotations, accounting records, employees, uploaded documents and Google Drive workspace files? This cannot be undone.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Delete all workspace data')),
+              ],
+            ));
+    if (confirmed == true && mounted) await widget.session.deleteCompany();
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -91,6 +112,11 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                             },
                     ),
                   if (company != null) ...[
+                    TextButton.icon(
+                      onPressed: session.busy ? null : _deleteWorkspace,
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Delete workspace'),
+                    ),
                     Text(
                       session.ready
                           ? 'Company workspace is ready.'

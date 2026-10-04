@@ -488,6 +488,8 @@ class SaasApi {
         force: force,
       );
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
+  Future<Map<String, dynamic>> deleteCompany(String companyId) =>
+      _json('DELETE', '/v1/companies/${_id(companyId)}');
   Future<Map<String, dynamic>> createCompany(String name, String operationId) =>
       _json(
         'POST',

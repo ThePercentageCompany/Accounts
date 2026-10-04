@@ -57,6 +57,34 @@ async function setupFixture() {
     current: () => f.storage.state.companies[id] };
 }
 
+test('workspace deletion removes tenant resources and access but preserves other tenants', async () => {
+  const f = await setupFixture();
+  await f.connect(); await f.drain();
+  f.google.deleteCompanyFiles = async (_token, id) => {
+    for (const [key, file] of f.files) if (file.appProperties.tpcCompany === id) f.files.delete(key);
+  };
+  f.storage.state.employeeSessions = { mine: { companyId: f.id }, other: { companyId: 'other' } };
+  await f.workspace.deleteCompany(f.token, f.id);
+  assert.equal(f.files.size, 0);
+  assert.equal(f.current(), undefined);
+  assert.equal(f.storage.state.employeeSessions.mine, undefined);
+  assert.ok(f.storage.state.employeeSessions.other);
+  assert.ok(!Object.values(f.storage.state.memberships).some(m => m.companyId === f.id));
+});
+
+test('failed workspace file deletion remains blocked and can be retried', async () => {
+  const f = await setupFixture();
+  await f.connect(); await f.drain();
+  f.google.deleteCompanyFiles = async () => { throw new Error('offline'); };
+  await assert.rejects(f.workspace.deleteCompany(f.token, f.id));
+  assert.equal(f.current().stage, 'DELETING');
+  await f.workspace.work(f.id);
+  assert.equal(f.current().stage, 'DELETING');
+  f.google.deleteCompanyFiles = async () => {};
+  await f.workspace.deleteCompany(f.token, f.id);
+  assert.equal(f.current(), undefined);
+});
+
 test('offline connection persists only ciphertext, queues setup and reaches READY with exact folder structure', async () => {
   const f = await setupFixture();
   await f.connect();
