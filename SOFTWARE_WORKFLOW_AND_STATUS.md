@@ -4,6 +4,19 @@ Updated: 4 October 2026. Based on the repository and recorded validation results
 
 ### Responsive workspace and feature architecture - 4 October 2026
 
+The reference style now applies across the application through shared theme and
+form components: white navigation with soft blue selection, neutral canvas,
+bordered cards, consistent desktop dialog headers/actions, responsive document
+dialogs, table headers, menus, sheets and record expansion surfaces. Accounting,
+customer, payroll and invoice/quotation forms reuse the same dialog treatment.
+Employee cards include identity icons; employee access has a clearer entrance and
+a reserved loading area. Status badges use semantic colors in light mode and
+monochrome styling in dark mode. All dark surface levels, inverse colors,
+navigation, menus and actions use black/grey/white. Dashboard income/spending
+comparison uses real totals with reduced-motion-aware animation.
+Full regression suite: 130 tests passed, one existing skip. Ten phone/desktop
+light/dark preview checks passed; renders inspected. Changes remain local.
+
 Workspace setup now uses a searchable directory and a selected-company overview
 with status, connection/retry actions and an integrated Open workspace button.
 Company creation expands within its own card. Deletion confirmation names the

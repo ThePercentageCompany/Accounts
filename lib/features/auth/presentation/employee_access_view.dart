@@ -154,15 +154,32 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (busy)
-                  const SizedBox(
-                    height: 28,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: CupertinoActivityIndicator(radius: 8),
+                SizedBox(
+                  height: 28,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: busy
+                        ? const CupertinoActivityIndicator(radius: 8)
+                        : null,
+                  ),
+                ),
+                if (employee == null) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        Icons.badge_outlined,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
-                if (employee == null) ...[
+                  const SizedBox(height: 24),
                   Text(
                     'Join your company',
                     style: Theme.of(context).textTheme.headlineMedium,

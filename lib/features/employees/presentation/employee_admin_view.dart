@@ -256,10 +256,28 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      row['fullName'] as String,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.person_outline,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            row['fullName'] as String,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
                     Text('${row['role']} · ${row['employmentStatus']}'),
                     Text(row['email'] as String? ?? ''),
                     Wrap(

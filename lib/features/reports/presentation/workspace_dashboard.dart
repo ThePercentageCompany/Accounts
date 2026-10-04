@@ -143,6 +143,61 @@ class WorkspaceDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 28),
+              if (num.tryParse('${data['totalIncome']}')?.isFinite == true &&
+                  num.tryParse('${data['totalExpenses']}')?.isFinite ==
+                      true) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Income & spending',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Relative size for the selected reporting period',
+                          style: TextStyle(color: colors.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 24),
+                        for (final entry in const {
+                          'totalIncome': 'Income',
+                          'totalExpenses': 'Expenses',
+                        }.entries) ...[
+                          Text(entry.value),
+                          const SizedBox(height: 8),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: _share(entry.key)),
+                            duration: MediaQuery.disableAnimationsOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 500),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, _) =>
+                                LinearProgressIndicator(
+                                  value: value,
+                                  minHeight: 12,
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: entry.key == 'totalIncome'
+                                      ? colors.primary
+                                      : colors.onSurfaceVariant,
+                                  backgroundColor:
+                                      colors.surfaceContainerHighest,
+                                  semanticsLabel: '${entry.value} share',
+                                  semanticsValue:
+                                      '${(_share(entry.key) * 100).round()}%',
+                                ),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+              ],
               Text(
                 'Cash & financial position',
                 style: Theme.of(
@@ -203,5 +258,13 @@ class WorkspaceDashboard extends StatelessWidget {
         },
       ),
     );
+  }
+
+  double _share(String key) {
+    final income = (double.tryParse('${data['totalIncome']}') ?? 0).abs();
+    final expenses = (double.tryParse('${data['totalExpenses']}') ?? 0).abs();
+    final total = income + expenses;
+    if (!total.isFinite || total == 0) return 0;
+    return ((double.tryParse('${data[key]}') ?? 0).abs() / total).clamp(0, 1);
   }
 }

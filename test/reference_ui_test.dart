@@ -27,6 +27,13 @@ void main() {
       theme.colorScheme.primaryContainer,
       theme.colorScheme.error,
       theme.colorScheme.errorContainer,
+      theme.colorScheme.surfaceContainerLowest,
+      theme.colorScheme.surfaceContainerLow,
+      theme.colorScheme.surfaceContainer,
+      theme.colorScheme.surfaceContainerHigh,
+      theme.colorScheme.surfaceContainerHighest,
+      theme.colorScheme.inverseSurface,
+      theme.colorScheme.inversePrimary,
     ]) {
       expect(color.r, color.g);
       expect(color.g, color.b);

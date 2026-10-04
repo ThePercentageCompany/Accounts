@@ -70,7 +70,58 @@ class AdaptiveFormDialog extends StatelessWidget {
         MediaQuery.sizeOf(context).height -
                 MediaQuery.viewInsetsOf(context).bottom >=
             480) {
-      return AlertDialog(title: title, content: content, actions: actions);
+      return Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 900,
+            maxHeight:
+                MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                48,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DefaultTextStyle.merge(
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        child: title,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close without saving',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: content,
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(spacing: 12, runSpacing: 8, children: actions),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     return Dialog.fullscreen(
       child: SafeArea(
@@ -154,15 +205,40 @@ class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.value});
   final String value;
   @override
-  Widget build(BuildContext context) => Chip(
-    visualDensity: VisualDensity.compact,
-    label: Text(value.replaceAll('_', ' ').toLowerCase()),
-    side: BorderSide.none,
-    backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-    labelStyle: TextStyle(
-      color: Theme.of(context).colorScheme.onSecondaryContainer,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final status = value.toUpperCase();
+    final positive = [
+      'PAID',
+      'READY',
+      'ACTIVE',
+      'ISSUED',
+      'ACCEPTED',
+    ].contains(status);
+    final warning = [
+      'DRAFT',
+      'UNPAID',
+      'PENDING',
+      'PARTIALLY_PAID',
+    ].contains(status);
+    final color = dark
+        ? colors.onSurface
+        : positive
+        ? const Color(0xFF20843A)
+        : warning
+        ? const Color(0xFF986A08)
+        : colors.primary;
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      label: Text(value.replaceAll('_', ' ').toLowerCase()),
+      side: BorderSide.none,
+      backgroundColor: dark
+          ? colors.surfaceContainerHighest
+          : color.withValues(alpha: .09),
+      labelStyle: TextStyle(color: color),
+    );
+  }
 }
 
 class RecordCard extends StatelessWidget {

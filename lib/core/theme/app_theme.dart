@@ -68,23 +68,23 @@ class AppTheme {
   // -------------------------------------------------------------
   // Light Mode (Zoho Books Signature Canvas)
   static const Color zohoLightBg = Color(
-    0xFFF3F5FA,
+    0xFFF7F7F7,
   ); // Clean SaaS Light Slate Canvas
   static const Color zohoLightSurface = Color(
     0xFFFFFFFF,
   ); // Pure White Card Surface
   static const Color zohoLightSurfaceElevated = Color(
-    0xFFF8FAFC,
+    0xFFF6F6F6,
   ); // Table Header / Subtle surface
   static const Color zohoLightBorder = Color(
-    0xFFE2E8F0,
+    0xFFE5E5E5,
   ); // Crisp 1px card border
   static const Color zohoLightSeparator = Color(0xFFEAECF0);
   static const Color zohoLightTextPrimary = Color(
-    0xFF0F172A,
+    0xFF202020,
   ); // High-contrast Charcoal Slate
   static const Color zohoLightTextSecondary = Color(
-    0xFF475569,
+    0xFF686868,
   ); // Clean Secondary Slate
   static const Color zohoLightTextMuted = Color(0xFFAAAAAA);
 
@@ -125,7 +125,7 @@ class AppTheme {
   static const double cardRadiusVal = 16.0;
   static const double buttonRadiusVal = 10.0;
   static const double inputRadiusVal = 10.0;
-  static const double badgeRadiusVal = 5.0;
+  static const double badgeRadiusVal = 10.0;
 
   static final BorderRadius cardRadius = BorderRadius.circular(cardRadiusVal);
   static final BorderRadius buttonRadius = BorderRadius.circular(
@@ -187,6 +187,53 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      splashFactory: InkSparkle.splashFactory,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: zohoLightSurface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: zohoLightSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingRowColor: WidgetStatePropertyAll(zohoLightSurfaceElevated),
+        headingTextStyle: const TextStyle(
+          color: zohoLightTextPrimary,
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
+        dataTextStyle: const TextStyle(
+          color: zohoLightTextPrimary,
+          fontSize: 14,
+        ),
+        horizontalMargin: 24,
+        columnSpacing: 32,
+        dividerThickness: .7,
+      ),
+      expansionTileTheme: ExpansionTileThemeData(
+        backgroundColor: zohoLightSurface,
+        collapsedBackgroundColor: zohoLightSurface,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: zohoLightBorder),
+        ),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: zohoLightBorder),
+        ),
+      ),
+      tooltipTheme: const TooltipThemeData(
+        waitDuration: Duration(milliseconds: 400),
+      ),
+
       colorScheme: colorScheme,
       scaffoldBackgroundColor: zohoLightBg,
       fontFamily: 'Inter',
@@ -404,6 +451,15 @@ class AppTheme {
       errorContainer: zohoDarkSurfaceElevated,
       onErrorContainer: Colors.white,
       surfaceContainerHighest: zohoDarkSurfaceElevated,
+      surfaceContainerLowest: zohoDarkBg,
+      surfaceContainerLow: zohoDarkSurface,
+      surfaceContainer: zohoDarkSurface,
+      surfaceContainerHigh: zohoDarkSurfaceElevated,
+      surfaceDim: zohoDarkBg,
+      surfaceBright: zohoDarkSurfaceElevated,
+      inverseSurface: zohoDarkTextPrimary,
+      onInverseSurface: zohoDarkBg,
+      inversePrimary: zohoDarkSurfaceElevated,
       surfaceTint: Colors.transparent,
       surface: zohoDarkSurface,
       onSurface: zohoDarkTextPrimary,
@@ -417,6 +473,53 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      splashFactory: InkSparkle.splashFactory,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: zohoDarkSurface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: zohoDarkSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingRowColor: WidgetStatePropertyAll(zohoDarkSurfaceElevated),
+        headingTextStyle: const TextStyle(
+          color: zohoDarkTextPrimary,
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
+        dataTextStyle: const TextStyle(
+          color: zohoDarkTextPrimary,
+          fontSize: 14,
+        ),
+        horizontalMargin: 24,
+        columnSpacing: 32,
+        dividerThickness: .7,
+      ),
+      expansionTileTheme: ExpansionTileThemeData(
+        backgroundColor: zohoDarkSurface,
+        collapsedBackgroundColor: zohoDarkSurface,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: zohoDarkBorder),
+        ),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: zohoDarkBorder),
+        ),
+      ),
+      tooltipTheme: const TooltipThemeData(
+        waitDuration: Duration(milliseconds: 400),
+      ),
+
       colorScheme: colorScheme,
       scaffoldBackgroundColor: zohoDarkBg,
       fontFamily: 'Inter',

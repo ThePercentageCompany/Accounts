@@ -480,7 +480,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       'Settings': Icons.settings_outlined,
     };
     return Material(
-      color: dark ? const Color(0xFF111111) : const Color(0xFF17283E),
+      color: colors.surface,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -488,12 +488,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
             child: Row(
               children: [
-                Icon(
-                  Icons.auto_graph,
-                  color: dark ? Colors.white : const Color(0xFF4A9CFF),
-                ),
+                Icon(Icons.auto_graph, color: colors.primary),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'TPC Accounts',
                     maxLines: 1,
@@ -501,7 +498,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 17,
-                      color: Colors.white,
+                      color: colors.onSurface,
                     ),
                   ),
                 ),
@@ -516,7 +513,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.5,
-                color: dark ? Colors.white60 : const Color(0xFF9AA9BB),
+                color: colors.onSurfaceVariant,
               ),
             ),
           ),
@@ -530,13 +527,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 selected: selected == section,
                 selectedTileColor: dark
                     ? const Color(0xFF333333)
-                    : colors.primary,
-                selectedColor: Colors.white,
-                textColor: dark ? Colors.white70 : const Color(0xFFDCE4EE),
-                iconColor: dark ? Colors.white60 : const Color(0xFFBCC9D9),
+                    : colors.primaryContainer,
+                selectedColor: dark ? colors.onSurface : colors.primary,
+                textColor: colors.onSurfaceVariant,
+                iconColor: colors.onSurfaceVariant,
                 leading: Icon(icons[section], size: 21),
                 title: Text(
-                  section,
+                  section == 'Reports' ? 'Overview' : section,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

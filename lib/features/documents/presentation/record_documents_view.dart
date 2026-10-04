@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/utils/file_download.dart';
 import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/accounting/data/record_write_queue.dart';
@@ -184,7 +185,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     if (mounted) Navigator.pop(context);
   });
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(logo ? 'Company logo' : 'Record documents'),
     content: SizedBox(
       width: 560,
