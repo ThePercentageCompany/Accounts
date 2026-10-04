@@ -561,6 +561,9 @@ historical “pending” statements as the current status.
 
 ### Custom document HTML designs - 5 October 2026
 
+- Popup forms use a shared responsive field layout with 24px field gaps, paired desktop fields and a scrollable single column on phones. Customer, company, shareholder/capital, payroll, cash/payment, receipt, asset and financial-period editors reuse their existing controllers and validation. Shared popup fields keep labels visible and use comfortable internal padding; larger dialog headers/content use 24px margins.
+- Validation: 142 regression tests passed with one existing skip; static analysis found no issues.
+
 - Shared expanded record views now group details, amounts/quantities, contact/business fields and notes in responsive bordered panels. Desktop workflow actions wrap together above details; mobile retains the action sheet. Applies to invoice, quotation and other shared record sections without changing accounting permissions or workflow rules.
 - Validation: 139 existing tests passed with one skip; three new expansion/large-text checks passed at 320px, 390px and desktop widths.
 

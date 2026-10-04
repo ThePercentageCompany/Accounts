@@ -41,13 +41,11 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
   Widget build(BuildContext context) => AdaptiveFormDialog(
     title: const Text('Edit company profile'),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: SingleChildScrollView(
         child: Form(
           key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               for (final field in fields.entries)
                 if (field.key == 'currency')

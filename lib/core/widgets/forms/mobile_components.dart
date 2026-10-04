@@ -1,6 +1,8 @@
 export 'package:tpc_invoice/core/widgets/forms/date_time_field.dart';
 export 'package:tpc_invoice/core/widgets/forms/currency_field.dart';
 import 'package:flutter/material.dart';
+import 'package:tpc_invoice/core/widgets/forms/date_time_field.dart';
+import 'package:tpc_invoice/core/widgets/forms/currency_field.dart';
 
 /// Shared form surface: existing desktop dialogs, reachable mobile actions.
 class AdaptiveFormDialog extends StatelessWidget {
@@ -18,6 +20,22 @@ class AdaptiveFormDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+        ),
+      ),
+      child: _surface(context),
+    );
+  }
+
+  Widget _surface(BuildContext context) {
     if (expanded &&
         MediaQuery.sizeOf(context).width >= 1100 &&
         MediaQuery.sizeOf(context).height >= 600) {
@@ -29,7 +47,7 @@ class AdaptiveFormDialog extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Row(
                   children: [
                     Expanded(
@@ -49,7 +67,7 @@ class AdaptiveFormDialog extends StatelessWidget {
               const Divider(height: 1),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   child: content,
                 ),
               ),
@@ -165,6 +183,40 @@ class AdaptiveFormDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Comfortable paired fields on desktop and a scrollable single column on phones.
+class PopupFormFields extends StatelessWidget {
+  const PopupFormFields({super.key, required this.children});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final paired =
+          constraints.maxWidth >= 560 &&
+          MediaQuery.textScalerOf(context).scale(14) <= 21;
+      return SingleChildScrollView(
+        child: Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          children: [
+            for (final child in children)
+              SizedBox(
+                width:
+                    paired &&
+                        (child is TextFormField ||
+                            child is SearchableRecordField ||
+                            child is CurrencyFormField ||
+                            child is CalendarFormField)
+                    ? (constraints.maxWidth - 24) / 2
+                    : constraints.maxWidth,
+                child: child,
+              ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class RecordSummary extends StatelessWidget {

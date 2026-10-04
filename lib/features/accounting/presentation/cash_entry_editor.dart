@@ -100,9 +100,7 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
       child: SingleChildScrollView(
         child: Form(
           key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               const Text(
                 'Tax and total are calculated by your company service when saved.',

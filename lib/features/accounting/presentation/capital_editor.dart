@@ -41,12 +41,10 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
   Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(widget.record == null ? 'Add shareholder' : 'Edit shareholder'),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: Form(
         key: form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+        child: PopupFormFields(
           children: [
             TextFormField(
               controller: name,
@@ -176,12 +174,10 @@ class _CapitalContributionEditorState extends State<CapitalContributionEditor> {
           : 'Edit capital contribution',
     ),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: Form(
         key: form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+        child: PopupFormFields(
           children: [
             SearchableRecordField(
               initialValue: shareholderId,
@@ -314,12 +310,10 @@ class _ShareholderLoanEditorState extends State<ShareholderLoanEditor> {
       widget.record == null ? 'Add shareholder loan' : 'Edit shareholder loan',
     ),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: Form(
         key: form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+        child: PopupFormFields(
           children: [
             SearchableRecordField(
               initialValue: shareholderId,
@@ -445,9 +439,7 @@ class _ShareholderLoanRepaymentEditorState
     title: const Text('Repay shareholder loan'),
     content: Form(
       key: form,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 12,
+      child: PopupFormFields(
         children: [
           Text('Full outstanding principal: ${widget.amount}'),
           CalendarFormField(

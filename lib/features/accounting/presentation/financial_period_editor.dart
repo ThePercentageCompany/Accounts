@@ -44,13 +44,11 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
       widget.record == null ? 'Add financial period' : 'Edit financial period',
     ),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: SingleChildScrollView(
         child: Form(
           key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               TextFormField(
                 controller: name,

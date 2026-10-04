@@ -77,9 +77,7 @@ class _AssetEditorState extends State<AssetEditor> {
       child: SingleChildScrollView(
         child: Form(
           key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               TextFormField(
                 controller: code,
@@ -278,9 +276,7 @@ class _AssetDisposalEditorState extends State<AssetDisposalEditor> {
       width: 460,
       child: Form(
         key: form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+        child: PopupFormFields(
           children: [
             Text('Current net book value: ${widget.bookValue}'),
             CalendarFormField(

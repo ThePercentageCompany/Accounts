@@ -33,13 +33,11 @@ class _CustomerEditorState extends State<CustomerEditor> {
   Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(widget.record == null ? 'Add customer' : 'Edit customer'),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: SingleChildScrollView(
         child: Form(
           key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               for (final field in _fields.entries)
                 TextFormField(

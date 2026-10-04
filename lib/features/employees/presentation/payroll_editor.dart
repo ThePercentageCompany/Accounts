@@ -45,12 +45,10 @@ class _PayrollEditorState extends State<PayrollEditor> {
       widget.record == null ? 'Create payroll draft' : 'Edit payroll draft',
     ),
     content: SizedBox(
-      width: 480,
+      width: 680,
       child: Form(
         key: form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 12,
+        child: PopupFormFields(
           children: [
             SearchableRecordField(
               initialValue: employeeId,
@@ -149,9 +147,7 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
     title: const Text('Pay approved payroll'),
     content: Form(
       key: form,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 12,
+      child: PopupFormFields(
         children: [
           Text('Net salary: ${widget.amount}'),
           CalendarFormField(

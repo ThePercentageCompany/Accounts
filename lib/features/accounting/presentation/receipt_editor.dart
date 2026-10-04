@@ -43,9 +43,7 @@ class _ReceiptEditorState extends State<ReceiptEditor> {
       child: Form(
         key: form,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               SearchableRecordField(
                 initialValue: invoiceId,

@@ -35,9 +35,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
       child: Form(
         key: _form,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
+          child: PopupFormFields(
             children: [
               Text(widget.explanation),
               CalendarFormField(
