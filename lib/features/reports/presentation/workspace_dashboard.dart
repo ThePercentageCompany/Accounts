@@ -52,7 +52,7 @@ class WorkspaceDashboard extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.all(width < 240 ? 12 : 20),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
                         children: [
@@ -83,10 +83,12 @@ class WorkspaceDashboard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         amount(key),
+                        textAlign: TextAlign.right,
                         style: TextStyle(
                           fontSize: width < 240 ? 20 : 24,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -.7,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
                       const SizedBox(height: 10),

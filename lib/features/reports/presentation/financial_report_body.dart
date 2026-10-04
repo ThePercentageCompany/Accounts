@@ -107,7 +107,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 label,
@@ -118,6 +118,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
               const SizedBox(height: 12),
               Text(
                 money(widget.data[key]),
+                textAlign: TextAlign.right,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],

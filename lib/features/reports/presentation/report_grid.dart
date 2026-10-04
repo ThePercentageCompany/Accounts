@@ -41,10 +41,14 @@ class ReportGrid extends StatelessWidget {
                 ? Alignment.centerRight
                 : Alignment.centerLeft,
             child: DefaultTextStyle.merge(
+              textAlign: numeric.contains(i) ? TextAlign.right : TextAlign.left,
               style: TextStyle(
                 fontWeight: header ? FontWeight.w700 : FontWeight.w400,
+                fontFeatures: numeric.contains(i)
+                    ? const [FontFeature.tabularFigures()]
+                    : null,
               ),
-              child: cells[i],
+              child: SizedBox(width: double.infinity, child: cells[i]),
             ),
           ),
       ],

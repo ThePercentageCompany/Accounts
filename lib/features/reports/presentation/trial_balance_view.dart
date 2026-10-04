@@ -918,6 +918,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
