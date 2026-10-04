@@ -31,6 +31,7 @@ const results = await Promise.all([
     requireCheck(response.status === 200, `HTTP ${response.status}`);
     const value = await json(response);
     requireCheck(value.status === 'ok' && value.phase === 4, 'Unexpected backend health contract.');
+    requireCheck(value.capabilities?.includes('report-configuration'), 'Deployed backend is missing report configuration support.');
   }),
   check('owner authentication boundary', '/v1/me', { headers: { Origin: appOrigin } }, async response => {
     requireCheck(response.status === 401, `Expected unauthenticated 401; received ${response.status}.`);
@@ -38,6 +39,19 @@ const results = await Promise.all([
     requireCheck(value.error?.code === 'UNAUTHORIZED', 'Unexpected owner authentication response.');
     requireCheck(response.headers.get('cache-control')?.includes('no-store'), 'Private routes must disable caching.');
     requireCheck(response.headers.get('access-control-allow-origin') === appOrigin, 'APP_ORIGIN/CORS mismatch.');
+  }),
+  check('report settings route', `/v1/companies/${'a'.repeat(43)}/reports/settings`, {}, async response => {
+    requireCheck(response.status === 401, `Expected unauthenticated 401; received ${response.status}.`);
+    const value = await json(response);
+    requireCheck(value.error?.code === 'UNAUTHORIZED', 'Unexpected report settings authentication response.');
+  }),
+  check('report settings save preflight', `/v1/companies/${'a'.repeat(43)}/reports/settings`, { method: 'OPTIONS', headers: {
+    Origin: appOrigin, 'Access-Control-Request-Method': 'PUT',
+    'Access-Control-Request-Headers': 'content-type,x-tpc-csrf',
+  } }, async response => {
+    requireCheck(response.status >= 200 && response.status < 300, `HTTP ${response.status}`);
+    requireCheck(response.headers.get('access-control-allow-origin') === appOrigin, 'Unexpected allowed origin.');
+    requireCheck(response.headers.get('access-control-allow-methods')?.split(/,\s*/).includes('PUT'), 'PUT missing from allowed methods.');
   }),
   check('employee login preflight', '/v1/employee/login', { method: 'OPTIONS', headers: {
     Origin: appOrigin, 'Access-Control-Request-Method': 'POST',

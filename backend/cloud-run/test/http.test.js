@@ -62,7 +62,7 @@ test('public health uses /health and requires no session', async t => {
   const response = await f.request('/health');
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', phase: 4,
-    capabilities: ['complete-document-drafts', 'invoice-item-returns'] });
+    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration'] });
 });
 
 test('new reporting and document listing routes validate queries and preserve session routing', async t => {
@@ -188,6 +188,7 @@ test('CSRF and foreign-origin calls are rejected, trusted preflight works', asyn
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get('access-control-allow-origin'), headers.Origin);
   assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true');
+  assert.ok(preflight.headers.get('access-control-allow-methods').split(', ').includes('PUT'));
 });
 test('HTTP registration requires session, key, JSON and tenant membership', async t => {
   const f = await running(t), token = await f.login();

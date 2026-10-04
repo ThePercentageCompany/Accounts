@@ -57,14 +57,14 @@ export function createApi(service, config, { log = console.error, workspace, que
       }
       if (request.method === 'OPTIONS') {
         requireThat(origin === config.appOrigin, 403, 'ORIGIN_DENIED', 'Request origin is not allowed.');
-        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
         response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-TPC-CSRF');
         response.writeHead(204); response.end(); return;
       }
       const url = new URL(request.url, config.apiOrigin);
       if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
         json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1,
-          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns'] : [] }); return;
+          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration'] : [] }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);
