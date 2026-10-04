@@ -69,7 +69,13 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) {
+        setState(
+          () => _error = e is SaasApiException && e.status == 404
+              ? 'The connected company service does not support report configuration yet. Deploy the updated backend, then select Retry. Your financial records have not been changed.'
+              : '$e',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
