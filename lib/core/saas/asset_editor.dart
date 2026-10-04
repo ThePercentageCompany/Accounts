@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class AssetEditor extends StatefulWidget {
@@ -68,7 +69,7 @@ class _AssetEditorState extends State<AssetEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(widget.record == null ? 'Add asset draft' : 'Edit asset draft'),
     content: SizedBox(
       width: 520,
@@ -95,6 +96,8 @@ class _AssetEditorState extends State<AssetEditor> {
               ),
               TextFormField(
                 controller: date,
+                readOnly: MediaQuery.sizeOf(context).width < 600,
+                onTap: () => pickControllerDate(context, date),
                 decoration: const InputDecoration(labelText: 'Purchase date'),
                 validator: (v) {
                   final t = v?.trim() ?? '';
@@ -214,12 +217,14 @@ class _AssetDepreciationEditorState extends State<AssetDepreciationEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: const Text('Post monthly depreciation'),
     content: Form(
       key: form,
       child: TextFormField(
         controller: date,
+                readOnly: MediaQuery.sizeOf(context).width < 600,
+                onTap: () => pickControllerDate(context, date),
         decoration: const InputDecoration(labelText: 'Posting date'),
         validator: (v) {
           final t = v?.trim() ?? '';
@@ -273,7 +278,7 @@ class _AssetDisposalEditorState extends State<AssetDisposalEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: const Text('Dispose asset'),
     content: SizedBox(
       width: 460,
@@ -285,6 +290,8 @@ class _AssetDisposalEditorState extends State<AssetDisposalEditor> {
             Text('Current net book value: ${widget.bookValue}'),
             TextFormField(
               controller: date,
+                readOnly: MediaQuery.sizeOf(context).width < 600,
+                onTap: () => pickControllerDate(context, date),
               decoration: const InputDecoration(labelText: 'Disposal date'),
               validator: (v) {
                 final t = v?.trim() ?? '';

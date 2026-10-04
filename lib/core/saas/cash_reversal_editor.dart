@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CashReversalEditor extends StatefulWidget {
@@ -27,7 +28,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(widget.title),
     content: SizedBox(
       width: 420,

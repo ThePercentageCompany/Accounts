@@ -9,7 +9,7 @@ import 'package:tpc_invoice/core/saas/shared_workspace.dart';
 import 'package:tpc_invoice/core/saas/cache_store.dart';
 
 void main() {
-  for (final width in [320.0, 390.0, 1024.0, 1366.0]) {
+  for (final width in [320.0, 360.0, 390.0, 430.0, 1024.0, 1366.0]) {
     testWidgets('workspace navigation fits $width', (tester) async {
       tester.view.physicalSize = Size(width, 740);
       tester.view.devicePixelRatio = 1;
@@ -85,7 +85,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Customers'));
+    await tester.tap(find.text('Customers').last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Saved customer'), findsOneWidget);

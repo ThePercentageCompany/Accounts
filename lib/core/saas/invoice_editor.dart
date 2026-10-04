@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 bool _validDate(String value) {
@@ -43,92 +44,118 @@ class _InvoiceEditorState extends State<InvoiceEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.record == null ? 'Create draft invoice' : 'Edit draft invoice',
-    ),
-    content: SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: customerId,
-                decoration: const InputDecoration(labelText: 'Customer'),
-                items: [
-                  for (final customer in widget.customers)
-                    DropdownMenuItem(
-                      value: customer['recordId'] as String,
-                      child: Text('${customer['name']}'),
+  Widget build(BuildContext context) => AdaptiveFormDialog(
+        title: Text(
+          widget.record == null ? 'Create draft invoice' : 'Edit draft invoice',
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SearchableRecordField(
+                    initialValue: customerId,
+                    decoration: const InputDecoration(labelText: 'Customer'),
+                    items: [
+                      for (final customer in widget.customers)
+                        DropdownMenuItem(
+                          value: customer['recordId'] as String,
+                          child: Text('${customer['name']}'),
+                        ),
+                    ],
+                    onChanged: (value) => customerId = value,
+                    validator: (value) =>
+                        value == null ? 'Choose a customer.' : null,
+                  ),
+                  for (final key in fields.keys)
+                    TextFormField(
+                      controller: fields[key],
+                      keyboardType: [
+                        'quantity',
+                        'unitPrice',
+                        'discount',
+                        'taxRate',
+                        'lineNumber'
+                      ].contains(key)
+                          ? const TextInputType.numberWithOptions(decimal: true)
+                          : TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      readOnly: MediaQuery.sizeOf(context).width < 600 &&
+                          ['issueDate', 'dueDate', 'validUntil'].contains(key),
+                      onTap:
+                          ['issueDate', 'dueDate', 'validUntil'].contains(key)
+                              ? () => pickControllerDate(context, fields[key]!)
+                              : null,
+                      maxLength:
+                          ['notes', 'paymentTerms'].contains(key) ? 1000 : 20,
+                      decoration: InputDecoration(
+                        suffixIcon: ['issueDate', 'dueDate', 'validUntil']
+                                .contains(key)
+                            ? IconButton(
+                                tooltip: 'Select date',
+                                icon: const Icon(Icons.calendar_today_outlined),
+                                onPressed: () =>
+                                    pickControllerDate(context, fields[key]!),
+                              )
+                            : null,
+                        labelText: switch (key) {
+                          'issueDate' => 'Issue date',
+                          'dueDate' => 'Due date (optional)',
+                          'currency' => 'Currency',
+                          'notes' => 'Notes',
+                          _ => 'Payment terms',
+                        },
+                      ),
+                      validator: (input) {
+                        final value = input?.trim() ?? '';
+                        if (key == 'issueDate' && !_validDate(value)) {
+                          return 'Enter a valid date.';
+                        }
+                        if (key == 'dueDate' &&
+                            value.isNotEmpty &&
+                            (!_validDate(value) ||
+                                value.compareTo(
+                                        fields['issueDate']!.text.trim()) <
+                                    0)) {
+                          return 'Due date cannot precede issue date.';
+                        }
+                        if (key == 'currency' &&
+                            !RegExp(r'^[A-Z]{3}$')
+                                .hasMatch(value.toUpperCase())) {
+                          return 'Use a three-letter currency code.';
+                        }
+                        return null;
+                      },
                     ),
                 ],
-                onChanged: (value) => customerId = value,
-                validator: (value) =>
-                    value == null ? 'Choose a customer.' : null,
               ),
-              for (final key in fields.keys)
-                TextFormField(
-                  controller: fields[key],
-                  maxLength: ['notes', 'paymentTerms'].contains(key)
-                      ? 1000
-                      : 20,
-                  decoration: InputDecoration(
-                    labelText: switch (key) {
-                      'issueDate' => 'Issue date',
-                      'dueDate' => 'Due date (optional)',
-                      'currency' => 'Currency',
-                      'notes' => 'Notes',
-                      _ => 'Payment terms',
-                    },
-                  ),
-                  validator: (input) {
-                    final value = input?.trim() ?? '';
-                    if (key == 'issueDate' && !_validDate(value)) {
-                      return 'Enter a valid date.';
-                    }
-                    if (key == 'dueDate' &&
-                        value.isNotEmpty &&
-                        (!_validDate(value) ||
-                            value.compareTo(fields['issueDate']!.text.trim()) <
-                                0)) {
-                      return 'Due date cannot precede issue date.';
-                    }
-                    if (key == 'currency' &&
-                        !RegExp(r'^[A-Z]{3}$').hasMatch(value.toUpperCase())) {
-                      return 'Use a three-letter currency code.';
-                    }
-                    return null;
-                  },
-                ),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (!form.currentState!.validate()) return;
-          Navigator.pop(context, <String, Object?>{
-            'customerId': customerId!,
-            'issueDate': fields['issueDate']!.text.trim(),
-            'dueDate': fields['dueDate']!.text.trim(),
-            'currency': fields['currency']!.text.trim().toUpperCase(),
-            'notes': fields['notes']!.text.trim(),
-            'paymentTerms': fields['paymentTerms']!.text.trim(),
-          });
-        },
-        child: const Text('Save draft'),
-      ),
-    ],
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!form.currentState!.validate()) return;
+              Navigator.pop(context, <String, Object?>{
+                'customerId': customerId!,
+                'issueDate': fields['issueDate']!.text.trim(),
+                'dueDate': fields['dueDate']!.text.trim(),
+                'currency': fields['currency']!.text.trim().toUpperCase(),
+                'notes': fields['notes']!.text.trim(),
+                'paymentTerms': fields['paymentTerms']!.text.trim(),
+              });
+            },
+            child: const Text('Save draft'),
+          ),
+        ],
+      );
 }
 
 class InvoiceLineEditor extends StatefulWidget {
@@ -152,12 +179,10 @@ class _InvoiceLineEditorState extends State<InvoiceLineEditor> {
       'taxRate',
     ])
       key: TextEditingController(
-        text:
-            '${widget.record?[key] ?? (key == 'quantity'
-                    ? '1'
-                    : ['discount', 'taxRate'].contains(key)
-                    ? '0'
-                    : '')}',
+        text: '${widget.record?[key] ?? (key == 'quantity' ? '1' : [
+            'discount',
+            'taxRate'
+          ].contains(key) ? '0' : '')}',
       ),
   };
   @override
@@ -187,79 +212,102 @@ class _InvoiceLineEditorState extends State<InvoiceLineEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.record == null ? 'Add invoice line' : 'Edit invoice line',
-    ),
-    content: SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: invoiceId,
-                decoration: const InputDecoration(labelText: 'Draft invoice'),
-                items: [
-                  for (final invoice in widget.invoices)
-                    DropdownMenuItem(
-                      value: invoice['recordId'] as String,
-                      child: Text(
-                        '${invoice['number']?.toString().isNotEmpty == true ? invoice['number'] : invoice['issueDate']}',
+  Widget build(BuildContext context) => AdaptiveFormDialog(
+        title: Text(
+          widget.record == null ? 'Add invoice line' : 'Edit invoice line',
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SearchableRecordField(
+                    initialValue: invoiceId,
+                    decoration:
+                        const InputDecoration(labelText: 'Draft invoice'),
+                    items: [
+                      for (final invoice in widget.invoices)
+                        DropdownMenuItem(
+                          value: invoice['recordId'] as String,
+                          child: Text(
+                            '${invoice['number']?.toString().isNotEmpty == true ? invoice['number'] : invoice['issueDate']}',
+                          ),
+                        ),
+                    ],
+                    onChanged: widget.record == null
+                        ? (value) => invoiceId = value
+                        : null,
+                    validator: (value) =>
+                        value == null ? 'Choose an invoice.' : null,
+                  ),
+                  LineEstimate(fields: fields),
+                  for (final key in fields.keys)
+                    TextFormField(
+                      controller: fields[key],
+                      keyboardType: [
+                        'quantity',
+                        'unitPrice',
+                        'discount',
+                        'taxRate',
+                        'lineNumber'
+                      ].contains(key)
+                          ? const TextInputType.numberWithOptions(decimal: true)
+                          : TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      readOnly: MediaQuery.sizeOf(context).width < 600 &&
+                          ['issueDate', 'dueDate', 'validUntil'].contains(key),
+                      onTap:
+                          ['issueDate', 'dueDate', 'validUntil'].contains(key)
+                              ? () => pickControllerDate(context, fields[key]!)
+                              : null,
+                      maxLength: key == 'description' ? 1000 : 30,
+                      decoration: InputDecoration(
+                        labelText: switch (key) {
+                          'lineNumber' => 'Line number',
+                          'description' => 'Description',
+                          'quantity' => 'Quantity',
+                          'unitPrice' => 'Unit price',
+                          'discount' => 'Discount',
+                          _ => 'Tax rate (%)',
+                        },
                       ),
+                      validator: key == 'description'
+                          ? (value) => (value?.trim().isEmpty ?? true)
+                              ? 'Enter a description.'
+                              : null
+                          : (value) => validateNumber(key, value),
                     ),
                 ],
-                onChanged: widget.record == null
-                    ? (value) => invoiceId = value
-                    : null,
-                validator: (value) =>
-                    value == null ? 'Choose an invoice.' : null,
               ),
-              for (final key in fields.keys)
-                TextFormField(
-                  controller: fields[key],
-                  maxLength: key == 'description' ? 1000 : 30,
-                  decoration: InputDecoration(
-                    labelText: switch (key) {
-                      'lineNumber' => 'Line number',
-                      'description' => 'Description',
-                      'quantity' => 'Quantity',
-                      'unitPrice' => 'Unit price',
-                      'discount' => 'Discount',
-                      _ => 'Tax rate (%)',
-                    },
-                  ),
-                  validator: key == 'description'
-                      ? (value) => (value?.trim().isEmpty ?? true)
-                            ? 'Enter a description.'
-                            : null
-                      : (value) => validateNumber(key, value),
-                ),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (!form.currentState!.validate()) return;
-          Navigator.pop(context, <String, Object?>{
-            'invoiceId': invoiceId!,
-            'lineNumber': int.parse(fields['lineNumber']!.text),
-            'description': fields['description']!.text.trim(),
-            for (final key in ['quantity', 'unitPrice', 'discount', 'taxRate'])
-              key: double.parse(fields[key]!.text),
-          });
-        },
-        child: const Text('Save line'),
-      ),
-    ],
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!form.currentState!.validate()) return;
+              Navigator.pop(context, <String, Object?>{
+                'invoiceId': invoiceId!,
+                'lineNumber': int.parse(fields['lineNumber']!.text),
+                'description': fields['description']!.text.trim(),
+                for (final key in [
+                  'quantity',
+                  'unitPrice',
+                  'discount',
+                  'taxRate'
+                ])
+                  key: double.parse(fields[key]!.text),
+              });
+            },
+            child: const Text('Save line'),
+          ),
+        ],
+      );
 }

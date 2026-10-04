@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class FinancialPeriodEditor extends StatefulWidget {
@@ -38,7 +39,7 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: Text(
       widget.record == null ? 'Add financial period' : 'Edit financial period',
     ),
@@ -98,7 +99,7 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
           if (close) {
             final yes = await showDialog<bool>(
               context: context,
-              builder: (context) => AlertDialog(
+              builder: (context) => AdaptiveFormDialog(
                 title: const Text('Close financial period?'),
                 content: const Text(
                   'This locks journal posting for the selected dates.',

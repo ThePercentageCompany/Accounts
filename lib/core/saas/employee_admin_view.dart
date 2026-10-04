@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 import '../widgets/qr_code.dart';
 import 'employee_admin_controller.dart';
@@ -16,6 +17,7 @@ class EmployeeAdminView extends StatefulWidget {
 }
 
 class _EmployeeAdminViewState extends State<EmployeeAdminView> {
+  String _search = '';
   @override
   void initState() {
     super.initState();
@@ -59,7 +61,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
   Future<void> _discardRejected() async {
     final yes = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AdaptiveFormDialog(
         title: const Text('Discard rejected change?'),
         content: const Text(
           'The server rejected this edit without saving it. Discard it and reload the current employee details before editing again.',
@@ -84,7 +86,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
     if (action != 'issue') {
       final yes = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => AdaptiveFormDialog(
           title: Text(
             action == 'reset'
                 ? 'Reset employee access?'
@@ -118,7 +120,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => AdaptiveFormDialog(
         title: Text('Access for ${employee['fullName']}'),
         content: SingleChildScrollView(
           child: Column(
@@ -180,14 +182,22 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                   ),
                 ],
               ),
+              Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: TextField(
+                      decoration: const InputDecoration(
+                          labelText: 'Search employees',
+                          prefixIcon: Icon(Icons.search)),
+                      onChanged: (value) =>
+                          setState(() => _search = value.toLowerCase()))),
               if (c.busy ||
                   c.api.cache.state(c.resourcePath)?.refreshing == true)
                 const LinearProgressIndicator(),
               if (c.api.cache.state(c.resourcePath)?.refreshing == true &&
                   c.employees.isNotEmpty)
-                const Text('Updating?'),
+                const Text('Updating...'),
               if (c.api.cache.state(c.resourcePath)?.offline == true)
-                const Text('Offline ? showing saved data.'),
+                const Text('Offline - showing saved data.'),
               if (c.api.cache.state(c.resourcePath)?.error != null &&
                   c.employees.isNotEmpty)
                 const Text('Refresh failed. Showing saved employees.'),
@@ -220,7 +230,10 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     'No employees to display. Add your first employee when the company workspace is ready.',
                   ),
                 ),
-              for (final row in c.employees)
+              for (final row in c.employees.where((row) =>
+                  '${row['fullName']} ${row['email']} ${row['role']}'
+                      .toLowerCase()
+                      .contains(_search)))
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -334,7 +347,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
         title: Text(widget.employee == null ? 'Add employee' : 'Edit employee'),
         content: SizedBox(
           width: 520,

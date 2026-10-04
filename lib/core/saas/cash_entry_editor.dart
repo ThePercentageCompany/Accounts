@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CashEntryEditor extends StatefulWidget {
@@ -25,11 +26,7 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
     ])
       key: TextEditingController(
         text:
-            '${widget.record?[key] ?? (key == 'taxRate'
-                    ? '0'
-                    : key == 'date'
-                    ? DateTime.now().toIso8601String().substring(0, 10)
-                    : '')}',
+            '${widget.record?[key] ?? (key == 'taxRate' ? '0' : key == 'date' ? DateTime.now().toIso8601String().substring(0, 10) : '')}',
       ),
   };
   late String? status = widget.record == null
@@ -89,86 +86,92 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      '${widget.record == null ? 'Add' : 'Edit'} ${widget.expense ? 'expense' : 'income'}',
-    ),
-    content: SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: Form(
-          key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Tax and total are calculated by your company service when saved.',
-              ),
-              for (final key in [
-                'date',
-                'description',
-                'category',
-                if (widget.expense) 'supplier',
-                'amount',
-                'taxRate',
-              ])
-                _field(key),
-              DropdownButtonFormField<String>(
-                initialValue: status,
-                decoration: const InputDecoration(labelText: 'Payment status'),
-                validator: (value) =>
-                    value == null ? 'Choose a payment status.' : null,
-                items: const [
-                  DropdownMenuItem(value: 'UNPAID', child: Text('Unpaid')),
-                  DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+  Widget build(BuildContext context) => AdaptiveFormDialog(
+        title: Text(
+          '${widget.record == null ? 'Add' : 'Edit'} ${widget.expense ? 'expense' : 'income'}',
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Form(
+              key: _form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Tax and total are calculated by your company service when saved.',
+                  ),
+                  for (final key in [
+                    'date',
+                    'description',
+                    'category',
+                    if (widget.expense) 'supplier',
+                    'amount',
+                    'taxRate',
+                  ])
+                    _field(key),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration:
+                        const InputDecoration(labelText: 'Payment status'),
+                    validator: (value) =>
+                        value == null ? 'Choose a payment status.' : null,
+                    items: const [
+                      DropdownMenuItem(value: 'UNPAID', child: Text('Unpaid')),
+                      DropdownMenuItem(value: 'PAID', child: Text('Paid')),
+                    ],
+                    onChanged: (v) => setState(() => status = v!),
+                  ),
+                  if (status == 'PAID') _field('paidDate'),
+                  _field('dueDate'),
+                  _field('account'),
+                  _field('reference'),
                 ],
-                onChanged: (v) => setState(() => status = v!),
               ),
-              if (status == 'PAID') _field('paidDate'),
-              _field('dueDate'),
-              _field('account'),
-              _field('reference'),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (!_form.currentState!.validate()) return;
-          Navigator.pop(context, <String, Object?>{
-            for (final key in [
-              'date',
-              'description',
-              'category',
-              if (widget.expense) 'supplier',
-              'dueDate',
-              'account',
-              'reference',
-            ])
-              key: fields[key]!.text.trim(),
-            'amount': double.parse(fields['amount']!.text.trim()),
-            'taxRate': double.parse(fields['taxRate']!.text.trim()),
-            'paymentStatus': status,
-            'paidDate': status == 'PAID' ? fields['paidDate']!.text.trim() : '',
-          });
-        },
-        child: const Text('Save entry'),
-      ),
-    ],
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (!_form.currentState!.validate()) return;
+              Navigator.pop(context, <String, Object?>{
+                for (final key in [
+                  'date',
+                  'description',
+                  'category',
+                  if (widget.expense) 'supplier',
+                  'dueDate',
+                  'account',
+                  'reference',
+                ])
+                  key: fields[key]!.text.trim(),
+                'amount': double.parse(fields['amount']!.text.trim()),
+                'taxRate': double.parse(fields['taxRate']!.text.trim()),
+                'paymentStatus': status,
+                'paidDate':
+                    status == 'PAID' ? fields['paidDate']!.text.trim() : '',
+              });
+            },
+            child: const Text('Save entry'),
+          ),
+        ],
+      );
   Widget _field(String key) => TextFormField(
-    controller: fields[key],
-    decoration: InputDecoration(labelText: labels[key]),
-    maxLength: key == 'description' ? 1000 : 200,
-    validator: (value) => _validate(key, value),
-    keyboardType: ['amount', 'taxRate'].contains(key)
-        ? const TextInputType.numberWithOptions(decimal: true)
-        : TextInputType.text,
-  );
+        controller: fields[key],
+        readOnly: MediaQuery.sizeOf(context).width < 600 && ['date', 'paidDate', 'dueDate'].contains(key),
+        onTap: ['date', 'paidDate', 'dueDate'].contains(key)
+            ? () => pickControllerDate(context, fields[key]!)
+            : null,
+        decoration: InputDecoration(labelText: labels[key]),
+        maxLength: key == 'description' ? 1000 : 200,
+        validator: (value) => _validate(key, value),
+        keyboardType: ['amount', 'taxRate'].contains(key)
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
+      );
 }

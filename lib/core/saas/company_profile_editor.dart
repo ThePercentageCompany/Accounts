@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CompanyProfileEditor extends StatefulWidget {
@@ -37,7 +38,7 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
         title: const Text('Edit company profile'),
         content: SizedBox(
             width: 480,

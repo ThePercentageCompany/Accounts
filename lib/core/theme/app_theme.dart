@@ -259,6 +259,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          minimumSize: const Size(48, 48),
           backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -274,6 +275,7 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 48),
           backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -289,6 +291,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
           foregroundColor: zohoLightTextPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           side: const BorderSide(color: zohoLightBorder, width: 1.0),
@@ -304,6 +307,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
           foregroundColor: zohoBlue,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           shape: RoundedRectangleBorder(
@@ -453,6 +457,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          minimumSize: const Size(48, 48),
           backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -468,6 +473,7 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 48),
           backgroundColor: zohoBlue,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -483,6 +489,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
           foregroundColor: zohoDarkTextPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           side: const BorderSide(color: zohoDarkBorder, width: 1.0),
@@ -498,6 +505,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
           foregroundColor: const Color(0xFF60A5FA),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           shape: RoundedRectangleBorder(

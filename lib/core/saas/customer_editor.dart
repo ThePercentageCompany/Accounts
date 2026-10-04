@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CustomerEditor extends StatefulWidget {
@@ -29,58 +30,64 @@ class _CustomerEditorState extends State<CustomerEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.record == null ? 'Add customer' : 'Edit customer'),
-    content: SizedBox(
-      width: 480,
-      child: SingleChildScrollView(
-        child: Form(
-          key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final field in _fields.entries)
-                TextFormField(
-                  controller: controllers[field.key],
-                  maxLength: field.key == 'address' ? 1000 : 200,
-                  decoration: InputDecoration(labelText: field.value),
-                  validator: (v) {
-                    if (field.key == 'name' &&
-                        (v == null || v.trim().isEmpty)) {
-                      return 'Enter a customer name.';
-                    }
-                    if (field.key == 'email' &&
-                        v != null &&
-                        v.trim().isNotEmpty &&
-                        !RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        ).hasMatch(v.trim())) {
-                      return 'Enter a valid email.';
-                    }
-                    return null;
-                  },
-                ),
-            ],
+  Widget build(BuildContext context) => AdaptiveFormDialog(
+        title: Text(widget.record == null ? 'Add customer' : 'Edit customer'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Form(
+              key: _form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final field in _fields.entries)
+                    TextFormField(
+                      controller: controllers[field.key],
+                      keyboardType: field.key == 'email'
+                          ? TextInputType.emailAddress
+                          : field.key == 'phone'
+                              ? TextInputType.phone
+                              : TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      maxLength: field.key == 'address' ? 1000 : 200,
+                      decoration: InputDecoration(labelText: field.value),
+                      validator: (v) {
+                        if (field.key == 'name' &&
+                            (v == null || v.trim().isEmpty)) {
+                          return 'Enter a customer name.';
+                        }
+                        if (field.key == 'email' &&
+                            v != null &&
+                            v.trim().isNotEmpty &&
+                            !RegExp(
+                              r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                            ).hasMatch(v.trim())) {
+                          return 'Enter a valid email.';
+                        }
+                        return null;
+                      },
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (_form.currentState!.validate()) {
-            Navigator.pop(context, <String, Object?>{
-              for (final field in controllers.entries)
-                field.key: field.value.text.trim(),
-            });
-          }
-        },
-        child: const Text('Save customer'),
-      ),
-    ],
-  );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (_form.currentState!.validate()) {
+                Navigator.pop(context, <String, Object?>{
+                  for (final field in controllers.entries)
+                    field.key: field.value.text.trim(),
+                });
+              }
+            },
+            child: const Text('Save customer'),
+          ),
+        ],
+      );
 }

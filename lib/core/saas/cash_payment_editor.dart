@@ -1,3 +1,4 @@
+import 'mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CashPaymentEditor extends StatefulWidget {
@@ -20,7 +21,7 @@ class _CashPaymentEditorState extends State<CashPaymentEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AdaptiveFormDialog(
     title: const Text('Record full payment'),
     content: SizedBox(
       width: 420,

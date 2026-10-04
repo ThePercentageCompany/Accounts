@@ -390,6 +390,14 @@ historical “pending” statements as the current status.
 - New widget checks cover 320px, 390px, 1024px and 1366px widths, mobile section switching, and delayed-response caching. Thirteen focused tests passed; changed source and new tests pass analysis. No deployment or live browser visual review claimed.
 - Full Flutter regression suite after this refinement: **201 tests passed**.
 
-### Permission fix ? 4 October 2026
+### Permission fix - 4 October 2026
 
 Employee administration now includes a view/edit switch for supported company-wide sections. Existing assignments remain view-only until an admin enables editing. Owners retain all supported actions; generated ledger/child tables and modules without editors remain subject to accounting workflow restrictions. Updated frontend and backend require deployment together. Employee attachment uploads and self-scoped writes remain pending.
+
+### Mobile workspace redesign - 4 October 2026
+
+- Added shared mobile form surfaces, searchable selection sheets, status summaries, record action sheets and invoice/quotation line estimates. Existing save callbacks, accounting validation and permission checks remain in use.
+- Mobile navigation prioritizes Home, Invoices and Customers where assigned; More groups sales, people and accounting modules. The desktop sidebar and cached section state remain intact.
+- Mobile reports use account cards with quick reporting periods and custom calendars/ranges. Dashboard cards respond to width and text scaling. Customer, cash, payroll, capital, asset, settings and employee forms share reachable mobile actions; employees have local search.
+- Validation: 233 Flutter tests passed with one browser-only test skipped on the VM; 23 final focused checks passed. Added coverage for 320/360/390/430 pixels, landscape, tablet/desktop, large text, keyboard insets and selection sheets. Changed source passed analysis. Release web build and Wasm dry run passed.
+- Local changes only. No deployment or physical-device/live authenticated browser review claimed. See `docs/MOBILE_WORKSPACE.md` for scope and remaining limitations.

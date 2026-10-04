@@ -15,11 +15,12 @@ class WorkspaceDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 12 : 24),
       child: LayoutBuilder(builder: (context, constraints) {
         final columns = constraints.maxWidth >= 1000
             ? 4
-            : constraints.maxWidth >= 560
+            : constraints.maxWidth >= 300 &&
+                    MediaQuery.textScalerOf(context).scale(14) <= 18
                 ? 2
                 : 1;
         final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
@@ -29,7 +30,7 @@ class WorkspaceDashboard extends StatelessWidget {
               width: width,
               child: Card(
                   child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: EdgeInsets.all(width < 240 ? 12 : 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -44,15 +45,15 @@ class WorkspaceDashboard extends StatelessWidget {
                             Icon(Icons.insights_outlined,
                                 color: colors.onSurfaceVariant, size: 18)
                           ]),
-                          const SizedBox(height: 20),
+                          SizedBox(height: width < 240 ? 8 : 20),
                           Text(label,
                               style: TextStyle(
                                   color: colors.onSurfaceVariant,
                                   fontWeight: FontWeight.w500)),
                           const SizedBox(height: 8),
                           Text(amount(key),
-                              style: const TextStyle(
-                                  fontSize: 26,
+                              style: TextStyle(
+                                  fontSize: width < 240 ? 20 : 26,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -.7)),
                           const SizedBox(height: 10),

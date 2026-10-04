@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'mobile_components.dart';
 import 'read_cache.dart';
 import 'package:flutter/material.dart';
 import '../widgets/appearance_selector.dart';
@@ -129,11 +130,24 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         sections.contains(_selected) ? _selected : sections.firstOrNull;
     if (selected != null) _visited.add(selected);
     final wide = MediaQuery.sizeOf(context).width >= 900;
-    final shortcuts = sections.take(3).toList();
+    final shortcuts = <String>[
+      for (final section in ['Reports', 'Invoices', 'Customers'])
+        if (sections.contains(section)) section,
+      for (final section in sections)
+        if (!['Reports', 'Invoices', 'Customers'].contains(section)) section,
+    ].take(3).toList();
     final moreSelected = !shortcuts.contains(selected);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        toolbarHeight: wide ? 64 : 56,
+        title: Text(
+            wide
+                ? widget.title
+                : selected == 'Reports'
+                    ? 'Home'
+                    : selected ?? 'Workspace',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
         actions: const [AppearanceSelector(), SizedBox(width: 12)],
         leading: IconButton(
           onPressed: widget.onBack,
@@ -199,31 +213,32 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                                   },
                             child: const Text('Retry upload')));
                   }),
-            Padding(
-                padding:
-                    EdgeInsets.fromLTRB(wide ? 24 : 16, 12, 24, wide ? 20 : 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            selected == 'Reports'
-                                ? 'Business overview'
-                                : selected ?? 'Workspace',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        if (wide) const SizedBox(height: 6),
-                        if (wide)
-                          Text('Your company, clearly organised.',
-                              style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant)),
-                      ]),
-                )),
+            if (wide)
+              Padding(
+                  padding: EdgeInsets.fromLTRB(
+                      wide ? 24 : 16, 12, 24, wide ? 20 : 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              selected == 'Reports'
+                                  ? 'Business overview'
+                                  : selected ?? 'Workspace',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                          if (wide) const SizedBox(height: 6),
+                          if (wide)
+                            Text('Your company, clearly organised.',
+                                style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)),
+                        ]),
+                  )),
             Expanded(
               child: IndexedStack(
                 index: selected == null ? 0 : sections.indexOf(selected),
@@ -314,15 +329,41 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   padding: const EdgeInsets.all(12),
                   child: Text('Workspace',
                       style: Theme.of(context).textTheme.titleLarge)),
-              for (final section in sections)
-                ListTile(
-                  leading: Icon(_sectionIcon(section)),
-                  title: Text(section),
-                  selected: section == selected,
-                  trailing:
-                      section == selected ? const Icon(Icons.check) : null,
-                  onTap: () => Navigator.pop(context, section),
-                ),
+              for (final group in const <String, List<String>>{
+                'Sales & customers': [
+                  'Reports',
+                  'Invoices',
+                  'Quotations',
+                  'Customers'
+                ],
+                'People & office': [
+                  'Employees',
+                  'Payroll',
+                  'Office & Attendance'
+                ],
+                'Accounting & setup': [
+                  'Income & Expenses',
+                  'Fixed Assets',
+                  'Capital & Equity',
+                  'Balance Sheet',
+                  'Settings'
+                ],
+              }.entries) ...[
+                if (group.value.any(sections.contains))
+                  Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Text(group.key,
+                          style: Theme.of(context).textTheme.titleSmall)),
+                for (final section in group.value.where(sections.contains))
+                  ListTile(
+                    leading: Icon(_sectionIcon(section)),
+                    title: Text(section),
+                    selected: section == selected,
+                    trailing:
+                        section == selected ? const Icon(Icons.check) : null,
+                    onTap: () => Navigator.pop(context, section),
+                  ),
+              ],
             ]),
       )),
     );
@@ -414,11 +455,19 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   late String table = widget.tables.first;
   List<Map<String, dynamic>> rows = [];
   String _search = '';
+  final Map<String, Set<String>> _statusFilters = {};
   List<Map<String, dynamic>> get _visibleRows => rows
-      .where((row) => [_title(row), row['status'] ?? '']
-          .join(' ')
-          .toLowerCase()
-          .contains(_search.toLowerCase()))
+      .where((row) =>
+          (_statusFilters[table]?.isEmpty ?? true) ||
+          _statusFilters[table]!
+              .contains('${row['status'] ?? row['paymentStatus'] ?? ''}'))
+      .where((row) => [
+            _title(row),
+            row['status'] ?? '',
+            row['paymentStatus'] ?? '',
+            row['email'] ?? '',
+            row['phone'] ?? ''
+          ].join(' ').toLowerCase().contains(_search.toLowerCase()))
       .toList();
   bool busy = false;
   String? error;
@@ -1368,10 +1417,44 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             child: TextField(
               controller: _searchController,
               decoration: const InputDecoration(
-                  hintText: 'Search records', prefixIcon: Icon(Icons.search)),
+                  labelText: 'Search records', prefixIcon: Icon(Icons.search)),
               onChanged: (value) => setState(() => _search = value),
             ),
           ),
+          if (rows.any(
+              (row) => row['status'] != null || row['paymentStatus'] != null))
+            Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: [
+                      Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ActionChip(
+                              label: const Text('All statuses'),
+                              onPressed: () =>
+                                  setState(() => _statusFilters[table] = {}))),
+                      for (final status in rows
+                          .map((row) =>
+                              '${row['status'] ?? row['paymentStatus'] ?? ''}')
+                          .where((value) => value.isNotEmpty)
+                          .toSet())
+                        Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                                label: Text(
+                                    status.toLowerCase().replaceAll('_', ' ')),
+                                selected:
+                                    _statusFilters[table]?.contains(status) ??
+                                        false,
+                                onSelected: (selected) => setState(() {
+                                      final values = _statusFilters.putIfAbsent(
+                                          table, () => {});
+                                      selected
+                                          ? values.add(status)
+                                          : values.remove(status);
+                                    }))),
+                    ]))),
           if (!busy && error == null && rows.isNotEmpty && _visibleRows.isEmpty)
             const Padding(
                 padding: EdgeInsets.all(24),
@@ -1381,8 +1464,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               widget.api.cache.state(_path)?.refreshing == true)
             const LinearProgressIndicator(),
           if (widget.api.cache.state(_path)?.refreshing == true && _hasData)
-            const Text('Updating?'),
-          if (_savedData) const Text('Offline ? showing saved data.'),
+            const Text('Updating...'),
+          if (_savedData) const Text('Offline - showing saved data.'),
           if (error != null)
             Padding(
               padding: const EdgeInsets.all(24),
@@ -1404,12 +1487,24 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                 itemCount: _visibleRows.length,
                 itemBuilder: (context, index) {
                   final row = _visibleRows[index];
-                  return ExpansionTile(
+                  return RecordCard(
                     key: PageStorageKey((table, row['recordId'] ?? index)),
                     title: Text(_title(row),
                         maxLines: 2, overflow: TextOverflow.ellipsis),
-                    subtitle:
-                        row['status'] == null ? null : Text('${row['status']}'),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                            color:
+                                Theme.of(context).colorScheme.outlineVariant)),
+                    collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                            color:
+                                Theme.of(context).colorScheme.outlineVariant)),
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    collapsedBackgroundColor:
+                        Theme.of(context).colorScheme.surface,
+                    subtitle: RecordSummary(record: row),
                     children: [
                       if (table == 'CompanyProfile' &&
                           '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
