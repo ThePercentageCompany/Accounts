@@ -2,6 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppTheme {
+  static TextTheme _typography(Color color) => TextTheme(
+    headlineLarge: TextStyle(
+      fontSize: 30,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.8,
+      color: color,
+    ),
+    headlineMedium: TextStyle(
+      fontSize: 26,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.6,
+      color: color,
+    ),
+    headlineSmall: TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.4,
+      color: color,
+    ),
+    titleLarge: TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.3,
+      color: color,
+    ),
+    titleMedium: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: color,
+    ),
+    titleSmall: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      color: color,
+    ),
+    bodyLarge: TextStyle(fontSize: 15, height: 1.5, color: color),
+    bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: color),
+    bodySmall: TextStyle(fontSize: 12, height: 1.4, color: color),
+    labelLarge: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      color: color,
+    ),
+    labelMedium: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: color,
+    ),
+    labelSmall: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w500,
+      color: color,
+    ),
+  ).apply(fontFamily: 'Inter');
+
   // -------------------------------------------------------------
   // Zoho Books / Zoho Finance Color Palette
   // -------------------------------------------------------------
@@ -122,8 +177,8 @@ class AppTheme {
   // Zoho Card Curves & Geometry Tokens
   // -------------------------------------------------------------
   // Compact, sharp geometry keeps finance-dense screens calm and legible.
-  static const double cardRadiusVal = 16.0;
-  static const double buttonRadiusVal = 10.0;
+  static const double cardRadiusVal = 14.0;
+  static const double buttonRadiusVal = 8.0;
   static const double inputRadiusVal = 10.0;
   static const double badgeRadiusVal = 10.0;
 
@@ -147,7 +202,7 @@ class AppTheme {
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
         color: customBorder ?? (isDark ? zohoDarkBorder : zohoLightBorder),
-        width: 1.0,
+        width: 0.8,
       ),
       boxShadow: showShadow
           ? [
@@ -187,6 +242,8 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      textTheme: _typography(zohoLightTextPrimary),
+      iconTheme: const IconThemeData(size: 20, color: zohoLightTextSecondary),
       splashFactory: InkSparkle.splashFactory,
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: zohoLightSurface,
@@ -267,7 +324,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
-          side: const BorderSide(color: zohoLightBorder, width: 1.0),
+          side: const BorderSide(color: zohoLightBorder, width: 0.8),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -296,22 +353,22 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: zohoLightSurfaceElevated,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoLightBorder, width: 1.0),
+          borderSide: const BorderSide(color: zohoLightBorder, width: 0.8),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoLightBorder, width: 1.0),
+          borderSide: const BorderSide(color: zohoLightBorder, width: 0.8),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoBlue, width: 1.8),
+          borderSide: const BorderSide(color: zohoBlue, width: 1.2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
@@ -365,7 +422,7 @@ class AppTheme {
           minimumSize: const Size(48, 48),
           foregroundColor: zohoLightTextPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          side: const BorderSide(color: zohoLightBorder, width: 1.0),
+          side: const BorderSide(color: zohoLightBorder, width: 0.8),
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(buttonRadiusVal),
@@ -473,6 +530,8 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      textTheme: _typography(zohoDarkTextPrimary),
+      iconTheme: const IconThemeData(size: 20, color: zohoDarkTextSecondary),
       splashFactory: InkSparkle.splashFactory,
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: zohoDarkSurface,
@@ -553,7 +612,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
-          side: const BorderSide(color: zohoDarkBorder, width: 1.0),
+          side: const BorderSide(color: zohoDarkBorder, width: 0.8),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -589,15 +648,15 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoDarkBorder, width: 1.0),
+          borderSide: const BorderSide(color: zohoDarkBorder, width: 0.8),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoDarkBorder, width: 1.0),
+          borderSide: const BorderSide(color: zohoDarkBorder, width: 0.8),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoDarkTextPrimary, width: 1.8),
+          borderSide: const BorderSide(color: zohoDarkTextPrimary, width: 1.2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
@@ -651,7 +710,7 @@ class AppTheme {
           minimumSize: const Size(48, 48),
           foregroundColor: zohoDarkTextPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          side: const BorderSide(color: zohoDarkBorder, width: 1.0),
+          side: const BorderSide(color: zohoDarkBorder, width: 0.8),
           backgroundColor: zohoDarkSurfaceElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(buttonRadiusVal),

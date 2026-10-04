@@ -46,6 +46,7 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
         key: form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: 12,
           children: [
             TextFormField(
               controller: name,
@@ -180,6 +181,7 @@ class _CapitalContributionEditorState extends State<CapitalContributionEditor> {
         key: form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: 12,
           children: [
             SearchableRecordField(
               initialValue: shareholderId,
@@ -317,6 +319,7 @@ class _ShareholderLoanEditorState extends State<ShareholderLoanEditor> {
         key: form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: 12,
           children: [
             SearchableRecordField(
               initialValue: shareholderId,
@@ -444,6 +447,7 @@ class _ShareholderLoanRepaymentEditorState
       key: form,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        spacing: 12,
         children: [
           Text('Full outstanding principal: ${widget.amount}'),
           CalendarFormField(

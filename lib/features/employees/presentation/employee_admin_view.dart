@@ -128,6 +128,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               QrImageView(data: result['qrPayload'] as String, size: 220),
               const SizedBox(height: 12),
@@ -393,6 +394,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
           key: form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               TextFormField(
                 controller: name,

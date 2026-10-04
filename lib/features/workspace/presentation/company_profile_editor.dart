@@ -47,6 +47,7 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
           key: form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               for (final field in fields.entries)
                 if (field.key == 'currency')

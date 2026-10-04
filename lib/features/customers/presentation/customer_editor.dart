@@ -39,6 +39,7 @@ class _CustomerEditorState extends State<CustomerEditor> {
           key: _form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               for (final field in _fields.entries)
                 TextFormField(

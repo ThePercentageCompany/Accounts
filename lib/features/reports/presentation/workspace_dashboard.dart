@@ -76,7 +76,7 @@ class WorkspaceDashboard extends StatelessWidget {
                         amount(key),
                         style: TextStyle(
                           fontSize: width < 240 ? 20 : 24,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: -.7,
                         ),
                       ),

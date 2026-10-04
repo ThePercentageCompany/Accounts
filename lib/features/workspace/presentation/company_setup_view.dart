@@ -35,6 +35,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
           width: 440,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(

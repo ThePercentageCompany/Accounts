@@ -50,6 +50,7 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
           key: _form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               TextFormField(
                 controller: name,

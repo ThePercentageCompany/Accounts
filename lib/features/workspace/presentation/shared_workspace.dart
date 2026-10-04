@@ -496,7 +496,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontSize: 17,
                       color: colors.onSurface,
                     ),
@@ -517,31 +517,62 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
               ),
             ),
           ),
-          for (final section in sections)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                selected: selected == section,
-                selectedTileColor: dark
-                    ? const Color(0xFF333333)
-                    : colors.primaryContainer,
-                selectedColor: dark ? colors.onSurface : colors.primary,
-                textColor: colors.onSurfaceVariant,
-                iconColor: colors.onSurfaceVariant,
-                leading: Icon(icons[section], size: 21),
-                title: Text(
-                  section == 'Reports' ? 'Overview' : section,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+          for (final group in const <String, List<String>>{
+            'Overview': ['Reports'],
+            'DAILY OPERATIONS': [
+              'Invoices',
+              'Quotations',
+              'Customers',
+              'Employees',
+              'Payroll',
+              'Office & Attendance',
+            ],
+            'ACCOUNTING': [
+              'Income & Expenses',
+              'Fixed Assets',
+              'Capital & Equity',
+              'Balance Sheet',
+            ],
+            'SYSTEM': ['Settings'],
+          }.entries) ...[
+            if (group.key != 'Overview' && group.value.any(sections.contains))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+                child: Text(
+                  group.key,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                onTap: () => setState(() => _selected = section),
               ),
-            ),
+            for (final section in group.value.where(sections.contains))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  selected: selected == section,
+                  selectedTileColor: dark
+                      ? const Color(0xFF333333)
+                      : colors.primaryContainer,
+                  selectedColor: dark ? colors.onSurface : colors.primary,
+                  textColor: colors.onSurfaceVariant,
+                  iconColor: colors.onSurfaceVariant,
+                  leading: Icon(icons[section], size: 21),
+                  title: Text(
+                    section == 'Reports' ? 'Overview' : section,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () => setState(() => _selected = section),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -1789,13 +1820,13 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
                     color: Theme.of(context).colorScheme.outlineVariant,
                   ),
                 ),
                 collapsedShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   side: BorderSide(
                     color: Theme.of(context).colorScheme.outlineVariant,
                   ),

@@ -86,6 +86,7 @@ class _InvoiceReturnEditorState extends State<InvoiceReturnEditor> {
           key: form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(

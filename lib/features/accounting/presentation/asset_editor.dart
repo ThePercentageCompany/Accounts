@@ -79,6 +79,7 @@ class _AssetEditorState extends State<AssetEditor> {
           key: form,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               TextFormField(
                 controller: code,
@@ -279,6 +280,7 @@ class _AssetDisposalEditorState extends State<AssetDisposalEditor> {
         key: form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: 12,
           children: [
             Text('Current net book value: ${widget.bookValue}'),
             CalendarFormField(

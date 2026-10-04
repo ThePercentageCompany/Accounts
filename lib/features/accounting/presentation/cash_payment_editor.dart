@@ -30,6 +30,7 @@ class _CashPaymentEditorState extends State<CashPaymentEditor> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            spacing: 12,
             children: [
               Text(
                 'Pay the full outstanding amount: ${widget.total}. This posts the payment to the ledger. Partial payments and reversals are not available yet.',

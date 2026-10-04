@@ -50,6 +50,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
         key: form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          spacing: 12,
           children: [
             SearchableRecordField(
               initialValue: employeeId,
@@ -150,6 +151,7 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
       key: form,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        spacing: 12,
         children: [
           Text('Net salary: ${widget.amount}'),
           CalendarFormField(

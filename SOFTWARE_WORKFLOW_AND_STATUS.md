@@ -559,6 +559,14 @@ historical “pending” statements as the current status.
 - These are local source changes; no deployment or authenticated browser visual review is claimed.
 - Release web build succeeded with the configured shared API origin.
 
+### Reference design details - 4 October 2026
+
+- Applied the supplied reference design language through the shared light/dark themes: bundled Inter typography, muted secondary text, consistent 20px icons, fine borders, 14px card corners, 10px input corners and 8px button corners. Inter and its OFL license are included locally.
+- Light forms use subtle grey fields; dark surfaces remain black and grey. Existing accounting, customer, employee, payroll, workspace and return forms now share consistent field spacing.
+- Desktop navigation groups assigned sections into daily operations, accounting and system settings, with softer selected rows. Existing compact actions, responsive mobile navigation and business workflows remain in use.
+- Validation: 132 regression tests passed with one existing skip; 21 focused responsive/reference checks passed. Static analysis found no issues. Release web build and Wasm dry run succeeded.
+- Local source/build changes only; not deployed. Widget screenshots were reviewed for desktop light and mobile dark layouts; no authenticated live browser or physical-device review is claimed.
+
 ### Responsive record caching - 4 October 2026
 
 - Laptop sidebar begins at 900px; narrow layouts use an expanded section selector, compact record toolbar padding, and bounded title wrapping.

@@ -69,7 +69,7 @@ void main() {
               ..addFont(
                 Future.value(
                   ByteData.sublistView(
-                    await File('C:/Windows/Fonts/segoeui.ttf').readAsBytes(),
+                    await File('assets/fonts/Inter.ttf').readAsBytes(),
                   ),
                 ),
               );
