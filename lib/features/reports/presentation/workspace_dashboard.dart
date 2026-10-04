@@ -17,7 +17,12 @@ class WorkspaceDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 12 : 24),
+      padding: EdgeInsets.fromLTRB(
+        MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+        8,
+        MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+        24,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = constraints.maxWidth >= 1000

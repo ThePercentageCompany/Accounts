@@ -288,7 +288,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                         wide ? 24 : 16,
                         12,
                         24,
-                        wide ? 20 : 12,
+                        selected == 'Reports' ? 8 : (wide ? 20 : 12),
                       ),
                       child: Align(
                         alignment: Alignment.centerLeft,

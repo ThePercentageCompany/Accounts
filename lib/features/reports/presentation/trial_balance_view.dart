@@ -357,18 +357,19 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               key: PageStorageKey(_path),
               child: Column(
                 children: [
-                  SizedBox(
-                    height: 28,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: widget.api.cache.state(_path)?.refreshing == true
-                          ? const Padding(
-                              padding: EdgeInsets.only(right: 24),
-                              child: CupertinoActivityIndicator(radius: 8),
-                            )
-                          : null,
+                  if (widget.api.cache.state(_path)?.refreshing == true)
+                    SizedBox(
+                      height: 18,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: widget.api.cache.state(_path)?.refreshing == true
+                            ? const Padding(
+                                padding: EdgeInsets.only(right: 24),
+                                child: CupertinoActivityIndicator(radius: 8),
+                              )
+                            : null,
+                      ),
                     ),
-                  ),
                   if (widget.api.cache.state(_path)?.offline == true)
                     const Text('Offline - showing saved data.'),
                   if (widget.api.cache.state(_path)?.error != null &&
@@ -377,8 +378,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       'Refresh failed. Showing saved report; use Refresh to retry.',
                     ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: MediaQuery.sizeOf(context).width < 600
+                          ? 12
+                          : 24,
                       vertical: 4,
                     ),
                     child: Align(
