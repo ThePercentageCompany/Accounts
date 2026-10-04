@@ -27,6 +27,7 @@ Regenerate state with flutter pub run build_runner build after changing declarat
 Validation: the full Flutter suite passed 126 tests with one existing skip. The
 final responsive/theme/loading/report checks passed 20 targeted tests. Phone and
 desktop invoice/dashboard renders were inspected in light and dark modes.
+Static analysis found no issues. A configured release web build succeeded.
 These UI changes have not been deployed to production.
 
 ### Complete draft API and item returns - 4 October 2026
