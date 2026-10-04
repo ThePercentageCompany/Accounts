@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/receipt_editor.dart';
+import 'package:tpc_invoice/features/accounting/presentation/receipt_editor.dart';
 
 void main() {
   testWidgets(

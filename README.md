@@ -20,10 +20,18 @@ Set the example configuration's SAAS_API_ORIGIN to a trusted backend. Without an
 ## Source layout
 
 - `lib/main.dart`: application entrypoint.
-- `lib/core/saas/`: authentication, company setup, workspace, editors, reports, documents and caching.
+- `lib/features/`: authentication, workspace, documents, customers, accounting, employees and reports, grouped by feature and responsibility.
+- `lib/features/auth/domain/`: the session repository contract.
+- `lib/features/auth/presentation/cubit/`: Bloc/Cubit session state with Freezed immutable snapshots.
+- `lib/features/employees/presentation/cubit/`: employee administration state and durable write coordination.
+- `lib/core/network/` and `cache/`: shared API transport and persistent read cache.
 - `lib/core/theme/`, `widgets/` and `utils/`: shared appearance, QR rendering and platform downloads.
 - `backend/cloud-run/`: shared API, provisioning, permissions and accounting policies.
 - `test/`: tests for the active Flutter application.
 - `scripts/`: setup, build and verification tools.
 
-The obsolete direct-Sheets/local application, generated models and their tests have been removed. The active app uses the shared API; code generation is no longer required.
+The active app uses the shared API. Existing editors, queues and reporting logic are reused in the feature folders; no duplicate legacy screen tree remains. Regenerate Freezed state after editing its declaration:
+
+```bash
+flutter pub run build_runner build
+```

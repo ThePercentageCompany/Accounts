@@ -1,7 +1,7 @@
 import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/quotation_editor.dart';
+import 'package:tpc_invoice/features/documents/presentation/quotation_editor.dart';
 
 void main() {
   testWidgets(
@@ -18,20 +18,20 @@ void main() {
               body: TextButton(
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
-                  context: context,
-                  builder: (_) => QuotationEditor(
-                    customers: customers,
-                    items: const [
-                      {
-                        'description': 'Service',
-                        'quantity': 1,
-                        'unitPrice': 100,
-                        'discount': 0,
-                        'taxRate': 5,
-                      },
-                    ],
-                  ),
-                ),
+                      context: context,
+                      builder: (_) => QuotationEditor(
+                        customers: customers,
+                        items: const [
+                          {
+                            'description': 'Service',
+                            'quantity': 1,
+                            'unitPrice': 100,
+                            'discount': 0,
+                            'taxRate': 5,
+                          },
+                        ],
+                      ),
+                    ),
                 child: const Text('Open'),
               ),
             ),

@@ -1,7 +1,7 @@
 import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/payroll_editor.dart';
+import 'package:tpc_invoice/features/employees/presentation/payroll_editor.dart';
 
 void main() {
   testWidgets('payroll draft submits only employee month and adjustments', (

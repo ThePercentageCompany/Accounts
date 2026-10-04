@@ -6,7 +6,7 @@ class AppTheme {
   // Zoho Books / Zoho Finance Color Palette
   // -------------------------------------------------------------
   // Primary Zoho Colors
-  static const Color zohoBlue = Color(0xFF365CCE); // Zoho Books Action Blue
+  static const Color zohoBlue = Color(0xFF0866FF); // Zoho Books Action Blue
   static const Color zohoBlueDark = Color(0xFF1351A8);
   static const Color zohoBlueBg = Color(0xFFEBF3FC);
   static const Color zohoBlueBgDark = Color(0xFF0F264A);
@@ -67,20 +67,26 @@ class AppTheme {
   // Zoho Backgrounds & Surfaces
   // -------------------------------------------------------------
   // Light Mode (Zoho Books Signature Canvas)
-  static const Color zohoLightBg =
-      Color(0xFFF3F5FA); // Clean SaaS Light Slate Canvas
-  static const Color zohoLightSurface =
-      Color(0xFFFFFFFF); // Pure White Card Surface
-  static const Color zohoLightSurfaceElevated =
-      Color(0xFFF8FAFC); // Table Header / Subtle surface
-  static const Color zohoLightBorder =
-      Color(0xFFE2E8F0); // Crisp 1px card border
+  static const Color zohoLightBg = Color(
+    0xFFF3F5FA,
+  ); // Clean SaaS Light Slate Canvas
+  static const Color zohoLightSurface = Color(
+    0xFFFFFFFF,
+  ); // Pure White Card Surface
+  static const Color zohoLightSurfaceElevated = Color(
+    0xFFF8FAFC,
+  ); // Table Header / Subtle surface
+  static const Color zohoLightBorder = Color(
+    0xFFE2E8F0,
+  ); // Crisp 1px card border
   static const Color zohoLightSeparator = Color(0xFFEAECF0);
-  static const Color zohoLightTextPrimary =
-      Color(0xFF0F172A); // High-contrast Charcoal Slate
-  static const Color zohoLightTextSecondary =
-      Color(0xFF475569); // Clean Secondary Slate
-  static const Color zohoLightTextMuted = Color(0xFF94A3B8);
+  static const Color zohoLightTextPrimary = Color(
+    0xFF0F172A,
+  ); // High-contrast Charcoal Slate
+  static const Color zohoLightTextSecondary = Color(
+    0xFF475569,
+  ); // Clean Secondary Slate
+  static const Color zohoLightTextMuted = Color(0xFFAAAAAA);
 
   // Backward compatible aliases
   static const Color iosLightBg = zohoLightBg;
@@ -92,15 +98,16 @@ class AppTheme {
   static const Color iosLightTextSecondary = zohoLightTextSecondary;
 
   // Dark Mode (Zoho Books Dark Navy)
-  static const Color zohoDarkBg = Color(0xFF0B1120); // Deep Dark Slate Canvas
-  static const Color zohoDarkSurface =
-      Color(0xFF172235); // Dark Slate Card Surface
-  static const Color zohoDarkSurfaceElevated = Color(0xFF162032);
-  static const Color zohoDarkBorder = Color(0xFF334155);
-  static const Color zohoDarkSeparator = Color(0xFF243044);
-  static const Color zohoDarkTextPrimary = Color(0xFFF8FAFC);
-  static const Color zohoDarkTextSecondary = Color(0xFF94A3B8);
-  static const Color zohoDarkTextMuted = Color(0xFF64748B);
+  static const Color zohoDarkBg = Color(0xFF080808); // Deep Dark Slate Canvas
+  static const Color zohoDarkSurface = Color(
+    0xFF151515,
+  ); // Dark Slate Card Surface
+  static const Color zohoDarkSurfaceElevated = Color(0xFF1D1D1D);
+  static const Color zohoDarkBorder = Color(0xFF363636);
+  static const Color zohoDarkSeparator = Color(0xFF292929);
+  static const Color zohoDarkTextPrimary = Color(0xFFF5F5F5);
+  static const Color zohoDarkTextSecondary = Color(0xFFAAAAAA);
+  static const Color zohoDarkTextMuted = Color(0xFF888888);
 
   // Backward compatible aliases
   static const Color iosDarkBg = zohoDarkBg;
@@ -121,8 +128,9 @@ class AppTheme {
   static const double badgeRadiusVal = 5.0;
 
   static final BorderRadius cardRadius = BorderRadius.circular(cardRadiusVal);
-  static final BorderRadius buttonRadius =
-      BorderRadius.circular(buttonRadiusVal);
+  static final BorderRadius buttonRadius = BorderRadius.circular(
+    buttonRadiusVal,
+  );
   static final BorderRadius inputRadius = BorderRadius.circular(inputRadiusVal);
   static final BorderRadius badgeRadius = BorderRadius.circular(badgeRadiusVal);
 
@@ -162,10 +170,12 @@ class AppTheme {
       onPrimary: Colors.white,
       primaryContainer: zohoBlueBg,
       onPrimaryContainer: zohoBlueDark,
-      secondary: zohoRed,
+      secondary: zohoBlue,
       onSecondary: Colors.white,
-      secondaryContainer: zohoRedBg,
-      onSecondaryContainer: zohoRedDark,
+      secondaryContainer: zohoBlueBg,
+      onSecondaryContainer: zohoBlueDark,
+      surfaceContainerHighest: Color(0xFFF1F4F9),
+      surfaceTint: Colors.transparent,
       surface: zohoLightSurface,
       onSurface: zohoLightTextPrimary,
       error: zohoRed,
@@ -186,7 +196,7 @@ class AppTheme {
         'BlinkMacSystemFont',
         'Segoe UI',
         'Roboto',
-        'sans-serif'
+        'sans-serif',
       ],
       appBarTheme: const AppBarTheme(
         backgroundColor: zohoLightSurface,
@@ -216,7 +226,8 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: zohoLightSurface,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(cardRadiusVal)),
+          borderRadius: BorderRadius.circular(cardRadiusVal),
+        ),
       ),
       listTileTheme: const ListTileThemeData(
         dense: true,
@@ -227,14 +238,22 @@ class AppTheme {
         backgroundColor: zohoLightSurfaceElevated,
         side: const BorderSide(color: zohoLightBorder, width: 0.8),
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(badgeRadiusVal)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          borderRadius: BorderRadius.circular(badgeRadiusVal),
+        ),
+        labelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Inter',
+          color: zohoLightTextPrimary,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
           borderSide: const BorderSide(color: zohoLightBorder, width: 1.0),
@@ -252,9 +271,10 @@ class AppTheme {
           borderSide: const BorderSide(color: zohoRed, width: 1.2),
         ),
         labelStyle: const TextStyle(
-            color: zohoLightTextSecondary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w500),
+          color: zohoLightTextSecondary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+        ),
         hintStyle: const TextStyle(color: zohoLightTextMuted, fontSize: 13.5),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -265,12 +285,14 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -281,12 +303,14 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -297,12 +321,14 @@ class AppTheme {
           side: const BorderSide(color: zohoLightBorder, width: 1.0),
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -311,12 +337,14 @@ class AppTheme {
           foregroundColor: zohoBlue,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13.5,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 13.5,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -332,22 +360,27 @@ class AppTheme {
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
-                color: zohoBlue,
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
-                letterSpacing: -0.1,
-                fontFamily: 'Inter');
-          }
-          return const TextStyle(
-              color: zohoLightTextSecondary,
-              fontWeight: FontWeight.w500,
+              color: zohoBlue,
+              fontWeight: FontWeight.w700,
               fontSize: 11,
               letterSpacing: -0.1,
-              fontFamily: 'Inter');
+              fontFamily: 'Inter',
+            );
+          }
+          return const TextStyle(
+            color: zohoLightTextSecondary,
+            fontWeight: FontWeight.w500,
+            fontSize: 11,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          );
         }),
       ),
       dividerTheme: const DividerThemeData(
-          color: zohoLightSeparator, thickness: 0.8, space: 14),
+        color: zohoLightSeparator,
+        thickness: 0.8,
+        space: 14,
+      ),
     );
   }
 
@@ -356,18 +389,27 @@ class AppTheme {
   // -------------------------------------------------------------
   static ThemeData dark() {
     final colorScheme = const ColorScheme.dark(
-      primary: zohoBlue,
-      onPrimary: Colors.white,
-      primaryContainer: zohoBlueBgDark,
+      primary: zohoDarkTextPrimary,
+      onPrimary: Colors.black,
+      primaryContainer: zohoDarkSurfaceElevated,
       onPrimaryContainer: Colors.white,
-      secondary: zohoRed,
-      onSecondary: Colors.white,
-      secondaryContainer: zohoRedBgDark,
+      secondary: zohoDarkTextPrimary,
+      onSecondary: Colors.black,
+      secondaryContainer: zohoDarkSurfaceElevated,
       onSecondaryContainer: Colors.white,
+      tertiary: zohoDarkTextPrimary,
+      onTertiary: Colors.black,
+      tertiaryContainer: zohoDarkSurfaceElevated,
+      onTertiaryContainer: Colors.white,
+      errorContainer: zohoDarkSurfaceElevated,
+      onErrorContainer: Colors.white,
+      surfaceContainerHighest: zohoDarkSurfaceElevated,
+      surfaceTint: Colors.transparent,
       surface: zohoDarkSurface,
       onSurface: zohoDarkTextPrimary,
-      error: zohoRed,
-      onError: Colors.white,
+      onSurfaceVariant: zohoDarkTextSecondary,
+      error: zohoDarkTextPrimary,
+      onError: Colors.black,
       outline: zohoDarkBorder,
       outlineVariant: zohoDarkSeparator,
     );
@@ -384,7 +426,7 @@ class AppTheme {
         'BlinkMacSystemFont',
         'Segoe UI',
         'Roboto',
-        'sans-serif'
+        'sans-serif',
       ],
       appBarTheme: const AppBarTheme(
         backgroundColor: zohoDarkSurface,
@@ -414,7 +456,8 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: zohoDarkSurface,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(cardRadiusVal)),
+          borderRadius: BorderRadius.circular(cardRadiusVal),
+        ),
       ),
       listTileTheme: const ListTileThemeData(
         dense: true,
@@ -425,14 +468,22 @@ class AppTheme {
         backgroundColor: zohoDarkSurfaceElevated,
         side: const BorderSide(color: zohoDarkBorder, width: 0.8),
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(badgeRadiusVal)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          borderRadius: BorderRadius.circular(badgeRadiusVal),
+        ),
+        labelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Inter',
+          color: zohoDarkTextPrimary,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: zohoDarkSurfaceElevated,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
           borderSide: const BorderSide(color: zohoDarkBorder, width: 1.0),
@@ -443,48 +494,53 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoBlue, width: 1.8),
+          borderSide: const BorderSide(color: zohoDarkTextPrimary, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(inputRadiusVal),
-          borderSide: const BorderSide(color: zohoRed, width: 1.2),
+          borderSide: const BorderSide(color: zohoDarkTextPrimary, width: 1.2),
         ),
         labelStyle: const TextStyle(
-            color: zohoDarkTextSecondary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w500),
+          color: zohoDarkTextSecondary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+        ),
         hintStyle: const TextStyle(color: zohoDarkTextMuted, fontSize: 13.5),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           minimumSize: const Size(48, 48),
-          backgroundColor: zohoBlue,
-          foregroundColor: Colors.white,
+          backgroundColor: zohoDarkTextPrimary,
+          foregroundColor: Colors.black,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 48),
-          backgroundColor: zohoBlue,
-          foregroundColor: Colors.white,
+          backgroundColor: zohoDarkTextPrimary,
+          foregroundColor: Colors.black,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -495,57 +551,66 @@ class AppTheme {
           side: const BorderSide(color: zohoDarkBorder, width: 1.0),
           backgroundColor: zohoDarkSurfaceElevated,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           minimumSize: const Size(48, 48),
-          foregroundColor: const Color(0xFF60A5FA),
+          foregroundColor: zohoDarkTextPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(buttonRadiusVal)),
+            borderRadius: BorderRadius.circular(buttonRadiusVal),
+          ),
           textStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13.5,
-              letterSpacing: -0.1,
-              fontFamily: 'Inter'),
+            fontWeight: FontWeight.w600,
+            fontSize: 13.5,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          ),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: zohoDarkSurface,
         elevation: 0,
-        indicatorColor: zohoBlueBgDark,
+        indicatorColor: zohoDarkSurfaceElevated,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: zohoBlue, size: 22);
+            return const IconThemeData(color: zohoDarkTextPrimary, size: 22);
           }
           return const IconThemeData(color: zohoDarkTextSecondary, size: 22);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
-                color: Color(0xFF60A5FA),
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
-                letterSpacing: -0.1,
-                fontFamily: 'Inter');
-          }
-          return const TextStyle(
-              color: zohoDarkTextSecondary,
-              fontWeight: FontWeight.w500,
+              color: zohoDarkTextPrimary,
+              fontWeight: FontWeight.w700,
               fontSize: 11,
               letterSpacing: -0.1,
-              fontFamily: 'Inter');
+              fontFamily: 'Inter',
+            );
+          }
+          return const TextStyle(
+            color: zohoDarkTextSecondary,
+            fontWeight: FontWeight.w500,
+            fontSize: 11,
+            letterSpacing: -0.1,
+            fontFamily: 'Inter',
+          );
         }),
       ),
       dividerTheme: const DividerThemeData(
-          color: zohoDarkSeparator, thickness: 0.8, space: 14),
+        color: zohoDarkSeparator,
+        thickness: 0.8,
+        space: 14,
+      ),
     );
   }
 }

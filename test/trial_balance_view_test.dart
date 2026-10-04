@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:tpc_invoice/core/saas/saas_api.dart';
-import 'package:tpc_invoice/core/saas/trial_balance_view.dart';
+import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/features/reports/presentation/trial_balance_view.dart';
 
 void main() {
   testWidgets('balance sheet displays earnings separately from posted equity', (

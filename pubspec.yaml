@@ -20,9 +20,14 @@ dependencies:
   idb_shim: ^2.9.10
   web: ^1.1.1
   http_parser: ^4.1.2
+  flutter_bloc: ^9.1.1
+  cupertino_icons: ^1.0.8
+  freezed_annotation: ^3.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  freezed: ^3.2.3
+  build_runner: ^2.10.0
 flutter:
   uses-material-design: true

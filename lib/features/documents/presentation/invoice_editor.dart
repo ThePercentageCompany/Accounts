@@ -1,0 +1,24 @@
+import 'package:tpc_invoice/features/documents/presentation/document_editor.dart';
+import 'package:flutter/material.dart';
+
+class InvoiceEditor extends StatelessWidget {
+  const InvoiceEditor({
+    super.key,
+    required this.customers,
+    this.record,
+    this.items = const [],
+    this.company = const {},
+  });
+  final List<Map<String, dynamic>> customers;
+  final Map<String, dynamic>? record;
+  final List<Map<String, dynamic>> items;
+  final Map<String, dynamic> company;
+  @override
+  Widget build(BuildContext context) => DocumentEditor(
+    quotation: false,
+    customers: customers,
+    record: record,
+    items: items,
+    company: company,
+  );
+}

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/cash_entry_editor.dart';
+import 'package:tpc_invoice/features/accounting/presentation/cash_entry_editor.dart';
 
 void main() {
   testWidgets('unknown imported payment status requires an explicit choice', (
@@ -56,6 +56,16 @@ void main() {
     }
 
     await fill('Description', 'Supplies');
+    final category = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == 'Category',
+    );
+    await tester.ensureVisible(category);
+    await tester.tap(category);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Office supplies').last);
+    await tester.pumpAndSettle();
     await fill('Amount before tax', '10.001');
     await fill('Tax rate (%)', '5');
     await tester.tap(find.text('Save entry'));
@@ -69,6 +79,7 @@ void main() {
     await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
     expect(saved!['amount'], 10.1);
+    expect(saved!['category'], 'Office supplies');
     expect(saved!['taxRate'], 5);
     expect(saved!['paymentStatus'], 'UNPAID');
     expect(saved!['paidDate'], '');

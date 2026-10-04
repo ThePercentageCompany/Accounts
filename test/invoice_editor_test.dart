@@ -1,7 +1,7 @@
 import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/invoice_editor.dart';
+import 'package:tpc_invoice/features/documents/presentation/invoice_editor.dart';
 
 void main() {
   testWidgets(
@@ -18,20 +18,20 @@ void main() {
               body: TextButton(
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
-                  context: context,
-                  builder: (_) => InvoiceEditor(
-                    customers: customers,
-                    items: const [
-                      {
-                        'description': 'Service',
-                        'quantity': 1,
-                        'unitPrice': 100,
-                        'discount': 0,
-                        'taxRate': 5,
-                      },
-                    ],
-                  ),
-                ),
+                      context: context,
+                      builder: (_) => InvoiceEditor(
+                        customers: customers,
+                        items: const [
+                          {
+                            'description': 'Service',
+                            'quantity': 1,
+                            'unitPrice': 100,
+                            'discount': 0,
+                            'taxRate': 5,
+                          },
+                        ],
+                      ),
+                    ),
                 child: const Text('Open'),
               ),
             ),
@@ -47,8 +47,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Client').last);
       await tester.pumpAndSettle();
-      await tester
-          .ensureVisible(find.byType(DropdownButtonFormField<String>).last);
+      await tester.ensureVisible(
+        find.byType(DropdownButtonFormField<String>).last,
+      );
       await tester.tap(find.byType(DropdownButtonFormField<String>).last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('USD — US dollar').last);

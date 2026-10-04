@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tpc_invoice/core/saas/saas_api.dart';
-import 'package:tpc_invoice/core/saas/employee_admin_controller.dart';
-import 'package:tpc_invoice/core/saas/employee_admin_view.dart';
+import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/features/employees/presentation/cubit/employee_admin_controller.dart';
+import 'package:tpc_invoice/features/employees/presentation/employee_admin_view.dart';
 import 'package:tpc_invoice/core/widgets/qr_code.dart';
 
 void main() {

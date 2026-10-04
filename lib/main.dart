@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'core/saas/saas_app.dart';
-import 'core/theme/app_theme.dart';
+import 'package:tpc_invoice/features/auth/presentation/saas_app.dart';
+import 'package:tpc_invoice/core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

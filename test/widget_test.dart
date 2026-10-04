@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/main.dart';
-import 'package:tpc_invoice/core/saas/saas_app.dart';
+import 'package:tpc_invoice/features/auth/presentation/saas_app.dart';
 
 void main() {
   testWidgets('missing shared API fails closed without legacy login', (

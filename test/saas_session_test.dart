@@ -4,39 +4,83 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tpc_invoice/core/saas/saas_api.dart';
-import 'package:tpc_invoice/core/saas/saas_session.dart';
+import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('workspace deletion clears tenant queues and preserves other workspaces',
-      () async {
-    final id = 'c' * 43;
-    SharedPreferences.setMockInitialValues({
-      'saas_records_owner_${id}_op': '{}',
-      'saas_document_owner_$id': '{}',
-      'saas_employee_write_owner_$id': '{}',
-      'saas_records_owner_other_op': '{}',
-    });
-    final prefs = await SharedPreferences.getInstance();
-    final api = SaasApi(
+  test(
+    'session emits immutable busy and signed-in snapshots and closes safely',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'employee': {
+                'employeeId': 'e' * 43,
+                'companyId': 'c' * 43,
+                'fullName': 'Alex',
+                'allowedSections': ['Invoices'],
+              },
+            }),
+            200,
+          ),
+        ),
+      );
+      final session = SaasSession(api, await SharedPreferences.getInstance());
+      final states = <SessionState>[];
+      final subscription = session.stream.listen(states.add);
+      await session.employeeLogin('i' * 43, '123456');
+      await Future<void>.delayed(Duration.zero);
+      expect(states.first.busy, isTrue);
+      expect(states.last.busy, isFalse);
+      expect(states.last.employee?['fullName'], 'Alex');
+      expect(
+        () => states.last.employee!['fullName'] = 'Changed',
+        throwsUnsupportedError,
+      );
+      session.employee!['fullName'] = 'Mutable working value';
+      expect(states.last.employee?['fullName'], 'Alex');
+      await session.close();
+      expect(session.isClosed, isTrue);
+      expect(api.onAccessRevoked, isNull);
+      await subscription.cancel();
+      api.close();
+    },
+  );
+  test(
+    'workspace deletion clears tenant queues and preserves other workspaces',
+    () async {
+      final id = 'c' * 43;
+      SharedPreferences.setMockInitialValues({
+        'saas_records_owner_${id}_op': '{}',
+        'saas_document_owner_$id': '{}',
+        'saas_employee_write_owner_$id': '{}',
+        'saas_records_owner_other_op': '{}',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final api = SaasApi(
         origin: 'https://api.test',
         client: MockClient((request) async {
           expect(request.method, 'DELETE');
           expect(request.url.path, '/v1/companies/$id');
           return http.Response('{"deleted":true}', 200);
-        }));
-    final session = SaasSession(api, prefs);
-    session.owner = {'ownerId': 'owner'};
-    session.company = {'companyId': id, 'name': 'Company', 'stage': 'READY'};
-    session.companies = [session.company!];
-    await session.deleteCompany();
-    expect(session.company, isNull);
-    expect(session.companies, isEmpty);
-    expect(prefs.getKeys(), {'saas_records_owner_other_op'});
-    session.dispose();
-    api.close();
-  });
+        }),
+      );
+      final session = SaasSession(api, prefs);
+      session.owner = {'ownerId': 'owner'};
+      session.company = {'companyId': id, 'name': 'Company', 'stage': 'READY'};
+      session.companies = [session.company!];
+      await session.deleteCompany();
+      expect(session.company, isNull);
+      expect(session.companies, isEmpty);
+      expect(prefs.getKeys(), {'saas_records_owner_other_op'});
+      session.dispose();
+      api.close();
+    },
+  );
   final companyId = 'c' * 43;
   final company = {'companyId': companyId, 'name': 'Company', 'stage': 'READY'};
   http.Response json(Object body, [int status = 200]) =>

@@ -2,6 +2,33 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Responsive workspace and feature architecture - 4 October 2026
+
+Local UI changes reuse the active workspace, dashboard, editors, queues and API.
+Desktop uses a navy sidebar, section search, workspace breadcrumbs and bordered
+cards. Mobile keeps bottom navigation and presents report selection in a compact
+menu with a calendar range picker. Invoice/quotation editing includes a live
+desktop preview; mobile retains the full-screen editor and explicit PDF preview.
+Appearance selection persists light/dark/system preferences. Dark surfaces,
+navigation, metrics and actions use black, grey and white.
+
+Loading uses Cupertino activity indicators in reserved inline areas. Record and
+employee refreshes keep existing rows visible without shifting them; pull-to-refresh
+uses the same inline indication rather than adding an overlay spinner.
+
+The former lib/core/saas tree was moved into features/auth, workspace, documents,
+accounting, customers, employees and reports, plus shared core/network, cache and
+widgets/forms folders. Imports and test references point to the new files; no
+forwarding copies of the old tree remain. Session and employee administration use
+Bloc/Cubit and generated Freezed snapshots. Authentication consumes a domain
+repository contract; local form inputs remain in the existing StatefulWidgets.
+Regenerate state with flutter pub run build_runner build after changing declarations.
+
+Validation: the full Flutter suite passed 126 tests with one existing skip. The
+final responsive/theme/loading/report checks passed 20 targeted tests. Phone and
+desktop invoice/dashboard renders were inspected in light and dark modes.
+These UI changes have not been deployed to production.
+
 ### Complete draft API and item returns - 4 October 2026
 
 Released to production on 4 October 2026: Cloud Run revision
@@ -249,7 +276,7 @@ the earlier proposal; it is not the registry used by this implementation.
 Legacy source files remain for reference only. In particular,
 `lib/core/auth/company_onboarding_view.dart` is not the active onboarding path.
 The obsolete Apps Script backend has been removed. The current owner setup view is
-`lib/core/saas/company_setup_view.dart`.
+`lib/features/workspace/presentation/company_setup_view.dart`.
 
 ## 3. Completed implementation work
 
@@ -469,8 +496,8 @@ JSON configuration, run Cloud Shell commands or create Apps Script projects.
 - [Validation history](VALIDATION.md)
 - [Backend API contract](backend/cloud-run/API.md)
 - [Shared application entry](lib/main.dart)
-- [Owner/employee routing](lib/core/saas/saas_app.dart)
-- [Shared workspace](lib/core/saas/shared_workspace.dart)
+- [Owner/employee routing](lib/features/auth/presentation/saas_app.dart)
+- [Shared workspace](lib/features/workspace/presentation/shared_workspace.dart)
 - [Frontend build script](scripts/build-shared-web.sh)
 - [Backend deployment script](backend/cloud-run/deploy-cloud-shell.sh)
 

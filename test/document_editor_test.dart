@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:invoice_kit/invoice_kit.dart' as kit;
-import 'package:tpc_invoice/core/saas/document_editor.dart';
-import 'package:tpc_invoice/core/saas/invoice_document.dart';
+import 'package:tpc_invoice/features/documents/presentation/document_editor.dart';
+import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 import 'package:tpc_invoice/core/theme/app_theme.dart';
-import 'package:tpc_invoice/core/saas/mobile_components.dart';
+import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 
 const items = [
   {
@@ -25,28 +25,37 @@ const items = [
 ];
 
 void main() {
-  testWidgets('saved customer missing from choices does not crash the editor',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
+  testWidgets('saved customer missing from choices does not crash the editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
         home: Scaffold(
-            body: Form(
-      child: SearchableRecordField(
-        initialValue: 'retired-customer',
-        decoration: const InputDecoration(labelText: 'Customer'),
-        items: const [
-          DropdownMenuItem(
-              value: 'active-customer', child: Text('Active customer'))
-        ],
-        onChanged: (_) {},
+          body: Form(
+            child: SearchableRecordField(
+              initialValue: 'retired-customer',
+              decoration: const InputDecoration(labelText: 'Customer'),
+              items: const [
+                DropdownMenuItem(
+                  value: 'active-customer',
+                  child: Text('Active customer'),
+                ),
+              ],
+              onChanged: (_) {},
+            ),
+          ),
+        ),
       ),
-    ))));
+    );
     expect(tester.takeException(), isNull);
     expect(
-        tester
-            .widget<DropdownButtonFormField<String>>(
-                find.byType(DropdownButtonFormField<String>))
-            .initialValue,
-        isNull);
+      tester
+          .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .initialValue,
+      isNull,
+    );
   });
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
@@ -122,21 +131,21 @@ void main() {
                 body: TextButton(
                   onPressed: () async =>
                       result = await showDialog<Map<String, Object?>>(
-                    context: context,
-                    builder: (_) => DocumentEditor(
-                      quotation: quotation,
-                      customers: const [
-                        {'recordId': 'customer', 'name': 'Client'},
-                      ],
-                      items: items,
-                      record: {
-                        'customerId': 'customer',
-                        'issueDate': '2026-10-04',
-                        'validUntil': '2026-11-04',
-                        'dueDate': '2026-11-04',
-                      },
-                    ),
-                  ),
+                        context: context,
+                        builder: (_) => DocumentEditor(
+                          quotation: quotation,
+                          customers: const [
+                            {'recordId': 'customer', 'name': 'Client'},
+                          ],
+                          items: items,
+                          record: {
+                            'customerId': 'customer',
+                            'issueDate': '2026-10-04',
+                            'validUntil': '2026-11-04',
+                            'dueDate': '2026-11-04',
+                          },
+                        ),
+                      ),
                   child: const Text('Open'),
                 ),
               ),
@@ -169,44 +178,46 @@ void main() {
   }
 
   test(
-      'credit-note PDF includes saved credit totals and original invoice reference',
-      () async {
-    final data = documentData(
-      quotation: false,
-      creditNote: true,
-      record: {
-        'number': 'CN-2026-000001',
-        'issueDate': '2026-10-04',
-        'status': 'POSTED',
-        'currency': 'AED',
-        'subtotal': 10,
-        'discount': 0,
-        'taxAmount': 0.5,
-        'total': 10.5,
-        'notes': 'Credit for invoice INV-2026-000001',
-        'recordVersion': 1
-      },
-      company: {'name': 'TPC'},
-      customer: {'name': 'Client'},
-      items: [
-        {
-          'description': 'Returned item',
-          'quantity': 1,
-          'unitPrice': 10,
+    'credit-note PDF includes saved credit totals and original invoice reference',
+    () async {
+      final data = documentData(
+        quotation: false,
+        creditNote: true,
+        record: {
+          'number': 'CN-2026-000001',
+          'issueDate': '2026-10-04',
+          'status': 'POSTED',
+          'currency': 'AED',
+          'subtotal': 10,
           'discount': 0,
-          'taxRate': 5,
-          'lineTotal': 10.5
-        }
-      ],
-    );
-    final bytes = await kit.InvoiceGenerator.generate(
+          'taxAmount': 0.5,
+          'total': 10.5,
+          'notes': 'Credit for invoice INV-2026-000001',
+          'recordVersion': 1,
+        },
+        company: {'name': 'TPC'},
+        customer: {'name': 'Client'},
+        items: [
+          {
+            'description': 'Returned item',
+            'quantity': 1,
+            'unitPrice': 10,
+            'discount': 0,
+            'taxRate': 5,
+            'lineTotal': 10.5,
+          },
+        ],
+      );
+      final bytes = await kit.InvoiceGenerator.generate(
         data: data,
         template: BusinessDocumentTemplate(),
-        config: const kit.TemplateConfig(extras: {'compress': false}));
-    expect(data.get('title'), 'CREDIT NOTE');
-    expect(latin1.decode(bytes), contains('10.50'));
-    expect(latin1.decode(bytes), contains('INV-2026-000001'));
-  });
+        config: const kit.TemplateConfig(extras: {'compress': false}),
+      );
+      expect(data.get('title'), 'CREDIT NOTE');
+      expect(latin1.decode(bytes), contains('10.50'));
+      expect(latin1.decode(bytes), contains('INV-2026-000001'));
+    },
+  );
   for (final size in [
     const Size(320, 740),
     const Size(390, 740),

@@ -3,18 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tpc_invoice/core/saas/saas_api.dart';
-import 'package:tpc_invoice/core/saas/record_write_queue.dart';
+import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/features/accounting/data/record_write_queue.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   for (final batchError in [true, false]) {
-    test('rejected draft permits a fresh creation (batch error: $batchError)',
-        () async {
-      SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
-      final ids = <String>[];
-      final api = SaasApi(
+    test(
+      'rejected draft permits a fresh creation (batch error: $batchError)',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final ids = <String>[];
+        final api = SaasApi(
           origin: 'https://api.test',
           client: MockClient((request) async {
             final op = jsonDecode(request.body)['operations'][0];
@@ -22,70 +23,88 @@ void main() {
             if (ids.length == 1) {
               final error = {
                 'code': 'INVALID_RECORD',
-                'message': 'Record contains unsupported fields.'
+                'message': 'Record contains unsupported fields.',
               };
               return http.Response(
-                  jsonEncode(batchError
+                jsonEncode(
+                  batchError
                       ? {'error': error}
                       : {
                           'results': [
                             {
                               'operationId': op['operationId'],
                               'status': 'FAILED',
-                              'error': error
-                            }
-                          ]
-                        }),
-                  batchError ? 400 : 200);
+                              'error': error,
+                            },
+                          ],
+                        },
+                ),
+                batchError ? 400 : 200,
+              );
             }
             return http.Response(
-                jsonEncode({
-                  'results': [
-                    {'operationId': op['operationId'], 'status': 'APPLIED'}
-                  ]
-                }),
-                200);
-          }));
-      final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-      await queue.enqueue('Invoices', 'create', {'currency': 'AED'},
-          expectedVersion: 0);
-      await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
-      expect(queue.pending, isEmpty);
-      await queue.enqueue('Invoices', 'create', {'currency': 'USD'},
-          expectedVersion: 0);
-      await queue.flush();
-      expect(ids[0], isNot(ids[1]));
-      expect(queue.pending, isEmpty);
-      api.close();
-    });
+              jsonEncode({
+                'results': [
+                  {'operationId': op['operationId'], 'status': 'APPLIED'},
+                ],
+              }),
+              200,
+            );
+          }),
+        );
+        final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+        await queue.enqueue('Invoices', 'create', {
+          'currency': 'AED',
+        }, expectedVersion: 0);
+        await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
+        expect(queue.pending, isEmpty);
+        await queue.enqueue('Invoices', 'create', {
+          'currency': 'USD',
+        }, expectedVersion: 0);
+        await queue.flush();
+        expect(ids[0], isNot(ids[1]));
+        expect(queue.pending, isEmpty);
+        api.close();
+      },
+    );
   }
-  test('employee pending writes use employee endpoint and isolated storage',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final api = SaasApi(
+  test(
+    'employee pending writes use employee endpoint and isolated storage',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final api = SaasApi(
         origin: 'https://api.test',
         client: MockClient((request) async {
           expect(request.url.path, '/v1/employee/sync');
           final op = jsonDecode(request.body)['operations'][0];
           return http.Response(
-              jsonEncode({
-                'results': [
-                  {'operationId': op['operationId'], 'status': 'APPLIED'}
-                ]
-              }),
-              200);
-        }));
-    final employee =
-        RecordWriteQueue(api, prefs, 'employee_e', 'c' * 43, employee: true);
-    final owner = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-    await employee.enqueue('Customers', 'create', {'name': 'Customer'},
-        expectedVersion: 0);
-    expect(owner.pending, isEmpty);
-    await employee.flush();
-    expect(employee.pending, isEmpty);
-    api.close();
-  });
+            jsonEncode({
+              'results': [
+                {'operationId': op['operationId'], 'status': 'APPLIED'},
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      final employee = RecordWriteQueue(
+        api,
+        prefs,
+        'employee_e',
+        'c' * 43,
+        employee: true,
+      );
+      final owner = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+      await employee.enqueue('Customers', 'create', {
+        'name': 'Customer',
+      }, expectedVersion: 0);
+      expect(owner.pending, isEmpty);
+      await employee.flush();
+      expect(employee.pending, isEmpty);
+      api.close();
+    },
+  );
   test(
     'receipt payment retains the server-validated allocation inputs',
     () async {
@@ -115,19 +134,15 @@ void main() {
         }),
       );
       final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-      await queue.enqueue(
-          'Receipts',
-          'receive',
-          {
-            'invoiceId': 'i' * 43,
-            'customerId': 'u' * 43,
-            'paymentDate': '2026-09-28',
-            'amount': 25.0,
-            'currency': 'AED',
-            'paymentAccount': 'Bank',
-            'reference': 'Transfer',
-          },
-          expectedVersion: 0);
+      await queue.enqueue('Receipts', 'receive', {
+        'invoiceId': 'i' * 43,
+        'customerId': 'u' * 43,
+        'paymentDate': '2026-09-28',
+        'amount': 25.0,
+        'currency': 'AED',
+        'paymentAccount': 'Bank',
+        'reference': 'Transfer',
+      }, expectedVersion: 0);
       await queue.flush();
       expect(queue.pending, isEmpty);
       api.close();
@@ -298,13 +313,9 @@ void main() {
       }),
     );
     final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
-    await queue.enqueue(
-        'Customers',
-        'create',
-        {
-          'name': 'Customer',
-        },
-        expectedVersion: 0);
+    await queue.enqueue('Customers', 'create', {
+      'name': 'Customer',
+    }, expectedVersion: 0);
     await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
     expect(queue.canDiscardRejected, isFalse);
     await expectLater(

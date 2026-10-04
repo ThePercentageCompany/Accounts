@@ -1,7 +1,7 @@
 import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tpc_invoice/core/saas/cash_reversal_editor.dart';
+import 'package:tpc_invoice/features/accounting/presentation/cash_reversal_editor.dart';
 
 void main() {
   testWidgets(
