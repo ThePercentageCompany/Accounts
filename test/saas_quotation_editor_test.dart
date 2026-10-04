@@ -18,20 +18,20 @@ void main() {
               body: TextButton(
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
-                      context: context,
-                      builder: (_) => QuotationEditor(
-                        customers: customers,
-                        items: const [
-                          {
-                            'description': 'Service',
-                            'quantity': 1,
-                            'unitPrice': 100,
-                            'discount': 0,
-                            'taxRate': 5,
-                          },
-                        ],
-                      ),
-                    ),
+                  context: context,
+                  builder: (_) => QuotationEditor(
+                    customers: customers,
+                    items: const [
+                      {
+                        'description': 'Service',
+                        'quantity': 1,
+                        'unitPrice': 100,
+                        'discount': 0,
+                        'taxRate': 5,
+                      },
+                    ],
+                  ),
+                ),
                 child: const Text('Open'),
               ),
             ),
@@ -43,7 +43,7 @@ void main() {
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a customer.'), findsOneWidget);
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Client').last);
       await tester.pumpAndSettle();
@@ -80,9 +80,9 @@ void main() {
             body: TextButton(
               onPressed: () async =>
                   result = await showDialog<Map<String, Object?>>(
-                    context: context,
-                    builder: (_) => QuotationLineEditor(quotations: quotations),
-                  ),
+                context: context,
+                builder: (_) => QuotationLineEditor(quotations: quotations),
+              ),
               child: const Text('Open'),
             ),
           ),
@@ -91,7 +91,7 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2026-09-28').last);
     await tester.pumpAndSettle();

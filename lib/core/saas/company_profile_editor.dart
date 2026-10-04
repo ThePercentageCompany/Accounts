@@ -47,33 +47,35 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
                     key: form,
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       for (final field in fields.entries)
-                        TextFormField(
-                          controller: controllers[field.key],
-                          maxLength: field.key == 'address' ? 1000 : 200,
-                          decoration: InputDecoration(labelText: field.value),
-                          validator: (value) {
-                            final v = value!.trim();
-                            if (field.key == 'name' && v.isEmpty) {
-                              return 'Enter a company name.';
-                            }
-                            if (field.key == 'currency' &&
-                                !RegExp(r'^[A-Z]{3}$').hasMatch(v)) {
-                              return 'Enter a three-letter uppercase currency.';
-                            }
-                            if (field.key.endsWith('Prefix') &&
-                                v.isNotEmpty &&
-                                !RegExp(r'^[A-Z0-9-]{1,12}$').hasMatch(v)) {
-                              return 'Use 1–12 uppercase letters, digits or hyphens.';
-                            }
-                            if (field.key == 'email' &&
-                                v.isNotEmpty &&
-                                !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                                    .hasMatch(v)) {
-                              return 'Enter a valid email.';
-                            }
-                            return null;
-                          },
-                        ),
+                        if (field.key == 'currency')
+                          CurrencyFormField(
+                            controller: controllers[field.key]!,
+                            label: field.value,
+                          )
+                        else
+                          TextFormField(
+                            controller: controllers[field.key],
+                            maxLength: field.key == 'address' ? 1000 : 200,
+                            decoration: InputDecoration(labelText: field.value),
+                            validator: (value) {
+                              final v = value!.trim();
+                              if (field.key == 'name' && v.isEmpty) {
+                                return 'Enter a company name.';
+                              }
+                              if (field.key.endsWith('Prefix') &&
+                                  v.isNotEmpty &&
+                                  !RegExp(r'^[A-Z0-9-]{1,12}$').hasMatch(v)) {
+                                return 'Use 1–12 uppercase letters, digits or hyphens.';
+                              }
+                              if (field.key == 'email' &&
+                                  v.isNotEmpty &&
+                                  !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                                      .hasMatch(v)) {
+                                return 'Enter a valid email.';
+                              }
+                              return null;
+                            },
+                          ),
                     ])))),
         actions: [
           TextButton(

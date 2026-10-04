@@ -1,4 +1,5 @@
 export 'date_time_field.dart';
+export 'currency_field.dart';
 import 'package:flutter/material.dart';
 
 /// Shared form surface: existing desktop dialogs, reachable mobile actions.

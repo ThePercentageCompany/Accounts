@@ -18,20 +18,20 @@ void main() {
               body: TextButton(
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
-                      context: context,
-                      builder: (_) => InvoiceEditor(
-                        customers: customers,
-                        items: const [
-                          {
-                            'description': 'Service',
-                            'quantity': 1,
-                            'unitPrice': 100,
-                            'discount': 0,
-                            'taxRate': 5,
-                          },
-                        ],
-                      ),
-                    ),
+                  context: context,
+                  builder: (_) => InvoiceEditor(
+                    customers: customers,
+                    items: const [
+                      {
+                        'description': 'Service',
+                        'quantity': 1,
+                        'unitPrice': 100,
+                        'discount': 0,
+                        'taxRate': 5,
+                      },
+                    ],
+                  ),
+                ),
                 child: const Text('Open'),
               ),
             ),
@@ -43,9 +43,15 @@ void main() {
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a customer.'), findsOneWidget);
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Client').last);
+      await tester.pumpAndSettle();
+      await tester
+          .ensureVisible(find.byType(DropdownButtonFormField<String>).last);
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('USD — US dollar').last);
       await tester.pumpAndSettle();
       final fields = find.byType(TextFormField);
       await fillFormField(tester, fields.at(0), '2026-09-27');
@@ -57,7 +63,7 @@ void main() {
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(result?['customerId'], 'c' * 43);
-      expect(result?['currency'], 'AED');
+      expect(result?['currency'], 'USD');
       expect(result?.containsKey('total'), isFalse);
       expect(result?.containsKey('status'), isFalse);
     },
@@ -77,9 +83,9 @@ void main() {
             body: TextButton(
               onPressed: () async =>
                   result = await showDialog<Map<String, Object?>>(
-                    context: context,
-                    builder: (_) => InvoiceLineEditor(invoices: invoices),
-                  ),
+                context: context,
+                builder: (_) => InvoiceLineEditor(invoices: invoices),
+              ),
               child: const Text('Open'),
             ),
           ),
@@ -88,7 +94,7 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2026-09-27').last);
     await tester.pumpAndSettle();
