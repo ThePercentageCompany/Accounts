@@ -394,6 +394,16 @@ historical “pending” statements as the current status.
 
 Employee administration now includes a view/edit switch for supported company-wide sections. Existing assignments remain view-only until an admin enables editing. Owners retain all supported actions; generated ledger/child tables and modules without editors remain subject to accounting workflow restrictions. Updated frontend and backend require deployment together. Employee attachment uploads and self-scoped writes remain pending.
 
+### Employee permission backend compatibility fix - 4 October 2026
+
+Follow-up recovery fix: retrying a previously rejected edit now persists its unconfirmed state before sending the same payload/key. A lost retry response can no longer leave the operation incorrectly discardable. The UI explains retrying the saved edit as well as discarding it; discard reloads employees without stale cache. Six focused tests passed, including rejection by an old API followed by uncertain retry and successful recovery. This follow-up frontend change is local; backend revision `00005-bfv` remains live.
+
+- Root cause verified: production API revision `tpc-accounts-api-00004-4b6` was built from `ebe4196`. Its employee input whitelist omitted `writableSections`, while the updated permission editor includes that field. The API therefore returned `INVALID_EMPLOYEE: Unsupported employee fields.` before saving.
+- Deployed the existing compatible permission backend, including validated company-wide edit grants and employee sync authorization. Cloud Build `542ca6f1-ad41-4f24-90ec-67bb6f88a09d` succeeded; revision `tpc-accounts-api-00005-bfv` is READY and receives 100% traffic. Existing service configuration was preserved by an image-only update.
+- Image digest: `sha256:292f6165de4b2979835bf327305b128903b7ba9ab12dd7c9da4ec7777232b01a`.
+- Validation: 197 backend tests and 9 focused Flutter tests passed. Public website and direct Cloud Run health checks returned 200; unauthenticated employee access remains denied with 401 and no-store responses. An authenticated permission save was not performed from this session.
+- Recovery: discard the previously rejected employee edit, reopen the employee, and save permissions again. Do not clear uncertain pending writes; only confirmed rejected changes are discardable.
+
 ### Mobile workspace redesign - 4 October 2026
 
 Employee pending-save recovery: opening or refreshing Employees confirms an uncertain persisted operation with its original payload and idempotency key before loading the list. Confirmed saves force a fresh employee list. Rejected edits remain available for explicit discard, and their message now explains the recovery action. Pending operations are not blindly deleted.

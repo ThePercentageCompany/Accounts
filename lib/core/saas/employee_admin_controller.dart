@@ -108,6 +108,14 @@ class EmployeeAdminController extends ChangeNotifier {
     final raw = preferences.getString(_key);
     if (raw == null) return;
     final op = jsonDecode(raw) as Map;
+    // A retry may now be accepted (for example after an API upgrade). Persist
+    // its uncertain state before sending so a lost response cannot leave a
+    // submitted operation marked safe to discard.
+    if (op.remove('rejected') == true &&
+        !await preferences.setString(_key, jsonEncode(op))) {
+      throw const SaasApiException('LOCAL_STORAGE',
+          'Could not prepare the saved edit for retry. Try again.');
+    }
     try {
       await api.saveEmployee(
         companyId,
@@ -174,7 +182,7 @@ class EmployeeAdminController extends ChangeNotifier {
           'Could not discard the rejected change.',
         );
       }
-      await _load();
+      await _load(force: true);
     });
   }
 

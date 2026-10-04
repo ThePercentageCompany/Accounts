@@ -19,6 +19,55 @@ void main() {
   };
 
   test(
+    'permission edit rejected by old API recovers without changing its key',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final writes = <http.Request>[];
+      final api = SaasApi(
+          origin: 'https://api.test',
+          client: MockClient((r) async {
+            if (r.method == 'GET') {
+              return http.Response('{"employees":[]}', 200);
+            }
+            writes.add(r);
+            if (writes.length == 1) {
+              return http.Response(
+                  '{"error":{"code":"INVALID_EMPLOYEE","message":"Unsupported employee fields."}}',
+                  400);
+            }
+            if (writes.length == 2) {
+              throw http.ClientException('Lost retry response');
+            }
+            return http.Response('{"version":2}', 200);
+          }));
+      final c = EmployeeAdminController(api, prefs, 'owner', company);
+      await c.save(employee, {
+        ...values,
+        'allowedSections': ['Customers'],
+        'writableSections': ['Customers'],
+        'expectedVersion': 1
+      });
+      expect(c.canDiscardRejected, isTrue);
+      await c.retry();
+      expect(c.hasPending, isTrue);
+      expect(c.canDiscardRejected, isFalse);
+      await c.discardRejected();
+      expect(c.hasPending, isTrue);
+      await c.retry();
+      expect(c.hasPending, isFalse);
+      expect(c.error, isNull);
+      for (final write in writes.skip(1)) {
+        expect(write.body, writes.first.body);
+        expect(write.headers['Idempotency-Key'],
+            writes.first.headers['Idempotency-Key']);
+      }
+      c.dispose();
+      api.close();
+    },
+  );
+
+  test(
     'refresh confirms a persisted write before loading employees',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -29,9 +78,9 @@ void main() {
           origin: 'https://api.test',
           client: MockClient((r) async {
             requests.add(r);
-          if (r.method == 'GET') {
-            return http.Response('{"employees":[]}', 200);
-          }
+            if (r.method == 'GET') {
+              return http.Response('{"employees":[]}', 200);
+            }
             if (fail) throw http.ClientException('Lost response');
             return http.Response('{"version":1}', 200);
           }));
