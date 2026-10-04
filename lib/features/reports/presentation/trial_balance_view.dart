@@ -14,12 +14,14 @@ class TrialBalanceView extends StatefulWidget {
     this.employee = false,
     this.initialDashboard = false,
     this.active = true,
+    this.reportKind,
   });
   final SaasApi api;
   final String companyId;
   final bool employee;
   final bool initialDashboard;
   final bool active;
+  final String? reportKind;
   @override
   State<TrialBalanceView> createState() => _TrialBalanceViewState();
 }
@@ -85,6 +87,11 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   @override
   void didUpdateWidget(covariant TrialBalanceView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.reportKind != widget.reportKind) {
+      _selectKind(widget.reportKind ?? 'dashboard');
+      _load();
+      return;
+    }
     if (oldWidget.active != widget.active) {
       _watch();
       if (widget.active) _load();
@@ -105,7 +112,15 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
     super.initState();
     widget.api.cache.addListener(_cacheChanged);
     if (widget.initialDashboard) _extra = 'dashboard';
+    if (widget.reportKind != null) _selectKind(widget.reportKind!);
     _load();
+  }
+
+  void _selectKind(String kind) {
+    _extra = ['dashboard', 'general-ledger'].contains(kind) ? kind : null;
+    _profit = kind == 'profit-and-loss';
+    _balance = kind == 'balance-sheet';
+    if (_from.isAfter(_date)) _from = DateTime(_date.year);
   }
 
   void _load({bool force = false}) {
@@ -248,43 +263,44 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              PopupMenuButton<String>(
-                tooltip: 'Choose report',
-                initialValue: _kind,
-                onSelected: (kind) => setState(() {
-                  _extra = ['dashboard', 'general-ledger'].contains(kind)
-                      ? kind
-                      : null;
-                  _profit = kind == 'profit-and-loss';
-                  _balance = kind == 'balance-sheet';
-                  if (_from.isAfter(_date)) _from = DateTime(_date.year);
-                  _load();
-                }),
-                itemBuilder: (_) => [
-                  for (final entry in const {
-                    'dashboard': 'Dashboard',
-                    'general-ledger': 'General ledger',
-                    'trial-balance': 'Trial balance',
-                    'profit-and-loss': 'Profit and loss',
-                    'balance-sheet': 'Balance sheet',
-                  }.entries)
-                    PopupMenuItem(value: entry.key, child: Text(entry.value)),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _title,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.expand_more, size: 18),
-                    ],
+              if (widget.reportKind == null)
+                PopupMenuButton<String>(
+                  tooltip: 'Choose report',
+                  initialValue: _kind,
+                  onSelected: (kind) => setState(() {
+                    _extra = ['dashboard', 'general-ledger'].contains(kind)
+                        ? kind
+                        : null;
+                    _profit = kind == 'profit-and-loss';
+                    _balance = kind == 'balance-sheet';
+                    if (_from.isAfter(_date)) _from = DateTime(_date.year);
+                    _load();
+                  }),
+                  itemBuilder: (_) => [
+                    for (final entry in const {
+                      'dashboard': 'Dashboard',
+                      'general-ledger': 'General ledger',
+                      'trial-balance': 'Trial balance',
+                      'profit-and-loss': 'Profit and loss',
+                      'balance-sheet': 'Balance sheet',
+                    }.entries)
+                      PopupMenuItem(value: entry.key, child: Text(entry.value)),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _title,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.expand_more, size: 18),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               PopupMenuButton<String>(
                 tooltip: 'Filter dates',
                 icon: const Icon(Icons.calendar_month_outlined),

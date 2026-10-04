@@ -108,6 +108,28 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         )
       : null;
   String? _selected;
+  final Map<String, String> _subsections = {};
+  Map<String, String> _children(String section) => section == 'Reports'
+      ? const {
+          'dashboard': 'Dashboard',
+          'general-ledger': 'General ledger',
+          'trial-balance': 'Trial balance',
+          'profit-and-loss': 'Profit and loss',
+          'balance-sheet': 'Balance sheet',
+        }
+      : {
+          for (final table in workspaceTables[section] ?? <String>[])
+            table: tableTitles[table] ?? table,
+        };
+  String _subsection(String section) =>
+      _subsections[section] ?? _children(section).keys.first;
+  void _navigate(String section, String child) => setState(() {
+    _selected = section;
+    _subsections[section] = child;
+  });
+  String _destinationTitle(String section) => _children(section).isEmpty
+      ? section
+      : _children(section)[_subsection(section)]!;
   final Set<String> _visited = {};
   @override
   void initState() {
@@ -210,7 +232,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           icon: const Icon(Icons.arrow_back),
         ),
       ),
-      bottomNavigationBar: wide || sections.length < 2
+      bottomNavigationBar:
+          wide ||
+              (sections.length < 2 &&
+                  !sections.any((section) => _children(section).length > 1))
           ? null
           : NavigationBar(
               selectedIndex: moreSelected
@@ -297,7 +322,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           children: [
                             Text(
                               selected == 'Reports'
-                                  ? 'Business overview'
+                                  ? (_subsection('Reports') == 'dashboard'
+                                        ? 'Business overview'
+                                        : _destinationTitle('Reports'))
                                   : selected ?? 'Workspace',
                               style: Theme.of(context).textTheme.headlineSmall
                                   ?.copyWith(fontWeight: FontWeight.w700),
@@ -305,7 +332,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                             if (wide) const SizedBox(height: 6),
                             if (wide)
                               Text(
-                                '${widget.title}  /  ${selected == 'Reports' ? 'Dashboard' : selected ?? 'Workspace'}',
+                                '${widget.title}  /  ${selected == null ? 'Workspace' : _destinationTitle(selected)}',
                                 style: TextStyle(
                                   color: Theme.of(
                                     context,
@@ -351,6 +378,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           companyId: widget.companyId,
           employee: widget.employee != null,
           initialDashboard: true,
+          reportKind: _subsection('Reports'),
           active: active,
         )
       : selected == 'Employees' && _employees != null
@@ -384,6 +412,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
               ? _writes
               : null,
           uploads: _uploads,
+          selectedTable: _children(selected).isEmpty
+              ? 'Employees'
+              : _subsection(selected),
           tables: selected == 'Employees'
               ? ['Employees']
               : workspaceTables[selected]!,
@@ -444,23 +475,55 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
-                for (final section in group.value.where(sections.contains))
-                  ListTile(
-                    leading: Icon(_sectionIcon(section)),
-                    title: Text(section),
-                    selected: section == selected,
-                    trailing: section == selected
-                        ? const Icon(Icons.check)
-                        : null,
-                    onTap: () => Navigator.pop(context, section),
-                  ),
+                for (final section in group.value.where(sections.contains)) ...[
+                  if (_children(section).length > 1)
+                    ExpansionTile(
+                      leading: Icon(_sectionIcon(section)),
+                      title: Text(section),
+                      initiallyExpanded: false,
+                      children: [
+                        for (final child in _children(section).entries)
+                          ListTile(
+                            contentPadding: const EdgeInsets.only(
+                              left: 48,
+                              right: 16,
+                            ),
+                            title: Text(child.value),
+                            selected:
+                                section == selected &&
+                                _subsection(section) == child.key,
+                            onTap: () => Navigator.pop(
+                              context,
+                              '$section::${child.key}',
+                            ),
+                          ),
+                      ],
+                    )
+                  else
+                    ListTile(
+                      leading: Icon(_sectionIcon(section)),
+                      title: Text(section),
+                      selected: section == selected,
+                      trailing: section == selected
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => Navigator.pop(context, section),
+                    ),
+                ],
               ],
             ],
           ),
         ),
       ),
     );
-    if (mounted && choice != null) setState(() => _selected = choice);
+    if (mounted && choice != null) {
+      final parts = choice.split('::');
+      if (parts.length == 2) {
+        _navigate(parts[0], parts[1]);
+      } else {
+        setState(() => _selected = choice);
+      }
+    }
   }
 
   Widget _navigation(List<String> sections, String? selected) {
@@ -548,7 +611,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   ),
                 ),
               ),
-            for (final section in group.value.where(sections.contains))
+            for (final section in group.value.where(sections.contains)) ...[
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: ListTile(
@@ -573,6 +636,26 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   onTap: () => setState(() => _selected = section),
                 ),
               ),
+              if (selected == section && _children(section).length > 1)
+                for (final child in _children(section).entries)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20, bottom: 4),
+                    child: ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      title: Text(
+                        child.value,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      selected: _subsection(section) == child.key,
+                      selectedTileColor: colors.surfaceContainerHighest,
+                      leading: Icon(Icons.subdirectory_arrow_right, size: 16),
+                      onTap: () => _navigate(section, child.key),
+                    ),
+                  ),
+            ],
           ],
         ],
       ),
@@ -590,8 +673,10 @@ class _RecordsPanel extends StatefulWidget {
     this.writes,
     this.uploads,
     this.active = true,
+    this.selectedTable,
   });
   final bool active;
+  final String? selectedTable;
   final SaasApi api;
   final String companyId;
   final bool employee;
@@ -603,7 +688,7 @@ class _RecordsPanel extends StatefulWidget {
 }
 
 class _RecordsPanelState extends State<_RecordsPanel> {
-  late String table = widget.tables.first;
+  late String table = widget.selectedTable ?? widget.tables.first;
   List<Map<String, dynamic>> rows = [];
   String _search = '';
   final Map<String, Set<String>> _statusFilters = {};
@@ -1513,6 +1598,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   @override
   void didUpdateWidget(covariant _RecordsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTable != widget.selectedTable &&
+        widget.selectedTable != null) {
+      _tableSearch[table] = _search;
+      table = widget.selectedTable!;
+      rows = [];
+      _hasData = false;
+      _search = _tableSearch[table] ?? '';
+      _searchController.text = _search;
+      _watch();
+      _load();
+      return;
+    }
     if (oldWidget.active != widget.active) {
       _watch();
       if (widget.active) _load();
@@ -1641,39 +1738,48 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              PopupMenuButton<String>(
-                tooltip: 'Choose record type',
-                enabled: !busy,
-                initialValue: table,
-                onSelected: (value) {
-                  _tableSearch[table] = _search;
-                  rows = [];
-                  _hasData = false;
-                  table = value;
-                  _search = _tableSearch[table] ?? '';
-                  _searchController.text = _search;
-                  _watch();
-                  _load();
-                },
-                itemBuilder: (_) => [
-                  for (final t in widget.tables)
-                    PopupMenuItem(value: t, child: Text(tableTitles[t] ?? t)),
-                ],
-                child: Padding(
+              if (widget.selectedTable != null)
+                Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        tableTitles[table] ?? table,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.expand_more, size: 18),
-                    ],
+                  child: Text(
+                    tableTitles[table] ?? table,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-              ),
+              if (widget.selectedTable == null)
+                PopupMenuButton<String>(
+                  tooltip: 'Choose record type',
+                  enabled: !busy,
+                  initialValue: table,
+                  onSelected: (value) {
+                    _tableSearch[table] = _search;
+                    rows = [];
+                    _hasData = false;
+                    table = value;
+                    _search = _tableSearch[table] ?? '';
+                    _searchController.text = _search;
+                    _watch();
+                    _load();
+                  },
+                  itemBuilder: (_) => [
+                    for (final t in widget.tables)
+                      PopupMenuItem(value: t, child: Text(tableTitles[t] ?? t)),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          tableTitles[table] ?? table,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.expand_more, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
               PopupMenuButton<String>(
                 tooltip: 'Filter statuses',
                 icon: Icon(

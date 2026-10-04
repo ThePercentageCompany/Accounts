@@ -9,6 +9,54 @@ import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dar
 import 'package:tpc_invoice/core/cache/cache_store.dart';
 
 void main() {
+  for (final width in [390.0, 1366.0]) {
+    testWidgets(
+      'report sidebar destinations switch authorized routes at $width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final paths = <String>[];
+        final api = SaasApi(
+          origin: 'https://api.test',
+          client: MockClient((request) async {
+            paths.add(request.url.path);
+            return http.Response('{"accounts":[],"journalCount":0}', 200);
+          }),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SharedWorkspace(
+              api: api,
+              companyId: 'c' * 43,
+              title: 'Test',
+              onBack: () {},
+              employee: const {
+                'allowedSections': ['Reports'],
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Choose report'), findsNothing);
+        if (width < 900) {
+          await tester.tap(find.text('More'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Reports'));
+          await tester.pumpAndSettle();
+        }
+        await tester.ensureVisible(find.text('General ledger').first);
+        await tester.tap(find.text('General ledger').first);
+        await tester.pumpAndSettle();
+        expect(paths.last, '/v1/employee/reports/general-ledger');
+        expect(find.byTooltip('Choose report'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        api.close();
+      },
+    );
+  }
   for (final width in [320.0, 360.0, 390.0, 430.0, 1024.0, 1366.0]) {
     testWidgets('workspace navigation fits $width', (tester) async {
       tester.view.physicalSize = Size(width, 740);

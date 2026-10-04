@@ -561,6 +561,8 @@ historical “pending” statements as the current status.
 
 ### Custom document HTML designs - 5 October 2026
 
+- Workspace section switching now uses desktop sidebar subcategories and expandable mobile More groups. Reports expose Dashboard, General ledger, Trial balance, Profit and loss, and Balance sheet. Multi-table modules expose their assigned record tables; workspace report/record dropdowns are removed. Existing filter, export, refresh and date controls remain local to each page. Selected record searches and report dates remain in the existing panel state.
+
 - Popup forms use a shared responsive field layout with 24px field gaps, paired desktop fields and a scrollable single column on phones. Customer, company, shareholder/capital, payroll, cash/payment, receipt, asset and financial-period editors reuse their existing controllers and validation. Shared popup fields keep labels visible and use comfortable internal padding; larger dialog headers/content use 24px margins.
 - Validation: 142 regression tests passed with one existing skip; static analysis found no issues.
 
