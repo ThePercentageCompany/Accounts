@@ -19,6 +19,40 @@ void main() {
   };
 
   test(
+    'refresh confirms a persisted write before loading employees',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final requests = <http.Request>[];
+      var fail = true;
+      final api = SaasApi(
+          origin: 'https://api.test',
+          client: MockClient((r) async {
+            requests.add(r);
+          if (r.method == 'GET') {
+            return http.Response('{"employees":[]}', 200);
+          }
+            if (fail) throw http.ClientException('Lost response');
+            return http.Response('{"version":1}', 200);
+          }));
+      final first = EmployeeAdminController(api, prefs, 'owner', company);
+      await first.save(null, values);
+      first.dispose();
+      fail = false;
+      final resumed = EmployeeAdminController(api, prefs, 'owner', company);
+      await resumed.refresh(force: false);
+      expect(requests.map((r) => r.method), ['POST', 'POST', 'GET']);
+      expect(requests[0].body, requests[1].body);
+      expect(requests[0].headers['Idempotency-Key'],
+          requests[1].headers['Idempotency-Key']);
+      expect(resumed.hasPending, isFalse);
+      expect(resumed.error, isNull);
+      resumed.dispose();
+      api.close();
+    },
+  );
+
+  test(
     'uncertain employee save survives restart and uses identical payload/key',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -83,6 +117,9 @@ void main() {
       );
       final c = EmployeeAdminController(api, prefs, 'owner', company);
       await c.save(employee, {...values, 'expectedVersion': 1});
+      expect(c.hasPending, isTrue);
+      expect(c.canDiscardRejected, isTrue);
+      await c.refresh();
       expect(c.hasPending, isTrue);
       expect(c.canDiscardRejected, isTrue);
       await c.discardRejected();

@@ -396,6 +396,8 @@ Employee administration now includes a view/edit switch for supported company-wi
 
 ### Mobile workspace redesign - 4 October 2026
 
+Employee pending-save recovery: opening or refreshing Employees confirms an uncertain persisted operation with its original payload and idempotency key before loading the list. Confirmed saves force a fresh employee list. Rejected edits remain available for explicit discard, and their message now explains the recovery action. Pending operations are not blindly deleted.
+
 - Added shared mobile form surfaces, searchable selection sheets, status summaries, record action sheets and invoice/quotation line estimates. Existing save callbacks, accounting validation and permission checks remain in use.
 - Mobile navigation prioritizes Home, Invoices and Customers where assigned; More groups sales, people and accounting modules. The desktop sidebar and cached section state remain intact.
 - Mobile reports use account cards with quick reporting periods and custom calendars/ranges. Dashboard cards respond to width and text scaling. Customer, cash, payroll, capital, asset, settings and employee forms share reachable mobile actions; employees have local search.

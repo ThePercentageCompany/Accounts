@@ -93,7 +93,15 @@ class EmployeeAdminController extends ChangeNotifier {
   }
 
   Future<void> refresh({bool force = true}) async {
-    await _run(() => _load(force: force));
+    await _run(() async {
+      // Recover the exact persisted write before reading: the server can block
+      // list requests until an uncertain employee write has been confirmed.
+      if (hasPending && !canDiscardRejected) {
+        await _submitPending();
+      } else {
+        await _load(force: force);
+      }
+    });
   }
 
   Future<void> _submitPending() async {
@@ -122,7 +130,7 @@ class EmployeeAdminController extends ChangeNotifier {
         'Saved online. Retry to confirm local progress.',
       );
     }
-    await _load();
+    await _load(force: true);
   }
 
   Future<bool> save(String? id, Map<String, Object?> values) async =>

@@ -210,8 +210,10 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                   ),
                 ),
               if (c.hasPending) ...[
-                const Text(
-                  'An employee change is pending. Retry the same change before making another edit.',
+                Text(
+                  c.canDiscardRejected
+                      ? 'This employee edit was rejected. Discard it, then reopen the employee to correct the details.'
+                      : 'The employee save has not been confirmed. Retry to confirm the saved edit and unlock editing.',
                 ),
                 TextButton(
                   onPressed: c.busy ? null : c.retry,
