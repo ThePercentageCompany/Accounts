@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -139,27 +139,11 @@ class _SaasAppState extends State<SaasApp> {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Column(
-            children: [
-              BlocBuilder<SaasSession, SessionState>(
-                bloc: session,
-                builder: (context, _) => session.ready && session.owner != null
-                    ? Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: FilledButton(
-                          onPressed: session.busy
-                              ? null
-                              : () => setState(() => _workspace = true),
-                          child: const Text('Open company workspace'),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              Expanded(
-                child: CompanySetupView(session: session, navigate: _navigate),
-              ),
-            ],
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: CompanySetupView(
+            session: session,
+            navigate: _navigate,
+            onOpen: () => setState(() => _workspace = true),
           ),
         ),
       ),

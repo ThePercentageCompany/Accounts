@@ -4,6 +4,15 @@ Updated: 4 October 2026. Based on the repository and recorded validation results
 
 ### Responsive workspace and feature architecture - 4 October 2026
 
+Workspace setup now uses a searchable directory and a selected-company overview
+with status, connection/retry actions and an integrated Open workspace button.
+Company creation expands within its own card. Deletion confirmation names the
+company and explains all removed data; cancellation preserves the workspace.
+Desktop uses two columns, mobile stacks the cards, and both follow light/dark
+appearance. A short card entrance and animated form expansion respect reduced
+motion settings. Existing session provisioning and deletion methods are reused.
+Ten focused setup/session tests passed and the release web build succeeded.
+
 Local UI changes reuse the active workspace, dashboard, editors, queues and API.
 Desktop uses a navy sidebar, section search, workspace breadcrumbs and bordered
 cards. Mobile keeps bottom navigation and presents report selection in a compact
