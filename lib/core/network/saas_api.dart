@@ -497,6 +497,88 @@ class SaasApi implements SessionRepository {
     );
   }
 
+  String financialReportPath(
+    String companyId,
+    String kind, {
+    required String asOf,
+    String? from,
+    String? compareFrom,
+    String? compareAsOf,
+    bool employee = false,
+  }) {
+    if (!const [
+      'dashboard',
+      'general-ledger',
+      'trial-balance',
+      'profit-and-loss',
+      'balance-sheet',
+    ].contains(kind)) {
+      throw const SaasApiException('INVALID_REPORT', 'Invalid report.');
+    }
+    final query = <String, String>{
+      'asOf': asOf,
+      if (from != null && kind != 'balance-sheet') 'from': from,
+      if (compareAsOf != null) 'compareAsOf': compareAsOf,
+      if (compareFrom != null && kind != 'balance-sheet')
+        'compareFrom': compareFrom,
+    };
+    final base = employee
+        ? '/v1/employee/reports'
+        : '/v1/companies/${_id(companyId)}/reports';
+    return '$base/$kind?${Uri(queryParameters: query).query}';
+  }
+
+  Future<Map<String, dynamic>> financialReport(
+    String companyId,
+    String kind, {
+    required String asOf,
+    String? from,
+    String? compareFrom,
+    String? compareAsOf,
+    bool employee = false,
+    bool force = false,
+  }) => _json(
+    'GET',
+    financialReportPath(
+      companyId,
+      kind,
+      asOf: asOf,
+      from: from,
+      compareFrom: compareFrom,
+      compareAsOf: compareAsOf,
+      employee: employee,
+    ),
+    force: force,
+  );
+
+  Future<Map<String, dynamic>> reportSettings(
+    String companyId, {
+    bool employee = false,
+    bool force = false,
+  }) => _json(
+    'GET',
+    employee
+        ? '/v1/employee/reports/settings'
+        : '/v1/companies/${_id(companyId)}/reports/settings',
+    force: force,
+  );
+
+  Future<Map<String, dynamic>> saveReportSettings(
+    String companyId,
+    Map<String, dynamic> settings,
+  ) async {
+    final result = await _json(
+      'PUT',
+      '/v1/companies/${_id(companyId)}/reports/settings',
+      data: {
+        'expectedVersion': settings['version'],
+        'settings': {...settings}..remove('version'),
+      },
+    );
+    cache.invalidate((path) => path.contains('/reports/'));
+    return result;
+  }
+
   Future<Map<String, dynamic>> report(
     String companyId,
     String kind,

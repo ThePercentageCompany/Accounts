@@ -6,7 +6,8 @@ import { validateJournal } from './journal-policy.js';
 import { cashEntryValues, assertCashEntryEditable } from './cash-entry-policy.js';
 import { financialPeriodValues } from './financial-period-policy.js';
 import { cashLedgerChanges, reverseCashChanges } from './cash-ledger.js';
-import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger } from './ledger-report.js';
+import { financialReport } from './financial-report.js';
+import { reportConfiguration, validateReportConfiguration } from './report-configuration.js';
 import { invoiceChanges } from './invoice-policy.js';
 import { receiptChanges, receiptInput } from './receipt-policy.js';
 import { quotationChanges } from './quotation-policy.js';
@@ -113,29 +114,42 @@ export class BusinessService {
       } : {}) } : { recordId: row.recordId, companyId,
         recordVersion: row.recordVersion, updatedAt: row.updatedAt, isDeleted: true });
   }
-  async trialBalance(token, companyId, asOf) {
-    this.owner((await this.registry.read()).state, token, companyId);
-    const data = await this.sheets.read(companyId, ['Journals', 'JournalLines']);
-    this.owner((await this.registry.read()).state, token, companyId);
-    return trialBalance(companyId, asOf, data);
+  async reportSettings(token, companyId) {
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return reportConfiguration(company);
   }
-  async report(token, companyId, kind, from, asOf) {
+  async saveReportSettings(token, companyId, input) {
     this.owner((await this.registry.read()).state, token, companyId);
-    const data = await this.sheets.read(companyId, ['Journals', 'JournalLines']);
-    this.owner((await this.registry.read()).state, token, companyId);
-    return (kind === 'dashboard' ? dashboard : generalLedger)(companyId, from, asOf, data);
+    const settings = validateReportConfiguration(input);
+    const data = await this.sheets.read(companyId, ['JournalLines']);
+    for (const account of settings.accounts) requireThat(!data.JournalLines.some(l => active(l) && l.companyId === companyId &&
+      l.accountId === account.accountId && l.accountGroup !== account.group), 409, 'REPORT_CLASSIFICATION_CONFLICT',
+      'Account groups must match existing journal lines.');
+    return this.registry.transact(state => {
+      const { company } = this.owner(state, token, companyId);
+      const current = reportConfiguration(company);
+      requireThat(current.version === input.expectedVersion, 409, 'VERSION_CONFLICT', 'Report settings changed. Reload before saving.');
+      company.reporting = { ...settings, version: current.version + 1 };
+      return structuredClone(company.reporting);
+    });
   }
-  async balanceSheet(token, companyId, asOf) {
+  async financialReport(token, companyId, kind, from, asOf, options = {}) {
     this.owner((await this.registry.read()).state, token, companyId);
-    const data = await this.sheets.read(companyId, ['Journals', 'JournalLines']);
-    this.owner((await this.registry.read()).state, token, companyId);
-    return balanceSheet(companyId, asOf, data);
+    const data = await this.sheets.read(companyId, ['Journals', 'JournalLines', 'CompanyProfile']);
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return financialReport(companyId, kind, from, asOf, data, company, options, this.now());
   }
-  async profitAndLoss(token, companyId, from, asOf) {
-    this.owner((await this.registry.read()).state, token, companyId);
-    const data = await this.sheets.read(companyId, ['Journals', 'JournalLines']);
-    this.owner((await this.registry.read()).state, token, companyId);
-    return profitAndLoss(companyId, from, asOf, data);
+  async trialBalance(token, companyId, asOf, from = null, options = {}) {
+    return this.financialReport(token, companyId, 'trial-balance', from, asOf, options);
+  }
+  async report(token, companyId, kind, from, asOf, options = {}) {
+    return this.financialReport(token, companyId, kind, from, asOf, options);
+  }
+  async balanceSheet(token, companyId, asOf, options = {}) {
+    return this.financialReport(token, companyId, 'balance-sheet', null, asOf, options);
+  }
+  async profitAndLoss(token, companyId, from, asOf, options = {}) {
+    return this.financialReport(token, companyId, 'profit-and-loss', from, asOf, options);
   }
   async mutate(token, companyId, tableName, recordId, action, input, key) {
     requireThat(!['CreditNotes', 'CreditNoteItems'].includes(tableName), 409,

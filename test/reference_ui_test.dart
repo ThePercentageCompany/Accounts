@@ -213,7 +213,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Financial quick view'), findsOneWidget);
+        expect(find.text('Performance overview'), findsOneWidget);
         expect(
           find.byType(NavigationBar),
           width < 900 ? findsOneWidget : findsNothing,

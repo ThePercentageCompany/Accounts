@@ -113,7 +113,7 @@ export function generalLedger(companyId, from, asOf, data) {
       if (journal.date < from) { opening = balance; continue; }
       debit += amount.debit; credit += amount.credit;
       entries.push({ date: journal.date, journalId: journal.recordId, number: journal.number || '',
-        description: journal.description || '', sourceType: journal.sourceType || '',
+        description: journal.description || '', sourceType: journal.sourceType || '', sourceId: journal.sourceId || '', lineNumber: line.lineNumber,
         debit: money(amount.debit), credit: money(amount.credit), balance: money(balance) });
     }
     return { accountId: account.accountId, accountName: account.accountName, accountGroup: account.accountGroup,

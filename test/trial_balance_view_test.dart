@@ -123,7 +123,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Balance sheet').last);
     await tester.pumpAndSettle();
-    expect(find.text('Assets: 10.61'), findsOneWidget);
+    expect(find.text('Assets'), findsOneWidget);
+    expect(find.text('10.61'), findsOneWidget);
     expect(find.text('Accumulated earnings: 10.10'), findsOneWidget);
     expect(find.text('Posted equity: 0.00'), findsOneWidget);
     expect(find.text('Liabilities + equity: 10.61'), findsOneWidget);
@@ -181,9 +182,18 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Profit and loss').last);
       await tester.pumpAndSettle();
-      expect(find.textContaining('Net profit / loss: -0.30'), findsOneWidget);
+      expect(find.text('Net profit / loss'), findsOneWidget);
+      expect(find.text('-0.30'), findsOneWidget);
+      expect(find.textContaining('Not defined'), findsOneWidget);
       expect(find.text('Amount'), findsOneWidget);
       expect(find.text('Credit'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'missing account');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No accounts match'), findsOneWidget);
+      await tester.tap(find.text('Reset filters'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No accounts match'), findsNothing);
+      expect(find.text('0.30'), findsWidgets);
       api.close();
     },
   );

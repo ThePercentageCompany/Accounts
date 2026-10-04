@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../data/report_format.dart';
+import 'report_trends.dart';
 
 class WorkspaceDashboard extends StatelessWidget {
-  const WorkspaceDashboard({super.key, required this.data});
+  const WorkspaceDashboard({
+    super.key,
+    required this.data,
+    this.format = const ReportFormat(),
+    this.onReportSelected,
+  });
   final Map<String, dynamic> data;
+  final ReportFormat format;
+  final ValueChanged<String>? onReportSelected;
 
   String amount(String key) {
-    final value = data[key];
-    final number = num.tryParse('$value');
-    return number == null || !number.isFinite
-        ? '—'
-        : NumberFormat('#,##0.00').format(number);
+    return format.money(data[key]);
   }
 
   @override
@@ -93,6 +97,22 @@ class WorkspaceDashboard extends StatelessWidget {
                           color: colors.onSurfaceVariant,
                         ),
                       ),
+                      if (data['comparison']?['totals']?[key] != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Previous: ${format.money(data['comparison']['totals'][key]['previous'])}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        Text(
+                          'Change: ${format.money(data['comparison']['totals'][key]['amount'])} · ${data['comparison']['totals'][key]['percent'] ?? 'Not defined'}${data['comparison']['totals'][key]['percent'] == null ? '' : '%'}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        if (key == 'totalExpenses')
+                          const Text(
+                            'Expense increases are unfavorable.',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                      ],
                     ],
                   ),
                 ),
@@ -104,7 +124,7 @@ class WorkspaceDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Financial quick view',
+                'Performance overview',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -143,6 +163,26 @@ class WorkspaceDashboard extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in const {
+                    'profit-and-loss': 'Profit & Loss',
+                    'balance-sheet': 'Balance Sheet',
+                    'trial-balance': 'Trial Balance',
+                    'general-ledger': 'General Ledger',
+                  }.entries)
+                    OutlinedButton.icon(
+                      onPressed: onReportSelected == null
+                          ? null
+                          : () => onReportSelected!(entry.key),
+                      icon: const Icon(Icons.arrow_outward, size: 16),
+                      label: Text(entry.value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
                 spacing: 16,
                 runSpacing: 16,
                 children: [
@@ -151,14 +191,14 @@ class WorkspaceDashboard extends StatelessWidget {
                     'Period income',
                     Icons.trending_up,
                     const Color(0xFF16A085),
-                    'Selected reporting period',
+                    'Reporting period: ${data['from'] ?? 'start'} to ${data['asOf'] ?? 'end'}',
                   ),
                   metric(
                     'totalExpenses',
                     'Period expenses',
                     Icons.trending_down,
                     const Color(0xFFE09037),
-                    'Selected reporting period',
+                    'Reporting period: ${data['from'] ?? 'start'} to ${data['asOf'] ?? 'end'}',
                   ),
                   metric(
                     'netProfit',
@@ -167,16 +207,42 @@ class WorkspaceDashboard extends StatelessWidget {
                     colors.primary,
                     'Income less expenses',
                   ),
+                  if (data.containsKey('grossProfit'))
+                    metric(
+                      'grossProfit',
+                      'Gross profit',
+                      Icons.show_chart,
+                      colors.primary,
+                      data['grossProfit'] == null
+                          ? 'Review revenue and COGS classifications'
+                          : 'Net revenue less cost of goods sold',
+                    ),
                   metric(
                     'receivables',
                     'Receivables',
                     Icons.receipt_long_outlined,
                     const Color(0xFF8B6BD6),
-                    'Cumulative outstanding balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                 ],
               ),
               const SizedBox(height: 28),
+              if (data['trends'] is List &&
+                  (data['trends'] as List).isNotEmpty) ...[
+                ReportTrends(
+                  trends: List<Map<String, dynamic>>.from(
+                    (data['trends'] as List).map(
+                      (t) => Map<String, dynamic>.from(t),
+                    ),
+                  ),
+                  format: format,
+                ),
+                if (data['trendsTruncated'] == true)
+                  const Text(
+                    'Trend chart shows the first 120 months. Report totals include the full selected period.',
+                  ),
+                const SizedBox(height: 20),
+              ],
               Wrap(
                 spacing: 16,
                 runSpacing: 16,
@@ -188,7 +254,7 @@ class WorkspaceDashboard extends StatelessWidget {
                     child: _graph(context, 'Income & spending', const {
                       'totalIncome': 'Income',
                       'totalExpenses': 'Expenses',
-                    }, 'Selected period'),
+                    }, 'Period totals (not a historical trend)'),
                   ),
                   SizedBox(
                     width: constraints.maxWidth >= 760
@@ -218,42 +284,42 @@ class WorkspaceDashboard extends StatelessWidget {
                     'Cash',
                     Icons.wallet_outlined,
                     colors.primary,
-                    'Cumulative balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
                     'bank',
                     'Bank',
                     Icons.account_balance_outlined,
                     colors.primary,
-                    'Cumulative balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
                     'payables',
                     'Payables',
                     Icons.payments_outlined,
                     const Color(0xFFE09037),
-                    'Cumulative outstanding balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
                     'totalAssets',
                     'Assets',
                     Icons.business_outlined,
                     colors.primary,
-                    'Cumulative balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
                     'totalLiabilities',
                     'Liabilities',
                     Icons.balance_outlined,
                     const Color(0xFF8B6BD6),
-                    'Cumulative balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
                     'totalEquity',
                     'Equity',
                     Icons.pie_chart_outline,
                     const Color(0xFF16A085),
-                    'Cumulative balance',
+                    'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                 ],
               ),

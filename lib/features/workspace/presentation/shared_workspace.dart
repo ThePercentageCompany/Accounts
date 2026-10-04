@@ -15,6 +15,7 @@ import 'package:tpc_invoice/features/accounting/presentation/cash_payment_editor
 import 'package:tpc_invoice/features/accounting/presentation/cash_reversal_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/financial_period_editor.dart';
 import 'package:tpc_invoice/features/reports/presentation/trial_balance_view.dart';
+import 'package:tpc_invoice/features/reports/presentation/report_configuration_view.dart';
 import 'package:tpc_invoice/features/documents/presentation/invoice_editor.dart';
 import 'package:tpc_invoice/features/documents/presentation/invoice_return_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/receipt_editor.dart';
@@ -112,10 +113,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   Map<String, String> _children(String section) => section == 'Reports'
       ? const {
           'dashboard': 'Dashboard',
+          'chart-of-accounts': 'Chart of Accounts',
+          'journal-entries': 'Journal Entries',
           'general-ledger': 'General ledger',
           'trial-balance': 'Trial balance',
           'profit-and-loss': 'Profit and loss',
           'balance-sheet': 'Balance sheet',
+          'report-settings': 'Report Settings',
         }
       : {
           for (final table in workspaceTables[section] ?? <String>[])
@@ -372,15 +376,45 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           ),
         )
       : selected == 'Reports'
-      ? TrialBalanceView(
-          key: ValueKey(widget.companyId),
-          api: widget.api,
-          companyId: widget.companyId,
-          employee: widget.employee != null,
-          initialDashboard: true,
-          reportKind: _subsection('Reports'),
-          active: active,
-        )
+      ? [
+              'chart-of-accounts',
+              'report-settings',
+            ].contains(_subsection('Reports'))
+            ? ReportConfigurationView(
+                key: ValueKey((widget.companyId, _subsection('Reports'))),
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: widget.employee != null,
+                chart: _subsection('Reports') == 'chart-of-accounts',
+              )
+            : _subsection('Reports') == 'journal-entries'
+            ? _RecordsPanel(
+                key: ValueKey((widget.companyId, 'report-journals')),
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: widget.employee != null,
+                active: active,
+                tables: const ['Journals', 'JournalLines'],
+                selectedTable: 'Journals',
+                writes:
+                    widget.employee == null ||
+                        (widget.employee!['writableSections'] as List? ?? [])
+                            .contains('Balance Sheet')
+                    ? _writes
+                    : null,
+                uploads: _uploads,
+              )
+            : TrialBalanceView(
+                key: ValueKey(widget.companyId),
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: widget.employee != null,
+                initialDashboard: true,
+                reportKind: _subsection('Reports'),
+                active: active,
+                companyName: widget.title,
+                onReportSelected: (kind) => _navigate('Reports', kind),
+              )
       : selected == 'Employees' && _employees != null
       ? EmployeeAdminView(
           controller: _employees,

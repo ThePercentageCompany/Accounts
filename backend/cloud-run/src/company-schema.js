@@ -55,7 +55,7 @@ export function seedRows(company, owner) {
     idempotencyKey: `setup:${company.id}:${recordId}`, ...extra });
   const rows = {
     SystemConfiguration: record('schema', { key: 'schemaVersion', value: SCHEMA_VERSION }),
-    CompanyProfile: record('company', { name: company.name }),
+    CompanyProfile: record('company', { name: company.name, currency: 'AED' }),
     OwnersUsers: record('owner', { userId: owner.id, email: owner.email, displayName: owner.name, status: 'ACTIVE' }),
   };
   return TABLES.filter(t => rows[t.title]).map(t => ({ title: t.title,

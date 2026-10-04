@@ -106,31 +106,30 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (business) {
-        const summaryReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/(dashboard|general-ledger)$/.exec(url.pathname);
-        if (summaryReport && request.method === 'GET') {
-          requireThat([...url.searchParams.keys()].every(k => ['from', 'asOf'].includes(k)) &&
-            url.searchParams.getAll('from').length === 1 && url.searchParams.getAll('asOf').length === 1,
-          400, 'INVALID_QUERY', 'Supply one from and one asOf date.');
-          json(200, await business.report(token, summaryReport[1], summaryReport[2], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
+        const settings = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/settings$/.exec(url.pathname);
+        if (settings && request.method === 'GET') {
+          requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Report settings do not accept query parameters.');
+          json(200, await business.reportSettings(token, settings[1])); return;
         }
-        const balanceReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/balance-sheet$/.exec(url.pathname);
-        if (balanceReport && request.method === 'GET') {
-          requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,
-            400, 'INVALID_QUERY', 'Supply one asOf date.');
-          json(200, await business.balanceSheet(token, balanceReport[1], url.searchParams.get('asOf'))); return;
+        if (settings && request.method === 'PUT') {
+          json(200, await business.saveReportSettings(token, settings[1], await body(request, 512 * 1024))); return;
         }
-        const profitReport = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/profit-and-loss$/.exec(url.pathname);
-        if (profitReport && request.method === 'GET') {
-          requireThat([...url.searchParams.keys()].every(k => ['from', 'asOf'].includes(k)) &&
-            url.searchParams.getAll('from').length === 1 && url.searchParams.getAll('asOf').length === 1,
-          400, 'INVALID_QUERY', 'Supply one from and one asOf date.');
-          json(200, await business.profitAndLoss(token, profitReport[1], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
-        }
-        const report = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/trial-balance$/.exec(url.pathname);
+        const report = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/(dashboard|general-ledger|trial-balance|profit-and-loss|balance-sheet)$/.exec(url.pathname);
         if (report && request.method === 'GET') {
-          requireThat([...url.searchParams.keys()].every(k => k === 'asOf') && url.searchParams.getAll('asOf').length === 1,
-            400, 'INVALID_QUERY', 'Supply one asOf date.');
-          json(200, await business.trialBalance(token, report[1], url.searchParams.get('asOf'))); return;
+          const kind = report[2], period = ['dashboard', 'general-ledger', 'profit-and-loss'].includes(kind);
+          const allowed = ['asOf', 'compareAsOf', ...(kind !== 'balance-sheet' ? ['from', 'compareFrom'] : [])];
+          requireThat([...url.searchParams.keys()].every(k => allowed.includes(k) && url.searchParams.getAll(k).length === 1) &&
+            url.searchParams.has('asOf') && (!period || url.searchParams.has('from')) &&
+            (!url.searchParams.has('compareFrom') || url.searchParams.has('compareAsOf')) &&
+            (!period || !url.searchParams.has('compareAsOf') || url.searchParams.has('compareFrom')),
+          400, 'INVALID_QUERY', 'Supply each report and comparison date once.');
+          const asOf = url.searchParams.get('asOf'), from = url.searchParams.get('from');
+          const options = { compareAsOf: url.searchParams.get('compareAsOf'), compareFrom: url.searchParams.get('compareFrom') };
+          const value = kind === 'trial-balance' ? await business.trialBalance(token, report[1], asOf, from, options)
+            : kind === 'balance-sheet' ? await business.balanceSheet(token, report[1], asOf, options)
+            : kind === 'profit-and-loss' ? await business.profitAndLoss(token, report[1], from, asOf, options)
+            : await business.report(token, report[1], kind, from, asOf, options);
+          json(200, value); return;
         }
         const sync = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/sync$/.exec(url.pathname);
         if (sync && request.method === 'POST') {
@@ -154,13 +153,21 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (employees) {
-        const employeeReport = /^\/v1\/employee\/reports\/(dashboard|general-ledger|trial-balance|profit-and-loss|balance-sheet)$/.exec(url.pathname);
+        const employeeReport = /^\/v1\/employee\/reports\/(dashboard|general-ledger|trial-balance|profit-and-loss|balance-sheet|settings)$/.exec(url.pathname);
         if (employeeReport && request.method === 'GET') {
-          const period = ['dashboard', 'general-ledger', 'profit-and-loss'].includes(employeeReport[1]);
-          requireThat([...url.searchParams.keys()].every(k => k === 'asOf' || (period && k === 'from')) &&
-            url.searchParams.getAll('asOf').length === 1 && (!period || url.searchParams.getAll('from').length === 1),
-          400, 'INVALID_QUERY', 'Supply the report dates once.');
-          json(200, await employees.report(jar[EMPLOYEE], employeeReport[1], url.searchParams.get('from'), url.searchParams.get('asOf'))); return;
+          if (employeeReport[1] === 'settings') {
+            requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Report settings do not accept query parameters.');
+            json(200, await employees.report(jar[EMPLOYEE], 'settings', null, null)); return;
+          }
+          const kind = employeeReport[1], period = ['dashboard', 'general-ledger', 'profit-and-loss'].includes(kind);
+          const allowed = ['asOf', 'compareAsOf', ...(kind !== 'balance-sheet' ? ['from', 'compareFrom'] : [])];
+          requireThat([...url.searchParams.keys()].every(k => allowed.includes(k) && url.searchParams.getAll(k).length === 1) &&
+            url.searchParams.has('asOf') && (!period || url.searchParams.has('from')) &&
+            (!url.searchParams.has('compareFrom') || url.searchParams.has('compareAsOf')) &&
+            (!period || !url.searchParams.has('compareAsOf') || url.searchParams.has('compareFrom')),
+          400, 'INVALID_QUERY', 'Supply each report and comparison date once.');
+          json(200, await employees.report(jar[EMPLOYEE], kind, url.searchParams.get('from'), url.searchParams.get('asOf'),
+            { compareFrom: url.searchParams.get('compareFrom'), compareAsOf: url.searchParams.get('compareAsOf') })); return;
         }
         if (route === 'POST /v1/employee/login' || route === 'POST /v1/employee/refresh') {
           const input = await body(request);
