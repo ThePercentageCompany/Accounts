@@ -8,6 +8,8 @@ export const RELATIONS = {
   InvoiceItems: { invoiceId: 'Invoices', productId: 'ProductsServices' },
   QuotationItems: { quotationId: 'Quotations', productId: 'ProductsServices' },
   ReceiptAllocations: { receiptId: 'Receipts', invoiceId: 'Invoices' },
+  CreditNotes: { invoiceId: 'Invoices', customerId: 'Customers' },
+  CreditNoteItems: { creditNoteId: 'CreditNotes', invoiceId: 'Invoices', invoiceItemId: 'InvoiceItems' },
   ExpenseAttachments: { expenseId: 'Expenses' }, PayrollItems: { payrollId: 'Payroll' },
   Payslips: { payrollId: 'Payroll', employeeId: 'Employees' }, JournalLines: { journalId: 'Journals' },
   Payroll: { employeeId: 'Employees' }, Attendance: { employeeId: 'Employees' }, Overtime: { employeeId: 'Employees' },

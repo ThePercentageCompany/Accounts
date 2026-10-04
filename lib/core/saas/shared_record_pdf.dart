@@ -15,6 +15,7 @@ Future<Uint8List> sharedRecordPdf(
 }) async {
   const titles = {
     'Invoices': 'Invoice',
+    'CreditNotes': 'Credit note',
     'Quotations': 'Quotation',
     'Receipts': 'Payment receipt',
     'Payroll': 'Payslip',
@@ -52,15 +53,21 @@ Future<Uint8List> sharedRecordPdf(
   }
   final itemTable = section == 'Invoices'
       ? 'InvoiceItems'
-      : section == 'Quotations'
-          ? 'QuotationItems'
-          : null;
+      : section == 'CreditNotes'
+          ? 'CreditNoteItems'
+          : section == 'Quotations'
+              ? 'QuotationItems'
+              : null;
   final items = itemTable == null
       ? <Map<String, dynamic>>[]
       : (await rows(itemTable))
           .where(
             (r) =>
-                r[section == 'Invoices' ? 'invoiceId' : 'quotationId'] ==
+                r[section == 'CreditNotes'
+                    ? 'creditNoteId'
+                    : section == 'Invoices'
+                        ? 'invoiceId'
+                        : 'quotationId'] ==
                 recordId,
           )
           .toList()
@@ -82,11 +89,26 @@ Future<Uint8List> sharedRecordPdf(
       'The record or company profile changed. Generate the document again.',
     );
   }
-  if (section == 'Invoices' || section == 'Quotations') {
+  if (section == 'Invoices' ||
+      section == 'Quotations' ||
+      section == 'CreditNotes') {
+    final invoice = section == 'CreditNotes'
+        ? find(await rows('Invoices'), record['invoiceId'])
+        : null;
     return kit.InvoiceGenerator.generate(
       data: documentData(
         quotation: section == 'Quotations',
-        record: record,
+        creditNote: section == 'CreditNotes',
+        record: invoice == null
+            ? record
+            : {
+                ...record,
+                'issueDate': record['date'],
+                'notes':
+                    'Credit for invoice ${invoice['number']}. ${record['reason']}',
+                'paymentTerms':
+                    'Refund: ${record['refundAmount']} ${record['currency']} ${record['refundAccount']}',
+              },
         company: profile,
         customer: party ?? {},
         items: items,

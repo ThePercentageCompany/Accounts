@@ -23,8 +23,7 @@ Map<String, num> estimateDocument(List<Map<String, dynamic>> items) {
     final net = lineGross - lineDiscount;
     gross += lineGross;
     discount += lineDiscount;
-    tax +=
-        (net * minor(item['taxRate']) + BigInt.from(5000)) ~/
+    tax += (net * minor(item['taxRate']) + BigInt.from(5000)) ~/
         BigInt.from(10000);
   }
   num money(BigInt value) => value.toDouble() / 100;
@@ -43,15 +42,21 @@ kit.InvoiceData documentData({
   required Map<String, dynamic> customer,
   required List<Map<String, dynamic>> items,
   bool estimate = false,
-}) => kit.InvoiceData({
-  'title': quotation ? 'QUOTATION' : 'INVOICE',
-  'record': record,
-  'seller': company,
-  'buyer': customer,
-  'items': items,
-  'totals': estimate ? estimateDocument(items) : record,
-  'estimate': estimate,
-});
+  bool creditNote = false,
+}) =>
+    kit.InvoiceData({
+      'title': creditNote
+          ? 'CREDIT NOTE'
+          : quotation
+              ? 'QUOTATION'
+              : 'INVOICE',
+      'record': record,
+      'seller': company,
+      'buyer': customer,
+      'items': items,
+      'totals': estimate ? estimateDocument(items) : record,
+      'estimate': estimate,
+    });
 
 /// invoice_kit custom template: company branding, UAE VAT labels, quotation
 /// validity and authoritative totals without the package's GST assumptions.
@@ -82,9 +87,8 @@ class BusinessDocumentTemplate extends kit.InvoiceTemplate {
     String text(Object? value) => '${value ?? ''}';
     String money(Object? value) =>
         (num.tryParse('$value') ?? 0).toStringAsFixed(2);
-    final currency = text(record['currency']).isEmpty
-        ? 'AED'
-        : text(record['currency']);
+    final currency =
+        text(record['currency']).isEmpty ? 'AED' : text(record['currency']);
     final unicode = data.toMap().toString().runes.any((rune) => rune > 126);
     final fonts = unicode ? await kit.FontLoader.autoLoad(data) : null;
     final regular = config?.baseFont ?? fonts?.regular ?? pw.Font.helvetica();
@@ -97,35 +101,36 @@ class BusinessDocumentTemplate extends kit.InvoiceTemplate {
       theme: pw.ThemeData.withFont(base: regular, bold: bold),
     );
     pw.Widget detail(String label, Object? value) => pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 4),
-      child: pw.Text(
-        '$label: ${text(value)}',
-        style: const pw.TextStyle(fontSize: 9),
-      ),
-    );
-    pw.Widget party(Map<String, dynamic> values, String label) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: 9,
-            color: color,
-            fontWeight: pw.FontWeight.bold,
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          child: pw.Text(
+            '$label: ${text(value)}',
+            style: const pw.TextStyle(fontSize: 9),
           ),
-        ),
-        pw.SizedBox(height: 6),
-        pw.Text(
-          text(values['name']),
-          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-        ),
-        for (final key in ['address', 'email', 'phone'])
-          if (text(values[key]).isNotEmpty)
-            pw.Text(text(values[key]), style: const pw.TextStyle(fontSize: 9)),
-        if (text(values['taxNumber']).isNotEmpty)
-          detail('Tax number / TRN', values['taxNumber']),
-      ],
-    );
+        );
+    pw.Widget party(Map<String, dynamic> values, String label) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 9,
+                color: color,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Text(
+              text(values['name']),
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+            ),
+            for (final key in ['address', 'email', 'phone'])
+              if (text(values[key]).isNotEmpty)
+                pw.Text(text(values[key]),
+                    style: const pw.TextStyle(fontSize: 9)),
+            if (text(values['taxNumber']).isNotEmpty)
+              detail('Tax number / TRN', values['taxNumber']),
+          ],
+        );
     final draft =
         data.get('estimate') == true || text(record['status']) == 'DRAFT';
     doc.addPage(

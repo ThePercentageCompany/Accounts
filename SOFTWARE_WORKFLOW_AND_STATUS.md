@@ -2,6 +2,40 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Complete draft API and item returns - 4 October 2026
+
+Released to production on 4 October 2026: Cloud Run revision
+`tpc-accounts-api-00006-sox` serves 100% of API traffic. Vercel deployment
+`dpl_GaKqpkVXfVbmy2KXFhtiK6NgefRF` was promoted to
+https://accounts.thepercentagecompany.com. The public JavaScript SHA-256 matches
+the tested local release build. Live health advertises both capabilities and
+public routing/authentication-boundary/CORS checks pass. Cloud Build passed all
+213 backend tests; 28 targeted Flutter tests passed, static analysis was clean,
+and the release web build/Wasm dry run succeeded. An authenticated customer
+invoice/return transaction was not performed during deployment verification.
+
+Verified the live revision tpc-accounts-api-00005-bfv was built from source that
+did not accept values.items. This caused the new invoice/quotation editor to fail
+with INVALID_RECORD despite the local implementation supporting complete drafts.
+The release now advertises complete-document-drafts and invoice-item-returns in
+the health response so deployment compatibility can be checked directly.
+
+Issued invoices remain immutable. Return items / credit note accepts selected
+original lines and partial quantities. Server-controlled prices, proportional
+discounts and VAT use cumulative minor-unit rounding, preventing excess returns
+and ensuring a complete return totals exactly to the original invoice. Credit
+notes and their item rows are posted atomically with the invoice balance and
+balanced return/refund journal. Excess credit is an immediate Cash/Bank refund;
+the UI displays estimated credit/refund and explains when to post it. Refunds
+are recorded, not transferred by this application. Original receipts with refunds
+cannot be reversed. Unrefunded partial returns allow subsequent receipt posting.
+
+CreditNotes and CreditNoteItems are additive spreadsheet tabs with headers,
+created atomically on first use for existing companies. Original tabs/headers
+are preserved. Credit notes are read-only, available under Invoices, and support
+invoice_kit PDF exports linked to the original invoice. Employee access follows
+the existing Invoices section permission.
+
 ### Workspace deletion - 4 October 2026
 
 Company setup now offers an owner-only Delete workspace action with explicit

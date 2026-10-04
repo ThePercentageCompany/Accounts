@@ -132,6 +132,30 @@ export class GoogleWorkspace {
     if (data.length) await this.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values:batchUpdate`,
       'POST', { valueInputOption: 'RAW', data });
   }
+  async ensureCreditTables(token, id) {
+    const tables = TABLES.filter(t => ['CreditNotes', 'CreditNoteItems'].includes(t.title));
+    const metadata = await this.metadata(token, id);
+    const properties = metadata.sheets.map(s => s.properties);
+    const missing = tables.filter(t => !properties.some(p => p.title === t.title));
+    for (const table of missing) requireThat(!properties.some(p => p.sheetId === table.sheetId),
+      409, 'SCHEMA_MISMATCH', 'A credit-note sheet identifier is already in use.');
+    if (!missing.length) return;
+    // Add tabs and headers atomically. Existing records and schema are untouched.
+    try {
+      await this.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}:batchUpdate`, 'POST', {
+        requests: missing.flatMap(t => [
+          { addSheet: { properties: { title: t.title, sheetId: t.sheetId,
+            gridProperties: { rowCount: 1000, columnCount: t.headers.length, frozenRowCount: 1 } } } },
+          { updateCells: { start: { sheetId: t.sheetId, rowIndex: 0, columnIndex: 0 },
+            rows: [{ values: t.headers.map(h => ({ userEnteredValue: { stringValue: h } })) }], fields: 'userEnteredValue' } },
+        ]),
+      });
+    } catch (error) {
+      // Another reader can win tab creation. Verify its headers before continuing.
+      const rows = await this.rows(token, id, tables.map(t => `'${t.title}'!1:1`));
+      if (!tables.every((t, i) => JSON.stringify(rows[i][0]) === JSON.stringify(t.headers))) throw error;
+    }
+  }
   async verifySchema(token, company) {
     const id = company.resources.spreadsheetId;
     const rows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));

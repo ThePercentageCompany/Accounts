@@ -167,6 +167,46 @@ void main() {
       },
     );
   }
+
+  test(
+      'credit-note PDF includes saved credit totals and original invoice reference',
+      () async {
+    final data = documentData(
+      quotation: false,
+      creditNote: true,
+      record: {
+        'number': 'CN-2026-000001',
+        'issueDate': '2026-10-04',
+        'status': 'POSTED',
+        'currency': 'AED',
+        'subtotal': 10,
+        'discount': 0,
+        'taxAmount': 0.5,
+        'total': 10.5,
+        'notes': 'Credit for invoice INV-2026-000001',
+        'recordVersion': 1
+      },
+      company: {'name': 'TPC'},
+      customer: {'name': 'Client'},
+      items: [
+        {
+          'description': 'Returned item',
+          'quantity': 1,
+          'unitPrice': 10,
+          'discount': 0,
+          'taxRate': 5,
+          'lineTotal': 10.5
+        }
+      ],
+    );
+    final bytes = await kit.InvoiceGenerator.generate(
+        data: data,
+        template: BusinessDocumentTemplate(),
+        config: const kit.TemplateConfig(extras: {'compress': false}));
+    expect(data.get('title'), 'CREDIT NOTE');
+    expect(latin1.decode(bytes), contains('10.50'));
+    expect(latin1.decode(bytes), contains('INV-2026-000001'));
+  });
   for (final size in [
     const Size(320, 740),
     const Size(390, 740),

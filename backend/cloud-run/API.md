@@ -429,6 +429,33 @@ notes and payment terms). Each line accepts `description` (1?1000 characters),
 optional same-company `productId`. Line numbers are assigned in array order.
 Clients cannot supply line IDs, parent IDs, tax amounts or calculated totals.
 
+`GET /health` now advertises `complete-document-drafts` and `invoice-item-returns`
+in `capabilities`. The prior deployed revision lacked complete-draft support;
+deploying the new frontend without the updated API caused INVALID_RECORD.
+
+### Issued invoice returns
+
+Use sync action `invoiceReturn`, table `Invoices`, the issued invoice's `recordId`
+and current `expectedVersion`. Values contain `date`, `reason`, optional
+`refundAccount` (`Cash` or `Bank`), and `returnItems` with 1-100 unique entries:
+`{invoiceItemId, quantity}`. Quantities have at most two decimal places. Prices,
+discounts and VAT come exclusively from the issued invoice. Repeated partial
+returns cannot exceed the original quantity. Dates must follow the invoice,
+payments and prior returns and belong to an open period.
+
+The operation atomically creates a numbered posted CreditNotes record, its
+CreditNoteItems, a balanced revenue/VAT/receivable/refund journal, and the updated
+invoice balance/status. Original invoice totals, item rows and number remain
+unchanged. Invoice status becomes PARTIALLY_RETURNED or RETURNED. Any credit above
+the unpaid balance is recorded as an immediate refund in the selected account;
+the application does not initiate bank transfers. Refunded receipts cannot be
+reversed. Remaining balances on partially returned invoices accept receipts.
+
+Credit note tables are read-only through generic record endpoints. They are
+additive spreadsheet tabs initialized atomically with headers on first access
+for existing workspaces. Employee reads and returns use the Invoices section
+permission. Credit note document uploads/exports use the existing Invoices folder.
+
 The operation validates the complete document and calculates rounded minor-unit
 totals before submitting one atomic Sheets batch. For draft updates, the array
 replaces active lines; previous lines are soft-deleted. Header expectedVersion

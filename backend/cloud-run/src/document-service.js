@@ -4,7 +4,7 @@ import { TABLES } from './company-schema.js';
 import { BusinessSheets } from './business-sheets.js';
 import { decodeContent, validateContent, contentHash } from './document-content.js';
 
-const FOLDERS = { CompanyProfile: 'Company Logo', Invoices: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
+const FOLDERS = { CompanyProfile: 'Company Logo', Invoices: 'Invoices', CreditNotes: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
   Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 export class DocumentSheets extends BusinessSheets {

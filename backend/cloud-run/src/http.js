@@ -63,7 +63,8 @@ export function createApi(service, config, { log = console.error, workspace, que
       }
       const url = new URL(request.url, config.apiOrigin);
       if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
-        json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1 }); return;
+        json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1,
+          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns'] : [] }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);

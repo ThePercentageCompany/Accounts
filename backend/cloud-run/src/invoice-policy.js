@@ -4,6 +4,7 @@ import { validLedgerDate } from './financial-period-policy.js';
 import { assertOpenLedgerDate } from './financial-period-policy.js';
 import { challenge } from './crypto.js';
 import { replaceDraftItems } from './document-draft.js';
+import { invoiceReturnChanges } from './invoice-return.js';
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 const dollars = cents => Number(cents) / 100;
 
@@ -33,8 +34,9 @@ function totals(lines) {
 
 export async function invoiceChanges(sheets, companyId, table, id, action, old, values, system, operation) {
   if (!['Invoices', 'InvoiceItems'].includes(table)) return { values, extra: [] };
-  requireThat(['create', 'update', 'delete', 'issue', 'invoiceVoid'].includes(action), 400, 'INVALID_INVOICE', 'Unsupported invoice action.');
+  requireThat(['create', 'update', 'delete', 'issue', 'invoiceVoid', 'invoiceReturn'].includes(action), 400, 'INVALID_INVOICE', 'Unsupported invoice action.');
   if (table === 'Invoices') {
+    if (action === 'invoiceReturn') return invoiceReturnChanges(sheets, companyId, id, old, values, system, operation);
     requireThat(!old || old.status === 'DRAFT' || action === 'invoiceVoid', 409, 'INVOICE_LOCKED', 'Only draft invoices can be edited.');
     if (action === 'issue') {
       const data = await sheets.read(companyId, ['Invoices', 'InvoiceItems', 'CompanyProfile', 'Journals', 'JournalLines']);

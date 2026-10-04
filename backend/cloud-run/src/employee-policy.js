@@ -5,6 +5,7 @@ export const SECTIONS = Object.freeze(['Dashboard', 'Invoices', 'Quotations', 'I
 export const WRITE_SECTIONS = Object.freeze(['Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
 export const SECTION_TABLES = {
+  CreditNotes: 'Invoices', CreditNoteItems: 'Invoices',
   CompanyProfile: 'Settings', Customers: 'Customers', ProductsServices: 'Invoices', Invoices: 'Invoices', InvoiceItems: 'Invoices',
   Receipts: 'Invoices', ReceiptAllocations: 'Invoices', Quotations: 'Quotations', QuotationItems: 'Quotations',
   Income: 'Income & Expenses', Expenses: 'Income & Expenses', ExpenseAttachments: 'Income & Expenses',
@@ -15,6 +16,7 @@ export const SECTION_TABLES = {
   FinancialPeriods: 'Balance Sheet', Journals: 'Balance Sheet', JournalLines: 'Balance Sheet',
 };
 export const CHILDREN = {
+  CreditNotes: ['Invoices', 'invoiceId'], CreditNoteItems: ['Invoices', 'invoiceId'],
   InvoiceItems: ['Invoices', 'invoiceId'], ReceiptAllocations: ['Receipts', 'receiptId'],
   QuotationItems: ['Quotations', 'quotationId'], ExpenseAttachments: ['Expenses', 'expenseId'],
   PayrollItems: ['Payroll', 'payrollId'], JournalLines: ['Journals', 'journalId'],

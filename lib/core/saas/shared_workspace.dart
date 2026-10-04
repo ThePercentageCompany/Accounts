@@ -15,6 +15,7 @@ import 'cash_reversal_editor.dart';
 import 'financial_period_editor.dart';
 import 'trial_balance_view.dart';
 import 'invoice_editor.dart';
+import 'invoice_return_editor.dart';
 import 'receipt_editor.dart';
 import 'quotation_editor.dart';
 import 'payroll_editor.dart';
@@ -25,7 +26,7 @@ import 'document_upload_queue.dart';
 import 'record_documents_view.dart';
 
 const workspaceTables = <String, List<String>>{
-  'Invoices': ['Invoices', 'Receipts', 'ReceiptAllocations'],
+  'Invoices': ['Invoices', 'CreditNotes', 'Receipts', 'ReceiptAllocations'],
   'Quotations': ['Quotations'],
   'Customers': ['Customers'],
   'Income & Expenses': ['Income', 'Expenses'],
@@ -44,6 +45,7 @@ const workspaceTables = <String, List<String>>{
 };
 
 const tableTitles = {
+  'CreditNotes': 'Credit notes / returns',
   'ReceiptAllocations': 'Payment allocations',
   'PayrollItems': 'Payroll details',
   'CompanyProfile': 'Company profile',
@@ -728,6 +730,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     const [
                       'ISSUED',
                       'PARTIALLY_PAID',
+                      'PARTIALLY_RETURNED',
                     ].contains(item['status']) &&
                     (num.tryParse('${item['balance']}') ?? 0) > 0),
           )
@@ -948,6 +951,49 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           () => error =
               'Unable to confirm invoice void. Retry the pending request.',
         );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _returnInvoice(Map<String, dynamic> record) async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      final responses = await Future.wait([
+        widget.api.records(widget.companyId, 'InvoiceItems',
+            employee: widget.employee, force: true),
+        widget.api.records(widget.companyId, 'CreditNoteItems',
+            employee: widget.employee, force: true),
+      ]);
+      List<Map<String, dynamic>> related(Map<String, dynamic> response) =>
+          (response['records'] as List)
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .where((r) => r['invoiceId'] == record['recordId'])
+              .toList();
+      if (!mounted) return;
+      final input = await showDialog<Map<String, Object?>>(
+          context: context,
+          builder: (_) => InvoiceReturnEditor(
+              invoice: record,
+              items: related(responses[0]),
+              returns: related(responses[1])));
+      if (input == null || !mounted) return;
+      await widget.writes!.enqueue('Invoices', 'invoiceReturn', input,
+          recordId: record['recordId'] as String,
+          expectedVersion: int.parse('${record['recordVersion']}'));
+      await widget.writes!.flush();
+      if (mounted) await _load(force: true);
+    } on SaasApiException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            error = 'Could not confirm the return. Retry any pending request.');
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -1663,6 +1709,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         Theme.of(context).colorScheme.surface,
                     subtitle: RecordSummary(record: row),
                     children: [
+                      if (table == 'Invoices' && row['status'] != 'DRAFT')
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                              'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.'),
+                        ),
                       if (table == 'CompanyProfile' &&
                           '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
                         PrivateCompanyLogo(
@@ -1721,6 +1773,21 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               ? null
                               : () => _voidInvoice(row),
                           child: const Text('Void invoice'),
+                        ),
+                      if (_editable &&
+                          table == 'Invoices' &&
+                          const [
+                            'ISSUED',
+                            'PARTIALLY_PAID',
+                            'PAID',
+                            'PARTIALLY_RETURNED'
+                          ].contains(row['status']))
+                        TextButton.icon(
+                          onPressed: busy || widget.writes!.pending.isNotEmpty
+                              ? null
+                              : () => _returnInvoice(row),
+                          icon: const Icon(Icons.assignment_return_outlined),
+                          label: const Text('Return items / credit note'),
                         ),
                       if (_editable &&
                           table == 'Quotations' &&

@@ -34,12 +34,15 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
       values.reversalReason.trim().length > 0 && values.reversalReason.length <= 500,
     409, 'RECEIPT_NOT_REVERSIBLE', 'Choose a valid reversal date and reason for a posted receipt.');
     await assertOpenLedgerDate(sheets, companyId, values.reversalDate);
-    const data = await sheets.read(companyId, ['Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+    const data = await sheets.read(companyId, ['Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines', 'CreditNotes']);
     const allocation = data.ReceiptAllocations.filter(row => row.companyId === companyId && row.receiptId === id && active(row));
     requireThat(allocation.length === 1, 409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt allocation is missing or inconsistent.');
     const invoice = data.Invoices.find(row => row.companyId === companyId && row.recordId === allocation[0].invoiceId && active(row));
-    const amount = minor(old.amount), paid = minor(invoice?.paidAmount ?? 0), balance = minor(invoice?.balance ?? 0), total = minor(invoice?.total ?? 0);
-    requireThat(invoice && paid >= amount && paid + balance === total && ['PAID', 'PARTIALLY_PAID'].includes(invoice.status),
+    const credits = data.CreditNotes.filter(n => n.companyId === companyId && n.invoiceId === invoice?.recordId && active(n));
+    requireThat(credits.every(n => values.reversalDate >= n.date), 409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt reversal date cannot precede a credit note.');
+    requireThat(credits.every(n => minor(n.refundAmount || 0) === 0n), 409, 'RECEIPT_NOT_REVERSIBLE', 'This invoice has customer refunds. Its original receipts cannot be reversed.');
+    const amount = minor(old.amount), paid = minor(invoice?.paidAmount ?? 0), balance = minor(invoice?.balance ?? 0), total = minor(invoice?.total ?? 0) - credits.reduce((sum, n) => sum + minor(n.total), 0n);
+    requireThat(invoice && paid >= amount && paid + balance === total && ['PAID', 'PARTIALLY_PAID', 'PARTIALLY_RETURNED'].includes(invoice.status),
       409, 'RECEIPT_NOT_REVERSIBLE', 'Invoice payment totals are inconsistent.');
     const original = data.Journals.filter(row => row.companyId === companyId && row.sourceType === 'Receipt' && row.sourceId === id && active(row));
     const previous = data.Journals.some(row => row.companyId === companyId && row.sourceType === 'ReceiptReversal' && row.sourceId === id && active(row));
@@ -50,7 +53,7 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
     const accountId = old.paymentAccount === 'Cash' ? 'cash' : 'bank';
     return { values: { status: 'REVERSED', reversalDate: values.reversalDate, reversalReason: values.reversalReason.trim() }, extra: [
       { table: 'Invoices', row: invoice._row, values: { paidAmount: money(newPaid), balance: money(newBalance),
-        status: newPaid === 0n ? 'ISSUED' : 'PARTIALLY_PAID', updatedAt: system.updatedAt, updatedBy: system.updatedBy,
+        status: credits.length ? 'PARTIALLY_RETURNED' : newPaid === 0n ? 'ISSUED' : 'PARTIALLY_PAID', updatedAt: system.updatedAt, updatedBy: system.updatedBy,
         recordVersion: Number(invoice.recordVersion) + 1, syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey } },
       { table: 'Journals', row: nextRow(data.Journals), values: { ...meta, recordId: journalId, number: `AUTO-${journalId}`,
         date: values.reversalDate, description: `Reverse ${old.number}: ${values.reversalReason.trim()}`,
@@ -62,16 +65,18 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
     ] };
   }
   const { invoiceId, ...receipt } = values;
-  const data = await sheets.read(companyId, ['Customers', 'Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+  const data = await sheets.read(companyId, ['Customers', 'Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines', 'CreditNotes']);
   const customer = data.Customers.find(row => row.companyId === companyId && row.recordId === receipt.customerId && active(row));
   const invoice = data.Invoices.find(row => row.companyId === companyId && row.recordId === invoiceId && active(row));
   requireThat(customer, 409, 'RECEIPT_CUSTOMER_INVALID', 'The selected customer is unavailable.');
-  requireThat(invoice && ['ISSUED', 'PARTIALLY_PAID'].includes(invoice.status), 409, 'INVOICE_NOT_PAYABLE', 'The selected invoice is not open for payment.');
+  requireThat(invoice && ['ISSUED', 'PARTIALLY_PAID', 'PARTIALLY_RETURNED'].includes(invoice.status), 409, 'INVOICE_NOT_PAYABLE', 'The selected invoice is not open for payment.');
   requireThat(invoice.customerId === receipt.customerId, 409, 'RECEIPT_CUSTOMER_MISMATCH', 'The receipt customer does not match the invoice.');
   requireThat(invoice.currency === receipt.currency, 409, 'RECEIPT_CURRENCY_MISMATCH', 'The receipt currency does not match the invoice.');
   requireThat(receipt.paymentDate >= invoice.issueDate, 409, 'INVALID_PAYMENT_DATE', 'Payment date cannot precede the invoice date.');
   await assertOpenLedgerDate(sheets, companyId, receipt.paymentDate);
-  const total = minor(invoice.total), paid = minor(invoice.paidAmount ?? 0), balance = minor(invoice.balance);
+  const credits = data.CreditNotes.filter(n => n.companyId === companyId && n.invoiceId === invoiceId && active(n));
+  requireThat(credits.every(n => receipt.paymentDate >= n.date), 409, 'INVALID_PAYMENT_DATE', 'Payment date cannot precede a credit note.');
+  const total = minor(invoice.total) - credits.reduce((sum, n) => sum + minor(n.total), 0n), paid = minor(invoice.paidAmount ?? 0), balance = minor(invoice.balance);
   requireThat(paid + balance === total && balance > 0n, 409, 'INVOICE_BALANCE_INVALID', 'Refresh or repair the invoice balance before receiving payment.');
   const amount = minor(receipt.amount);
   requireThat(amount <= balance, 409, 'RECEIPT_OVERPAYMENT', 'Receipt amount exceeds the invoice balance.');
@@ -92,7 +97,7 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
       ...journalSystem, recordId: allocationId, receiptId: id, invoiceId, amount: money(amount),
     } },
     { table: 'Invoices', row: invoice._row, values: {
-      paidAmount: money(newPaid), balance: money(newBalance), status: newBalance === 0n ? 'PAID' : 'PARTIALLY_PAID',
+      paidAmount: money(newPaid), balance: money(newBalance), status: credits.length ? 'PARTIALLY_RETURNED' : newBalance === 0n ? 'PAID' : 'PARTIALLY_PAID',
       updatedAt: system.updatedAt, updatedBy: system.updatedBy, recordVersion: Number(invoice.recordVersion) + 1,
       syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey,
     } },

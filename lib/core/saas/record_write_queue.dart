@@ -182,6 +182,11 @@ class RecordWriteQueue {
         if (const [
           'VERSION_CONFLICT',
           'INVALID_RECORD',
+          'INVALID_INVOICE_RETURN',
+          'INVOICE_RETURN_NOT_AVAILABLE',
+          'RETURN_QUANTITY_EXCEEDED',
+          'RETURN_REFUND_ACCOUNT_REQUIRED',
+          'CREDIT_SEQUENCE_EXHAUSTED',
           'INVALID_DOCUMENT_ITEMS',
           'INVALID_INVOICE_LINE',
           'INVALID_INVOICE',

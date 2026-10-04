@@ -40,6 +40,8 @@ const FIELDS = {
   SyncOperations: ['operationId', 'actorId', 'section', 'targetRecordId', 'action', 'expectedVersion', 'resultVersion', 'status', 'errorCode'],
   AuditLog: ['actorId', 'action', 'section', 'targetRecordId', 'outcome', 'requestId'],
   NumberSequences: ['kind', 'prefix', 'period', 'nextNumber'],
+  CreditNotes: ['number', 'invoiceId', 'customerId', 'date', 'reason', 'currency', 'subtotal', 'discount', 'taxAmount', 'total', 'refundAmount', 'refundAccount', 'status'],
+  CreditNoteItems: ['creditNoteId', 'invoiceId', 'invoiceItemId', 'lineNumber', 'description', 'quantity', 'unitPrice', 'discount', 'taxRate', 'taxAmount', 'lineTotal', 'subtotal'],
 };
 export const TABLES = Object.freeze(Object.entries(FIELDS).map(([title, fields], index) =>
   Object.freeze({ title, sheetId: 1000 + index, headers: [...SYSTEM, ...fields] })));

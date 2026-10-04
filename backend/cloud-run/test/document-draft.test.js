@@ -40,6 +40,79 @@ const items = [
 ];
 const header = { customerId: 'c'.repeat(43), issueDate: '2026-10-04', currency: 'AED' };
 
+async function issuedInvoice() {
+  const f = await setup();
+  const created = await f.business.mutate(f.token, f.companyId, 'Invoices', null, 'create', {
+    expectedVersion: 0, values: { ...header, items: [{ description: 'Design', quantity: 3, unitPrice: 10, discount: 1, taxRate: 5 }] },
+  }, 'return_draft_create_01');
+  await f.business.mutate(f.token, f.companyId, 'Invoices', created.recordId, 'issue', { expectedVersion: 1 }, 'return_invoice_issue_01');
+  return { ...f, invoice: f.data.Invoices[0], line: f.data.InvoiceItems[0] };
+}
+
+test('partial returns preserve original invoice and exactly reverse totals across fractional rounding', async () => {
+  const f = await issuedInvoice();
+  const original = structuredClone(f.invoice);
+  for (let i = 0; i < 3; i++) {
+    await f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', {
+      expectedVersion: Number(f.invoice.recordVersion), values: { date: '2026-10-04', reason: 'Returned item',
+        returnItems: [{ invoiceItemId: f.line.recordId, quantity: 1 }] },
+    }, `partial_return_number_${i}`);
+  }
+  assert.equal(f.invoice.status, 'RETURNED');
+  assert.equal(f.invoice.total, original.total);
+  assert.equal(f.invoice.number, original.number);
+  assert.equal(f.invoice.balance, 0);
+  assert.equal(f.line.quantity, 3);
+  assert.equal(f.data.CreditNotes.reduce((s, n) => s + Math.round(n.total * 100), 0), Math.round(original.total * 100));
+  assert.equal(f.data.CreditNotes.reduce((s, n) => s + Math.round(n.taxAmount * 100), 0), Math.round(original.taxAmount * 100));
+  for (const journal of f.data.Journals) {
+    const lines = f.data.JournalLines.filter(l => l.journalId === journal.recordId);
+    assert.equal(lines.reduce((sum, l) => sum + Math.round(l.debit * 100) - Math.round(l.credit * 100), 0), 0);
+  }
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'update', {
+    expectedVersion: f.invoice.recordVersion, values: { notes: 'change' },
+  }, 'edit_returned_invoice_1'), { code: 'INVOICE_LOCKED' });
+});
+
+test('paid invoice return refunds cash, stays idempotent after response loss and prevents overreturn', async () => {
+  const f = await issuedInvoice();
+  await f.business.mutate(f.token, f.companyId, 'Receipts', null, 'receive', { expectedVersion: 0,
+    values: { invoiceId: f.invoice.recordId, customerId: header.customerId, paymentDate: '2026-10-04',
+      amount: f.invoice.total, currency: 'AED', paymentAccount: 'Bank' } }, 'return_receipt_receive1');
+  const input = { expectedVersion: f.invoice.recordVersion, values: { date: '2026-10-04', reason: 'Customer return', refundAccount: 'Bank',
+    returnItems: [{ invoiceItemId: f.line.recordId, quantity: 1 }] } };
+  f.loseResponse();
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', input, 'return_lost_response_1'));
+  const replay = await f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', input, 'return_lost_response_1');
+  assert.equal(replay.replayed, true);
+  assert.equal(f.data.CreditNotes.length, 1);
+  assert.equal(f.invoice.balance, 0);
+  assert.equal(f.data.CreditNotes[0].refundAmount, f.data.CreditNotes[0].total);
+  assert.ok(f.data.JournalLines.some(l => l.accountId === 'bank' && l.credit > 0));
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', {
+    expectedVersion: f.invoice.recordVersion, values: { ...input.values, returnItems: [{ invoiceItemId: f.line.recordId, quantity: 3 }] },
+  }, 'return_excess_qty_001'), { code: 'RETURN_QUANTITY_EXCEEDED' });
+  assert.equal(f.data.CreditNotes.length, 1);
+});
+
+test('partial return leaves balance payable and rejects foreign lines and forged credit note edits', async () => {
+  const f = await issuedInvoice();
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', {
+    expectedVersion: f.invoice.recordVersion, values: { date: '2026-10-04', reason: 'Return item', returnItems: [{ invoiceItemId: 'z'.repeat(43), quantity: 1 }] },
+  }, 'foreign_return_item01'), { code: 'INVALID_INVOICE_RETURN' });
+  await f.business.mutate(f.token, f.companyId, 'Invoices', f.invoice.recordId, 'invoiceReturn', {
+    expectedVersion: f.invoice.recordVersion, values: { date: '2026-10-04', reason: 'Return item', returnItems: [{ invoiceItemId: f.line.recordId, quantity: 1 }] },
+  }, 'return_before_pay_001');
+  await f.business.mutate(f.token, f.companyId, 'Receipts', null, 'receive', { expectedVersion: 0,
+    values: { invoiceId: f.invoice.recordId, customerId: header.customerId, paymentDate: '2026-10-04',
+      amount: f.invoice.balance, currency: 'AED', paymentAccount: 'Cash' } }, 'return_remaining_paid');
+  assert.equal(f.invoice.balance, 0);
+  assert.equal(f.invoice.status, 'PARTIALLY_RETURNED');
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'CreditNotes', f.data.CreditNotes[0].recordId, 'update', {
+    expectedVersion: 1, values: { total: 0 },
+  }, 'forged_credit_update1'), { code: 'CREDIT_NOTE_LOCKED' });
+});
+
 for (const [table, child, parent] of [['Invoices', 'InvoiceItems', 'invoiceId'], ['Quotations', 'QuotationItems', 'quotationId']]) {
   const values = { ...header, ...(table === 'Quotations' ? { validUntil: '2026-11-04' } : {}), items };
   test(`${table}: complete draft saves in one batch and lost response replays without duplication`, async () => {

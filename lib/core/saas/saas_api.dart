@@ -178,8 +178,14 @@ class SaasApi {
     if (financial) affected.addAll(['Journals', 'JournalLines']);
     if (tables
         .any((t) => ['Invoices', 'InvoiceItems', 'Receipts'].contains(t))) {
-      affected.addAll(
-          ['Invoices', 'InvoiceItems', 'Receipts', 'ReceiptAllocations']);
+      affected.addAll([
+        'Invoices',
+        'InvoiceItems',
+        'Receipts',
+        'ReceiptAllocations',
+        'CreditNotes',
+        'CreditNoteItems'
+      ]);
     }
     if (tables.any((t) => ['Quotations', 'QuotationItems'].contains(t))) {
       affected

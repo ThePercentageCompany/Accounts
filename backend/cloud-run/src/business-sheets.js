@@ -19,6 +19,9 @@ export class BusinessSheets {
   }
   async readTables(companyId, tables) {
     return this.workspace.withGoogle(companyId, async (token, company) => {
+      if (tables.some(t => ['CreditNotes', 'CreditNoteItems'].includes(t.title))) {
+        await this.google.ensureCreditTables(token, company.resources.spreadsheetId);
+      }
       const values = await this.google.rows(token, company.resources.spreadsheetId,
         tables.map(t => `'${t.title}'!A1:AZ10002`));
       return Object.fromEntries(tables.map((table, i) => {

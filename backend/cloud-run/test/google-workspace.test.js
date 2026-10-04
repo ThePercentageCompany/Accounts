@@ -9,6 +9,21 @@ const response = (data, status = 200) => new Response(JSON.stringify(data), { st
 const company = { id: 'company-id', name: '=Dangerous formula', createdAt: 100, resources: { spreadsheetId: 'private-sheet' } };
 const owner = { id: 'owner', email: 'owner@example.com', name: 'Owner' };
 
+test('credit-note extension adds only missing tabs and headers in one atomic request', async () => {
+  const writes = [];
+  const existing = TABLES.filter(t => !['CreditNotes', 'CreditNoteItems'].includes(t.title));
+  const google = new GoogleWorkspace({ fetcher: async (url, options) => {
+    if (options.method === 'GET') return response({ sheets: existing.map(t => ({ properties: t })) });
+    writes.push(JSON.parse(options.body));
+    return response({});
+  } });
+  await google.ensureCreditTables('token', 'spreadsheet');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].requests.length, 4);
+  assert.deepEqual(writes[0].requests.filter(r => r.addSheet).map(r => r.addSheet.properties.title), ['CreditNotes', 'CreditNoteItems']);
+  assert.ok(writes[0].requests.filter(r => r.updateCells).every(r => r.updateCells.start.rowIndex === 0));
+});
+
 test('schema initializes dedicated columns and RAW metadata without sample business records', async () => {
   const calls = [];
   const google = new GoogleWorkspace({ fetcher: async (url, options) => {

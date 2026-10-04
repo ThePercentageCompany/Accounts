@@ -14,6 +14,7 @@ import { payrollChanges } from './payroll-policy.js';
 import { assetChanges } from './asset-policy.js';
 import { capitalChanges } from './capital-policy.js';
 import { draftItems } from './document-draft.js';
+import { returnInput } from './invoice-return.js';
 
 const SYSTEM = new Set(['recordId', 'companyId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
   'recordVersion', 'syncStatus', 'isDeleted', 'idempotencyKey']);
@@ -59,7 +60,7 @@ export class BusinessService {
     for (const op of input.operations) {
       requireThat(op && !Array.isArray(op) && Object.keys(op).every(k =>
         ['operationId', 'table', 'recordId', 'action', 'expectedVersion', 'values'].includes(k)) &&
-        validKey(op.operationId) && !seen.has(op.operationId) && ['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(op.action) &&
+        validKey(op.operationId) && !seen.has(op.operationId) && ['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(op.action) &&
         Number.isSafeInteger(op.expectedVersion) && (['create', 'receive'].includes(op.action) ?
           op.expectedVersion === 0 && op.recordId === undefined : op.expectedVersion > 0 && validRecordId(op.table, op.recordId)),
       400, 'INVALID_BATCH', 'Invalid or duplicate operation.');
@@ -67,6 +68,7 @@ export class BusinessService {
       if (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(op.action)) requireThat(!Object.hasOwn(op, 'values') &&
         (op.action !== 'post' || ['Income', 'Expenses'].includes(op.table)), 400, 'INVALID_BATCH', 'Invalid posting or deletion.');
       else if (op.action === 'receive') receiptInput(op.values);
+      else if (op.action === 'invoiceReturn') returnInput(op.values);
       else this.values(op.table, op.values);
       seen.add(op.operationId);
     }
@@ -136,17 +138,19 @@ export class BusinessService {
     return profitAndLoss(companyId, from, asOf, data);
   }
   async mutate(token, companyId, tableName, recordId, action, input, key) {
+    requireThat(!['CreditNotes', 'CreditNoteItems'].includes(tableName), 409,
+      'CREDIT_NOTE_LOCKED', 'Credit notes are created only through an issued invoice return.');
     this.sheets.table(tableName);
     await this.authorizeWrite(token, companyId, tableName);
     requireThat(validKey(key), 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
-    requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(action) &&
+    requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(action) &&
       (!['post', 'pay', 'reverse'].includes(action) || ['Income', 'Expenses'].includes(tableName)), 400, 'INVALID_RECORD', 'Invalid record action.');
     const expectedVersion = input?.expectedVersion;
     requireThat(Number.isSafeInteger(expectedVersion) && expectedVersion >= 0 &&
       (['create', 'receive'].includes(action) ? recordId === null && expectedVersion === 0 : validRecordId(tableName, recordId) && expectedVersion > 0),
     400, 'INVALID_RECORD', 'Supply the correct record ID and expectedVersion.');
     requireThat(action !== 'issue' || tableName === 'Invoices', 400, 'INVALID_RECORD', 'Only invoices can be issued.');
-    requireThat(action !== 'invoiceVoid' || tableName === 'Invoices', 400, 'INVALID_RECORD', 'Only invoices can be voided.');
+    requireThat(!['invoiceVoid', 'invoiceReturn'].includes(action) || tableName === 'Invoices', 400, 'INVALID_RECORD', 'Only invoices can be voided.');
     requireThat(action !== 'receive' || tableName === 'Receipts', 400, 'INVALID_RECORD', 'Only receipts can record a payment.');
     requireThat(action !== 'receiptReverse' || tableName === 'Receipts', 400, 'INVALID_RECORD', 'Only receipts support receipt reversal.');
     requireThat(!['send', 'convert'].includes(action) || tableName === 'Quotations', 400, 'INVALID_RECORD', 'Only quotations support this action.');
@@ -154,7 +158,7 @@ export class BusinessService {
     requireThat(!['capitalize', 'depreciate', 'assetDispose'].includes(action) || tableName === 'Assets', 400, 'INVALID_RECORD', 'Only assets support this action.');
     requireThat(action !== 'capitalPost' || tableName === 'CapitalTransactions', 400, 'INVALID_RECORD', 'Only capital contributions support this action.');
     requireThat(!['loanPost', 'loanRepay'].includes(action) || tableName === 'ShareholderLoans', 400, 'INVALID_RECORD', 'Only shareholder loans support this action.');
-    const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : this.values(tableName, input.values);
+    const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : action === 'invoiceReturn' ? returnInput(input.values) : this.values(tableName, input.values);
     if (Object.hasOwn(values, 'items')) {
       requireThat(['create', 'update'].includes(action), 400, 'INVALID_DOCUMENT_ITEMS', 'Only draft creation or editing accepts lines.');
       await this.authorizeWrite(token, companyId, tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
