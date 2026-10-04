@@ -276,9 +276,26 @@ class RecordCard extends StatelessWidget {
             collapsedShape: collapsedShape,
             backgroundColor: backgroundColor,
             collapsedBackgroundColor: collapsedBackgroundColor,
-            children: mobile
-                ? children.where((child) => !action(child)).toList()
-                : children,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 8,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Divider(height: 24),
+              if (!mobile && actions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: actions,
+                  ),
+                ),
+              ...children.where((child) => !action(child)),
+            ],
           ),
           if (mobile && actions.isNotEmpty)
             Align(
@@ -327,6 +344,204 @@ class RecordCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Shared readable detail groups for saved business records. Values remain
+/// authoritative; presentation never recalculates accounting amounts.
+class RecordDetails extends StatelessWidget {
+  const RecordDetails({super.key, required this.record});
+  final Map<String, dynamic> record;
+  static const _internal = {
+    'createdAt',
+    'createdBy',
+    'updatedAt',
+    'updatedBy',
+    'recordVersion',
+    'syncStatus',
+    'isDeleted',
+    'idempotencyKey',
+  };
+  static const _money = {
+    'subtotal',
+    'discount',
+    'taxAmount',
+    'total',
+    'paidAmount',
+    'balance',
+    'amount',
+    'unitPrice',
+    'lineTotal',
+    'cost',
+    'netSalary',
+    'grossSalary',
+    'basicSalary',
+    'allowances',
+    'deductions',
+    'bonus',
+    'refundAmount',
+    'principal',
+    'outstandingBalance',
+    'agreedCapital',
+    'accumulatedDepreciation',
+    'netBookValue',
+    'residualValue',
+    'disposalProceeds',
+    'totalDebit',
+    'totalCredit',
+    'debit',
+    'credit',
+  };
+  String group(String key) {
+    if (const {
+      'notes',
+      'paymentTerms',
+      'reason',
+      'description',
+    }.contains(key)) {
+      return 'Notes & description';
+    }
+    if (_money.contains(key) ||
+        const {
+          'currency',
+          'taxRate',
+          'quantity',
+          'rate',
+          'hours',
+          'percentage',
+        }.contains(key)) {
+      return 'Amounts & quantities';
+    }
+    if (RegExp(
+      r'email|phone|address|website|trn|bank|iban|swift',
+      caseSensitive: false,
+    ).hasMatch(key)) {
+      return 'Contact & business details';
+    }
+    return 'Record details';
+  }
+
+  String label(String key) {
+    const labels = {
+      'taxAmount': 'VAT amount',
+      'trn': 'TRN',
+      'iban': 'IBAN',
+      'paymentTerms': 'Terms & conditions',
+      'issueDate': 'Issue date',
+      'dueDate': 'Due date',
+      'validUntil': 'Valid until',
+    };
+    return labels[key] ??
+        key
+            .replaceAllMapped(
+              RegExp(r'([a-z])([A-Z])'),
+              (m) => '${m[1]} ${m[2]}',
+            )
+            .replaceFirstMapped(RegExp(r'^.'), (m) => m[0]!.toUpperCase());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <String, List<MapEntry<String, dynamic>>>{};
+    for (final entry in record.entries) {
+      if (entry.key.startsWith('_') ||
+          entry.key.endsWith('Id') ||
+          _internal.contains(entry.key) ||
+          entry.value == null ||
+          '${entry.value}'.trim().isEmpty) {
+        continue;
+      }
+      groups.putIfAbsent(group(entry.key), () => []).add(entry);
+    }
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final heading in const [
+          'Record details',
+          'Amounts & quantities',
+          'Contact & business details',
+          'Notes & description',
+        ])
+          if (groups[heading]?.isNotEmpty == true)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: theme.colorScheme.outlineVariant,
+                  width: .8,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(heading, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns = heading == 'Notes & description'
+                          ? 1
+                          : constraints.maxWidth >= 780
+                          ? 3
+                          : constraints.maxWidth >= 450
+                          ? 2
+                          : 1;
+                      final width =
+                          (constraints.maxWidth - (columns - 1) * 20) / columns;
+                      return Wrap(
+                        spacing: 20,
+                        runSpacing: 20,
+                        children: [
+                          for (final entry in groups[heading]!)
+                            SizedBox(
+                              width: width,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label(entry.key),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  if (const {
+                                    'status',
+                                    'paymentStatus',
+                                    'ledgerStatus',
+                                    'employmentStatus',
+                                  }.contains(entry.key))
+                                    StatusChip(value: '${entry.value}')
+                                  else
+                                    SelectionArea(
+                                      child: Text(
+                                        _money.contains(entry.key) &&
+                                                entry.value is num
+                                            ? '${entry.value.toStringAsFixed(2)}'
+                                            : '${entry.value}',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: entry.key == 'total'
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w400,
+                                            ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }

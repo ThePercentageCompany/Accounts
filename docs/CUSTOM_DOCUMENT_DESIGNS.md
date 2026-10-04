@@ -1,9 +1,11 @@
 # Custom invoice and quotation HTML designs
 
-Open an invoice or quotation's **Record documents** dialog. Use the code icon:
+Open **System → Settings** and choose **Invoice design** or **Quotation design**:
 
 - **Edit HTML design** edits HTML/CSS, imports an HTML file, resets the editor source, previews using the saved record, exports the source, and saves the design.
-- **Export custom HTML** downloads the current record populated into the saved design. Open this file in a browser and use Print / Save as PDF.
+- In an invoice or quotation's **Record documents** dialog, **Export custom HTML** downloads the current record populated into the saved design. Open this file in a browser and use Print / Save as PDF.
+
+Settings preview uses the first saved invoice or quotation. A design can be saved before any records exist; preview requires a saved record.
 
 Designs are stored on the current browser/device, scoped by API origin, workspace ID and document type. They are not cloud-synchronized. Export the source as a backup; import it to another browser. Closing without saving leaves the stored design unchanged. Reset source also requires Save design to replace the stored design.
 

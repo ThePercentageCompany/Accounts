@@ -25,6 +25,7 @@ import 'package:tpc_invoice/features/accounting/presentation/capital_editor.dart
 import 'package:tpc_invoice/features/workspace/presentation/company_profile_editor.dart';
 import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/documents/presentation/record_documents_view.dart';
+import 'package:tpc_invoice/features/workspace/presentation/system_settings_panel.dart';
 
 const workspaceTables = <String, List<String>>{
   'Invoices': ['Invoices', 'CreditNotes', 'Receipts', 'ReceiptAllocations'],
@@ -1609,8 +1610,6 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
-  String _label(String key) =>
-      key.replaceAllMapped(RegExp(r'[A-Z]'), (m) => ' ${m[0]!.toLowerCase()}');
   String _title(Map<String, dynamic> row) =>
       const ['Invoices', 'Quotations'].contains(table) &&
           '${row['number'] ?? ''}'.trim().isEmpty
@@ -1619,6 +1618,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   @override
   Widget build(BuildContext context) => Column(
     children: [
+      if (table == 'CompanyProfile' && !widget.employee)
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .4,
+          ),
+          child: SingleChildScrollView(
+            child: SystemSettingsPanel(
+              api: widget.api,
+              companyId: widget.companyId,
+            ),
+          ),
+        ),
       Padding(
         padding: EdgeInsets.symmetric(
           horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
@@ -2081,27 +2092,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           : () => _editCustomer(row),
                       child: Text('Edit $_recordLabel'),
                     ),
-                  for (final field in row.entries)
-                    if (!field.key.startsWith('_') &&
-                        !field.key.endsWith('Id') &&
-                        !const [
-                          'createdAt',
-                          'createdBy',
-                          'updatedAt',
-                          'updatedBy',
-                          'recordVersion',
-                          'syncStatus',
-                          'isDeleted',
-                          'idempotencyKey',
-                        ].contains(field.key) &&
-                        '${field.value}'.isNotEmpty)
-                      ListTile(
-                        title: Text(_label(field.key)),
-                        // SelectableText's internal scrollable shares the
-                        // expansion tile's stored bool and can crash on
-                        // restoration. SelectionArea needs no scroll state.
-                        subtitle: SelectionArea(child: Text('${field.value}')),
-                      ),
+                  RecordDetails(record: row),
                 ],
               );
             },

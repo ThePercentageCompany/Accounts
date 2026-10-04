@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
-import 'package:tpc_invoice/features/documents/presentation/html_document_design_editor.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -58,22 +57,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
     '${widget.api.origin}|${widget.companyId}|${widget.section}',
   );
-  Future<void> _editHtml() async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => HtmlDocumentDesignEditor(
-        store: htmlStore,
-        preview: (source) => savedRecordHtml(
-          widget.api,
-          widget.companyId,
-          widget.section,
-          widget.record['recordId'],
-          source,
-        ),
-      ),
-    );
-  }
-
   Future<void> _exportHtml() => _run(() async {
     final html = await savedRecordHtml(
       widget.api,
@@ -241,18 +224,11 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
             Align(
               alignment: Alignment.centerRight,
               child: PopupMenuButton<String>(
-                tooltip: 'Custom HTML design',
+                tooltip: 'Export custom HTML',
                 enabled: !busy,
                 icon: const Icon(Icons.code),
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    _editHtml();
-                  } else {
-                    _exportHtml();
-                  }
-                },
+                onSelected: (_) => _exportHtml(),
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit HTML design')),
                   PopupMenuItem(
                     value: 'export',
                     child: Text('Export custom HTML'),

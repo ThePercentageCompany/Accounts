@@ -561,7 +561,13 @@ historical “pending” statements as the current status.
 
 ### Custom document HTML designs - 5 October 2026
 
-- Owner invoice and quotation document dialogs include a custom HTML design menu. Edit/import HTML and CSS, save or update a device-local workspace/type design, and export source or a populated saved-record preview.
+- Shared expanded record views now group details, amounts/quantities, contact/business fields and notes in responsive bordered panels. Desktop workflow actions wrap together above details; mobile retains the action sheet. Applies to invoice, quotation and other shared record sections without changing accounting permissions or workflow rules.
+- Validation: 139 existing tests passed with one skip; three new expansion/large-text checks passed at 320px, 390px and desktop widths.
+
+- Design editors now live under System → Settings, alongside appearance and existing company profile/logo settings. Record document menus retain custom HTML export only. Existing design storage keys are preserved. Settings preview uses the first saved document of the selected type.
+- Settings navigation and HTML editor checks passed at 320px and desktop widths; all 15 focused settings/design/document tests passed. Static analysis passed.
+
+- Owner Settings includes custom invoice and quotation HTML design editors. Edit/import HTML and CSS, save or update a device-local workspace/type design, and export source or a populated saved-record preview.
 - HTML exports use escaped record values and authoritative saved totals. Browser Print / Save as PDF produces the custom PDF; existing invoice_kit Modern/Classic PDF attachments remain available.
 - Designs are local to the browser/device, not cloud-synchronized. See `docs/CUSTOM_DOCUMENT_DESIGNS.md` for placeholders, backup/import and usage.
 - Validation: five new design/editor tests (including 320px mobile layout) and 19 existing document/report tests passed. Static analysis passed. Local changes only.
