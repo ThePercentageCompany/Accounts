@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'workspace_record_cache.dart';
+import 'read_cache.dart';
 import 'package:flutter/material.dart';
 import '../widgets/appearance_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -101,6 +101,14 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         )
       : null;
   String? _selected;
+  final Set<String> _visited = {};
+  @override
+  void initState() {
+    super.initState();
+    widget.api.useVerifiedWorkspace(widget.companyId,
+        ownerId: widget.ownerId, employee: widget.employee);
+  }
+
   @override
   void dispose() {
     _employees?.dispose();
@@ -119,6 +127,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     ];
     final selected =
         sections.contains(_selected) ? _selected : sections.firstOrNull;
+    if (selected != null) _visited.add(selected);
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final shortcuts = sections.take(3).toList();
     final moreSelected = !shortcuts.contains(selected);
@@ -216,61 +225,70 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       ]),
                 )),
             Expanded(
-              child: selected == null
-                  ? const Center(
-                      child: Text(
-                        'No record sections are assigned. Contact your company owner.',
-                      ),
-                    )
-                  : selected == 'Reports'
-                      ? TrialBalanceView(
-                          key: ValueKey(widget.companyId),
-                          api: widget.api,
-                          companyId: widget.companyId,
-                          employee: widget.employee != null,
-                          initialDashboard: true,
-                        )
-                      : selected == 'Employees' && _employees != null
-                          ? EmployeeAdminView(
-                              controller: _employees,
-                              onDocuments: (row) {
-                                showDialog<void>(
-                                    context: context,
-                                    builder: (_) => RecordDocumentsView(
-                                        api: widget.api,
-                                        companyId: widget.companyId,
-                                        section: 'Employees',
-                                        record: row,
-                                        uploads: _uploads,
-                                        writes: _writes));
-                              })
-                          : _RecordsPanel(
-                              key: ValueKey((widget.companyId, selected)),
-                              api: widget.api,
-                              companyId: widget.companyId,
-                              employee: widget.employee != null,
-                              writes: widget.employee == null ||
-                                      (widget.employee!['writableSections']
-                                                  as List? ??
-                                              [])
-                                          .contains(selected)
-                                  ? _writes
-                                  : null,
-                              uploads: _uploads,
-                              cache: widget.employee == null
-                                  ? WorkspaceRecordCache(widget.preferences!,
-                                      '${widget.api.origin}_${widget.ownerId}_${widget.companyId}')
-                                  : null,
-                              tables: selected == 'Employees'
-                                  ? ['Employees']
-                                  : workspaceTables[selected]!,
-                            ),
+              child: IndexedStack(
+                index: selected == null ? 0 : sections.indexOf(selected),
+                children: sections.isEmpty
+                    ? [const Center(child: Text('No sections assigned.'))]
+                    : [
+                        for (final section in sections)
+                          _visited.contains(section)
+                              ? _sectionView(section, section == selected)
+                              : const SizedBox.shrink(),
+                      ],
+              ),
             ),
           ],
         )),
       ])),
     );
   }
+
+  Widget _sectionView(String? selected, bool active) => selected == null
+      ? const Center(
+          child: Text(
+            'No record sections are assigned. Contact your company owner.',
+          ),
+        )
+      : selected == 'Reports'
+          ? TrialBalanceView(
+              key: ValueKey(widget.companyId),
+              api: widget.api,
+              companyId: widget.companyId,
+              employee: widget.employee != null,
+              initialDashboard: true,
+              active: active,
+            )
+          : selected == 'Employees' && _employees != null
+              ? EmployeeAdminView(
+                  controller: _employees,
+                  active: active,
+                  onDocuments: (row) {
+                    showDialog<void>(
+                        context: context,
+                        builder: (_) => RecordDocumentsView(
+                            api: widget.api,
+                            companyId: widget.companyId,
+                            section: 'Employees',
+                            record: row,
+                            uploads: _uploads,
+                            writes: _writes));
+                  })
+              : _RecordsPanel(
+                  key: ValueKey((widget.companyId, selected)),
+                  api: widget.api,
+                  companyId: widget.companyId,
+                  employee: widget.employee != null,
+                  active: active,
+                  writes: widget.employee == null ||
+                          (widget.employee!['writableSections'] as List? ?? [])
+                              .contains(selected)
+                      ? _writes
+                      : null,
+                  uploads: _uploads,
+                  tables: selected == 'Employees'
+                      ? ['Employees']
+                      : workspaceTables[selected]!,
+                );
 
   IconData _sectionIcon(String section) => switch (section) {
         'Reports' => Icons.space_dashboard_outlined,
@@ -379,9 +397,9 @@ class _RecordsPanel extends StatefulWidget {
     required this.tables,
     this.writes,
     this.uploads,
-    this.cache,
+    this.active = true,
   });
-  final WorkspaceRecordCache? cache;
+  final bool active;
   final SaasApi api;
   final String companyId;
   final bool employee;
@@ -405,7 +423,13 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   bool busy = false;
   String? error;
   int _request = 0;
-  Timer? _refreshTimer;
+  bool _hasData = false;
+  bool _loading = false;
+  String get _path => widget.api
+      .recordsPath(widget.companyId, table, employee: widget.employee);
+  final _searchController = TextEditingController();
+  final Map<String, String> _tableSearch = {};
+  String? _watchedPath;
   bool _savedData = false;
   Future<void> _discardRejected() async {
     final confirmed = await showDialog<bool>(
@@ -1158,75 +1182,109 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   @override
   void initState() {
     super.initState();
+    widget.api.cache.addListener(_cacheChanged);
+    _watch();
     _load();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (!busy &&
-          widget.writes?.pending.isNotEmpty != true &&
-          widget.uploads?.pending == null) {
-        _load();
+  }
+
+  void _watch() {
+    if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
+    _watchedPath = widget.active ? _path : null;
+    if (_watchedPath != null) widget.api.cache.activate(_watchedPath!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RecordsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      _watch();
+      if (widget.active) _load();
+    }
+  }
+
+  void _cacheChanged() {
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      final state = widget.api.cache.state(_path);
+      final data = state?.data;
+      if (data != null) {
+        final fresh = (data['records'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        final changed = dataFingerprint({'records': fresh}) !=
+            dataFingerprint({'records': rows});
+        setState(() {
+          if (changed) rows = fresh;
+          _hasData = true;
+          _savedData = state!.offline;
+          error = state.error is SaasApiException
+              ? (state.error as SaasApiException).message
+              : state.error == null
+                  ? null
+                  : 'Refresh failed. Showing saved data.';
+        });
+      } else if (widget.api.cache.scope == null && _hasData) {
+        setState(() {
+          rows = [];
+          _hasData = false;
+        });
+      } else {
+        setState(() {});
       }
     });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _request++;
+    widget.api.cache.removeListener(_cacheChanged);
+    if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    if (busy) return;
-    final requestedTable = table;
-    final request = ++_request;
+  Future<void> _load({bool force = false}) async {
+    final requestedTable = table, request = ++_request;
+    final cached = widget.api.cache.state(_path)?.data;
     setState(() {
-      busy = true;
-      final cached = widget.cache?.read(requestedTable);
-      rows = cached ?? rows;
-      _savedData = cached != null;
+      _loading = cached == null && !_hasData;
+      if (cached != null) {
+        rows = (cached['records'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        _hasData = true;
+      }
       error = null;
     });
     try {
-      final result = await widget.api.records(
-        widget.companyId,
-        table,
-        employee: widget.employee,
-      );
+      final result = await widget.api.records(widget.companyId, requestedTable,
+          employee: widget.employee, force: force);
       if (!mounted || request != _request) return;
-      final fresh = (result['records'] as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
       setState(() {
-        rows = fresh;
-        _savedData = false;
+        rows = (result['records'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        _hasData = true;
+        _savedData = widget.api.cache.state(_path)?.offline ?? false;
       });
-      try {
-        await widget.cache?.save(requestedTable, fresh);
-      } catch (_) {}
     } on SaasApiException catch (e) {
       if (mounted && request == _request) {
-        if (e.status == 401 || e.status == 403) {
-          setState(() => rows = []);
-          try {
-            await widget.cache?.clear(requestedTable);
-          } catch (_) {}
-        }
-        if (mounted) {
-          setState(() {
-            error = e.message;
-            _savedData = rows.isNotEmpty;
-          });
-        }
+        setState(() {
+          if (e.status == 401 || e.status == 403) {
+            rows = [];
+            _hasData = false;
+          }
+          error = e.message;
+        });
       }
     } catch (_) {
       if (mounted && request == _request) {
         setState(() {
-          if (widget.employee) rows = [];
-          _savedData = rows.isNotEmpty;
           error = 'Unable to load records. Retry when connected.';
         });
       }
     } finally {
-      if (mounted && request == _request) setState(() => busy = false);
+      if (mounted && request == _request) setState(() => _loading = false);
     }
   }
 
@@ -1258,13 +1316,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       onChanged: busy
                           ? null
                           : (v) {
+                              _tableSearch[table] = _search;
                               rows = [];
+                              _hasData = false;
                               table = v!;
+                              _search = _tableSearch[table] ?? '';
+                              _searchController.text = _search;
+                              _watch();
                               _load();
                             },
                     )),
                 TextButton.icon(
-                  onPressed: busy ? null : _load,
+                  onPressed: busy ? null : () => _load(force: true),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Refresh'),
                 ),
@@ -1303,6 +1366,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             child: TextField(
+              controller: _searchController,
               decoration: const InputDecoration(
                   hintText: 'Search records', prefixIcon: Icon(Icons.search)),
               onChanged: (value) => setState(() => _search = value),
@@ -1312,21 +1376,28 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             const Padding(
                 padding: EdgeInsets.all(24),
                 child: Text('No records match your search.')),
-          if (busy) const LinearProgressIndicator(),
+          if (busy ||
+              _loading ||
+              widget.api.cache.state(_path)?.refreshing == true)
+            const LinearProgressIndicator(),
+          if (widget.api.cache.state(_path)?.refreshing == true && _hasData)
+            const Text('Updating?'),
+          if (_savedData) const Text('Offline ? showing saved data.'),
           if (error != null)
             Padding(
               padding: const EdgeInsets.all(24),
               child: Semantics(liveRegion: true, child: Text(error!)),
             ),
-          if (!busy && error == null && rows.isEmpty)
+          if (!busy && !_loading && error == null && _hasData && rows.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
               child: Text('No records yet.'),
             ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: () => _load(force: true),
               child: ListView.builder(
+                key: PageStorageKey((widget.companyId, table)),
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -1334,6 +1405,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                 itemBuilder: (context, index) {
                   final row = _visibleRows[index];
                   return ExpansionTile(
+                    key: PageStorageKey((table, row['recordId'] ?? index)),
                     title: Text(_title(row),
                         maxLines: 2, overflow: TextOverflow.ellipsis),
                     subtitle:

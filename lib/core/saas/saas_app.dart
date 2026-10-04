@@ -38,6 +38,7 @@ class _SaasAppState extends State<SaasApp> {
       if (!mounted) return;
       final session = SaasSession(api, preferences);
       _session = session;
+      session.addListener(_sessionChanged);
       // Invitation links must not silently adopt a cached owner/employee.
       if (!_employee) await session.restore();
       if (!mounted) return;
@@ -53,6 +54,10 @@ class _SaasAppState extends State<SaasApp> {
     }
   }
 
+  void _sessionChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _navigate(Uri uri) async {
     if (!await launchUrl(uri, webOnlyWindowName: '_self')) {
       throw const SaasApiException(
@@ -64,6 +69,7 @@ class _SaasAppState extends State<SaasApp> {
 
   @override
   void dispose() {
+    _session?.removeListener(_sessionChanged);
     _session?.dispose();
     if (widget.api == null) _api?.close();
     super.dispose();
@@ -103,7 +109,8 @@ class _SaasAppState extends State<SaasApp> {
     }
     if (_workspace && session.ready && session.owner != null) {
       return SharedWorkspace(
-        key: ValueKey(session.company!['companyId']),
+        key: ValueKey(
+            (session.company!['companyId'], session.owner!['ownerId'])),
         api: _api!,
         companyId: session.company!['companyId'] as String,
         title: session.company!['name'] as String,

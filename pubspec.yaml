@@ -24,6 +24,9 @@ dependencies:
   url_launcher: ^6.3.2
   mobile_scanner: ^7.1.2
   qr: ^3.0.2
+  idb_shim: ^2.9.10
+  web: ^1.1.1
+  http_parser: ^4.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

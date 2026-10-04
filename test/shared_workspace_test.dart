@@ -7,6 +7,63 @@ import 'package:tpc_invoice/core/saas/saas_api.dart';
 import 'package:tpc_invoice/core/saas/shared_workspace.dart';
 
 void main() {
+  testWidgets(
+      'section navigation preserves filter and scroll without refetching',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final requests = <String>[];
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((r) async {
+          requests.add(r.url.path);
+          return http.Response(
+              r.url.path.endsWith('Customers')
+                  ? '{"records":[${List.generate(40, (i) => '{"recordId":"customer-$i","name":"Customer $i"}').join(',')}]}'
+                  : '{"records":[]}',
+              200);
+        }));
+    await tester.pumpWidget(MaterialApp(
+        home: SharedWorkspace(
+      api: api,
+      companyId: 'c' * 43,
+      title: 'Workspace',
+      onBack: () {},
+      preferences: prefs,
+      employee: {
+        'employeeId': 'e' * 43,
+        'allowedSections': ['Customers', 'Invoices']
+      },
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Customers').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Customer');
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -500));
+    await tester.pumpAndSettle();
+    final before = tester
+        .state<ScrollableState>(find.byType(Scrollable).last)
+        .position
+        .pixels;
+    expect(before, greaterThan(0));
+    await tester.tap(find.text('Invoices').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Customers').last);
+    await tester.pumpAndSettle();
+    expect(requests.where((p) => p.endsWith('/Customers')).length, 1);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        'Customer');
+    expect(
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).last)
+            .position
+            .pixels,
+        before);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
   for (final canEdit in [false, true]) {
     testWidgets('employee customer editor follows admin edit grant: $canEdit',
         (tester) async {

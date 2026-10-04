@@ -4,8 +4,12 @@ import 'employee_admin_controller.dart';
 
 class EmployeeAdminView extends StatefulWidget {
   const EmployeeAdminView(
-      {super.key, required this.controller, this.onDocuments});
+      {super.key,
+      required this.controller,
+      this.onDocuments,
+      this.active = true});
   final EmployeeAdminController controller;
+  final bool active;
   final ValueChanged<Map<String, dynamic>>? onDocuments;
   @override
   State<EmployeeAdminView> createState() => _EmployeeAdminViewState();
@@ -15,7 +19,32 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
   @override
   void initState() {
     super.initState();
-    widget.controller.refresh();
+    if (widget.active) {
+      widget.controller.api.cache.activate(widget.controller.resourcePath);
+    }
+    widget.controller.refresh(force: false);
+  }
+
+  @override
+  void didUpdateWidget(covariant EmployeeAdminView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      final c = widget.controller;
+      if (widget.active) {
+        c.api.cache.activate(c.resourcePath);
+        c.refresh(force: false);
+      } else {
+        c.api.cache.deactivate(c.resourcePath);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.active) {
+      widget.controller.api.cache.deactivate(widget.controller.resourcePath);
+    }
+    super.dispose();
   }
 
   Future<void> _edit([Map<String, dynamic>? employee]) async {
@@ -151,7 +180,17 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                   ),
                 ],
               ),
-              if (c.busy) const LinearProgressIndicator(),
+              if (c.busy ||
+                  c.api.cache.state(c.resourcePath)?.refreshing == true)
+                const LinearProgressIndicator(),
+              if (c.api.cache.state(c.resourcePath)?.refreshing == true &&
+                  c.employees.isNotEmpty)
+                const Text('Updating?'),
+              if (c.api.cache.state(c.resourcePath)?.offline == true)
+                const Text('Offline ? showing saved data.'),
+              if (c.api.cache.state(c.resourcePath)?.error != null &&
+                  c.employees.isNotEmpty)
+                const Text('Refresh failed. Showing saved employees.'),
               if (c.error != null)
                 Semantics(
                   liveRegion: true,

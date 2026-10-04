@@ -2,6 +2,31 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Workspace cache update — 4 October 2026
+
+Implemented locally: shared memory plus IndexedDB caching for active record,
+employee administration and dashboard/report screens. Visited sections retain
+their filters, report dates, table selection, expansion and scroll state. Fresh
+data does not refetch on entry; stale data remains visible during background
+synchronization. Empty results are valid cached data. Scoped request deduplication,
+bounded retention, mutation invalidation, hidden-tab checks and cross-tab logout
+are implemented without changing backend contracts or financial posting rules.
+
+Default freshness is 2 minutes for records/employees and 1 minute for reports;
+snapshot retention is 7 days, with 128 persistent entries and a 20 MiB total limit.
+Offline viewing requires the existing verified authentication/company context;
+a fully offline browser restart cannot bypass online sign-in verification.
+Existing durable pending-edit queues remain unchanged; this adds no new offline
+financial posting or closed-browser synchronization.
+
+Validation: 223 Flutter tests passed (one browser-only test skipped on the VM),
+4 Chrome tests passed against native IndexedDB and BroadcastChannel, changed
+code analyzed cleanly, and the release web build plus Wasm dry run succeeded.
+Chrome validation used a temporary test-only CanvasKit junction to work around
+the installed Flutter Windows test-server path issue; the junction was removed.
+These frontend changes have not been deployed. See
+[workspace caching details](docs/WORKSPACE_CACHING.md) for scope, policies and limits.
+
 **Overall status: shared-backend SaaS under implementation; not ready for customer production use.**
 
 The product remains multi-company SaaS, initially serving a small number of users.

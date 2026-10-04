@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'read_cache.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,7 +28,9 @@ class EmployeeAdminController extends ChangeNotifier {
     this.preferences,
     this.ownerId,
     this.companyId,
-  );
+  ) {
+    api.cache.addListener(_cacheChanged);
+  }
   final SaasApi api;
   final SharedPreferences preferences;
   final String ownerId;
@@ -61,15 +65,35 @@ class EmployeeAdminController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _load() async {
-    final result = await api.employees(companyId);
+  String get resourcePath => '/v1/companies/$companyId/employees';
+  void _cacheChanged() {
+    scheduleMicrotask(() {
+      if (_disposed) return;
+      final data = api.cache.state(resourcePath)?.data;
+      if (data != null) {
+        final fresh = (data['employees'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        if (dataFingerprint({'employees': fresh}) !=
+            dataFingerprint({'employees': employees})) {
+          employees = fresh;
+        }
+      } else if (api.cache.scope == null) {
+        employees = [];
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> _load({bool force = false}) async {
+    final result = await api.employees(companyId, force: force);
     employees = (result['employees'] as List)
         .map((r) => Map<String, dynamic>.from(r as Map))
         .toList();
   }
 
-  Future<void> refresh() async {
-    await _run(_load);
+  Future<void> refresh({bool force = true}) async {
+    await _run(() => _load(force: force));
   }
 
   Future<void> _submitPending() async {
@@ -147,27 +171,28 @@ class EmployeeAdminController extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> access(String id, String action) => _run(
-    () async {
-      if (hasPending) {
-        throw const SaasApiException(
-          'PENDING',
-          'Confirm the pending employee change first.',
-        );
-      }
-      // Codes are returned once and never persisted. Lost issue/reset responses
-      // require an explicit reset; automatic retries cannot recover the secret.
-      return api.employeeAccess(
-        companyId,
-        id,
-        action,
-        operationId: action == 'revoke' ? null : const Uuid().v4(),
+        () async {
+          if (hasPending) {
+            throw const SaasApiException(
+              'PENDING',
+              'Confirm the pending employee change first.',
+            );
+          }
+          // Codes are returned once and never persisted. Lost issue/reset responses
+          // require an explicit reset; automatic retries cannot recover the secret.
+          return api.employeeAccess(
+            companyId,
+            id,
+            action,
+            operationId: action == 'revoke' ? null : const Uuid().v4(),
+          );
+        },
       );
-    },
-  );
 
   @override
   void dispose() {
     _disposed = true;
+    api.cache.removeListener(_cacheChanged);
     super.dispose();
   }
 }

@@ -6,7 +6,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/saas/saas_api.dart';
 import 'package:tpc_invoice/core/saas/shared_workspace.dart';
-import 'package:tpc_invoice/core/saas/workspace_record_cache.dart';
+import 'package:tpc_invoice/core/saas/cache_store.dart';
 
 void main() {
   for (final width in [320.0, 390.0, 1024.0, 1366.0]) {
@@ -49,18 +49,31 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final company = 'c' * 43;
-    final cache =
-        WorkspaceRecordCache(prefs, 'https://api.test_owner_$company');
-    await cache.save('Customers', [
-      {'name': 'Saved customer'}
-    ]);
+    final store = MemoryCacheStore();
     final response = Completer<http.Response>();
     final api = SaasApi(
         origin: 'https://api.test',
+        cacheStore: store,
         client: MockClient((r) async {
           if (r.url.path.endsWith('/Customers')) return response.future;
           return http.Response('{"records":[],"employees":[]}', 200);
         }));
+    api.useVerifiedWorkspace(company, ownerId: 'owner');
+    await api.cache.read(
+        api.recordsPath(company, 'Customers'),
+        () async => {
+              'records': [
+                {'recordId': 'customer', 'name': 'Saved customer'}
+              ]
+            });
+    await tester.pump();
+    for (final entry in store.entries.values) {
+      entry['syncedAt'] = DateTime.now()
+          .subtract(const Duration(minutes: 3))
+          .millisecondsSinceEpoch;
+    }
+    // Simulate a browser restart: keep persistence, discard session memory.
+    api.detachWorkspace();
     await tester.pumpWidget(MaterialApp(
         home: SharedWorkspace(
             api: api,

@@ -9,7 +9,16 @@ import 'saas_api.dart';
 /// Session and provisioning state for the shared backend. Legacy workspace
 /// preferences and offline queues are deliberately never read or cleared here.
 class SaasSession extends ChangeNotifier {
-  SaasSession(this.api, this.preferences);
+  SaasSession(this.api, this.preferences) {
+    api.onAccessRevoked = _accessRevoked;
+  }
+
+  void _accessRevoked() {
+    if (_disposed) return;
+    _clearIdentity();
+    error = "Your access changed or expired. Sign in again.";
+    _notify();
+  }
 
   final SaasApi api;
   final SharedPreferences preferences;
@@ -45,6 +54,7 @@ class SaasSession extends ChangeNotifier {
   }
 
   void _clearIdentity() {
+    api.detachWorkspace();
     owner = null;
     employee = null;
     company = null;
@@ -53,30 +63,30 @@ class SaasSession extends ChangeNotifier {
   }
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
-    _clearIdentity();
-    if (!employeeOnly) {
-      try {
-        owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
-      } on SaasApiException catch (failure) {
-        if (!failure.requiresSignIn) rethrow;
-      }
-    }
-    if (owner != null) {
-      final pending = preferences.getString(_registrationKey);
-      if (pending != null) {
-        pendingCompanyName = (jsonDecode(pending) as Map)['name'] as String;
-      }
-      await _loadCompanies();
-      return;
-    }
-    try {
-      employee = Map<String, dynamic>.from(
-        (await api.employeeMe())['employee'] as Map,
-      );
-    } on SaasApiException catch (failure) {
-      if (!failure.requiresSignIn) rethrow;
-    }
-  });
+        _clearIdentity();
+        if (!employeeOnly) {
+          try {
+            owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
+          } on SaasApiException catch (failure) {
+            if (!failure.requiresSignIn) rethrow;
+          }
+        }
+        if (owner != null) {
+          final pending = preferences.getString(_registrationKey);
+          if (pending != null) {
+            pendingCompanyName = (jsonDecode(pending) as Map)['name'] as String;
+          }
+          await _loadCompanies();
+          return;
+        }
+        try {
+          employee = Map<String, dynamic>.from(
+            (await api.employeeMe())['employee'] as Map,
+          );
+        } on SaasApiException catch (failure) {
+          if (!failure.requiresSignIn) rethrow;
+        }
+      });
 
   Future<void> _loadCompanies() async {
     final previousId = company?['companyId'];
@@ -86,110 +96,131 @@ class SaasSession extends ChangeNotifier {
         .toList();
     company =
         companies.where((row) => row['companyId'] == previousId).firstOrNull ??
-        companies.firstOrNull;
+            companies.firstOrNull;
   }
 
   Future<void> selectCompany(String companyId) => _run(() async {
-    if (!companies.any((row) => row['companyId'] == companyId)) {
-      throw const SaasApiException(
-        'COMPANY_NOT_FOUND',
-        'Choose a company from your account.',
-      );
-    }
-    company = Map<String, dynamic>.from(
-      (await api.setup(companyId))['company'] as Map,
-    );
-  });
+        if (!companies.any((row) => row['companyId'] == companyId)) {
+          throw const SaasApiException(
+            'COMPANY_NOT_FOUND',
+            'Choose a company from your account.',
+          );
+        }
+        company = Map<String, dynamic>.from(
+          (await api.setup(companyId))['company'] as Map,
+        );
+      });
 
   Future<void> createCompany(String name) => _run(() async {
-    if (owner == null) {
-      throw const SaasApiException(
-        'UNAUTHORIZED',
-        'Sign in first.',
-        status: 401,
-      );
-    }
-    final cleaned = name.trim();
-    if (cleaned.isEmpty || cleaned.length > 160) {
-      throw const SaasApiException(
-        'INVALID_COMPANY',
-        'Enter a company name between 1 and 160 characters.',
-      );
-    }
-    final saved = preferences.getString(_registrationKey);
-    final operation = saved == null
-        ? {'name': cleaned, 'key': const Uuid().v4()}
-        : Map<String, dynamic>.from(jsonDecode(saved) as Map);
-    if (operation['name'] != cleaned) {
-      throw const SaasApiException(
-        'REGISTRATION_PENDING',
-        'Retry the pending company name before registering another company.',
-      );
-    }
-    // Persist before sending: a lost response must not create a second company.
-    if (!await preferences.setString(_registrationKey, jsonEncode(operation))) {
-      throw const SaasApiException(
-        'LOCAL_STORAGE',
-        'Cannot save setup progress on this device.',
-      );
-    }
-    pendingCompanyName = cleaned;
-    final result = await api.createCompany(cleaned, operation['key'] as String);
-    company = Map<String, dynamic>.from(result['company'] as Map);
-    if (!await preferences.remove(_registrationKey)) {
-      throw const SaasApiException(
-        'LOCAL_STORAGE',
-        'Company created. Retry to confirm saved setup progress.',
-      );
-    }
-    pendingCompanyName = null;
-    await _loadCompanies();
-  });
+        if (owner == null) {
+          throw const SaasApiException(
+            'UNAUTHORIZED',
+            'Sign in first.',
+            status: 401,
+          );
+        }
+        final cleaned = name.trim();
+        if (cleaned.isEmpty || cleaned.length > 160) {
+          throw const SaasApiException(
+            'INVALID_COMPANY',
+            'Enter a company name between 1 and 160 characters.',
+          );
+        }
+        final saved = preferences.getString(_registrationKey);
+        final operation = saved == null
+            ? {'name': cleaned, 'key': const Uuid().v4()}
+            : Map<String, dynamic>.from(jsonDecode(saved) as Map);
+        if (operation['name'] != cleaned) {
+          throw const SaasApiException(
+            'REGISTRATION_PENDING',
+            'Retry the pending company name before registering another company.',
+          );
+        }
+        // Persist before sending: a lost response must not create a second company.
+        if (!await preferences.setString(
+            _registrationKey, jsonEncode(operation))) {
+          throw const SaasApiException(
+            'LOCAL_STORAGE',
+            'Cannot save setup progress on this device.',
+          );
+        }
+        pendingCompanyName = cleaned;
+        final result =
+            await api.createCompany(cleaned, operation['key'] as String);
+        company = Map<String, dynamic>.from(result['company'] as Map);
+        if (!await preferences.remove(_registrationKey)) {
+          throw const SaasApiException(
+            'LOCAL_STORAGE',
+            'Company created. Retry to confirm saved setup progress.',
+          );
+        }
+        pendingCompanyName = null;
+        await _loadCompanies();
+      });
 
   Future<void> refreshSetup() => _run(() async {
-    if (company == null) return;
-    company = Map<String, dynamic>.from(
-      (await api.setup(company!['companyId'] as String))['company'] as Map,
-    );
-  });
+        if (company == null) return;
+        company = Map<String, dynamic>.from(
+          (await api.setup(company!['companyId'] as String))['company'] as Map,
+        );
+      });
 
   Future<void> retrySetup() => _run(() async {
-    if (company == null) return;
-    company = Map<String, dynamic>.from(
-      (await api.retrySetup(company!['companyId'] as String))['company'] as Map,
-    );
-  });
+        if (company == null) return;
+        company = Map<String, dynamic>.from(
+          (await api.retrySetup(company!['companyId'] as String))['company']
+              as Map,
+        );
+      });
 
   Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
-    await navigate(await api.startSignIn());
-  });
+        await navigate(await api.startSignIn());
+      });
 
   Future<void> connectGoogle(Future<void> Function(Uri) navigate) => _run(
-    () async {
-      if (company == null) return;
-      await navigate(await api.connectGoogle(company!['companyId'] as String));
-    },
-  );
+        () async {
+          if (company == null) return;
+          await navigate(
+              await api.connectGoogle(company!['companyId'] as String));
+        },
+      );
 
   Future<void> employeeLogin(String invite, String code) => _run(() async {
-    final result = await api.employeeLogin(invite, code);
-    _clearIdentity();
-    employee = Map<String, dynamic>.from(result['employee'] as Map);
-  });
+        final result = await api.employeeLogin(invite, code);
+        _clearIdentity();
+        employee = Map<String, dynamic>.from(result['employee'] as Map);
+      });
 
   Future<void> signOut() => _run(() async {
-    if (employee != null) await api.employeeLogout();
-    if (owner != null) await api.logout();
-    _clearIdentity();
-  });
+        // Purge optional read snapshots before logout; preserve the existing
+        // authenticated session/error behavior if remote logout fails.
+        for (final key in preferences.getKeys().where((k) => k.startsWith('tpc_workspace_cache_v1_')).toList()) {
+          await preferences.remove(key);
+        }
+        if (employee != null) await api.employeeLogout();
+        if (owner != null) await api.logout();
+        _clearIdentity();
+      });
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    // Owner and employee views can share the transport. Restore the callback
+    // when this session becomes active again after the other view is disposed.
+    api.onAccessRevoked = _accessRevoked;
+    if (employee != null) {
+      api.useVerifiedWorkspace(employee!['companyId'] as String,
+          employee: employee);
+    } else if (owner != null && ready) {
+      api.useVerifiedWorkspace(company!['companyId'] as String,
+          ownerId: owner!['ownerId'] as String);
+    }
+    notifyListeners();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    if (api.onAccessRevoked == _accessRevoked) api.onAccessRevoked = null;
     super.dispose();
   }
 }

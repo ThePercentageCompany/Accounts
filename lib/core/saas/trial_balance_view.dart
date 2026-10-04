@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'saas_api.dart';
 import 'workspace_dashboard.dart';
@@ -11,11 +12,13 @@ class TrialBalanceView extends StatefulWidget {
     required this.companyId,
     this.employee = false,
     this.initialDashboard = false,
+    this.active = true,
   });
   final SaasApi api;
   final String companyId;
   final bool employee;
   final bool initialDashboard;
+  final bool active;
   @override
   State<TrialBalanceView> createState() => _TrialBalanceViewState();
 }
@@ -38,41 +41,107 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                   : 'Trial balance';
   bool get _statement => _profit || _balance;
   late Future<Map<String, dynamic>> _report;
+  Map<String, dynamic>? _displayed;
+  String? _watchedPath;
+  int _request = 0;
+  String get _kind =>
+      _extra ??
+      (_balance
+          ? 'balance-sheet'
+          : _profit
+              ? 'profit-and-loss'
+              : 'trial-balance');
+  String get _path {
+    final base = widget.employee
+        ? '/v1/employee/reports/'
+        : '/v1/companies/${widget.companyId}/reports/';
+    final period =
+        ['dashboard', 'general-ledger', 'profit-and-loss'].contains(_kind);
+    return '$base$_kind?asOf=$_asOf${period ? '&from=${_from.toIso8601String().substring(0, 10)}' : ''}';
+  }
+
+  void _watch() {
+    if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
+    _watchedPath = widget.active ? _path : null;
+    if (_watchedPath != null) widget.api.cache.activate(_watchedPath!);
+  }
+
+  void _cacheChanged() {
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      final data = widget.api.cache.state(_path)?.data;
+      if (widget.api.cache.scope != null || _displayed != null) {
+        setState(() {
+          _displayed = data;
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TrialBalanceView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      _watch();
+      if (widget.active) _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _request++;
+    widget.api.cache.removeListener(_cacheChanged);
+    if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
+    super.dispose();
+  }
+
   String get _asOf => _date.toIso8601String().substring(0, 10);
   @override
   void initState() {
     super.initState();
+    widget.api.cache.addListener(_cacheChanged);
     if (widget.initialDashboard) _extra = 'dashboard';
     _load();
   }
 
-  void _load() {
-    _report = widget.employee
-        ? widget.api.employeeReport(
-            _extra ??
-                (_balance
-                    ? 'balance-sheet'
-                    : _profit
-                        ? 'profit-and-loss'
-                        : 'trial-balance'),
-            _from.toIso8601String().substring(0, 10),
-            _asOf)
-        : _extra != null
-            ? widget.api.report(widget.companyId, _extra!,
-                _from.toIso8601String().substring(0, 10), _asOf)
-            : _balance
-                ? widget.api.balanceSheet(widget.companyId, _asOf)
-                : _profit
-                    ? widget.api.profitAndLoss(
-                        widget.companyId,
-                        _from.toIso8601String().substring(0, 10),
-                        _asOf,
-                      )
-                    : widget.api.trialBalance(widget.companyId, _asOf);
-    // Observe immediate failures before the next frame attaches FutureBuilder.
-    // FutureBuilder still receives the original future and displays its error.
+  void _load({bool force = false}) {
+    _watch();
+    _displayed = widget.api.cache.state(_path)?.data;
+    final request = ++_request;
+    final future = _fetchReport(force: force);
+    _report = future.then((data) {
+      if (mounted && request == _request) setState(() => _displayed = data);
+      return data;
+    });
     _report.ignore();
   }
+
+  Future<Map<String, dynamic>> _fetchReport({bool force = false}) => widget
+          .employee
+      ? widget.api.employeeReport(
+          _extra ??
+              (_balance
+                  ? 'balance-sheet'
+                  : _profit
+                      ? 'profit-and-loss'
+                      : 'trial-balance'),
+          _from.toIso8601String().substring(0, 10),
+          _asOf,
+          force: force)
+      : _extra != null
+          ? widget.api.report(widget.companyId, _extra!,
+              _from.toIso8601String().substring(0, 10), _asOf, force: force)
+          : _balance
+              ? widget.api.balanceSheet(widget.companyId, _asOf, force: force)
+              : _profit
+                  ? widget.api.profitAndLoss(
+                      widget.companyId,
+                      _from.toIso8601String().substring(0, 10),
+                      _asOf,
+                      force: force,
+                    )
+                  : widget.api
+                      .trialBalance(widget.companyId, _asOf, force: force);
 
   @override
   Widget build(BuildContext context) => Column(
@@ -166,7 +235,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               ),
               IconButton(
                 tooltip: 'Refresh report',
-                onPressed: () => setState(_load),
+                onPressed: () => setState(() => _load(force: true)),
                 icon: const Icon(Icons.refresh),
               ),
             ],
@@ -181,10 +250,11 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
             child: FutureBuilder<Map<String, dynamic>>(
               future: _report,
               builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
+                if (_displayed == null &&
+                    snapshot.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (snapshot.hasError) {
+                if (_displayed == null && snapshot.hasError) {
                   return Center(
                     child: Text(
                       snapshot.error is SaasApiException
@@ -193,11 +263,24 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                     ),
                   );
                 }
-                final data = snapshot.data!,
+                if (_displayed == null) {
+                  return const Center(
+                      child: Text("Sign in again to load this report."));
+                }
+                final data = _displayed!,
                     rows = data['accounts'] as List? ?? [];
                 return SingleChildScrollView(
+                  key: PageStorageKey(_path),
                   child: Column(
                     children: [
+                      if (widget.api.cache.state(_path)?.refreshing == true)
+                        const Text('Updating?'),
+                      if (widget.api.cache.state(_path)?.offline == true)
+                        const Text('Offline ? showing saved data.'),
+                      if (widget.api.cache.state(_path)?.error != null &&
+                          _displayed != null)
+                        const Text(
+                            'Refresh failed. Showing saved report; use Refresh to retry.'),
                       TextButton.icon(
                           icon: const Icon(Icons.download),
                           label: const Text('Export CSV'),
