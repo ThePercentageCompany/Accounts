@@ -50,18 +50,17 @@ class RecordWriteQueue {
     }
   }
 
-  List<Map<String, Object?>> get pending =>
-      (preferences
-              .getKeys()
-              .where((key) => key.startsWith('${storageKey}_'))
-              .toList()
-            ..sort())
-          .map(
-            (key) => Map<String, Object?>.from(
-              jsonDecode(preferences.getString(key)!) as Map,
-            ),
-          )
-          .toList();
+  List<Map<String, Object?>> get pending => (preferences
+          .getKeys()
+          .where((key) => key.startsWith('${storageKey}_'))
+          .toList()
+        ..sort())
+      .map(
+        (key) => Map<String, Object?>.from(
+          jsonDecode(preferences.getString(key)!) as Map,
+        ),
+      )
+      .toList();
   Future<void> _store(Map<String, Object?> operation) async {
     if (!await preferences.setString(
       '${storageKey}_${operation['operationId']}',
@@ -128,7 +127,19 @@ class RecordWriteQueue {
       var operations = pending;
       if (operations.isEmpty) return;
       final batch = operations.take(20).toList();
-      final response = await api.sync(companyId, batch, employee: employee);
+      late final Map<String, dynamic> response;
+      try {
+        response = await api.sync(companyId, batch, employee: employee);
+      } on SaasApiException catch (error) {
+        // INVALID_RECORD at batch validation occurs before any write starts.
+        if (error.status == 400 &&
+            error.code == 'INVALID_RECORD' &&
+            batch.length == 1 &&
+            _isDraftCreation(batch.single)) {
+          await _removeRejectedDraft(batch.single['operationId'] as String);
+        }
+        rethrow;
+      }
       final results = response['results'];
       if (results is! List || results.length != batch.length) {
         throw const SaasApiException(
@@ -155,9 +166,8 @@ class RecordWriteQueue {
           .where((r) => r['status'] == 'APPLIED')
           .map((r) => r['operationId'])
           .toSet();
-      operations = operations
-          .where((r) => !applied.contains(r['operationId']))
-          .toList();
+      operations =
+          operations.where((r) => !applied.contains(r['operationId'])).toList();
       for (final id in applied) {
         if (!await preferences.remove('${storageKey}_$id')) {
           throw const SaasApiException(
@@ -171,6 +181,7 @@ class RecordWriteQueue {
         final error = failed['error'] as Map;
         if (const [
           'VERSION_CONFLICT',
+          'INVALID_RECORD',
           'INVALID_DOCUMENT_ITEMS',
           'INVALID_INVOICE_LINE',
           'INVALID_INVOICE',
@@ -251,9 +262,16 @@ class RecordWriteQueue {
           'PERIOD_HAS_JOURNALS',
           'PERIOD_HAS_DRAFTS',
         ].contains(error['code'])) {
-          await preferences.setStringList(_rejectedKey, [
-            failed['operationId'] as String,
-          ]);
+          final operation = batch.firstWhere(
+            (op) => op['operationId'] == failed['operationId'],
+          );
+          if (_isDraftCreation(operation)) {
+            await _removeRejectedDraft(failed['operationId'] as String);
+          } else {
+            await preferences.setStringList(_rejectedKey, [
+              failed['operationId'] as String,
+            ]);
+          }
         }
         throw SaasApiException(
           error['code'] as String,
@@ -270,5 +288,19 @@ class RecordWriteQueue {
     } finally {
       _busy = false;
     }
+  }
+
+  bool _isDraftCreation(Map<String, Object?> operation) =>
+      operation['action'] == 'create' &&
+      const ['Invoices', 'Quotations'].contains(operation['table']);
+
+  Future<void> _removeRejectedDraft(String id) async {
+    if (!await preferences.remove('${storageKey}_$id')) {
+      throw const SaasApiException(
+        'LOCAL_STORAGE',
+        'Could not clear the rejected draft. Retry.',
+      );
+    }
+    await preferences.remove(_rejectedKey);
   }
 }

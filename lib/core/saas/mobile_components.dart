@@ -71,14 +71,12 @@ class RecordSummary extends StatelessWidget {
   final Map<String, dynamic> record;
   @override
   Widget build(BuildContext context) {
-    final amount =
-        record['total'] ??
+    final amount = record['total'] ??
         record['totalAmount'] ??
         record['amount'] ??
         record['unitPrice'];
     final date = record['issueDate'] ?? record['date'] ?? record['dueDate'];
-    final status =
-        record['status'] ??
+    final status = record['status'] ??
         record['paymentStatus'] ??
         record['employmentStatus'];
     return Wrap(
@@ -105,47 +103,14 @@ class StatusChip extends StatelessWidget {
   final String value;
   @override
   Widget build(BuildContext context) => Chip(
-    visualDensity: VisualDensity.compact,
-    label: Text(value.replaceAll('_', ' ').toLowerCase()),
-    side: BorderSide.none,
-    backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-    labelStyle: TextStyle(
-      color: Theme.of(context).colorScheme.onSecondaryContainer,
-    ),
-  );
-}
-
-class LineEstimate extends StatelessWidget {
-  const LineEstimate({super.key, required this.fields});
-  final Map<String, TextEditingController> fields;
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge(fields.values.toList()),
-    builder: (context, _) {
-      double number(String key) =>
-          double.tryParse(fields[key]?.text ?? '') ?? 0;
-      final subtotal =
-          number('quantity') * number('unitPrice') - number('discount');
-      final total = subtotal * (1 + number('taxRate') / 100);
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Line estimate',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              Text('Subtotal: ${subtotal.toStringAsFixed(2)}'),
-              Text('Including tax: ${total.toStringAsFixed(2)}'),
-              const Text('Final totals are calculated by the company service.'),
-            ],
-          ),
+        visualDensity: VisualDensity.compact,
+        label: Text(value.replaceAll('_', ' ').toLowerCase()),
+        side: BorderSide.none,
+        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+        labelStyle: TextStyle(
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
         ),
       );
-    },
-  );
 }
 
 class RecordCard extends StatelessWidget {
@@ -322,9 +287,11 @@ class SearchableRecordField extends StatelessWidget {
   final FormFieldValidator<String>? validator;
   @override
   Widget build(BuildContext context) {
+    final selected =
+        items.any((item) => item.value == initialValue) ? initialValue : null;
     if (MediaQuery.sizeOf(context).width >= 600 || items.length <= 2) {
       return DropdownButtonFormField<String>(
-        initialValue: initialValue,
+        initialValue: selected,
         decoration: decoration,
         items: items,
         onChanged: onChanged,
@@ -333,7 +300,7 @@ class SearchableRecordField extends StatelessWidget {
       );
     }
     return FormField<String>(
-      initialValue: initialValue,
+      initialValue: selected,
       validator: validator,
       builder: (field) => InkWell(
         onTap: onChanged == null
@@ -355,8 +322,7 @@ class SearchableRecordField extends StatelessWidget {
             errorText: field.errorText,
             suffixIcon: const Icon(Icons.expand_more),
           ),
-          child:
-              items
+          child: items
                   .where((item) => item.value == field.value)
                   .firstOrNull
                   ?.child ??

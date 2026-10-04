@@ -5,6 +5,7 @@ import 'package:invoice_kit/invoice_kit.dart' as kit;
 import 'package:tpc_invoice/core/saas/document_editor.dart';
 import 'package:tpc_invoice/core/saas/invoice_document.dart';
 import 'package:tpc_invoice/core/theme/app_theme.dart';
+import 'package:tpc_invoice/core/saas/mobile_components.dart';
 
 const items = [
   {
@@ -24,6 +25,29 @@ const items = [
 ];
 
 void main() {
+  testWidgets('saved customer missing from choices does not crash the editor',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: Form(
+      child: SearchableRecordField(
+        initialValue: 'retired-customer',
+        decoration: const InputDecoration(labelText: 'Customer'),
+        items: const [
+          DropdownMenuItem(
+              value: 'active-customer', child: Text('Active customer'))
+        ],
+        onChanged: (_) {},
+      ),
+    ))));
+    expect(tester.takeException(), isNull);
+    expect(
+        tester
+            .widget<DropdownButtonFormField<String>>(
+                find.byType(DropdownButtonFormField<String>))
+            .initialValue,
+        isNull);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'preview estimates round each line in minor units and tolerate incomplete input',
@@ -98,21 +122,21 @@ void main() {
                 body: TextButton(
                   onPressed: () async =>
                       result = await showDialog<Map<String, Object?>>(
-                        context: context,
-                        builder: (_) => DocumentEditor(
-                          quotation: quotation,
-                          customers: const [
-                            {'recordId': 'customer', 'name': 'Client'},
-                          ],
-                          items: items,
-                          record: {
-                            'customerId': 'customer',
-                            'issueDate': '2026-10-04',
-                            'validUntil': '2026-11-04',
-                            'dueDate': '2026-11-04',
-                          },
-                        ),
-                      ),
+                    context: context,
+                    builder: (_) => DocumentEditor(
+                      quotation: quotation,
+                      customers: const [
+                        {'recordId': 'customer', 'name': 'Client'},
+                      ],
+                      items: items,
+                      record: {
+                        'customerId': 'customer',
+                        'issueDate': '2026-10-04',
+                        'validUntil': '2026-11-04',
+                        'dueDate': '2026-11-04',
+                      },
+                    ),
+                  ),
                   child: const Text('Open'),
                 ),
               ),

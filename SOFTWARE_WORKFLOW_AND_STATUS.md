@@ -2,6 +2,24 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Saved invoice grey-screen fix - 4 October 2026
+
+Reproduced the saved-record expansion failure in a widget regression test:
+SelectableText's internal scroll restoration read the expansion tile's boolean
+state as a double. Replaced record-detail SelectableText with SelectionArea and
+Text, preserving copying without the conflicting scroll state. The regression
+passes after the change.
+
+Removed the separate invoice/quotation line editors and their navigation entries;
+complete documents now use the shared multi-item editor exclusively. Child item
+tables remain required for storage, permissions, PDFs and atomic document writes.
+Saved drafts have a visible title, save completion forces a fresh record read,
+and missing customer choices no longer crash the dropdown.
+
+Validated 30 relevant widget/PDF/workspace tests and static analysis. These changes
+are local. The release web build and Wasm dry run succeeded; build/web is ready
+for frontend deployment. The live frontend must be deployed to receive the fix.
+
 ### Advanced invoice and quotation creation ? 4 October 2026
 
 Implemented locally: invoice_kit 0.2.0 with a shared multi-item invoice/quotation

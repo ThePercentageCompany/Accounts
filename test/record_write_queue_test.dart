@@ -8,6 +8,57 @@ import 'package:tpc_invoice/core/saas/record_write_queue.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final batchError in [true, false]) {
+    test('rejected draft permits a fresh creation (batch error: $batchError)',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final ids = <String>[];
+      final api = SaasApi(
+          origin: 'https://api.test',
+          client: MockClient((request) async {
+            final op = jsonDecode(request.body)['operations'][0];
+            ids.add(op['operationId'] as String);
+            if (ids.length == 1) {
+              final error = {
+                'code': 'INVALID_RECORD',
+                'message': 'Record contains unsupported fields.'
+              };
+              return http.Response(
+                  jsonEncode(batchError
+                      ? {'error': error}
+                      : {
+                          'results': [
+                            {
+                              'operationId': op['operationId'],
+                              'status': 'FAILED',
+                              'error': error
+                            }
+                          ]
+                        }),
+                  batchError ? 400 : 200);
+            }
+            return http.Response(
+                jsonEncode({
+                  'results': [
+                    {'operationId': op['operationId'], 'status': 'APPLIED'}
+                  ]
+                }),
+                200);
+          }));
+      final queue = RecordWriteQueue(api, prefs, 'owner', 'c' * 43);
+      await queue.enqueue('Invoices', 'create', {'currency': 'AED'},
+          expectedVersion: 0);
+      await expectLater(queue.flush(), throwsA(isA<SaasApiException>()));
+      expect(queue.pending, isEmpty);
+      await queue.enqueue('Invoices', 'create', {'currency': 'USD'},
+          expectedVersion: 0);
+      await queue.flush();
+      expect(ids[0], isNot(ids[1]));
+      expect(queue.pending, isEmpty);
+      api.close();
+    });
+  }
   test('employee pending writes use employee endpoint and isolated storage',
       () async {
     SharedPreferences.setMockInitialValues({});

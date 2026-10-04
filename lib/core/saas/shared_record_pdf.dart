@@ -53,23 +53,22 @@ Future<Uint8List> sharedRecordPdf(
   final itemTable = section == 'Invoices'
       ? 'InvoiceItems'
       : section == 'Quotations'
-      ? 'QuotationItems'
-      : null;
-  final items =
-      itemTable == null
-            ? <Map<String, dynamic>>[]
-            : (await rows(itemTable))
-                  .where(
-                    (r) =>
-                        r[section == 'Invoices'
-                            ? 'invoiceId'
-                            : 'quotationId'] ==
-                        recordId,
-                  )
-                  .toList()
-        ..sort(
-          (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num),
-        );
+          ? 'QuotationItems'
+          : null;
+  final items = itemTable == null
+      ? <Map<String, dynamic>>[]
+      : (await rows(itemTable))
+          .where(
+            (r) =>
+                r[section == 'Invoices' ? 'invoiceId' : 'quotationId'] ==
+                recordId,
+          )
+          .toList()
+    ..sort(
+      (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
+        num.tryParse('${b['lineNumber']}') ?? 0,
+      ),
+    );
   Uint8List? logo;
   if ('${profile['logoDocumentId'] ?? ''}'.isNotEmpty) {
     logo = await api.document(companyId, profile['logoDocumentId']);

@@ -8,6 +8,41 @@ import 'package:tpc_invoice/core/saas/shared_workspace.dart';
 
 void main() {
   testWidgets(
+      'saved draft displays and expands with the complete document navigation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async => http.Response(
+            request.url.path.endsWith('/Invoices')
+                ? '{"records":[{"recordId":"${'i' * 43}","number":"","status":"DRAFT","issueDate":"2026-10-04","currency":"AED","total":"105.00","recordVersion":1}]}'
+                : '{"records":[]}',
+            200)));
+    await tester.pumpWidget(MaterialApp(
+        home: SharedWorkspace(
+      api: api,
+      companyId: 'c' * 43,
+      title: 'Workspace',
+      onBack: () {},
+      preferences: prefs,
+      employee: {
+        'employeeId': 'e' * 43,
+        'allowedSections': ['Invoices'],
+        'writableSections': ['Invoices']
+      },
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Draft invoice · 2026-10-04'), findsOneWidget);
+    await tester.tap(find.text('Draft invoice · 2026-10-04'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(workspaceTables['Invoices'], isNot(contains('InvoiceItems')));
+    expect(workspaceTables['Quotations'], isNot(contains('QuotationItems')));
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+  testWidgets(
       'section navigation preserves filter and scroll without refetching',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
