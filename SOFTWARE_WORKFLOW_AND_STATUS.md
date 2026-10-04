@@ -559,6 +559,13 @@ historical “pending” statements as the current status.
 - These are local source changes; no deployment or authenticated browser visual review is claimed.
 - Release web build succeeded with the configured shared API origin.
 
+### Custom document HTML designs - 5 October 2026
+
+- Owner invoice and quotation document dialogs include a custom HTML design menu. Edit/import HTML and CSS, save or update a device-local workspace/type design, and export source or a populated saved-record preview.
+- HTML exports use escaped record values and authoritative saved totals. Browser Print / Save as PDF produces the custom PDF; existing invoice_kit Modern/Classic PDF attachments remain available.
+- Designs are local to the browser/device, not cloud-synchronized. See `docs/CUSTOM_DOCUMENT_DESIGNS.md` for placeholders, backup/import and usage.
+- Validation: five new design/editor tests (including 320px mobile layout) and 19 existing document/report tests passed. Static analysis passed. Local changes only.
+
 ### Reference design details - 4 October 2026
 
 - Applied the supplied reference design language through the shared light/dark themes: bundled Inter typography, muted secondary text, consistent 20px icons, fine borders, 14px card corners, 10px input corners and 8px button corners. Inter and its OFL license are included locally.

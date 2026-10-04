@@ -1,5 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'dart:typed_data';
+import 'dart:convert';
+import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
+import 'package:tpc_invoice/features/documents/presentation/html_document_design_editor.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -52,6 +55,39 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   String? imageName;
   DocumentStyle pdfStyle = DocumentStyle.modern;
   bool get logo => widget.section == 'CompanyProfile';
+  HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
+    '${widget.api.origin}|${widget.companyId}|${widget.section}',
+  );
+  Future<void> _editHtml() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => HtmlDocumentDesignEditor(
+        store: htmlStore,
+        preview: (source) => savedRecordHtml(
+          widget.api,
+          widget.companyId,
+          widget.section,
+          widget.record['recordId'],
+          source,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportHtml() => _run(() async {
+    final html = await savedRecordHtml(
+      widget.api,
+      widget.companyId,
+      widget.section,
+      widget.record['recordId'],
+      await htmlStore.load(),
+    );
+    await downloadFile(
+      Uint8List.fromList(utf8.encode(html)),
+      filename: '${widget.section}-${widget.record['recordId']}.html',
+      mimeType: 'text/html',
+    );
+  });
   @override
   void initState() {
     super.initState();
@@ -200,6 +236,30 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
             ),
           ),
           if (error != null) Text(error!),
+          if (!widget.employee &&
+              const ['Invoices', 'Quotations'].contains(widget.section))
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                tooltip: 'Custom HTML design',
+                enabled: !busy,
+                icon: const Icon(Icons.code),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _editHtml();
+                  } else {
+                    _exportHtml();
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit HTML design')),
+                  PopupMenuItem(
+                    value: 'export',
+                    child: Text('Export custom HTML'),
+                  ),
+                ],
+              ),
+            ),
           if (widget.uploads != null &&
               const [
                 'Invoices',
