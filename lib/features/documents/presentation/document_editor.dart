@@ -626,6 +626,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
       child: Column(
         children: [
           Wrap(
+            alignment: WrapAlignment.end,
             spacing: 12,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -651,24 +652,21 @@ class _DocumentEditorState extends State<DocumentEditor> {
                   setState(() => preview = selected.first);
                 },
               ),
-              SizedBox(
-                width: 150,
-                child: DropdownButtonFormField<DocumentStyle>(
-                  isExpanded: true,
-                  initialValue: style,
-                  decoration: const InputDecoration(labelText: 'PDF style'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: DocumentStyle.modern,
-                      child: Text('Modern'),
-                    ),
-                    DropdownMenuItem(
-                      value: DocumentStyle.classic,
-                      child: Text('Classic'),
-                    ),
-                  ],
-                  onChanged: (value) => setState(() => style = value!),
-                ),
+              PopupMenuButton<DocumentStyle>(
+                tooltip: 'PDF style',
+                initialValue: style,
+                icon: const Icon(Icons.tune),
+                onSelected: (value) => setState(() => style = value),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: DocumentStyle.modern,
+                    child: Text('Modern'),
+                  ),
+                  const PopupMenuItem(
+                    value: DocumentStyle.classic,
+                    child: Text('Classic'),
+                  ),
+                ],
               ),
             ],
           ),

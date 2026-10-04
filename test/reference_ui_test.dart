@@ -262,7 +262,7 @@ void main() {
     await tester.pumpAndSettle();
     final before = tester.getTopLeft(find.text('Existing customer'));
     final barriers = find.byType(ModalBarrier).evaluate().length;
-    await tester.tap(find.text('Refresh'));
+    await tester.tap(find.byTooltip('Refresh records'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byType(CupertinoActivityIndicator), findsOneWidget);

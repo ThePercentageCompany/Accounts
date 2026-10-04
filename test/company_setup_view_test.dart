@@ -85,7 +85,9 @@ void main() {
           await tester.ensureVisible(find.text('Open company workspace'));
           await tester.tap(find.text('Open company workspace'));
           expect(opened, isTrue);
-          await tester.ensureVisible(find.text('Delete workspace'));
+          await tester.ensureVisible(find.byTooltip('Workspace options'));
+          await tester.tap(find.byTooltip('Workspace options'));
+          await tester.pumpAndSettle();
           await tester.tap(find.text('Delete workspace'));
           await tester.pumpAndSettle();
           expect(find.text('This cannot be undone.'), findsOneWidget);
@@ -97,7 +99,9 @@ void main() {
           await tester.pumpAndSettle();
           expect(session.company?['companyId'], b);
           expect(find.text('Retry setup'), findsOneWidget);
-          await tester.ensureVisible(find.text('Delete workspace'));
+          await tester.ensureVisible(find.byTooltip('Workspace options'));
+          await tester.tap(find.byTooltip('Workspace options'));
+          await tester.pumpAndSettle();
           await tester.tap(find.text('Delete workspace'));
           await tester.pumpAndSettle();
           await tester.tap(find.text('Delete all workspace data'));

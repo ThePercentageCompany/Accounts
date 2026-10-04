@@ -4,6 +4,17 @@ Updated: 4 October 2026. Based on the repository and recorded validation results
 
 ### Responsive workspace and feature architecture - 4 October 2026
 
+Compact controls now extend to every shared record section: record type and
+multi-select status filters use right-aligned menus, refresh uses an icon,
+creation retains one primary action, and pending-write recovery uses an options
+menu. Selected statuses remain visible in a small summary; search has a clear
+action. Employee controls align right with icon refresh. Invoice/quotation and
+document PDF styles use compact menus; document actions align right. Workspace
+deletion is under Workspace options and retains the permanent-deletion dialog.
+Form data choices and save/cancel actions remain explicit. The full Flutter
+regression suite passed 132 tests with one existing skip, including status filter
+selection/reset, workspace deletion and responsive navigation.
+
 Dashboard refinement: replaced the visible report/date chip rows and central CSV
 button with one right-aligned toolbar. Report selection, calendar presets/custom
 range, refresh and an options menu retain all existing reports and CSV export.

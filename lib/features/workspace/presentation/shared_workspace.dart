@@ -1592,125 +1592,154 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         padding: EdgeInsets.symmetric(
           horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
         ),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 220,
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: table,
-                items: [
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              PopupMenuButton<String>(
+                tooltip: 'Choose record type',
+                enabled: !busy,
+                initialValue: table,
+                onSelected: (value) {
+                  _tableSearch[table] = _search;
+                  rows = [];
+                  _hasData = false;
+                  table = value;
+                  _search = _tableSearch[table] ?? '';
+                  _searchController.text = _search;
+                  _watch();
+                  _load();
+                },
+                itemBuilder: (_) => [
                   for (final t in widget.tables)
-                    DropdownMenuItem(
-                      value: t,
-                      child: Text(tableTitles[t] ?? t),
+                    PopupMenuItem(value: t, child: Text(tableTitles[t] ?? t)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tableTitles[table] ?? table,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.expand_more, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Filter statuses',
+                icon: Icon(
+                  (_statusFilters[table]?.isNotEmpty ?? false)
+                      ? Icons.filter_alt
+                      : Icons.filter_alt_outlined,
+                ),
+                onSelected: (status) => setState(() {
+                  if (status == '__all') {
+                    _statusFilters[table] = {};
+                  } else {
+                    final values = _statusFilters.putIfAbsent(table, () => {});
+                    values.contains(status)
+                        ? values.remove(status)
+                        : values.add(status);
+                  }
+                }),
+                itemBuilder: (_) => [
+                  CheckedPopupMenuItem(
+                    value: '__all',
+                    checked: _statusFilters[table]?.isEmpty ?? true,
+                    child: const Text('All statuses'),
+                  ),
+                  for (final status
+                      in rows
+                          .map(
+                            (row) =>
+                                '${row['status'] ?? row['paymentStatus'] ?? ''}',
+                          )
+                          .where((value) => value.isNotEmpty)
+                          .toSet())
+                    CheckedPopupMenuItem(
+                      value: status,
+                      checked: _statusFilters[table]?.contains(status) ?? false,
+                      child: Text(status.toLowerCase().replaceAll('_', ' ')),
                     ),
                 ],
-                onChanged: busy
-                    ? null
-                    : (v) {
-                        _tableSearch[table] = _search;
-                        rows = [];
-                        _hasData = false;
-                        table = v!;
-                        _search = _tableSearch[table] ?? '';
-                        _searchController.text = _search;
-                        _watch();
-                        _load();
-                      },
               ),
-            ),
-            TextButton.icon(
-              onPressed: busy ? null : () => _load(force: true),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
-            ),
-            if (_editable && table != 'CompanyProfile')
-              FilledButton(
-                onPressed: busy || widget.writes!.pending.isNotEmpty
-                    ? null
-                    : () => _editCustomer(),
-                child: Text('Add $_recordLabel'),
+              IconButton(
+                tooltip: 'Refresh records',
+                onPressed: busy ? null : () => _load(force: true),
+                icon: const Icon(Icons.refresh),
               ),
-            if (widget.writes?.pending.isNotEmpty == true)
-              OutlinedButton(
-                onPressed: busy ? null : _retryWrite,
-                child: const Text('Retry pending change'),
-              ),
-            if (widget.writes?.canDiscardRejected == true)
-              TextButton(
-                onPressed: busy ? null : _discardRejected,
-                child: const Text('Discard rejected edit'),
-              ),
-          ],
+              if (_editable && table != 'CompanyProfile')
+                FilledButton.icon(
+                  onPressed: busy || widget.writes!.pending.isNotEmpty
+                      ? null
+                      : () => _editCustomer(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text('Add $_recordLabel'),
+                ),
+              if (widget.writes?.pending.isNotEmpty == true)
+                PopupMenuButton<String>(
+                  tooltip: 'Pending change options',
+                  enabled: !busy,
+                  onSelected: (value) {
+                    if (value == 'retry') {
+                      _retryWrite();
+                    } else {
+                      _discardRejected();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'retry',
+                      child: Text('Retry pending change'),
+                    ),
+                    if (widget.writes?.canDiscardRejected == true)
+                      const PopupMenuItem(
+                        value: 'discard',
+                        child: Text('Discard rejected edit'),
+                      ),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: Text(
-          _savedData
-              ? 'Saved data - syncing when connected'
-              : _editable
-              ? 'Company records'
-              : widget.employee
-              ? 'Online records - read access assigned by admin'
-              : 'Company records',
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
         child: TextField(
           controller: _searchController,
-          decoration: const InputDecoration(
-            labelText: 'Search records',
-            prefixIcon: Icon(Icons.search),
+          decoration: InputDecoration(
+            hintText: 'Search records',
+            prefixIcon: const Icon(Icons.search),
+            isDense: true,
+            suffixIcon: _search.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear record search',
+                    onPressed: () => setState(() {
+                      _search = '';
+                      _searchController.clear();
+                    }),
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
           ),
           onChanged: (value) => setState(() => _search = value),
         ),
       ),
-      if (rows.any(
-        (row) => row['status'] != null || row['paymentStatus'] != null,
-      ))
+      if (_statusFilters[table]?.isNotEmpty == true)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ActionChip(
-                    label: const Text('All statuses'),
-                    onPressed: () => setState(() => _statusFilters[table] = {}),
-                  ),
-                ),
-                for (final status
-                    in rows
-                        .map(
-                          (row) =>
-                              '${row['status'] ?? row['paymentStatus'] ?? ''}',
-                        )
-                        .where((value) => value.isNotEmpty)
-                        .toSet())
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(status.toLowerCase().replaceAll('_', ' ')),
-                      selected:
-                          _statusFilters[table]?.contains(status) ?? false,
-                      onSelected: (selected) => setState(() {
-                        final values = _statusFilters.putIfAbsent(
-                          table,
-                          () => {},
-                        );
-                        selected ? values.add(status) : values.remove(status);
-                      }),
-                    ),
-                  ),
-              ],
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Status: ${_statusFilters[table]!.map((value) => value.toLowerCase().replaceAll('_', ' ')).join(', ')}',
+              style: const TextStyle(fontSize: 12),
             ),
           ),
         ),

@@ -206,26 +206,29 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 'Quotations',
                 'CreditNotes',
               ].contains(widget.section))
-            DropdownButtonFormField<DocumentStyle>(
-              isExpanded: true,
-              initialValue: pdfStyle,
-              decoration: const InputDecoration(labelText: 'PDF style'),
-              items: const [
-                DropdownMenuItem(
-                  value: DocumentStyle.modern,
-                  child: Text('Modern'),
-                ),
-                DropdownMenuItem(
-                  value: DocumentStyle.classic,
-                  child: Text('Classic'),
-                ),
-              ],
-              onChanged: busy
-                  ? null
-                  : (value) => setState(() => pdfStyle = value!),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<DocumentStyle>(
+                tooltip: 'PDF style',
+                enabled: !busy,
+                initialValue: pdfStyle,
+                icon: const Icon(Icons.tune),
+                onSelected: (value) => setState(() => pdfStyle = value),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: DocumentStyle.modern,
+                    child: Text('Modern'),
+                  ),
+                  const PopupMenuItem(
+                    value: DocumentStyle.classic,
+                    child: Text('Classic'),
+                  ),
+                ],
+              ),
             ),
           if (widget.uploads != null)
             Wrap(
+              alignment: WrapAlignment.end,
               spacing: 8,
               children: [
                 if (const [

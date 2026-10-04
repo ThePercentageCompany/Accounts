@@ -7,6 +7,52 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
 
 void main() {
+  testWidgets('compact status menu supports multiple filters and reset', (
+    tester,
+  ) async {
+    final api = SaasApi(
+      origin: 'https://api.test',
+      client: MockClient(
+        (_) async => http.Response(
+          '{"records":[{"recordId":"a","name":"Active customer","status":"ACTIVE"},{"recordId":"b","name":"Pending customer","status":"PENDING"},{"recordId":"c","name":"Inactive customer","status":"INACTIVE"}]}',
+          200,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SharedWorkspace(
+          api: api,
+          companyId: 'c' * 43,
+          title: 'Workspace',
+          onBack: () {},
+          employee: const {
+            'allowedSections': ['Customers'],
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> select(String status) async {
+      await tester.tap(find.byTooltip('Filter statuses'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(status).last);
+      await tester.pumpAndSettle();
+    }
+
+    await select('active');
+    expect(find.text('Active customer'), findsOneWidget);
+    expect(find.text('Pending customer'), findsNothing);
+    await select('pending');
+    expect(find.text('Active customer'), findsOneWidget);
+    expect(find.text('Pending customer'), findsOneWidget);
+    expect(find.text('Inactive customer'), findsNothing);
+    await select('All statuses');
+    expect(find.text('Inactive customer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
   testWidgets(
     'saved draft displays and expands with the complete document navigation',
     (tester) async {

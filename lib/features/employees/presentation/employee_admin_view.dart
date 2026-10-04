@@ -169,6 +169,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
         padding: const EdgeInsets.all(24),
         children: [
           Wrap(
+            alignment: WrapAlignment.end,
             spacing: 12,
             runSpacing: 12,
             children: [
@@ -181,9 +182,10 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                 icon: const Icon(Icons.person_add_outlined),
                 label: const Text('Add employee'),
               ),
-              OutlinedButton(
+              IconButton(
+                tooltip: 'Refresh employees',
                 onPressed: c.busy ? null : c.refresh,
-                child: const Text('Refresh'),
+                icon: const Icon(Icons.refresh),
               ),
             ],
           ),

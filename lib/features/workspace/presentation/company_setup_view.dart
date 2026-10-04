@@ -212,19 +212,19 @@ class _CompanySetupViewState extends State<CompanySetupView> {
             ),
             if (company != null) ...[
               const Divider(height: 40),
-              Text(
-                'Workspace management',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Permanently remove this workspace and all its company data.',
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: state.busy ? null : _deleteWorkspace,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Delete workspace'),
+              Align(
+                alignment: Alignment.centerRight,
+                child: PopupMenuButton<String>(
+                  tooltip: 'Workspace options',
+                  enabled: !state.busy,
+                  onSelected: (_) => _deleteWorkspace(),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete workspace'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
