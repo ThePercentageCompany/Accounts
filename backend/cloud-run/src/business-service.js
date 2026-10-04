@@ -13,6 +13,7 @@ import { quotationChanges } from './quotation-policy.js';
 import { payrollChanges } from './payroll-policy.js';
 import { assetChanges } from './asset-policy.js';
 import { capitalChanges } from './capital-policy.js';
+import { draftItems } from './document-draft.js';
 
 const SYSTEM = new Set(['recordId', 'companyId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
   'recordVersion', 'syncStatus', 'isDeleted', 'idempotencyKey']);
@@ -35,6 +36,11 @@ export class BusinessService {
   values(tableName, input) {
     const table = this.sheets.table(tableName);
     requireThat(input && typeof input === 'object' && !Array.isArray(input), 400, 'INVALID_RECORD', 'Record values are required.');
+    if (['Invoices', 'Quotations'].includes(tableName) && Object.hasOwn(input, 'items')) {
+      const { items, ...header } = input;
+      // Normalize and validate the complete document before reserving a write.
+      return { ...this.values(tableName, header), items: draftItems(items).map(({ lineNumber, ...line }) => line) };
+    }
     const allowed = new Set(table.headers.filter(key => !SYSTEM.has(key)));
     requireThat(Object.keys(input).length > 0 && Object.keys(input).every(key => allowed.has(key)),
       400, 'INVALID_RECORD', 'Record contains unsupported fields.');
@@ -149,6 +155,10 @@ export class BusinessService {
     requireThat(action !== 'capitalPost' || tableName === 'CapitalTransactions', 400, 'INVALID_RECORD', 'Only capital contributions support this action.');
     requireThat(!['loanPost', 'loanRepay'].includes(action) || tableName === 'ShareholderLoans', 400, 'INVALID_RECORD', 'Only shareholder loans support this action.');
     const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : this.values(tableName, input.values);
+    if (Object.hasOwn(values, 'items')) {
+      requireThat(['create', 'update'].includes(action), 400, 'INVALID_DOCUMENT_ITEMS', 'Only draft creation or editing accepts lines.');
+      await this.authorizeWrite(token, companyId, tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
+    }
     if (action === 'reverse') requireThat(Object.keys(values).every(k => ['date', 'description'].includes(k)) &&
       typeof values.date === 'string' && typeof values.description === 'string' &&
       values.description.trim().length > 0 && values.description.length <= 500,
@@ -192,6 +202,12 @@ export class BusinessService {
           }
         }
         await validateRelations(this.sheets, companyId, tableName, op.recordId, action, { ...old, ...values });
+        if (values.items?.some(item => item.productId)) {
+          const products = (await this.sheets.read(companyId, ['ProductsServices'])).ProductsServices;
+          requireThat(values.items.every(item => !item.productId || products.some(product =>
+            product.companyId === companyId && product.recordId === item.productId && active(product))),
+          400, 'INVALID_DOCUMENT_ITEMS', 'A referenced product is missing or deleted in this company.');
+        }
         await validateJournal(this.sheets, companyId, tableName, op.recordId, action, old, values);
         if (!['pay', 'reverse'].includes(action)) await assertCashEntryEditable(this.sheets, companyId, tableName, op.recordId, action);
         if (action === 'pay') requireThat(old.paymentStatus === 'UNPAID', 409, 'PAYMENT_NOT_AVAILABLE', 'Only an unpaid posted entry can be paid.');
@@ -228,6 +244,8 @@ export class BusinessService {
           old, { ...system, createdAt: now, createdBy: actor }, opKey, values) : ['post', 'pay'].includes(action) ? await cashLedgerChanges(this.sheets, companyId, tableName,
           { ...old, ...writeValues }, { ...system, createdAt: now, createdBy: actor }, opKey, action === 'pay') : null;
         await this.authorizeWrite(token, companyId, tableName);
+        if (Object.hasOwn(values, 'items')) await this.authorizeWrite(token, companyId,
+          tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
         await this.registry.transact(state => { const { company } = this.owner(state, token, companyId, true);
           requireThat(company.businessWrite === opKey && company.businessOps[opKey]?.reservation === op.reservation && !company.businessOps[opKey].submitted, 409, 'BUSINESS_WRITE_PENDING', 'Business update changed.');
           company.businessOps[opKey].submitted = true; });

@@ -39,103 +39,97 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: Text(
-            widget.record == null ? 'Add shareholder' : 'Edit shareholder'),
-        content: SizedBox(
-          width: 480,
-          child: Form(
-            key: form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: name,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  validator: (v) =>
-                      (v?.trim().isEmpty ?? true) ? 'Required.' : null,
-                ),
-                TextFormField(
-                  controller: email,
-                  decoration:
-                      const InputDecoration(labelText: 'Email (optional)'),
-                ),
-                TextFormField(
-                  controller: phone,
-                  decoration:
-                      const InputDecoration(labelText: 'Phone (optional)'),
-                ),
-                TextFormField(
-                  controller: role,
-                  decoration: const InputDecoration(labelText: 'Role'),
-                ),
-                TextFormField(
-                  controller: capital,
-                  decoration:
-                      const InputDecoration(labelText: 'Agreed capital'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  validator: (v) {
-                    final t = v?.trim() ?? '', n = double.tryParse(t);
-                    return n == null ||
-                            n < 0 ||
-                            !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
-                        ? 'Enter a nonnegative amount.'
-                        : null;
-                  },
-                ),
-                TextFormField(
-                  controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
-                  decoration: const InputDecoration(
-                    labelText: 'Investment date (optional)',
-                  ),
-                  validator: (v) {
-                    final t = v?.trim() ?? '';
-                    return t.isEmpty ||
-                            (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
-                                DateTime.tryParse(t) != null)
-                        ? null
-                        : 'Use YYYY-MM-DD.';
-                  },
-                ),
-                SearchableRecordField(
-                  initialValue: status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: const [
-                    DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                    DropdownMenuItem(
-                        value: 'INACTIVE', child: Text('Inactive')),
-                  ],
-                  onChanged: (v) => status = v ?? 'ACTIVE',
-                ),
-              ],
+    title: Text(widget.record == null ? 'Add shareholder' : 'Edit shareholder'),
+    content: SizedBox(
+      width: 480,
+      child: Form(
+        key: form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name'),
+              validator: (v) =>
+                  (v?.trim().isEmpty ?? true) ? 'Required.' : null,
             ),
-          ),
+            TextFormField(
+              controller: email,
+              decoration: const InputDecoration(labelText: 'Email (optional)'),
+            ),
+            TextFormField(
+              controller: phone,
+              decoration: const InputDecoration(labelText: 'Phone (optional)'),
+            ),
+            TextFormField(
+              controller: role,
+              decoration: const InputDecoration(labelText: 'Role'),
+            ),
+            TextFormField(
+              controller: capital,
+              decoration: const InputDecoration(labelText: 'Agreed capital'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              validator: (v) {
+                final t = v?.trim() ?? '', n = double.tryParse(t);
+                return n == null ||
+                        n < 0 ||
+                        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
+                    ? 'Enter a nonnegative amount.'
+                    : null;
+              },
+            ),
+            CalendarFormField(
+              controller: date,
+              decoration: const InputDecoration(
+                labelText: 'Investment date (optional)',
+              ),
+              optional: true,
+              validator: (v) {
+                final t = v?.trim() ?? '';
+                return t.isEmpty ||
+                        (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
+                            DateTime.tryParse(t) != null)
+                    ? null
+                    : 'Use YYYY-MM-DD.';
+              },
+            ),
+            SearchableRecordField(
+              initialValue: status,
+              decoration: const InputDecoration(labelText: 'Status'),
+              items: const [
+                DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                DropdownMenuItem(value: 'INACTIVE', child: Text('Inactive')),
+              ],
+              onChanged: (v) => status = v ?? 'ACTIVE',
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'name': name.text.trim(),
-                'email': email.text.trim(),
-                'phone': phone.text.trim(),
-                'role': role.text.trim(),
-                'status': status,
-                'agreedCapital': double.parse(capital.text.trim()),
-                'investmentDate': date.text.trim(),
-              });
-            },
-            child: const Text('Save shareholder'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'name': name.text.trim(),
+            'email': email.text.trim(),
+            'phone': phone.text.trim(),
+            'role': role.text.trim(),
+            'status': status,
+            'agreedCapital': double.parse(capital.text.trim()),
+            'investmentDate': date.text.trim(),
+          });
+        },
+        child: const Text('Save shareholder'),
+      ),
+    ],
+  );
 }
 
 class CapitalContributionEditor extends StatefulWidget {
@@ -175,104 +169,101 @@ class _CapitalContributionEditorState extends State<CapitalContributionEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: Text(
-          widget.record == null
-              ? 'Add capital contribution'
-              : 'Edit capital contribution',
-        ),
-        content: SizedBox(
-          width: 480,
-          child: Form(
-            key: form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SearchableRecordField(
-                  initialValue: shareholderId,
-                  decoration: const InputDecoration(labelText: 'Shareholder'),
-                  items: [
-                    for (final s in widget.shareholders)
-                      DropdownMenuItem(
-                        value: s['recordId'] as String,
-                        child: Text('${s['name']}'),
-                      ),
-                  ],
-                  onChanged: (v) => shareholderId = v,
-                  validator: (v) => v == null ? 'Choose a shareholder.' : null,
-                ),
-                TextFormField(
-                  controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
-                  decoration:
-                      const InputDecoration(labelText: 'Contribution date'),
-                  validator: (v) {
-                    final t = v?.trim() ?? '';
-                    return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
-                            DateTime.tryParse(t) != null
-                        ? null
-                        : 'Use YYYY-MM-DD.';
-                  },
-                ),
-                TextFormField(
-                  controller: amount,
-                  decoration: const InputDecoration(labelText: 'Amount'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
+    title: Text(
+      widget.record == null
+          ? 'Add capital contribution'
+          : 'Edit capital contribution',
+    ),
+    content: SizedBox(
+      width: 480,
+      child: Form(
+        key: form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SearchableRecordField(
+              initialValue: shareholderId,
+              decoration: const InputDecoration(labelText: 'Shareholder'),
+              items: [
+                for (final s in widget.shareholders)
+                  DropdownMenuItem(
+                    value: s['recordId'] as String,
+                    child: Text('${s['name']}'),
                   ),
-                  validator: (v) {
-                    final t = v?.trim() ?? '', n = double.tryParse(t);
-                    return n == null ||
-                            n <= 0 ||
-                            !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
-                        ? 'Enter a positive amount.'
-                        : null;
-                  },
-                ),
-                SearchableRecordField(
-                  initialValue: account,
-                  decoration: const InputDecoration(labelText: 'Received into'),
-                  items: const [
-                    DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                    DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                  ],
-                  onChanged: (v) => account = v ?? 'Bank',
-                ),
-                TextFormField(
-                  controller: reference,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    labelText: 'Reference (optional)',
-                  ),
-                ),
               ],
+              onChanged: (v) => shareholderId = v,
+              validator: (v) => v == null ? 'Choose a shareholder.' : null,
             ),
-          ),
+            CalendarFormField(
+              controller: date,
+              decoration: const InputDecoration(labelText: 'Contribution date'),
+              validator: (v) {
+                final t = v?.trim() ?? '';
+                return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
+                        DateTime.tryParse(t) != null
+                    ? null
+                    : 'Use YYYY-MM-DD.';
+              },
+            ),
+            TextFormField(
+              controller: amount,
+              decoration: const InputDecoration(labelText: 'Amount'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              validator: (v) {
+                final t = v?.trim() ?? '', n = double.tryParse(t);
+                return n == null ||
+                        n <= 0 ||
+                        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
+                    ? 'Enter a positive amount.'
+                    : null;
+              },
+            ),
+            SearchableRecordField(
+              initialValue: account,
+              decoration: const InputDecoration(labelText: 'Received into'),
+              items: const [
+                DropdownMenuItem(value: 'Bank', child: Text('Bank')),
+                DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+              ],
+              onChanged: (v) => account = v ?? 'Bank',
+            ),
+            TextFormField(
+              controller: reference,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Reference (optional)',
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'date': date.text.trim(),
-                'capitalAccountId': '',
-                'shareholderId': shareholderId!,
-                'kind': 'CAPITAL_CONTRIBUTION',
-                'amount': double.parse(amount.text.trim()),
-                'method': 'PAID',
-                'destinationAccount': account,
-                'assetId': '',
-                'reference': reference.text.trim(),
-              });
-            },
-            child: const Text('Save draft'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'date': date.text.trim(),
+            'capitalAccountId': '',
+            'shareholderId': shareholderId!,
+            'kind': 'CAPITAL_CONTRIBUTION',
+            'amount': double.parse(amount.text.trim()),
+            'method': 'PAID',
+            'destinationAccount': account,
+            'assetId': '',
+            'reference': reference.text.trim(),
+          });
+        },
+        child: const Text('Save draft'),
+      ),
+    ],
+  );
 }
 
 class ShareholderLoanEditor extends StatefulWidget {
@@ -317,115 +308,110 @@ class _ShareholderLoanEditorState extends State<ShareholderLoanEditor> {
       DateTime.tryParse(value) != null;
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: Text(
-          widget.record == null
-              ? 'Add shareholder loan'
-              : 'Edit shareholder loan',
-        ),
-        content: SizedBox(
-          width: 480,
-          child: Form(
-            key: form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SearchableRecordField(
-                  initialValue: shareholderId,
-                  decoration: const InputDecoration(labelText: 'Shareholder'),
-                  items: [
-                    for (final s in widget.shareholders)
-                      DropdownMenuItem(
-                        value: s['recordId'] as String,
-                        child: Text('${s['name']}'),
-                      ),
-                  ],
-                  onChanged: (v) => shareholderId = v,
-                  validator: (v) => v == null ? 'Choose a shareholder.' : null,
-                ),
-                TextFormField(
-                  controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
-                  decoration: const InputDecoration(labelText: 'Receipt date'),
-                  validator: (v) =>
-                      validDate(v?.trim() ?? '') ? null : 'Use YYYY-MM-DD.',
-                ),
-                TextFormField(
-                  controller: dueDate,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, dueDate),
-                  decoration: const InputDecoration(
-                    labelText: 'Due date (optional)',
+    title: Text(
+      widget.record == null ? 'Add shareholder loan' : 'Edit shareholder loan',
+    ),
+    content: SizedBox(
+      width: 480,
+      child: Form(
+        key: form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SearchableRecordField(
+              initialValue: shareholderId,
+              decoration: const InputDecoration(labelText: 'Shareholder'),
+              items: [
+                for (final s in widget.shareholders)
+                  DropdownMenuItem(
+                    value: s['recordId'] as String,
+                    child: Text('${s['name']}'),
                   ),
-                  validator: (v) {
-                    final t = v?.trim() ?? '';
-                    return t.isEmpty || validDate(t) ? null : 'Use YYYY-MM-DD.';
-                  },
-                ),
-                TextFormField(
-                  controller: principal,
-                  decoration: const InputDecoration(labelText: 'Principal'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  validator: (v) {
-                    final t = v?.trim() ?? '', n = double.tryParse(t);
-                    return n == null ||
-                            n <= 0 ||
-                            !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
-                        ? 'Enter a positive amount.'
-                        : null;
-                  },
-                ),
-                SearchableRecordField(
-                  initialValue: account,
-                  decoration: const InputDecoration(labelText: 'Received into'),
-                  items: const [
-                    DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                    DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                  ],
-                  onChanged: (v) => account = v ?? 'Bank',
-                ),
-                TextFormField(
-                  controller: reference,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    labelText: 'Reference (optional)',
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    'This release supports interest-free shareholder loans.',
-                  ),
-                ),
               ],
+              onChanged: (v) => shareholderId = v,
+              validator: (v) => v == null ? 'Choose a shareholder.' : null,
             ),
-          ),
+            CalendarFormField(
+              controller: date,
+              decoration: const InputDecoration(labelText: 'Receipt date'),
+              validator: (v) =>
+                  validDate(v?.trim() ?? '') ? null : 'Use YYYY-MM-DD.',
+            ),
+            CalendarFormField(
+              controller: dueDate,
+              optional: true,
+              decoration: const InputDecoration(
+                labelText: 'Due date (optional)',
+              ),
+              validator: (v) {
+                final t = v?.trim() ?? '';
+                return t.isEmpty || validDate(t) ? null : 'Use YYYY-MM-DD.';
+              },
+            ),
+            TextFormField(
+              controller: principal,
+              decoration: const InputDecoration(labelText: 'Principal'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              validator: (v) {
+                final t = v?.trim() ?? '', n = double.tryParse(t);
+                return n == null ||
+                        n <= 0 ||
+                        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)
+                    ? 'Enter a positive amount.'
+                    : null;
+              },
+            ),
+            SearchableRecordField(
+              initialValue: account,
+              decoration: const InputDecoration(labelText: 'Received into'),
+              items: const [
+                DropdownMenuItem(value: 'Bank', child: Text('Bank')),
+                DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+              ],
+              onChanged: (v) => account = v ?? 'Bank',
+            ),
+            TextFormField(
+              controller: reference,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Reference (optional)',
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Text(
+                'This release supports interest-free shareholder loans.',
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'shareholderId': shareholderId!,
-                'date': date.text.trim(),
-                'kind': 'LOAN_TO_COMPANY',
-                'principal': double.parse(principal.text.trim()),
-                'interestRate': 0,
-                'dueDate': dueDate.text.trim(),
-                'paymentAccount': account,
-                'reference': reference.text.trim(),
-              });
-            },
-            child: const Text('Save draft'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'shareholderId': shareholderId!,
+            'date': date.text.trim(),
+            'kind': 'LOAN_TO_COMPANY',
+            'principal': double.parse(principal.text.trim()),
+            'interestRate': 0,
+            'dueDate': dueDate.text.trim(),
+            'paymentAccount': account,
+            'reference': reference.text.trim(),
+          });
+        },
+        child: const Text('Save draft'),
+      ),
+    ],
+  );
 }
 
 class ShareholderLoanRepaymentEditor extends StatefulWidget {
@@ -453,61 +439,59 @@ class _ShareholderLoanRepaymentEditorState
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: const Text('Repay shareholder loan'),
-        content: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Full outstanding principal: ${widget.amount}'),
-              TextFormField(
-                controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
-                decoration: const InputDecoration(labelText: 'Repayment date'),
-                validator: (v) {
-                  final t = v?.trim() ?? '';
-                  return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
-                          DateTime.tryParse(t) != null
-                      ? null
-                      : 'Use YYYY-MM-DD.';
-                },
-              ),
-              SearchableRecordField(
-                initialValue: account,
-                decoration: const InputDecoration(labelText: 'Paid from'),
-                items: const [
-                  DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                ],
-                onChanged: (v) => account = v ?? 'Bank',
-              ),
-              TextFormField(
-                controller: reference,
-                maxLength: 500,
-                decoration: const InputDecoration(
-                  labelText: 'Reference (optional)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'lastRepaymentDate': date.text.trim(),
-                'paymentAccount': account,
-                'paymentReference': reference.text.trim(),
-              });
+    title: const Text('Repay shareholder loan'),
+    content: Form(
+      key: form,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Full outstanding principal: ${widget.amount}'),
+          CalendarFormField(
+            controller: date,
+            decoration: const InputDecoration(labelText: 'Repayment date'),
+            validator: (v) {
+              final t = v?.trim() ?? '';
+              return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t) &&
+                      DateTime.tryParse(t) != null
+                  ? null
+                  : 'Use YYYY-MM-DD.';
             },
-            child: const Text('Record full repayment'),
+          ),
+          SearchableRecordField(
+            initialValue: account,
+            decoration: const InputDecoration(labelText: 'Paid from'),
+            items: const [
+              DropdownMenuItem(value: 'Bank', child: Text('Bank')),
+              DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+            ],
+            onChanged: (v) => account = v ?? 'Bank',
+          ),
+          TextFormField(
+            controller: reference,
+            maxLength: 500,
+            decoration: const InputDecoration(
+              labelText: 'Reference (optional)',
+            ),
           ),
         ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'lastRepaymentDate': date.text.trim(),
+            'paymentAccount': account,
+            'paymentReference': reference.text.trim(),
+          });
+        },
+        child: const Text('Record full repayment'),
+      ),
+    ],
+  );
 }

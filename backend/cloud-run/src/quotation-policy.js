@@ -1,4 +1,5 @@
 import { challenge } from './crypto.js';
+import { replaceDraftItems } from './document-draft.js';
 import { requireThat } from './errors.js';
 import { validLedgerDate } from './financial-period-policy.js';
 import { invoiceLineValues } from './invoice-policy.js';
@@ -66,8 +67,12 @@ export async function quotationChanges(sheets, companyId, table, id, action, old
       validLedgerDate(record.validUntil) && record.validUntil >= record.issueDate && /^[A-Z]{3}$/.test(record.currency),
     400, 'INVALID_QUOTATION', 'Choose a customer, currency and valid quotation dates.');
     const data = await sheets.read(companyId, ['QuotationItems']);
-    return { values: { ...values, status: 'DRAFT', ...totals(data.QuotationItems.filter(line =>
-      line.companyId === companyId && line.quotationId === id && active(line))) }, extra: [] };
+    const { items, ...header } = values;
+    const lines = data.QuotationItems.filter(line => line.companyId === companyId && line.quotationId === id && active(line));
+    const replacement = items === undefined ? { lines, extra: [] } :
+      replaceDraftItems(companyId, 'QuotationItems', 'quotationId', id, data.QuotationItems,
+        items, system, operation, invoiceLineValues);
+    return { values: { ...header, status: 'DRAFT', ...totals(replacement.lines) }, extra: replacement.extra };
   }
   const next = { ...old, ...values };
   requireThat(!old || old.quotationId === next.quotationId, 409, 'QUOTATION_LOCKED', 'Moving quotation lines is not supported.');

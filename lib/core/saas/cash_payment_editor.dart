@@ -34,7 +34,7 @@ class _CashPaymentEditorState extends State<CashPaymentEditor> {
               Text(
                 'Pay the full outstanding amount: ${widget.total}. This posts the payment to the ledger. Partial payments and reversals are not available yet.',
               ),
-              TextFormField(
+              CalendarFormField(
                 controller: _date,
                 decoration: const InputDecoration(
                   labelText: 'Payment date (YYYY-MM-DD)',

@@ -43,7 +43,7 @@ live verification remains required. No customer should deploy scripts.
 See [Software workflow and delivery status](SOFTWARE_WORKFLOW_AND_STATUS.md) for
 the consolidated completed/pending checklist dated 26 September 2026.
 
-Retained legacy source and tests are historical references, not active routes.
+Unused legacy source and its tests were removed on 4 October 2026.
 Cloud resources and the live website have not been changed by this local cutover.
 
 ## Deployment access and routing verification
@@ -82,3 +82,17 @@ Outstanding integration and live verification are tracked in
 `SOFTWARE_WORKFLOW_AND_STATUS.md`. New company
 provisioning creates schema and actual company/owner metadata, with no sample
 customers, employees or accounting transactions.
+
+## Invoice editor dependency and API update ? 4 October 2026
+
+The frontend uses `invoice_kit: ^0.2.0` with custom invoice/quotation templates.
+Its dependency requires `intl` 0.19; the project now uses `intl: ^0.19.0`.
+Run `flutter pub get` after updating the source.
+
+Deploy the updated shared backend before releasing this frontend. The new
+editors submit complete drafts through the existing sync endpoint with an
+optional `values.items` array. Older backend code rejects that array.
+This is an additive API update with no Google Sheets schema migration.
+Modern and Classic PDF styles can be chosen in the editor preview and when
+creating/attaching a saved record PDF. Style choice belongs to each generation,
+and is not stored as financial record metadata.

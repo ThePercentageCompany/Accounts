@@ -1,3 +1,4 @@
+import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/saas/payroll_editor.dart';
@@ -36,9 +37,9 @@ void main() {
     await tester.tap(find.text('Employee').last);
     await tester.pumpAndSettle();
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), '2026-09');
-    await tester.enterText(fields.at(1), '250');
-    await tester.enterText(fields.at(2), '100');
+    await fillFormField(tester, fields.at(0), '2026-09');
+    await fillFormField(tester, fields.at(1), '250');
+    await fillFormField(tester, fields.at(2), '100');
     await tester.tap(find.text('Save draft'));
     await tester.pumpAndSettle();
     expect(result?['employeeId'], 'e' * 43);
@@ -69,7 +70,7 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).last, 'WPS');
+    await fillFormField(tester, find.byType(TextFormField).last, 'WPS');
     await tester.tap(find.text('Record payment'));
     await tester.pumpAndSettle();
     expect(result?['paymentAccount'], 'Bank');

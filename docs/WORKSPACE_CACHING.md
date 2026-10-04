@@ -16,7 +16,8 @@ The workspace now lazily mounts visited sections in an IndexedStack. Filters,
 selected record tables, report dates/types, expanded rows and scroll positions
 remain in their existing widget/controller state. Only the selected section is
 registered for automatic refresh. Existing ChangeNotifier/stateful-widget
-patterns are retained; legacy inactive feature repositories are unchanged.
+patterns are retained. Legacy inactive feature repositories were removed in the
+4 October 2026 source cleanup.
 
 ## Storage and scope
 

@@ -1,3 +1,4 @@
+import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/saas/quotation_editor.dart';
@@ -18,7 +19,18 @@ void main() {
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
                       context: context,
-                      builder: (_) => QuotationEditor(customers: customers),
+                      builder: (_) => QuotationEditor(
+                        customers: customers,
+                        items: const [
+                          {
+                            'description': 'Service',
+                            'quantity': 1,
+                            'unitPrice': 100,
+                            'discount': 0,
+                            'taxRate': 5,
+                          },
+                        ],
+                      ),
                     ),
                 child: const Text('Open'),
               ),
@@ -36,15 +48,15 @@ void main() {
       await tester.tap(find.text('Client').last);
       await tester.pumpAndSettle();
       final fields = find.byType(TextFormField);
-      await tester.enterText(fields.at(0), '2026-09-28');
-      await tester.enterText(fields.at(1), '2026-09-01');
+      await fillFormField(tester, fields.at(0), '2026-09-28');
+      await fillFormField(tester, fields.at(1), '2026-09-01');
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(
         find.text('Valid until cannot precede issue date.'),
         findsOneWidget,
       );
-      await tester.enterText(fields.at(1), '2026-10-28');
+      await fillFormField(tester, fields.at(1), '2026-10-28');
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(result?['customerId'], 'c' * 43);
@@ -92,7 +104,7 @@ void main() {
       4: '5',
       5: '5',
     }.entries) {
-      await tester.enterText(fields.at(entry.key), entry.value);
+      await fillFormField(tester, fields.at(entry.key), entry.value);
     }
     await tester.tap(find.text('Save line'));
     await tester.pumpAndSettle();

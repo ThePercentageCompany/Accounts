@@ -2,6 +2,55 @@
 
 Updated: 4 October 2026. Based on the repository and recorded validation results.
 
+### Advanced invoice and quotation creation ? 4 October 2026
+
+Implemented locally: invoice_kit 0.2.0 with a shared multi-item invoice/quotation
+editor, customer details, currency, notes/terms, duplicate/remove/reorder actions,
+per-line discounts and tax, rounded estimates and Modern/Classic PDF previews.
+Saved invoice/quotation PDFs use invoice_kit custom branded templates and saved
+server totals; receipts/payslips/assets retain their existing templates.
+
+Complete drafts save their header and 1?100 lines in one idempotent atomic
+backend operation. Updating draft lines soft-deletes the previous lines.
+Version checks prevent overwriting concurrent edits; existing numbering,
+issue/send and posting workflows remain separate. Product references stay
+company-scoped. The operation passes through the existing durable pending queue.
+
+All existing editable date fields now open calendars on desktop and mobile,
+including receipts, cash/payment/reversal entries, financial periods, assets,
+capital and payroll payments. Payroll month uses a month calendar; report dates
+use calendar selection. Optional dates can be cleared. A reusable clock/date-time
+picker stores 24-hour values. Attendance/Overtime currently have no editable
+time forms, and audit timestamps remain generated/read-only.
+
+Validation: 108 Flutter tests passed (one browser-only skip), 207 backend tests
+passed, and phone/desktop editor renders were reviewed. Targeted checks cover
+picker selection/cancellation, multi-line editing, financial rounding, saved PDF
+totals, atomic creation/replacement, replay after lost responses, stale versions,
+100-line bounds and tenant-scoped references. Analysis has only the existing
+dart:html deprecation notice. The release web build and Wasm dry run succeeded.
+
+These changes are not deployed. Release the updated backend before the frontend;
+no spreadsheet schema migration is required. See SETUP.md and backend/cloud-run/API.md.
+
+### Source cleanup ? 4 October 2026
+
+Removed 75 Dart library files unreachable from the active shared-backend
+entrypoint and 26 tests for that retired implementation. This includes the old
+direct-Google authentication/repositories, local feature screens, generated
+models, legacy sync engine and superseded workspace snapshot cache. Removed 11
+unused direct dependencies, code-generation configuration, the obsolete Google
+frontend example, unused bundled logo and one-off icon-generation script.
+The current shared API application and its tests remain the supported source.
+README, project overview and bootstrap instructions now describe that source.
+
+Cleanup validation: 94 active Flutter tests passed with one browser-only skip;
+all local Dart references resolve. Dart analysis found no errors or unused-code
+issues, with one existing dart:html deprecation notice. The release web build
+and Wasm dry run succeeded. The build reports an unused Cupertino font family
+from the Flutter Cupertino import; application source uses only its activity
+indicator and contains no CupertinoIcons references. No deployment was made.
+
 ### Workspace cache update — 4 October 2026
 
 Implemented locally: shared memory plus IndexedDB caching for active record,

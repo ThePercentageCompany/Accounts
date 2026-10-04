@@ -6,9 +6,13 @@ import 'saas_api.dart';
 /// One durable owner/company queue. Only individually acknowledged operations
 /// are removed; an HTTP 200 batch can still contain a failed operation.
 class RecordWriteQueue {
-  RecordWriteQueue(this.api, this.preferences, String ownerId, this.companyId,
-      {this.employee = false})
-      : storageKey = 'saas_records_${ownerId}_$companyId';
+  RecordWriteQueue(
+    this.api,
+    this.preferences,
+    String ownerId,
+    this.companyId, {
+    this.employee = false,
+  }) : storageKey = 'saas_records_${ownerId}_$companyId';
   final bool employee;
   final SaasApi api;
   final SharedPreferences preferences;
@@ -46,17 +50,18 @@ class RecordWriteQueue {
     }
   }
 
-  List<Map<String, Object?>> get pending => (preferences
-          .getKeys()
-          .where((key) => key.startsWith('${storageKey}_'))
-          .toList()
-        ..sort())
-      .map(
-        (key) => Map<String, Object?>.from(
-          jsonDecode(preferences.getString(key)!) as Map,
-        ),
-      )
-      .toList();
+  List<Map<String, Object?>> get pending =>
+      (preferences
+              .getKeys()
+              .where((key) => key.startsWith('${storageKey}_'))
+              .toList()
+            ..sort())
+          .map(
+            (key) => Map<String, Object?>.from(
+              jsonDecode(preferences.getString(key)!) as Map,
+            ),
+          )
+          .toList();
   Future<void> _store(Map<String, Object?> operation) async {
     if (!await preferences.setString(
       '${storageKey}_${operation['operationId']}',
@@ -150,8 +155,9 @@ class RecordWriteQueue {
           .where((r) => r['status'] == 'APPLIED')
           .map((r) => r['operationId'])
           .toSet();
-      operations =
-          operations.where((r) => !applied.contains(r['operationId'])).toList();
+      operations = operations
+          .where((r) => !applied.contains(r['operationId']))
+          .toList();
       for (final id in applied) {
         if (!await preferences.remove('${storageKey}_$id')) {
           throw const SaasApiException(
@@ -165,6 +171,10 @@ class RecordWriteQueue {
         final error = failed['error'] as Map;
         if (const [
           'VERSION_CONFLICT',
+          'INVALID_DOCUMENT_ITEMS',
+          'INVALID_INVOICE_LINE',
+          'INVALID_INVOICE',
+          'INVOICE_DERIVED_FIELD',
           'INVALID_COMPANY_PROFILE',
           'COMPANY_CURRENCY_LOCKED',
           'DOCUMENT_REFERENCE_INVALID',

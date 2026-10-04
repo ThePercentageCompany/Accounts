@@ -3,6 +3,7 @@ import { minor } from './journal-policy.js';
 import { validLedgerDate } from './financial-period-policy.js';
 import { assertOpenLedgerDate } from './financial-period-policy.js';
 import { challenge } from './crypto.js';
+import { replaceDraftItems } from './document-draft.js';
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 const dollars = cents => Number(cents) / 100;
 
@@ -119,7 +120,11 @@ export async function invoiceChanges(sheets, companyId, table, id, action, old, 
     400, 'INVALID_INVOICE', 'Choose a customer, currency and valid invoice dates.');
     const data = await sheets.read(companyId, ['InvoiceItems']);
     const lines = data.InvoiceItems.filter(l => l.companyId === companyId && l.invoiceId === id && active(l));
-    return { values: { ...values, status: 'DRAFT', ...totals(lines) }, extra: [] };
+    const { items, ...header } = values;
+    const replacement = items === undefined ? { lines, extra: [] } :
+      replaceDraftItems(companyId, 'InvoiceItems', 'invoiceId', id, data.InvoiceItems,
+        items, system, operation, invoiceLineValues);
+    return { values: { ...header, status: 'DRAFT', ...totals(replacement.lines) }, extra: replacement.extra };
   }
   const next = { ...old, ...values };
   requireThat(!old || old.invoiceId === next.invoiceId, 409, 'INVOICE_LOCKED', 'Moving invoice lines is not supported.');

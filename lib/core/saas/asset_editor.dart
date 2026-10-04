@@ -94,10 +94,8 @@ class _AssetEditorState extends State<AssetEditor> {
                 decoration: const InputDecoration(labelText: 'Category'),
                 validator: requiredText,
               ),
-              TextFormField(
+              CalendarFormField(
                 controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
                 decoration: const InputDecoration(labelText: 'Purchase date'),
                 validator: (v) {
                   final t = v?.trim() ?? '';
@@ -221,10 +219,8 @@ class _AssetDepreciationEditorState extends State<AssetDepreciationEditor> {
     title: const Text('Post monthly depreciation'),
     content: Form(
       key: form,
-      child: TextFormField(
+      child: CalendarFormField(
         controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
         decoration: const InputDecoration(labelText: 'Posting date'),
         validator: (v) {
           final t = v?.trim() ?? '';
@@ -288,10 +284,8 @@ class _AssetDisposalEditorState extends State<AssetDisposalEditor> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Current net book value: ${widget.bookValue}'),
-            TextFormField(
+            CalendarFormField(
               controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
               decoration: const InputDecoration(labelText: 'Disposal date'),
               validator: (v) {
                 final t = v?.trim() ?? '';

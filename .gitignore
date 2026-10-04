@@ -4,7 +4,6 @@ node_modules/
 .env*
 !backend/cloud-run/.env.example
 config/google*.json
-!config/google.example.json
 *client_secret*.json
 
 .vercel

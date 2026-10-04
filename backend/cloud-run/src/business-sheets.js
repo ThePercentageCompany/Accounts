@@ -44,8 +44,8 @@ export class BusinessSheets {
   async writeBatch(companyId, changes) {
     let submitted = false;
     try {
-      requireThat(Array.isArray(changes) && changes.length > 0 && changes.length <= 100,
-        400, 'INVALID_BATCH', 'Supply between 1 and 100 internal record writes.');
+      requireThat(Array.isArray(changes) && changes.length > 0 && changes.length <= 250,
+        400, 'INVALID_BATCH', 'Supply between 1 and 250 internal record writes.');
       const seen = new Set();
       const prepared = changes.map(change => {
         requireThat(change && Number.isSafeInteger(change.row) && change.row >= 2 && change.row <= 10001 &&

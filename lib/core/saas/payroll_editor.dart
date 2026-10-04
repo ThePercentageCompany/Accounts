@@ -41,83 +41,85 @@ class _PayrollEditorState extends State<PayrollEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: Text(
-          widget.record == null ? 'Create payroll draft' : 'Edit payroll draft',
-        ),
-        content: SizedBox(
-          width: 480,
-          child: Form(
-            key: form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SearchableRecordField(
-                  initialValue: employeeId,
-                  decoration: const InputDecoration(labelText: 'Employee'),
-                  items: [
-                    for (final row in widget.employees)
-                      DropdownMenuItem(
-                        value: row['recordId'] as String,
-                        child: Text('${row['fullName']}'),
-                      ),
-                  ],
-                  onChanged: widget.record == null
-                      ? (value) => employeeId = value
-                      : null,
-                  validator: (value) =>
-                      value == null ? 'Choose an employee.' : null,
-                ),
-                TextFormField(
-                  controller: month,
-                  enabled: widget.record == null,
-                  decoration: const InputDecoration(
-                    labelText: 'Payroll month (YYYY-MM)',
+    title: Text(
+      widget.record == null ? 'Create payroll draft' : 'Edit payroll draft',
+    ),
+    content: SizedBox(
+      width: 480,
+      child: Form(
+        key: form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SearchableRecordField(
+              initialValue: employeeId,
+              decoration: const InputDecoration(labelText: 'Employee'),
+              items: [
+                for (final row in widget.employees)
+                  DropdownMenuItem(
+                    value: row['recordId'] as String,
+                    child: Text('${row['fullName']}'),
                   ),
-                  validator: (value) => RegExp(
+              ],
+              onChanged: widget.record == null
+                  ? (value) => employeeId = value
+                  : null,
+              validator: (value) =>
+                  value == null ? 'Choose an employee.' : null,
+            ),
+            CalendarFormField(
+              controller: month,
+              mode: CalendarFieldMode.month,
+              enabled: widget.record == null,
+              decoration: const InputDecoration(
+                labelText: 'Payroll month (YYYY-MM)',
+              ),
+              validator: (value) =>
+                  RegExp(
                     r'^\d{4}-(0[1-9]|1[0-2])$',
                   ).hasMatch(value?.trim() ?? '')
-                      ? null
-                      : 'Use YYYY-MM.',
-                ),
-                TextFormField(
-                  controller: bonus,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Bonus'),
-                  validator: amount,
-                ),
-                TextFormField(
-                  controller: deductions,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Deductions'),
-                  validator: amount,
-                ),
-              ],
+                  ? null
+                  : 'Use YYYY-MM.',
             ),
-          ),
+            TextFormField(
+              controller: bonus,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Bonus'),
+              validator: amount,
+            ),
+            TextFormField(
+              controller: deductions,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Deductions'),
+              validator: amount,
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'month': month.text.trim(),
-                'employeeId': employeeId!,
-                'bonus': double.parse(bonus.text.trim()),
-                'deductions': double.parse(deductions.text.trim()),
-              });
-            },
-            child: const Text('Save draft'),
-          ),
-        ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'month': month.text.trim(),
+            'employeeId': employeeId!,
+            'bonus': double.parse(bonus.text.trim()),
+            'deductions': double.parse(deductions.text.trim()),
+          });
+        },
+        child: const Text('Save draft'),
+      ),
+    ],
+  );
 }
 
 class PayrollPaymentEditor extends StatefulWidget {
@@ -143,63 +145,61 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: const Text('Pay approved payroll'),
-        content: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Net salary: ${widget.amount}'),
-              TextFormField(
-                controller: date,
-                readOnly: MediaQuery.sizeOf(context).width < 600,
-                onTap: () => pickControllerDate(context, date),
-                decoration: const InputDecoration(labelText: 'Payment date'),
-                validator: (value) {
-                  final text = value?.trim() ?? '',
-                      parsed = DateTime.tryParse(text);
-                  return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) &&
-                          parsed != null &&
-                          parsed.toIso8601String().startsWith(text)
-                      ? null
-                      : 'Enter a valid date.';
-                },
-              ),
-              SearchableRecordField(
-                initialValue: account,
-                decoration: const InputDecoration(labelText: 'Payment account'),
-                items: const [
-                  DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                ],
-                onChanged: (value) => account = value ?? 'Bank',
-              ),
-              TextFormField(
-                controller: reference,
-                maxLength: 500,
-                decoration: const InputDecoration(
-                  labelText: 'Reference (optional)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!form.currentState!.validate()) return;
-              Navigator.pop(context, <String, Object?>{
-                'paidDate': date.text.trim(),
-                'paymentAccount': account,
-                'paymentReference': reference.text.trim(),
-              });
+    title: const Text('Pay approved payroll'),
+    content: Form(
+      key: form,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Net salary: ${widget.amount}'),
+          CalendarFormField(
+            controller: date,
+            decoration: const InputDecoration(labelText: 'Payment date'),
+            validator: (value) {
+              final text = value?.trim() ?? '',
+                  parsed = DateTime.tryParse(text);
+              return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) &&
+                      parsed != null &&
+                      parsed.toIso8601String().startsWith(text)
+                  ? null
+                  : 'Enter a valid date.';
             },
-            child: const Text('Record payment'),
+          ),
+          SearchableRecordField(
+            initialValue: account,
+            decoration: const InputDecoration(labelText: 'Payment account'),
+            items: const [
+              DropdownMenuItem(value: 'Bank', child: Text('Bank')),
+              DropdownMenuItem(value: 'Cash', child: Text('Cash')),
+            ],
+            onChanged: (value) => account = value ?? 'Bank',
+          ),
+          TextFormField(
+            controller: reference,
+            maxLength: 500,
+            decoration: const InputDecoration(
+              labelText: 'Reference (optional)',
+            ),
           ),
         ],
-      );
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!form.currentState!.validate()) return;
+          Navigator.pop(context, <String, Object?>{
+            'paidDate': date.text.trim(),
+            'paymentAccount': account,
+            'paymentReference': reference.text.trim(),
+          });
+        },
+        child: const Text('Record payment'),
+      ),
+    ],
+  );
 }

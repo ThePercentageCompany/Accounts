@@ -1,3 +1,4 @@
+import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/saas/invoice_editor.dart';
@@ -18,7 +19,18 @@ void main() {
                 onPressed: () async =>
                     result = await showDialog<Map<String, Object?>>(
                       context: context,
-                      builder: (_) => InvoiceEditor(customers: customers),
+                      builder: (_) => InvoiceEditor(
+                        customers: customers,
+                        items: const [
+                          {
+                            'description': 'Service',
+                            'quantity': 1,
+                            'unitPrice': 100,
+                            'discount': 0,
+                            'taxRate': 5,
+                          },
+                        ],
+                      ),
                     ),
                 child: const Text('Open'),
               ),
@@ -36,12 +48,12 @@ void main() {
       await tester.tap(find.text('Client').last);
       await tester.pumpAndSettle();
       final fields = find.byType(TextFormField);
-      await tester.enterText(fields.at(0), '2026-09-27');
-      await tester.enterText(fields.at(1), '2026-09-01');
+      await fillFormField(tester, fields.at(0), '2026-09-27');
+      await fillFormField(tester, fields.at(1), '2026-09-01');
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(find.text('Due date cannot precede issue date.'), findsOneWidget);
-      await tester.enterText(fields.at(1), '2026-10-01');
+      await fillFormField(tester, fields.at(1), '2026-10-01');
       await tester.tap(find.text('Save draft'));
       await tester.pumpAndSettle();
       expect(result?['customerId'], 'c' * 43);
@@ -81,12 +93,12 @@ void main() {
     await tester.tap(find.text('2026-09-27').last);
     await tester.pumpAndSettle();
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), '1');
-    await tester.enterText(fields.at(1), 'Service');
-    await tester.enterText(fields.at(2), '3');
-    await tester.enterText(fields.at(3), '0.10');
-    await tester.enterText(fields.at(4), '0.05');
-    await tester.enterText(fields.at(5), '5');
+    await fillFormField(tester, fields.at(0), '1');
+    await fillFormField(tester, fields.at(1), 'Service');
+    await fillFormField(tester, fields.at(2), '3');
+    await fillFormField(tester, fields.at(3), '0.10');
+    await fillFormField(tester, fields.at(4), '0.05');
+    await fillFormField(tester, fields.at(5), '5');
     await tester.tap(find.text('Save line'));
     await tester.pumpAndSettle();
     expect(result?['quantity'], 3.0);

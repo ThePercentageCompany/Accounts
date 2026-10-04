@@ -58,12 +58,12 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
                 validator: (v) =>
                     (v ?? '').trim().isEmpty ? 'Enter a name.' : null,
               ),
-              TextFormField(
+              CalendarFormField(
                 controller: start,
                 decoration: const InputDecoration(labelText: 'Start date'),
                 validator: _date,
               ),
-              TextFormField(
+              CalendarFormField(
                 controller: end,
                 decoration: const InputDecoration(labelText: 'End date'),
                 validator: (v) =>

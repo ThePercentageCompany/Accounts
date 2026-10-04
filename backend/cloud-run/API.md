@@ -418,3 +418,26 @@ remain outside the initial scope.
 - CompanyProfile updates validate company name, email and document prefixes.
   Established accounting currency cannot change after posted journals exist.
   Private logos continue to require a ready same-record document reference.
+
+## Complete invoice and quotation drafts ? 4 October 2026
+
+The existing `create` and `update` operations for `Invoices` and `Quotations`
+accept an optional `values.items` array containing 1?100 lines. Include the
+ordinary header fields (customer, issue date, currency, due date or validity,
+notes and payment terms). Each line accepts `description` (1?1000 characters),
+`quantity`, `unitPrice`, `discount` (absolute amount), `taxRate` and an
+optional same-company `productId`. Line numbers are assigned in array order.
+Clients cannot supply line IDs, parent IDs, tax amounts or calculated totals.
+
+The operation validates the complete document and calculates rounded minor-unit
+totals before submitting one atomic Sheets batch. For draft updates, the array
+replaces active lines; previous lines are soft-deleted. Header expectedVersion
+protects against concurrent line edits. Numbering and posting still require the
+separate existing issue/send actions. Issued or sent documents remain locked.
+Retry uncertain results with the same operation ID and identical values.
+
+Internal batches now allow up to 250 row changes to accommodate the header,
+100 new lines and tombstones. No spreadsheet columns or provisioning changes
+are required. Existing header-only and individual line operations remain valid.
+Employee grants are checked for both the header and its line table, and product
+references are checked within the current company.

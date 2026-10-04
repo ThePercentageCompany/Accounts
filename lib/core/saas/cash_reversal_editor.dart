@@ -39,7 +39,7 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(widget.explanation),
-              TextFormField(
+              CalendarFormField(
                 controller: _date,
                 decoration: const InputDecoration(
                   labelText: 'Reversal date (YYYY-MM-DD)',

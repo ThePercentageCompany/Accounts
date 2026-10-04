@@ -2,29 +2,42 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'saas_api.dart';
+import 'invoice_document.dart';
+import 'package:invoice_kit/invoice_kit.dart' as kit;
 
 /// Uses saved server totals, never the legacy local accounting repositories.
 Future<Uint8List> sharedRecordPdf(
-    SaasApi api, String companyId, String section, String recordId) async {
+  SaasApi api,
+  String companyId,
+  String section,
+  String recordId, {
+  DocumentStyle style = DocumentStyle.modern,
+}) async {
   const titles = {
     'Invoices': 'Invoice',
     'Quotations': 'Quotation',
     'Receipts': 'Payment receipt',
     'Payroll': 'Payslip',
-    'Assets': 'Asset record'
+    'Assets': 'Asset record',
   };
   if (!titles.containsKey(section)) {
     throw const SaasApiException(
-        'DOCUMENT_TYPE', 'This record has no PDF template.');
+      'DOCUMENT_TYPE',
+      'This record has no PDF template.',
+    );
   }
   Future<List<Map<String, dynamic>>> rows(String table) async =>
-      ((await api.records(companyId, table))['records'] as List)
+      ((await api.records(companyId, table, force: true))['records'] as List)
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
   Map<String, dynamic> find(List<Map<String, dynamic>> rows, String id) =>
-      rows.firstWhere((row) => row['recordId'] == id,
-          orElse: () => throw const SaasApiException('RECORD_UNAVAILABLE',
-              'A document record is unavailable. Refresh and retry.'));
+      rows.firstWhere(
+        (row) => row['recordId'] == id,
+        orElse: () => throw const SaasApiException(
+          'RECORD_UNAVAILABLE',
+          'A document record is unavailable. Refresh and retry.',
+        ),
+      );
   final record = find(await rows(section), recordId);
   final profile = find(await rows('CompanyProfile'), 'company');
   Map<String, dynamic>? party;
@@ -40,17 +53,23 @@ Future<Uint8List> sharedRecordPdf(
   final itemTable = section == 'Invoices'
       ? 'InvoiceItems'
       : section == 'Quotations'
-          ? 'QuotationItems'
-          : null;
-  final items = itemTable == null
-      ? <Map<String, dynamic>>[]
-      : (await rows(itemTable))
-          .where((r) =>
-              r[section == 'Invoices' ? 'invoiceId' : 'quotationId'] ==
-              recordId)
-          .toList()
-    ..sort(
-        (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num));
+      ? 'QuotationItems'
+      : null;
+  final items =
+      itemTable == null
+            ? <Map<String, dynamic>>[]
+            : (await rows(itemTable))
+                  .where(
+                    (r) =>
+                        r[section == 'Invoices'
+                            ? 'invoiceId'
+                            : 'quotationId'] ==
+                        recordId,
+                  )
+                  .toList()
+        ..sort(
+          (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num),
+        );
   Uint8List? logo;
   if ('${profile['logoDocumentId'] ?? ''}'.isNotEmpty) {
     logo = await api.document(companyId, profile['logoDocumentId']);
@@ -59,8 +78,22 @@ Future<Uint8List> sharedRecordPdf(
   final latestProfile = find(await rows('CompanyProfile'), 'company');
   if (latest['recordVersion'] != record['recordVersion'] ||
       latestProfile['recordVersion'] != profile['recordVersion']) {
-    throw const SaasApiException('VERSION_CONFLICT',
-        'The record or company profile changed. Generate the document again.');
+    throw const SaasApiException(
+      'VERSION_CONFLICT',
+      'The record or company profile changed. Generate the document again.',
+    );
+  }
+  if (section == 'Invoices' || section == 'Quotations') {
+    return kit.InvoiceGenerator.generate(
+      data: documentData(
+        quotation: section == 'Quotations',
+        record: record,
+        company: profile,
+        customer: party ?? {},
+        items: items,
+      ),
+      template: BusinessDocumentTemplate(style: style, logo: logo),
+    );
   }
   final doc = pw.Document();
   String text(Object? value) {
@@ -68,8 +101,10 @@ Future<Uint8List> sharedRecordPdf(
     // The built-in PDF fonts cannot safely render every script. Fail visibly
     // instead of publishing a document with silently missing glyphs.
     if (result.runes.any((r) => r > 126)) {
-      throw const SaasApiException('PDF_FONT_UNSUPPORTED',
-          'Automatic PDFs currently support English text. Upload a prepared PDF for other scripts.');
+      throw const SaasApiException(
+        'PDF_FONT_UNSUPPORTED',
+        'Automatic PDFs currently support English text. Upload a prepared PDF for other scripts.',
+      );
     }
     return result;
   }
@@ -97,7 +132,7 @@ Future<Uint8List> sharedRecordPdf(
     'voidDate': 'Void date',
     'voidReason': 'Void reason',
     'reversalDate': 'Reversal date',
-    'reversalReason': 'Reversal reason'
+    'reversalReason': 'Reversal reason',
   };
   const amounts = {
     'subtotal': 'Subtotal',
@@ -118,98 +153,117 @@ Future<Uint8List> sharedRecordPdf(
     'residualValue': 'Residual value',
     'accumulatedDepreciation': 'Accumulated depreciation',
     'netBookValue': 'Net book value',
-    'disposalProceeds': 'Disposal proceeds'
+    'disposalProceeds': 'Disposal proceeds',
   };
-  doc.addPage(pw.MultiPage(
+  doc.addPage(
+    pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(36),
       footer: (context) => pw.Text(
-          '${text(profile['name'])} | ${context.pageNumber} / ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 8)),
+        '${text(profile['name'])} | ${context.pageNumber} / ${context.pagesCount}',
+        style: const pw.TextStyle(fontSize: 8),
+      ),
       build: (context) => [
-            if (logo != null)
-              pw.Image(pw.MemoryImage(logo),
-                  width: 120, height: 60, fit: pw.BoxFit.contain),
-            pw.Text(text(profile['name']),
-                style:
-                    pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-            for (final key in ['address', 'email', 'phone', 'taxNumber'])
-              if (text(profile[key]).isNotEmpty)
-                pw.Text(
-                    '${key == 'taxNumber' ? 'Tax number: ' : ''}${text(profile[key])}'),
-            pw.SizedBox(height: 20),
-            pw.Text('${titles[section]} - ${text(record['status'])}',
-                style: const pw.TextStyle(fontSize: 18)),
-            pw.Text(text(record['number']).isEmpty
-                ? 'Record: $recordId'
-                : text(record['number'])),
+        if (logo != null)
+          pw.Image(
+            pw.MemoryImage(logo),
+            width: 120,
+            height: 60,
+            fit: pw.BoxFit.contain,
+          ),
+        pw.Text(
+          text(profile['name']),
+          style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+        ),
+        for (final key in ['address', 'email', 'phone', 'taxNumber'])
+          if (text(profile[key]).isNotEmpty)
             pw.Text(
-                'Currency: ${text(record['currency'] ?? profile['currency'])}'),
-            if (party != null) ...[
-              pw.SizedBox(height: 12),
-              pw.Text(text(party['name'] ?? party['fullName']),
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              if (section != 'Payroll') ...[
-                pw.Text(text(party['address'])),
-                pw.Text('Tax number: ${text(party['taxNumber'])}'),
-              ],
+              '${key == 'taxNumber' ? 'Tax number: ' : ''}${text(profile[key])}',
+            ),
+        pw.SizedBox(height: 20),
+        pw.Text(
+          '${titles[section]} - ${text(record['status'])}',
+          style: const pw.TextStyle(fontSize: 18),
+        ),
+        pw.Text(
+          text(record['number']).isEmpty
+              ? 'Record: $recordId'
+              : text(record['number']),
+        ),
+        pw.Text('Currency: ${text(record['currency'] ?? profile['currency'])}'),
+        if (party != null) ...[
+          pw.SizedBox(height: 12),
+          pw.Text(
+            text(party['name'] ?? party['fullName']),
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+          if (section != 'Payroll') ...[
+            pw.Text(text(party['address'])),
+            pw.Text('Tax number: ${text(party['taxNumber'])}'),
+          ],
+        ],
+        pw.SizedBox(height: 12),
+        for (final entry in labels.entries)
+          if (text(record[entry.key]).isNotEmpty)
+            pw.Text('${entry.value}: ${text(record[entry.key])}'),
+        if (items.isNotEmpty) ...[
+          pw.SizedBox(height: 16),
+          pw.TableHelper.fromTextArray(
+            headers: [
+              'Description',
+              'Qty',
+              'Unit price',
+              'Discount',
+              'Tax',
+              'Total',
             ],
-            pw.SizedBox(height: 12),
-            for (final entry in labels.entries)
-              if (text(record[entry.key]).isNotEmpty)
-                pw.Text('${entry.value}: ${text(record[entry.key])}'),
-            if (items.isNotEmpty) ...[
-              pw.SizedBox(height: 16),
-              pw.TableHelper.fromTextArray(
-                  headers: [
-                    'Description',
-                    'Qty',
-                    'Unit price',
-                    'Discount',
-                    'Tax',
-                    'Total'
-                  ],
-                  data: [
-                    for (final item in items)
-                      [
-                        text(item['description']),
-                        text(item['quantity']),
-                        money(item['unitPrice']),
-                        money(item['discount']),
-                        money(item['taxAmount']),
-                        money(item['lineTotal'])
-                      ]
-                  ],
-                  cellStyle: const pw.TextStyle(fontSize: 9),
-                  headerStyle: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
+            data: [
+              for (final item in items)
+                [
+                  text(item['description']),
+                  text(item['quantity']),
+                  money(item['unitPrice']),
+                  money(item['discount']),
+                  money(item['taxAmount']),
+                  money(item['lineTotal']),
+                ],
             ],
-            pw.SizedBox(height: 16),
-            for (final entry in amounts.entries)
-              if (record[entry.key] != null &&
-                  text(record[entry.key]).isNotEmpty)
-                pw.Text('${entry.value}: ${money(record[entry.key])}'),
-            for (final key in ['notes', 'paymentTerms'])
-              if (text(record[key]).isNotEmpty)
-                pw.Padding(
-                    padding: const pw.EdgeInsets.only(top: 12),
-                    child: pw.Text(text(record[key]))),
-            if (['Invoices', 'Quotations'].contains(section)) ...[
-              pw.SizedBox(height: 16),
-              for (final key in [
-                'bankName',
-                'accountHolder',
-                'accountNumber',
-                'iban',
-                'swift'
-              ])
-                if (text(profile[key]).isNotEmpty)
-                  pw.Text('$key: ${text(profile[key])}'),
-            ],
-            pw.SizedBox(height: 16),
-            pw.Text(
-                'Saved record version ${record['recordVersion']}. Generated ${DateTime.now().toUtc().toIso8601String()}.',
-                style: const pw.TextStyle(fontSize: 8)),
-          ]));
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            headerStyle: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ],
+        pw.SizedBox(height: 16),
+        for (final entry in amounts.entries)
+          if (record[entry.key] != null && text(record[entry.key]).isNotEmpty)
+            pw.Text('${entry.value}: ${money(record[entry.key])}'),
+        for (final key in ['notes', 'paymentTerms'])
+          if (text(record[key]).isNotEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 12),
+              child: pw.Text(text(record[key])),
+            ),
+        if (['Invoices', 'Quotations'].contains(section)) ...[
+          pw.SizedBox(height: 16),
+          for (final key in [
+            'bankName',
+            'accountHolder',
+            'accountNumber',
+            'iban',
+            'swift',
+          ])
+            if (text(profile[key]).isNotEmpty)
+              pw.Text('$key: ${text(profile[key])}'),
+        ],
+        pw.SizedBox(height: 16),
+        pw.Text(
+          'Saved record version ${record['recordVersion']}. Generated ${DateTime.now().toUtc().toIso8601String()}.',
+          style: const pw.TextStyle(fontSize: 8),
+        ),
+      ],
+    ),
+  );
   return doc.save();
 }

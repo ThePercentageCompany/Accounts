@@ -1,3 +1,4 @@
+import 'support/form_input.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/saas/cash_payment_editor.dart';
@@ -30,11 +31,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter a valid date.'), findsOneWidget);
     expect(find.text('Choose an account.'), findsOneWidget);
-    await tester.enterText(find.byType(TextFormField).first, '2026-02-30');
+    await fillFormField(tester, find.byType(TextFormField).first, '2026-02-30');
     await tester.tap(find.text('Record payment'));
     await tester.pumpAndSettle();
     expect(find.text('Enter a valid date.'), findsOneWidget);
-    await tester.enterText(find.byType(TextFormField).first, '2026-10-01');
+    await fillFormField(tester, find.byType(TextFormField).first, '2026-10-01');
     await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bank').last);
