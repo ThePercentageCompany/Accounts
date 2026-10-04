@@ -32,7 +32,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('General ledger'));
+    await tester.tap(find.byTooltip('Choose report'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('General ledger').last);
     await tester.pumpAndSettle();
     expect(paths, [
       '/v1/employee/reports/trial-balance',
@@ -276,7 +278,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dashboard'));
+      await tester.tap(find.byTooltip('Choose report'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dashboard').last);
       await tester.pumpAndSettle();
       expect(find.text('Period income'), findsOneWidget);
       expect(find.text('123.45'), findsWidgets);

@@ -152,220 +152,184 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         )
       : widget.api.trialBalance(widget.companyId, _asOf, force: force);
 
+  Future<void> _filterDates(String preset) async {
+    if (preset == 'Custom') {
+      if (_period) {
+        final range = await showDateRangePicker(
+          context: context,
+          initialEntryMode: DatePickerEntryMode.calendarOnly,
+          firstDate: DateTime(1900),
+          lastDate: DateTime(2200),
+          initialDateRange: DateTimeRange(start: _from, end: _date),
+        );
+        if (range == null || !mounted) return;
+        setState(() {
+          _from = range.start;
+          _date = range.end;
+          _load();
+        });
+      } else {
+        final date = await showDatePicker(
+          context: context,
+          initialEntryMode: DatePickerEntryMode.calendarOnly,
+          initialDate: _date,
+          firstDate: DateTime(1900),
+          lastDate: DateTime(2200),
+        );
+        if (date == null || !mounted) return;
+        setState(() {
+          _date = date;
+          _load();
+        });
+      }
+      return;
+    }
+    setState(() {
+      final now = DateTime.now();
+      _date = DateTime(now.year, now.month, now.day);
+      _from = switch (preset) {
+        'This Year' => DateTime(now.year),
+        'This Month' => DateTime(now.year, now.month),
+        'This Week' => _date.subtract(Duration(days: now.weekday - 1)),
+        _ => _date,
+      };
+      _load();
+    });
+  }
+
+  Future<void> _exportCsv() async {
+    final data = _displayed;
+    if (data == null) return;
+    try {
+      await downloadFile(
+        reportCsv(_title, data),
+        filename:
+            '${_title.toLowerCase().replaceAll(' ', '-')}-${data['asOf']}.csv',
+        mimeType: 'text/csv;charset=utf-8',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Export unavailable. Downloads are supported in the web app.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _reportInfo() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('About this report'),
+      content: const Text(
+        'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * .32,
-        ),
-        child: SingleChildScrollView(
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Align(
+          alignment: Alignment.centerRight,
           child: Wrap(
-            spacing: 12,
+            spacing: 4,
+            runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (MediaQuery.sizeOf(context).width >= 600)
-                for (final preset in ['Today', 'This Week', 'This Month'])
-                  ActionChip(
-                    label: Text(preset),
-                    onPressed: () => setState(() {
-                      final now = DateTime.now();
-                      _date = DateTime(now.year, now.month, now.day);
-                      _from = preset == 'This Month'
-                          ? DateTime(now.year, now.month)
-                          : preset == 'This Week'
-                          ? _date.subtract(Duration(days: now.weekday - 1))
-                          : _date;
-                      _load();
-                    }),
+              PopupMenuButton<String>(
+                tooltip: 'Choose report',
+                initialValue: _kind,
+                onSelected: (kind) => setState(() {
+                  _extra = ['dashboard', 'general-ledger'].contains(kind)
+                      ? kind
+                      : null;
+                  _profit = kind == 'profit-and-loss';
+                  _balance = kind == 'balance-sheet';
+                  if (_from.isAfter(_date)) _from = DateTime(_date.year);
+                  _load();
+                }),
+                itemBuilder: (_) => [
+                  for (final entry in const {
+                    'dashboard': 'Dashboard',
+                    'general-ledger': 'General ledger',
+                    'trial-balance': 'Trial balance',
+                    'profit-and-loss': 'Profit and loss',
+                    'balance-sheet': 'Balance sheet',
+                  }.entries)
+                    PopupMenuItem(value: entry.key, child: Text(entry.value)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _title,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.expand_more, size: 18),
+                    ],
                   ),
-              ActionChip(
-                label: Text(
-                  MediaQuery.sizeOf(context).width < 600
-                      ? (_period
-                            ? '${_from.toIso8601String().substring(0, 10)} – $_asOf'
-                            : 'As of $_asOf')
-                      : 'Custom',
                 ),
-                onPressed: () async {
-                  if (!_period) {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialEntryMode: DatePickerEntryMode.calendarOnly,
-                      initialDate: _date,
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime(2200),
-                    );
-                    if (date != null && mounted) {
-                      setState(() {
-                        _date = date;
-                        _load();
-                      });
-                    }
-                  } else {
-                    final range = await showDateRangePicker(
-                      context: context,
-                      initialEntryMode: DatePickerEntryMode.calendarOnly,
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime(2200),
-                      initialDateRange: DateTimeRange(start: _from, end: _date),
-                    );
-                    if (range != null && mounted) {
-                      setState(() {
-                        _from = range.start;
-                        _date = range.end;
-                        _load();
-                      });
-                    }
-                  }
-                },
               ),
-              if (MediaQuery.sizeOf(context).width < 600)
-                PopupMenuButton<String>(
-                  tooltip: 'Choose report',
-                  initialValue: _kind,
-                  onSelected: (kind) => setState(() {
-                    _extra = ['dashboard', 'general-ledger'].contains(kind)
-                        ? kind
-                        : null;
-                    _profit = kind == 'profit-and-loss';
-                    _balance = kind == 'balance-sheet';
-                    if (_from.isAfter(_date)) _from = DateTime(_date.year);
-                    _load();
-                  }),
-                  itemBuilder: (_) => [
-                    for (final entry in const {
-                      'dashboard': 'Dashboard',
-                      'general-ledger': 'General ledger',
-                      'trial-balance': 'Trial balance',
-                      'profit-and-loss': 'Profit and loss',
-                      'balance-sheet': 'Balance sheet',
-                    }.entries)
-                      PopupMenuItem(value: entry.key, child: Text(entry.value)),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _title,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.expand_more, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              if (MediaQuery.sizeOf(context).width >= 600)
-                for (final entry in {
-                  'dashboard': 'Dashboard',
-                  'general-ledger': 'General ledger',
-                }.entries)
-                  ChoiceChip(
-                    label: Text(entry.value),
-                    selected: _extra == entry.key,
-                    onSelected: (_) => setState(() {
-                      _extra = entry.key;
-                      _profit = false;
-                      _balance = false;
-                      if (_from.isAfter(_date)) {
-                        _from = DateTime(_date.year);
-                      }
-                      _load();
-                    }),
-                  ),
-              if (MediaQuery.sizeOf(context).width >= 600)
-                ChoiceChip(
-                  label: const Text('Trial balance'),
-                  selected: !_statement && _extra == null,
-                  onSelected: (_) => setState(() {
-                    _profit = false;
-                    _balance = false;
-                    _extra = null;
-                    _load();
-                  }),
-                ),
-              if (MediaQuery.sizeOf(context).width >= 600)
-                ChoiceChip(
-                  label: const Text('Profit and loss'),
-                  selected: _profit,
-                  onSelected: (_) => setState(() {
-                    _profit = true;
-                    _balance = false;
-                    _extra = null;
-                    if (_from.isAfter(_date)) _from = DateTime(_date.year);
-                    _load();
-                  }),
-                ),
-              if (MediaQuery.sizeOf(context).width >= 600)
-                ChoiceChip(
-                  label: const Text('Balance sheet'),
-                  selected: _balance,
-                  onSelected: (_) => setState(() {
-                    _balance = true;
-                    _profit = false;
-                    _extra = null;
-                    _load();
-                  }),
-                ),
-              if (_period && MediaQuery.sizeOf(context).width >= 600)
-                TextButton(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialEntryMode: DatePickerEntryMode.calendarOnly,
-                      initialDate: _from,
-                      firstDate: DateTime(1900),
-                      lastDate: _date,
-                    );
-                    if (date != null && mounted) {
-                      setState(() {
-                        _from = date;
-                        _load();
-                      });
-                    }
-                  },
-                  child: Text(
-                    'From ${_from.toIso8601String().substring(0, 10)}',
-                  ),
-                ),
-              if (MediaQuery.sizeOf(context).width >= 600)
-                TextButton(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialEntryMode: DatePickerEntryMode.calendarOnly,
-                      initialDate: _date,
-                      firstDate: _period ? _from : DateTime(1900),
-                      lastDate: DateTime(2200),
-                    );
-                    if (date != null && mounted) {
-                      setState(() {
-                        _date = date;
-                        _load();
-                      });
-                    }
-                  },
-                  child: Text('As of $_asOf'),
-                ),
+              PopupMenuButton<String>(
+                tooltip: 'Filter dates',
+                icon: const Icon(Icons.calendar_month_outlined),
+                onSelected: _filterDates,
+                itemBuilder: (_) => [
+                  for (final preset in [
+                    'Today',
+                    'This Week',
+                    'This Month',
+                    'This Year',
+                    'Custom',
+                  ])
+                    PopupMenuItem(value: preset, child: Text(preset)),
+                ],
+              ),
               IconButton(
                 tooltip: 'Refresh report',
                 onPressed: () => setState(() => _load(force: true)),
                 icon: const Icon(Icons.refresh),
               ),
+              PopupMenuButton<String>(
+                tooltip: 'Report options',
+                onSelected: (value) {
+                  if (value == 'csv') {
+                    _exportCsv();
+                  } else {
+                    _reportInfo();
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'csv',
+                    enabled: _displayed != null,
+                    child: const Text('Export CSV'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'info',
+                    child: Text('About this report'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
-      if (MediaQuery.sizeOf(context).width >= 600)
-        const Padding(
-          padding: EdgeInsets.all(12),
-          child: Text(
-            'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. General ledger balances are debit-positive.',
-          ),
-        ),
       Expanded(
         child: FutureBuilder<Map<String, dynamic>>(
           future: _report,
@@ -412,37 +376,22 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                     const Text(
                       'Refresh failed. Showing saved report; use Refresh to retry.',
                     ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.download),
-                    label: const Text('Export CSV'),
-                    onPressed: () async {
-                      try {
-                        await downloadFile(
-                          reportCsv(_title, data),
-                          filename:
-                              '${_title.toLowerCase().replaceAll(' ', '-')}-${data['asOf']}.csv',
-                          mimeType: 'text/csv;charset=utf-8',
-                        );
-                      } catch (_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Export unavailable. Downloads are supported in the web app.',
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                  ),
-                  Text(
-                    '${data['journalCount']} posted journals ${_period && _extra != 'dashboard' ? "from ${data['from']} " : ""}through ${data['asOf']}',
-                  ),
-                  if (_extra == 'dashboard')
-                    Text(
-                      'Income and expenses: ${data['from']} through ${data['asOf']}. Other balances are cumulative.',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 4,
                     ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${_period ? "${_from.toIso8601String().substring(0, 10)} to " : "As of "}$_asOf · ${data['journalCount'] ?? 0} posted journals',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
                   if (_extra == 'dashboard') WorkspaceDashboard(data: data),
                   if (_extra == 'general-ledger')
                     for (final account in rows)

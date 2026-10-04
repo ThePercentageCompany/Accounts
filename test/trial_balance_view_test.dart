@@ -7,6 +7,81 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/reports/presentation/trial_balance_view.dart';
 
 void main() {
+  testWidgets(
+    'compact dashboard filters dates and exposes CSV through options',
+    (tester) async {
+      final requests = <Uri>[];
+      final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async {
+          requests.add(request.url);
+          return http.Response(
+            jsonEncode({
+              'from': request.url.queryParameters['from'],
+              'asOf': request.url.queryParameters['asOf'],
+              'journalCount': 3,
+              'balanced': true,
+              'totalIncome': '100.00',
+              'totalExpenses': '25.00',
+              'netProfit': '75.00',
+              'cash': '10.00',
+              'bank': '20.00',
+              'receivables': '30.00',
+              'payables': '40.00',
+              'totalAssets': '60.00',
+              'totalLiabilities': '40.00',
+              'totalEquity': '20.00',
+            }),
+            200,
+          );
+        }),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TrialBalanceView(
+              api: api,
+              companyId: 'c' * 43,
+              initialDashboard: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Export CSV'), findsNothing);
+      expect(find.text('Ledger balanced'), findsOneWidget);
+      await tester.tap(find.byTooltip('Filter dates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Today'));
+      await tester.pumpAndSettle();
+      expect(
+        requests.last.queryParameters['from'],
+        requests.last.queryParameters['asOf'],
+      );
+      await tester.tap(find.byTooltip('Report options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Export CSV'), findsOneWidget);
+      await tester.tap(find.text('About this report'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('drafts are excluded'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Equity'));
+      for (final label in [
+        'Cash',
+        'Bank',
+        'Payables',
+        'Assets',
+        'Liabilities',
+        'Equity',
+      ]) {
+        expect(find.text(label), findsWidgets);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      api.close();
+    },
+  );
   testWidgets('balance sheet displays earnings separately from posted equity', (
     tester,
   ) async {
@@ -44,7 +119,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Balance sheet'));
+    await tester.tap(find.byTooltip('Choose report'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Balance sheet').last);
     await tester.pumpAndSettle();
     expect(find.text('Assets: 10.61'), findsOneWidget);
     expect(find.text('Accumulated earnings: 10.10'), findsOneWidget);
@@ -100,7 +177,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Profit and loss'));
+      await tester.tap(find.byTooltip('Choose report'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Profit and loss').last);
       await tester.pumpAndSettle();
       expect(find.textContaining('Net profit / loss: -0.30'), findsOneWidget);
       expect(find.text('Amount'), findsOneWidget);

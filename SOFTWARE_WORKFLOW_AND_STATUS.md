@@ -4,6 +4,16 @@ Updated: 4 October 2026. Based on the repository and recorded validation results
 
 ### Responsive workspace and feature architecture - 4 October 2026
 
+Dashboard refinement: replaced the visible report/date chip rows and central CSV
+button with one right-aligned toolbar. Report selection, calendar presets/custom
+range, refresh and an options menu retain all existing reports and CSV export.
+The content keeps period/journal metadata and ledger balance status, all ten
+financial totals, and two compact comparison graphs (income/spending and cash/bank).
+Graphs use absolute current totals with signed values retained in summaries;
+no historical trend is inferred. Missing/non-finite values display an unavailable
+state. Calendar filtering and report/export menu navigation passed regression
+checks; 27 focused tests passed and static analysis was clean.
+
 The reference style now applies across the application through shared theme and
 form components: white navigation with soft blue selection, neutral canvas,
 bordered cards, consistent desktop dialog headers/actions, responsive document

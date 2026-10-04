@@ -8,7 +8,9 @@ class WorkspaceDashboard extends StatelessWidget {
   String amount(String key) {
     final value = data[key];
     final number = num.tryParse('$value');
-    return number == null ? '—' : NumberFormat('#,##0.00').format(number);
+    return number == null || !number.isFinite
+        ? '—'
+        : NumberFormat('#,##0.00').format(number);
   }
 
   @override
@@ -61,7 +63,7 @@ class WorkspaceDashboard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      SizedBox(height: width < 240 ? 8 : 20),
+                      SizedBox(height: width < 240 ? 8 : 12),
                       Text(
                         label,
                         style: TextStyle(
@@ -73,7 +75,7 @@ class WorkspaceDashboard extends StatelessWidget {
                       Text(
                         amount(key),
                         style: TextStyle(
-                          fontSize: width < 240 ? 20 : 26,
+                          fontSize: width < 240 ? 20 : 24,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -.7,
                         ),
@@ -103,6 +105,33 @@ class WorkspaceDashboard extends StatelessWidget {
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
+              if (data['balanced'] is bool)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        data['balanced'] == true
+                            ? Icons.check_circle_outline
+                            : Icons.info_outline,
+                        size: 16,
+                        color: colors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          data['balanced'] == true
+                              ? 'Ledger balanced'
+                              : 'Ledger needs review',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Text(
                 'A clear snapshot of performance, liquidity and outstanding balances.',
                 style: TextStyle(color: colors.onSurfaceVariant),
@@ -143,61 +172,31 @@ class WorkspaceDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 28),
-              if (num.tryParse('${data['totalIncome']}')?.isFinite == true &&
-                  num.tryParse('${data['totalExpenses']}')?.isFinite ==
-                      true) ...[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Income & spending',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Relative size for the selected reporting period',
-                          style: TextStyle(color: colors.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 24),
-                        for (final entry in const {
-                          'totalIncome': 'Income',
-                          'totalExpenses': 'Expenses',
-                        }.entries) ...[
-                          Text(entry.value),
-                          const SizedBox(height: 8),
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0, end: _share(entry.key)),
-                            duration: MediaQuery.disableAnimationsOf(context)
-                                ? Duration.zero
-                                : const Duration(milliseconds: 500),
-                            curve: Curves.easeOutCubic,
-                            builder: (context, value, _) =>
-                                LinearProgressIndicator(
-                                  value: value,
-                                  minHeight: 12,
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: entry.key == 'totalIncome'
-                                      ? colors.primary
-                                      : colors.onSurfaceVariant,
-                                  backgroundColor:
-                                      colors.surfaceContainerHighest,
-                                  semanticsLabel: '${entry.value} share',
-                                  semanticsValue:
-                                      '${(_share(entry.key) * 100).round()}%',
-                                ),
-                          ),
-                          const SizedBox(height: 18),
-                        ],
-                      ],
-                    ),
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  SizedBox(
+                    width: constraints.maxWidth >= 760
+                        ? (constraints.maxWidth - 16) / 2
+                        : constraints.maxWidth,
+                    child: _graph(context, 'Income & spending', const {
+                      'totalIncome': 'Income',
+                      'totalExpenses': 'Expenses',
+                    }, 'Selected period'),
                   ),
-                ),
-                const SizedBox(height: 28),
-              ],
+                  SizedBox(
+                    width: constraints.maxWidth >= 760
+                        ? (constraints.maxWidth - 16) / 2
+                        : constraints.maxWidth,
+                    child: _graph(context, 'Cash & bank', const {
+                      'cash': 'Cash',
+                      'bank': 'Bank',
+                    }, 'Balances at end date'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               Text(
                 'Cash & financial position',
                 style: Theme.of(
@@ -260,11 +259,79 @@ class WorkspaceDashboard extends StatelessWidget {
     );
   }
 
-  double _share(String key) {
-    final income = (double.tryParse('${data['totalIncome']}') ?? 0).abs();
-    final expenses = (double.tryParse('${data['totalExpenses']}') ?? 0).abs();
-    final total = income + expenses;
-    if (!total.isFinite || total == 0) return 0;
-    return ((double.tryParse('${data[key]}') ?? 0).abs() / total).clamp(0, 1);
+  Widget _graph(
+    BuildContext context,
+    String title,
+    Map<String, String> entries,
+    String caption,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final values = entries.keys
+        .map((key) => double.tryParse('${data[key]}'))
+        .toList();
+    final valid = values.every((value) => value != null && value.isFinite);
+    final maximum = valid
+        ? values
+              .map((value) => value!.abs())
+              .fold<double>(0, (a, b) => a > b ? a : b)
+        : 0.0;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              caption,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            if (!valid)
+              const Text('Graph unavailable for this report.')
+            else
+              for (final entry in entries.entries) ...[
+                Semantics(
+                  label: '${entry.value}: ${amount(entry.key)}',
+                  child: Text(entry.value),
+                ),
+                const SizedBox(height: 8),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: 0,
+                    end: maximum == 0
+                        ? 0
+                        : (double.parse('${data[entry.key]}').abs() / maximum)
+                              .clamp(0, 1),
+                  ),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 400),
+                  builder: (context, value, _) => LinearProgressIndicator(
+                    value: value,
+                    minHeight: 10,
+                    borderRadius: BorderRadius.circular(8),
+                    backgroundColor: colors.surfaceContainerHighest,
+                    color: entry.key == entries.keys.first
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            Text(
+              'Bars show absolute amounts; signed balances appear in the summary.',
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
