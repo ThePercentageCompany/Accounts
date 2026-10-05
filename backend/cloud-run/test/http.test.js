@@ -267,3 +267,20 @@ test('owner business record routes preserve authority and idempotency keys', asy
   assert.deepEqual(calls, [['list', token, companyId, 'Customers'],
     ['mutate', token, companyId, 'Customers', null, 'create', { expectedVersion: 0, values: { name: 'A' } }, 'business_record_123']]);
 });
+test('task HTTP routes pass verified employee context and reject duplicate date filters before reads', async t => {
+  const companyId = 'c'.repeat(43), employeeId = 'e'.repeat(43), calls = [];
+  const employees = {
+    principal: async () => ({ companyId, employeeId }),
+    records: async (token, table, context) => { calls.push({ token, table, context }); return []; },
+  };
+  const business = { now: () => Date.parse('2026-10-05'), list: async () => [] };
+  const f = await running(t, { employees, business });
+  const path = '/v1/employee/companies/' + companyId + '/tasks';
+  const options = { headers: { Cookie: '__Host-tpc_employee=employee-cookie', 'X-TPC-Company': companyId, 'X-TPC-Employee': employeeId } };
+  assert.equal((await f.request(path + '?from=2026-10-05&from=2026-10-06', options)).status, 400); assert.equal(calls.length, 0);
+  const response = await f.request(path + '?from=2026-10-05&to=2026-10-08', options);
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(calls[0], { token: 'employee-cookie', table: 'Tasks', context: { companyId, employeeId } });
+  const result = await response.json(); assert.equal(result.total, 0); assert.equal(result.nextOffset, null);
+  const health = await (await f.request('/health')).json(); assert.ok(health.capabilities.includes('task-management'));
+});

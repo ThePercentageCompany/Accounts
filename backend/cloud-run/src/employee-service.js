@@ -266,8 +266,24 @@ export class EmployeeService {
     requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => ['operations', 'companyId', 'employeeId'].includes(k)),
       400, 'INVALID_BATCH', 'Supply record operations and workspace context.');
     this.verifyContext(principal, input);
-    const authorizeWrite = async (_token, companyId, table) => {
+    const authorizeWrite = async (_token, companyId, table, change) => {
       const latest = await this.principal(token, true);
+      if (['Tasks', 'TaskComments'].includes(table) && latest.companyId === companyId && latest.permissions.Tasks) {
+        if (!change) return;
+        const manager = latest.writableSections.includes('Tasks');
+        if (table === 'Tasks' && manager) return;
+        if (table === 'Tasks') {
+          requireThat(change.action === 'update' && visible(latest, 'Tasks', change.old) &&
+            change.old.employeeId === latest.employeeId && Object.keys(change.values).every(k => k === 'status'),
+            403, 'WRITE_FORBIDDEN', 'You can update only the status of your assigned tasks.');
+          return;
+        }
+        requireThat(change.action === 'create', 403, 'WRITE_FORBIDDEN', 'Comments cannot be edited or removed.');
+        const rows = await business.sheets.read(companyId, ['Tasks']);
+        requireThat(rows.Tasks.some(t => t.recordId === change.values.taskId && visible(latest, 'Tasks', t)),
+          403, 'WRITE_FORBIDDEN', 'You cannot comment on this task.');
+        return;
+      }
       requireThat(latest.companyId === companyId && latest.writableSections.includes(SECTION_TABLES[table]),
         403, 'WRITE_FORBIDDEN', 'Your administrator has not granted edit access to this section.');
     };

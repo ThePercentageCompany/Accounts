@@ -3,6 +3,7 @@ import { requireThat } from './errors.js';
 // Employee reads are internal validation only; generic record APIs cannot expose
 // employee tables. Inactive employees remain valid for historical payroll.
 export const RELATIONS = {
+  Tasks: { employeeId: 'Employees' }, TaskComments: { taskId: 'Tasks' },
   Invoices: { customerId: 'Customers' }, Receipts: { customerId: 'Customers' },
   Quotations: { customerId: 'Customers', convertedInvoiceId: 'Invoices' },
   InvoiceItems: { invoiceId: 'Invoices', productId: 'ProductsServices' },
@@ -19,6 +20,7 @@ export const RELATIONS = {
   ShareholderEquity: { shareholderId: 'Shareholders' }, ShareholderLoans: { shareholderId: 'Shareholders' },
 };
 const REQUIRED = {
+  Tasks: ['employeeId'], TaskComments: ['taskId'],
   InvoiceItems: ['invoiceId'], QuotationItems: ['quotationId'], ReceiptAllocations: ['receiptId', 'invoiceId'],
   ExpenseAttachments: ['expenseId'], PayrollItems: ['payrollId'], Payslips: ['payrollId', 'employeeId'],
   Payroll: ['employeeId'], Attendance: ['employeeId'], Overtime: ['employeeId'],
@@ -28,6 +30,8 @@ const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 
 export async function validateRelations(sheets, companyId, table, recordId, action, values) {
   if (action === 'delete') {
+    // Task comments remain as history; visibility follows the soft-deleted parent.
+    if (table === 'Tasks') return;
     const references = Object.entries(RELATIONS).flatMap(([source, fields]) =>
       Object.entries(fields).filter(([, target]) => target === table).map(([field]) => ({ source, field })));
     if (!references.length) return;

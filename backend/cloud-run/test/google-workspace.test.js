@@ -76,6 +76,7 @@ test('schema verifier checks company identity and schema version', async () => {
   let wrongCompany = false;
   const google = new GoogleWorkspace({ fetcher: async url => {
     const ranges = new URL(url).searchParams.getAll('ranges');
+    if (!ranges.length) return response({ sheets: TABLES.map(t => ({ properties: { title: t.title, sheetId: t.sheetId } })) });
     if (ranges[0].endsWith('1:1')) return response({ valueRanges: TABLES.map(t => ({ values: [t.headers] })) });
     return response({ valueRanges: seedRows(company, owner).map(s => {
       const values = s.values.slice(); if (wrongCompany) values[1] = 'other-company';
@@ -171,4 +172,16 @@ test('worker authorization requires verified Google token with configured audien
   await assert.rejects(queue.authorize(undefined), e => e.code === 'WORKER_UNAUTHORIZED');
   email = 'customer@example.com';
   await assert.rejects(queue.authorize('Bearer signed-token'), e => e.code === 'WORKER_UNAUTHORIZED');
+});
+test('task sheet migration adds only missing tabs with deterministic IDs and leaves existing rows intact', async () => {
+  let requests = [], existing = TABLES.filter(t => !['Tasks', 'TaskComments', 'TaskActivity'].includes(t.title));
+  const google = new GoogleWorkspace({ fetcher: async (_url, options) => {
+    if (options.method === 'GET') return response({ sheets: existing.map(t => ({ properties: t })) });
+    requests = JSON.parse(options.body).requests;
+    existing = TABLES; return response({});
+  } });
+  await google.ensureTaskTables('token', 'sheet');
+  assert.deepEqual(requests.filter(r => r.addSheet).map(r => r.addSheet.properties.title), ['Tasks', 'TaskComments', 'TaskActivity']);
+  assert.equal(requests.filter(r => r.updateCells).every(r => r.updateCells.start.rowIndex === 0), true);
+  requests = []; await google.ensureTaskTables('token', 'sheet'); assert.equal(requests.length, 0);
 });

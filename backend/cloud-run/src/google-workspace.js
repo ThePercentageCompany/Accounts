@@ -133,7 +133,13 @@ export class GoogleWorkspace {
       'POST', { valueInputOption: 'RAW', data });
   }
   async ensureCreditTables(token, id) {
-    const tables = TABLES.filter(t => ['CreditNotes', 'CreditNoteItems'].includes(t.title));
+    return this.ensureTables(token, id, ['CreditNotes', 'CreditNoteItems']);
+  }
+  async ensureTaskTables(token, id) {
+    return this.ensureTables(token, id, ['Tasks', 'TaskComments', 'TaskActivity']);
+  }
+  async ensureTables(token, id, names) {
+    const tables = TABLES.filter(t => names.includes(t.title));
     const metadata = await this.metadata(token, id);
     const properties = metadata.sheets.map(s => s.properties);
     const missing = tables.filter(t => !properties.some(p => p.title === t.title));
@@ -158,6 +164,7 @@ export class GoogleWorkspace {
   }
   async verifySchema(token, company) {
     const id = company.resources.spreadsheetId;
+    await this.ensureTaskTables(token, id);
     const rows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));
     TABLES.forEach((t, i) => requireThat(JSON.stringify(rows[i][0]) === JSON.stringify(t.headers),
       409, 'SCHEMA_MISMATCH', 'Spreadsheet schema verification failed.'));

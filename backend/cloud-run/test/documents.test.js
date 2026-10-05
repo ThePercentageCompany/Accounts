@@ -113,3 +113,16 @@ test('Drive download detects changed bytes and bounds streamed content', async (
   data = Buffer.alloc(bytes.length + 1);
   await assert.rejects(() => drive.download('token', 'company', doc), e => e.code === 'DOCUMENT_CHANGED');
 });
+test('task attachments use the migrated task folder and current task visibility for employee downloads', async () => {
+  const f = await setup(); let migrations = 0;
+  f.documents.workspace.ensureTaskFolder = async companyId => {
+    assert.equal(companyId, f.companyId); migrations++;
+    await f.registry.transact(state => { state.companies[companyId].resources.folders['Task Attachments'] = 'private-task-folder'; });
+  };
+  const saved = await f.documents.upload(f.token, f.companyId, { ...input, relatedSection: 'Tasks' }, 'task_attachment_upload');
+  assert.equal(migrations, 1); assert.equal(f.rows[0].kind, 'Task Attachments');
+  assert.equal(f.storage.state.companies[f.companyId].documents[saved.documentId].folderId, 'private-task-folder');
+  assert.deepEqual((await f.documents.download('employee', f.companyId, saved.documentId, true)).bytes, bytes);
+  f.employees.records = async () => [];
+  await assert.rejects(f.documents.download('employee', f.companyId, saved.documentId, true), e => e.code === 'DOCUMENT_FORBIDDEN');
+});

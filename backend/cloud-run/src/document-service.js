@@ -4,7 +4,7 @@ import { TABLES } from './company-schema.js';
 import { BusinessSheets } from './business-sheets.js';
 import { decodeContent, validateContent, contentHash } from './document-content.js';
 
-const FOLDERS = { CompanyProfile: 'Company Logo', Invoices: 'Invoices', CreditNotes: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
+const FOLDERS = { Tasks: 'Task Attachments', CompanyProfile: 'Company Logo', Invoices: 'Invoices', CreditNotes: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
   Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 export class DocumentSheets extends BusinessSheets {
@@ -63,6 +63,7 @@ export class DocumentService {
       !/[\x00-\x1f\x7f/\\]/.test(input.name) && typeof input.relatedRecordId === 'string' &&
       (/^[A-Za-z0-9_-]{43}$/.test(input.relatedRecordId) || (input.relatedSection === 'CompanyProfile' && input.relatedRecordId === 'company')),
     400, 'INVALID_DOCUMENT', 'Supply a name, MIME type, related record and data.');
+    if (input.relatedSection === 'Tasks') await this.workspace.ensureTaskFolder(companyId);
     const bytes = decodeContent(input.data); validateContent(bytes, input.mimeType);
     requireThat(input.relatedSection !== 'CompanyProfile' || input.mimeType.startsWith('image/'), 415, 'DOCUMENT_TYPE', 'Company logos must be PNG or JPEG.');
     const operation = digest(`document:${key}`), hash = contentHash(bytes), id = opaque();

@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -29,6 +30,8 @@ import 'package:tpc_invoice/features/documents/presentation/record_documents_vie
 import 'package:tpc_invoice/features/workspace/presentation/system_settings_panel.dart';
 
 const workspaceTables = <String, List<String>>{
+  'Tasks': <String>[],
+  'Calendar': <String>[],
   'Invoices': ['Invoices', 'CreditNotes', 'Receipts', 'ReceiptAllocations'],
   'Quotations': ['Quotations'],
   'Customers': ['Customers'],
@@ -159,7 +162,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       if (widget.employee == null || allowed!.contains('Reports')) 'Reports',
       if (_employees != null || allowed!.contains('Employees')) 'Employees',
       for (final section in workspaceTables.keys)
-        if (allowed == null || allowed.contains(section)) section,
+        if (allowed == null || (section == 'Calendar' ? allowed.contains('Tasks') : allowed.contains(section))) section,
     ];
     final selected = sections.contains(_selected)
         ? _selected
@@ -375,6 +378,11 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             'No record sections are assigned. Contact your company owner.',
           ),
         )
+      : ['Tasks', 'Calendar'].contains(selected)
+      ? TaskWorkspace(
+          api: widget.api, companyId: widget.companyId, employee: widget.employee,
+          calendar: selected == 'Calendar', active: active, uploads: _uploads, writes: _writes,
+        )
       : selected == 'Reports'
       ? [
               'chart-of-accounts',
@@ -455,6 +463,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         );
 
   IconData _sectionIcon(String section) => switch (section) {
+    'Tasks' => Icons.task_alt,
+    'Calendar' => Icons.calendar_month_outlined,
     'Reports' => Icons.space_dashboard_outlined,
     'Invoices' => Icons.receipt_long_outlined,
     'Customers' => Icons.people_outline,
@@ -564,6 +574,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     const icons = <String, IconData>{
+      'Tasks': Icons.task_alt,
+      'Calendar': Icons.calendar_month_outlined,
       'Reports': Icons.space_dashboard_outlined,
       'Employees': Icons.badge_outlined,
       'Invoices': Icons.receipt_long_outlined,
@@ -618,6 +630,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           for (final group in const <String, List<String>>{
             'Overview': ['Reports'],
             'DAILY OPERATIONS': [
+              'Tasks',
+              'Calendar',
               'Invoices',
               'Quotations',
               'Customers',
@@ -1914,9 +1928,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     ),
                 ],
               ),
-              LoadingButton.iconOnly(
+              IconButton(
                 tooltip: 'Refresh records',
-                onPressed: busy ? null : () => _load(force: true),
+                onPressed: busy || _loading ? null : () => _load(force: true),
                 icon: const Icon(Icons.refresh),
               ),
               if (_editable && table != 'CompanyProfile')

@@ -95,6 +95,22 @@ export class WorkspaceService {
     if (c.stage !== 'READY') await this.queue.enqueue(c.id, c.version, opaque());
     return publicCompany(c);
   }
+  async ensureTaskFolder(companyId) {
+    return this.withGoogle(companyId, async (token, company) => {
+      const name = 'Task Attachments';
+      if (!company.resources.folders[name]) {
+        const [id] = await this.google.generateFolderIds(token, 1);
+        await this.registry.transact(state => {
+          const c = state.companies[companyId];
+          c.folderPlan.children[name] ??= id;
+          c.resources.folders[name] ??= c.folderPlan.children[name];
+        });
+      }
+      const c = (await this.registry.read()).state.companies[companyId];
+      await this.google.ensureFolder(token, { id: c.resources.folders[name], name,
+        companyId, operation: operation(companyId, name), parent: c.resources.rootFolderId });
+    });
+  }
   async withGoogle(companyId, action) {
     const { state } = await this.registry.read();
     const c = state.companies[companyId];
@@ -164,6 +180,10 @@ export class WorkspaceService {
           c.resources = { folders: {} };
           this.transition(c, 'CREATING_FOLDER');
         });
+      } else if (FOLDERS.some(name => !company.folderPlan.children[name])) {
+        const missing = FOLDERS.filter(name => !company.folderPlan.children[name]);
+        const ids = await this.google.generateFolderIds(access, missing.length);
+        await update(c => { missing.forEach((name, i) => { c.folderPlan.children[name] ??= c.resources.folders[name] || ids[i]; }); });
       } else if (!company.resources.rootFolderId) {
         const file = await this.google.ensureFolder(access, { id: company.folderPlan.root,
           name: `TPC Accounts - ${company.name}`, companyId, operation: operation(companyId, 'root') });

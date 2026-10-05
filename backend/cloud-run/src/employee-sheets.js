@@ -12,6 +12,9 @@ export class EmployeeSheets {
       if (names.some(name => ['CreditNotes', 'CreditNoteItems'].includes(name))) {
         await this.google.ensureCreditTables(token, company.resources.spreadsheetId);
       }
+      if (tables.some(t => ['Tasks', 'TaskComments', 'TaskActivity'].includes(t.title))) {
+        await this.google.ensureTaskTables(token, company.resources.spreadsheetId);
+      }
       const values = await this.google.rows(token, company.resources.spreadsheetId, tables.map(t => `'${t.title}'!A1:AZ10002`));
       return Object.fromEntries(tables.map((table, i) => {
         const [headers, ...rows] = values[i];

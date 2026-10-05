@@ -36,6 +36,7 @@ const employeeSections = [
   'Reports',
   'Settings',
   'Office & Attendance',
+  'Tasks',
 ];
 
 class EmployeeAdminController extends Cubit<EmployeeAdminState> {

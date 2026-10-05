@@ -1,10 +1,11 @@
 import { requireThat } from './errors.js';
 
 export const SECTIONS = Object.freeze(['Dashboard', 'Invoices', 'Quotations', 'Income & Expenses', 'Capital & Equity',
-  'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance']);
-export const WRITE_SECTIONS = Object.freeze(['Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings']);
+  'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance', 'Tasks', 'Calendar']);
+export const WRITE_SECTIONS = Object.freeze(['Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
 export const SECTION_TABLES = {
+  Tasks: 'Tasks', TaskComments: 'Tasks', TaskActivity: 'Tasks',
   CreditNotes: 'Invoices', CreditNoteItems: 'Invoices',
   CompanyProfile: 'Settings', Customers: 'Customers', ProductsServices: 'Invoices', Invoices: 'Invoices', InvoiceItems: 'Invoices',
   Receipts: 'Invoices', ReceiptAllocations: 'Invoices', Quotations: 'Quotations', QuotationItems: 'Quotations',
@@ -16,6 +17,7 @@ export const SECTION_TABLES = {
   FinancialPeriods: 'Balance Sheet', Journals: 'Balance Sheet', JournalLines: 'Balance Sheet',
 };
 export const CHILDREN = {
+  TaskComments: ['Tasks', 'taskId'], TaskActivity: ['Tasks', 'taskId'],
   CreditNotes: ['Invoices', 'invoiceId'], CreditNoteItems: ['Invoices', 'invoiceId'],
   InvoiceItems: ['Invoices', 'invoiceId'], ReceiptAllocations: ['Receipts', 'receiptId'],
   QuotationItems: ['Quotations', 'quotationId'], ExpenseAttachments: ['Expenses', 'expenseId'],
@@ -23,7 +25,7 @@ export const CHILDREN = {
 };
 export const deleted = row => row.isDeleted === true || row.isDeleted === 'TRUE';
 export function scopeFor(role, section) {
-  return role === 'Staff' && ['Employees', 'Payroll', 'Office & Attendance', 'Fixed Assets', 'Income & Expenses'].includes(section) ? 'SELF' : 'COMPANY';
+  return role === 'Staff' && ['Employees', 'Payroll', 'Office & Attendance', 'Fixed Assets', 'Income & Expenses', 'Tasks', 'Calendar'].includes(section) ? 'SELF' : 'COMPANY';
 }
 export function principalFromRows(companyId, employeeId, rows, now) {
   const employee = rows.Employees.find(r => r.recordId === employeeId && r.companyId === companyId && !deleted(r));
@@ -51,7 +53,7 @@ export function visible(principal, table, row, parentRows = {}) {
   if (scope !== 'SELF') return true;
   if (table === 'Employees') return row.recordId === principal.employeeId;
   if (table === 'Assets') return row.assignedEmployeeId === principal.employeeId;
-  if (['PayrollItems', 'ExpenseAttachments'].includes(table)) return true; // parent already checked
+  if (['PayrollItems', 'ExpenseAttachments', 'TaskComments', 'TaskActivity'].includes(table)) return true; // parent already checked
   if (['Payroll', 'Payslips', 'Attendance', 'Overtime'].includes(table)) return row.employeeId === principal.employeeId;
   return row.employeeId === principal.employeeId || row.createdBy === principal.employeeId;
 }

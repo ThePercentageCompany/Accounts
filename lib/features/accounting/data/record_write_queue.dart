@@ -191,6 +191,12 @@ class RecordWriteQueue {
         if (const [
           'VERSION_CONFLICT',
           'INVALID_RECORD',
+          'INVALID_TASK',
+          'INVALID_COMMENT',
+          'TASK_ASSIGNEE_UNAVAILABLE',
+          'REFERENCE_NOT_FOUND',
+          'REFERENCE_REQUIRED',
+          'INVALID_REFERENCE',
           'INVALID_INVOICE_RETURN',
           'INVOICE_RETURN_NOT_AVAILABLE',
           'RETURN_QUANTITY_EXCEEDED',

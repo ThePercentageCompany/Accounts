@@ -374,10 +374,12 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
         'Capital & Equity',
         'Balance Sheet',
         'Settings',
+        'Tasks',
       ].contains(section) &&
       !(role == 'Staff' &&
           const [
             'Income & Expenses',
+            'Tasks',
             'Payroll',
             'Fixed Assets',
           ].contains(section));

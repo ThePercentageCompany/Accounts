@@ -13,6 +13,7 @@ import 'package:tpc_invoice/features/documents/data/shared_record_pdf.dart';
 import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 
 const documentSections = [
+  'Tasks',
   'CompanyProfile',
   'Invoices',
   'CreditNotes',

@@ -176,12 +176,13 @@ class SaasApi implements SessionRepository {
     final uri = Uri.parse(path);
     if (_cacheEmployee) {
       return uri.path.startsWith('/v1/employee/records/') ||
-          uri.path.startsWith('/v1/employee/reports/');
+          uri.path.startsWith('/v1/employee/reports/') ||
+          uri.path.startsWith('/v1/employee/companies/$_cacheCompany/tasks');
     }
     final prefix = '/v1/companies/$_cacheCompany/';
     return uri.path.startsWith('${prefix}records/') ||
         uri.path.startsWith('${prefix}reports/') ||
-        uri.path == '${prefix}employees';
+        uri.path == '${prefix}employees' || uri.path.startsWith('${prefix}tasks');
   }
 
   String recordsPath(String companyId, String table, {bool employee = false}) =>
@@ -213,8 +214,9 @@ class SaasApi implements SessionRepository {
     if (tables.isEmpty) return;
     final affected = {...tables};
     final financial = tables.any(
-      (t) => !['Customers', 'Employees', 'CompanyProfile'].contains(t),
+      (t) => !['Customers', 'Employees', 'CompanyProfile', 'Tasks', 'TaskComments', 'TaskActivity'].contains(t),
     );
+    if (tables.contains('Tasks')) affected.add('TaskActivity');
     if (financial) affected.addAll(['Journals', 'JournalLines']);
     if (tables.any(
       (t) => ['Invoices', 'InvoiceItems', 'Receipts'].contains(t),
@@ -246,16 +248,21 @@ class SaasApi implements SessionRepository {
       (p) =>
           affected.contains(Uri.parse(p).path.split('/').last) ||
           (financial && p.contains('/reports/')) ||
-          (tables.contains('Employees') && p.endsWith('/employees')),
+          (tables.contains('Employees') && (p.endsWith('/employees') || Uri.parse(p).path.endsWith('/tasks/assignees'))) ||
+          (tables.any((t) => ['Tasks', 'TaskComments', 'TaskActivity'].contains(t)) && p.contains('/tasks') && !Uri.parse(p).path.endsWith('/assignees')),
       broadcastPaths: [
+        if (tables.any((t) => ['Tasks', 'TaskComments', 'TaskActivity'].contains(t)))
+          '/v1/${_cacheEmployee ? 'employee/' : ''}companies/$_cacheCompany/tasks',
         for (final table in affected)
           recordsPath(_cacheCompany!, table, employee: _cacheEmployee),
         if (financial)
           _cacheEmployee
               ? '/v1/employee/reports/'
               : '/v1/companies/$_cacheCompany/reports/',
-        if (tables.contains('Employees'))
+        if (tables.contains('Employees')) ...[
           '/v1/companies/$_cacheCompany/employees',
+          '/v1/${_cacheEmployee ? 'employee/' : ''}companies/$_cacheCompany/tasks/assignees',
+        ],
       ],
     );
   }
@@ -349,7 +356,8 @@ class SaasApi implements SessionRepository {
     if (_cacheEmployee &&
         _cacheCompany != null &&
         (path.startsWith('/v1/employee/records/') ||
-            path.startsWith('/v1/employee/reports/'))) {
+            path.startsWith('/v1/employee/reports/') ||
+            path.startsWith('/v1/employee/companies/'))) {
       request.headers['X-TPC-Company'] = _cacheCompany!;
       request.headers['X-TPC-Employee'] = _cacheUser!;
     }
@@ -837,6 +845,27 @@ class SaasApi implements SessionRepository {
     );
   }
 
+  String tasksPath(String companyId, {bool employee = false}) =>
+      '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/tasks';
+
+  Future<Map<String, dynamic>> tasks(
+    String companyId, {
+    bool employee = false,
+    bool force = false,
+    Map<String, String> filters = const {},
+  }) =>
+      _json('GET',
+          '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}',
+          force: force);
+
+  Future<Map<String, dynamic>> taskDetail(String companyId, String taskId,
+          {bool employee = false}) =>
+      _json('GET', '${tasksPath(companyId, employee: employee)}/${_id(taskId)}',
+          force: true);
+
+  Future<Map<String, dynamic>> taskAssignees(String companyId, {
+    bool employee = false, String search = '', int offset = 0,
+  }) => _json('GET', '${tasksPath(companyId, employee: employee)}/assignees?${Uri(queryParameters: {'search': search, 'offset': '$offset', 'limit': '40'}).query}');
   Future<Map<String, dynamic>> records(
     String companyId,
     String table, {

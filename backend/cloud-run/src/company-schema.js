@@ -1,6 +1,6 @@
 export const SCHEMA_VERSION = 7;
 export const FOLDERS = Object.freeze(['Company Logo', 'Invoices', 'Receipts', 'Quotations', 'Expenses',
-  'Employee Documents', 'Payslips', 'Financial Reports', 'Assets', 'Exports', 'Backups']);
+  'Employee Documents', 'Payslips', 'Financial Reports', 'Assets', 'Exports', 'Backups', 'Task Attachments']);
 const SYSTEM = ['recordId', 'companyId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
   'recordVersion', 'syncStatus', 'isDeleted', 'idempotencyKey'];
 const FIELDS = {
@@ -42,6 +42,9 @@ const FIELDS = {
   NumberSequences: ['kind', 'prefix', 'period', 'nextNumber'],
   CreditNotes: ['number', 'invoiceId', 'customerId', 'date', 'reason', 'currency', 'subtotal', 'discount', 'taxAmount', 'total', 'refundAmount', 'refundAccount', 'status'],
   CreditNoteItems: ['creditNoteId', 'invoiceId', 'invoiceItemId', 'lineNumber', 'description', 'quantity', 'unitPrice', 'discount', 'taxRate', 'taxAmount', 'lineTotal', 'subtotal'],
+  Tasks: ['title', 'description', 'employeeId', 'assigneeName', 'priority', 'status', 'startDate', 'dueDate', 'startTime', 'endTime', 'project', 'tags', 'reminder'],
+  TaskComments: ['taskId', 'body'],
+  TaskActivity: ['taskId', 'action', 'summary'],
 };
 export const TABLES = Object.freeze(Object.entries(FIELDS).map(([title, fields], index) =>
   Object.freeze({ title, sheetId: 1000 + index, headers: [...SYSTEM, ...fields] })));

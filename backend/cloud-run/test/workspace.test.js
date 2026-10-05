@@ -239,3 +239,13 @@ test('expired worker cannot overwrite a newer worker checkpoint', async () => {
   await assert.rejects(first, e => e.code === 'SETUP_SUPERSEDED');
   assert.equal(f.current().folderPlan.root, 'new-0');
 });
+test('existing workspace adds a missing planned task folder with a durable ID before reconnect verification', async () => {
+  const f = await setupFixture(); await f.connect(); await f.drain();
+  const name = 'Task Attachments', original = f.current().resources.folders[name];
+  f.files.delete(original); delete f.current().resources.folders[name]; delete f.current().folderPlan.children[name];
+  f.google.generateFolderIds = async (_token, count) => Array.from({ length: count }, (_, i) => 'task-migration-' + i);
+  await f.connect(); await f.drain();
+  assert.equal(f.current().resources.folders[name], 'task-migration-0');
+  assert.equal(f.files.get('task-migration-0').parents[0], f.current().resources.rootFolderId);
+  const count = f.counts.folder; await f.workspace.ensureTaskFolder(f.id); await f.workspace.ensureTaskFolder(f.id); assert.equal(f.counts.folder, count);
+});

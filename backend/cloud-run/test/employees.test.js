@@ -369,3 +369,33 @@ for (const [table, child] of [['Invoices', 'InvoiceItems'], ['Quotations', 'Quot
     assert.equal(batches, 2);
   });
 }
+test('Staff task writes are limited to assigned status and comments, including under broadened sheet grants', async () => {
+  const f = await setup(); f.input.allowedSections = ['Tasks'];
+  const id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  const own = opaque(), other = opaque();
+  f.rows.Tasks = [
+    { recordId: own, companyId: f.companyId, employeeId: id, title: 'Own task', status: 'TODO', priority: 'HIGH', dueDate: '2026-10-05', recordVersion: 1, _row: 2 },
+    { recordId: other, companyId: f.companyId, employeeId: opaque(), title: 'Private task', status: 'TODO', priority: 'HIGH', dueDate: '2026-10-05', recordVersion: 1, _row: 3 },
+  ];
+  f.rows.TaskActivity = []; f.rows.TaskComments = [];
+  const businessSheets = {
+    table: name => TABLES.find(t => t.title === name), read: f.sheets.read, readReferences: f.sheets.read,
+    write: (companyId, table, row, values) => f.sheets.write(companyId, [{ table, row, values }]),
+    writeBatch: f.sheets.write,
+  };
+  const run = (table, action, recordId, values, expectedVersion = 1) => f.employees.sync(session.token,
+    { companyId: f.companyId, employeeId: id, operations: [{ operationId: opaque(), table, action, ...(recordId ? { recordId } : {}), expectedVersion, values }] }, { sheets: businessSheets });
+  assert.equal((await f.employees.records(session.token, 'Tasks')).length, 1);
+  for (const [table, action, recordId, values, version] of [
+    ['Tasks', 'update', own, { employeeId: f.rows.Tasks[1].employeeId }, 1],
+    ['Tasks', 'update', other, { status: 'COMPLETED' }, 1],
+    ['Tasks', 'create', null, { title: 'Forbidden' }, 0],
+    ['TaskComments', 'create', null, { taskId: other, body: 'Forbidden' }, 0],
+  ]) assert.equal((await run(table, action, recordId, values, version)).results[0].error.code, 'WRITE_FORBIDDEN');
+  assert.equal((await run('Tasks', 'update', own, { status: 'IN_PROGRESS' })).results[0].status, 'APPLIED');
+  assert.equal((await run('TaskComments', 'create', null, { taskId: own, body: 'Started' }, 0)).results[0].status, 'APPLIED');
+  assert.equal(f.rows.Tasks[0].status, 'IN_PROGRESS'); assert.equal(f.rows.TaskComments.length, 1);
+  const permission = f.rows.RolePermissions.find(p => p.section === 'Tasks'); permission.recordScope = 'COMPANY'; permission.action = 'write';
+  assert.equal((await f.employees.records(session.token, 'Tasks')).length, 1);
+  assert.equal((await run('Tasks', 'update', other, { status: 'COMPLETED' })).results[0].error.code, 'WRITE_FORBIDDEN');
+});

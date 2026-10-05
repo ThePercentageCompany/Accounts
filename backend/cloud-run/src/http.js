@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { TaskService } from './task-service.js';
 import { ApiError, requireThat } from './errors.js';
 
 const SESSION = '__Host-tpc_session';
@@ -35,6 +36,7 @@ async function body(request, limit = 16 * 1024) {
 }
 
 export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents } = {}) {
+  const tasks = business && employees ? new TaskService({ business, employees }) : null;
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
     response.setHeader('X-Request-Id', requestId);
@@ -64,7 +66,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       const url = new URL(request.url, config.apiOrigin);
       if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
         json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1,
-          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration'] : [] }); return;
+          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', ...(tasks ? ['task-management', 'task-calendar', 'task-attachments'] : [])] : [] }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);
@@ -83,6 +85,16 @@ export function createApi(service, config, { log = console.error, workspace, que
       const jar = cookies(request), token = jar[SESSION];
       const employeeContext = { companyId: request.headers['x-tpc-company'], employeeId: request.headers['x-tpc-employee'] };
       const route = `${request.method} ${url.pathname}`;
+      if (tasks && request.method === 'GET') {
+        const taskRoute = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/tasks(?:\/(assignees|[A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
+        if (taskRoute) {
+          const employee = taskRoute[1] !== 'companies', auth = employee ? jar[EMPLOYEE] : token;
+          if (taskRoute[3] && taskRoute[3] !== 'assignees') requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Task details do not accept filters.');
+          json(200, taskRoute[3] === 'assignees' ? await tasks.assignees(auth, taskRoute[2], employee, employeeContext, url.searchParams) :
+            taskRoute[3] ? await tasks.detail(auth, taskRoute[2], taskRoute[3], employee, employeeContext) :
+            await tasks.list(auth, taskRoute[2], url.searchParams, employee, employeeContext)); return;
+        }
+      }
       if (documents) {
         const document = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
         if (document && request.method === 'GET' && !document[3]) {
