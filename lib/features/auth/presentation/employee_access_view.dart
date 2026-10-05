@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:tpc_invoice/core/network/invite_location_stub.dart'
@@ -162,9 +162,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                   height: 28,
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: busy
-                        ? const CupertinoActivityIndicator(radius: 8)
-                        : null,
+                    child: busy ? const AppActivityIndicator(radius: 8) : null,
                   ),
                 ),
                 if (employee == null) ...[
@@ -193,7 +191,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                     'Scan your managerâ€™s QR or paste your invitation link, then enter your private login code.',
                   ),
                   const SizedBox(height: 24),
-                  OutlinedButton.icon(
+                  LoadingButton.outlinedIcon(
                     onPressed: busy ? null : _scan,
                     icon: const Icon(Icons.qr_code_scanner),
                     label: const Text('Scan QR'),
@@ -231,7 +229,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                     },
                   ),
                   const SizedBox(height: 20),
-                  FilledButton(
+                  LoadingButton(
                     onPressed: busy ? null : _login,
                     child: const Text('Sign in'),
                   ),
@@ -256,13 +254,13 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                     'Your access is verified. Open your workspace to view records allowed by your company.',
                   ),
                   const SizedBox(height: 16),
-                  FilledButton(
+                  LoadingButton(
                     onPressed: busy
                         ? null
                         : () => setState(() => _workspace = true),
                     child: const Text('Open workspace'),
                   ),
-                  OutlinedButton(
+                  LoadingButton.outlined(
                     onPressed: busy
                         ? null
                         : () async {

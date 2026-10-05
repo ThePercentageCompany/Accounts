@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import '../data/report_format.dart';
 import 'report_trends.dart';
@@ -174,7 +175,7 @@ class WorkspaceDashboard extends StatelessWidget {
                     'trial-balance': 'Trial Balance',
                     'general-ledger': 'General Ledger',
                   }.entries)
-                    OutlinedButton.icon(
+                    LoadingButton.outlinedIcon(
                       onPressed: onReportSelected == null
                           ? null
                           : () => onReportSelected!(entry.key),

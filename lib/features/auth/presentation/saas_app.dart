@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -27,6 +27,7 @@ class _SaasAppState extends State<SaasApp> {
   String? _initializationError;
   bool _employee = SaasApi.invitation(Uri.base, Uri.base) != null;
   bool _workspace = false;
+  bool _initializing = true;
 
   @override
   void initState() {
@@ -48,6 +49,7 @@ class _SaasAppState extends State<SaasApp> {
       if (!mounted) return;
       if (session.employee != null) _employee = true;
       _workspace = session.restoreWorkspace;
+      _initializing = false;
       setState(() {});
     } catch (_) {
       if (mounted) {
@@ -99,9 +101,8 @@ class _SaasAppState extends State<SaasApp> {
       );
     }
     final session = _session;
-    if (session == null ||
-        (session.busy && session.owner == null && session.employee == null)) {
-      return const Scaffold(body: Center(child: CupertinoActivityIndicator()));
+    if (session == null || _initializing) {
+      return const Scaffold(body: CenteredLoading());
     }
     if (_employee) {
       return EmployeeAccessView(
@@ -135,7 +136,7 @@ class _SaasAppState extends State<SaasApp> {
         title: const Text('TPC Accounts'),
         actions: [
           const AppearanceSelector(),
-          TextButton.icon(
+          LoadingButton.textIcon(
             onPressed: () => setState(() => _employee = true),
             icon: const Icon(Icons.badge_outlined),
             label: const Text('Employee login'),

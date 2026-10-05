@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -85,7 +86,7 @@ class _EmployeeQrScannerState extends State<EmployeeQrScanner> {
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),

@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
@@ -88,11 +89,11 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () async {
           if (!_form.currentState!.validate()) return;
           if (close) {
@@ -104,11 +105,11 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
                   'This locks journal posting for the selected dates.',
                 ),
                 actions: [
-                  TextButton(
+                  LoadingButton.text(
                     onPressed: () => Navigator.pop(context, false),
                     child: const Text('Cancel'),
                   ),
-                  FilledButton(
+                  LoadingButton(
                     onPressed: () => Navigator.pop(context, true),
                     child: const Text('Close period'),
                   ),

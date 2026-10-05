@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
@@ -49,6 +49,7 @@ class RecordDocumentsView extends StatefulWidget {
 class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   List<Map<String, dynamic>> documents = [];
   bool busy = false;
+  bool _hasLoaded = false;
   String? error;
   Uint8List? image;
   String? imageName;
@@ -106,16 +107,16 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
       employee: widget.employee,
     );
     if (mounted) {
-      setState(
-        () => documents = (result['documents'] as List)
+      setState(() {
+        _hasLoaded = true;
+        documents = (result['documents'] as List)
             .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList(),
-      );
+            .toList();
+      });
     }
   }
 
   Future<void> _load() => _run(() async {
-    setState(() => documents = []);
     await _read();
   });
   Future<void> _upload() => _run(() async {
@@ -215,7 +216,9 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
             height: 28,
             child: Align(
               alignment: Alignment.centerRight,
-              child: busy ? const CupertinoActivityIndicator(radius: 8) : null,
+              child: busy && _hasLoaded
+                  ? const AppActivityIndicator(radius: 8)
+                  : null,
             ),
           ),
           if (error != null) Text(error!),
@@ -275,7 +278,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   'Payroll',
                   'Assets',
                 ].contains(widget.section))
-                  TextButton.icon(
+                  LoadingButton.textIcon(
                     onPressed:
                         busy ||
                             widget.uploads!.pending != null ||
@@ -285,7 +288,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Create and attach PDF'),
                   ),
-                TextButton.icon(
+                LoadingButton.textIcon(
                   onPressed:
                       busy ||
                           widget.uploads!.pending != null ||
@@ -296,7 +299,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   label: const Text('Upload file (max 5 MiB)'),
                 ),
                 if (widget.uploads!.pending != null)
-                  TextButton(
+                  LoadingButton.text(
                     onPressed: busy
                         ? null
                         : () => _run(() async {
@@ -309,34 +312,37 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
             ),
           if (!busy && documents.isEmpty) const Text('No documents attached.'),
           Expanded(
-            child: ListView(
-              children: [
-                for (final doc in documents)
-                  ListTile(
-                    title: Text('${doc['name']}'),
-                    subtitle: Text(
-                      '${doc['mimeType']} · ${doc['byteLength']} bytes',
-                    ),
-                    onTap: busy ? null : () => _open(doc),
-                    trailing: logo && widget.writes != null
-                        ? TextButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _useLogo(doc['documentId']),
-                            child: const Text('Use as logo'),
-                          )
-                        : const Icon(Icons.download),
+            child: busy && !_hasLoaded
+                ? const CenteredLoading(label: 'Loading documents')
+                : ListView(
+                    children: [
+                      for (final doc in documents)
+                        ListTile(
+                          title: Text('${doc['name']}'),
+                          subtitle: Text(
+                            '${doc['mimeType']} · ${doc['byteLength']} bytes',
+                          ),
+                          onTap: busy ? null : () => _open(doc),
+                          trailing: logo && widget.writes != null
+                              ? LoadingButton.text(
+                                  onPressed:
+                                      busy || widget.writes!.pending.isNotEmpty
+                                      ? null
+                                      : () => _useLogo(doc['documentId']),
+                                  child: const Text('Use as logo'),
+                                )
+                              : const Icon(Icons.download),
+                        ),
+                      if (image != null)
+                        Image.memory(
+                          image!,
+                          semanticLabel: imageName,
+                          height: 200,
+                          errorBuilder: (_, _, _) =>
+                              const Text('Image could not be displayed.'),
+                        ),
+                    ],
                   ),
-                if (image != null)
-                  Image.memory(
-                    image!,
-                    semanticLabel: imageName,
-                    height: 200,
-                    errorBuilder: (_, _, _) =>
-                        const Text('Image could not be displayed.'),
-                  ),
-              ],
-            ),
           ),
         ],
       ),
@@ -345,14 +351,17 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
       if (logo &&
           widget.writes != null &&
           '${widget.record['logoDocumentId'] ?? ''}'.isNotEmpty)
-        TextButton(
+        LoadingButton.text(
           onPressed: busy || widget.writes!.pending.isNotEmpty
               ? null
               : () => _useLogo(''),
           child: const Text('Remove logo'),
         ),
-      TextButton(onPressed: busy ? null : _load, child: const Text('Refresh')),
-      TextButton(
+      LoadingButton.text(
+        onPressed: busy ? null : _load,
+        child: const Text('Refresh'),
+      ),
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Close'),
       ),
@@ -389,10 +398,7 @@ class _PrivateCompanyLogoState extends State<PrivateCompanyLogo> {
         return const Text('Logo unavailable. Refresh to retry.');
       }
       if (!snapshot.hasData) {
-        return const SizedBox(
-          height: 40,
-          child: Center(child: CupertinoActivityIndicator()),
-        );
+        return const SizedBox(height: 40, child: CenteredLoading());
       }
       return Image.memory(
         snapshot.data!,

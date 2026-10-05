@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
@@ -283,7 +283,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           subtitle: Text(
                             '${pending['section']} — retry before other company changes.',
                           ),
-                          trailing: TextButton(
+                          trailing: LoadingButton.text(
                             onPressed: _uploads.busy
                                 ? null
                                 : () async {
@@ -767,11 +767,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           'This edit was rejected without being saved. Discard it and refresh the current record before editing again.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Keep edit'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Discard edit'),
           ),
@@ -1076,11 +1076,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           'Check the amount, tax, dates and Cash or Bank account before continuing.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Post to ledger'),
           ),
@@ -1124,11 +1124,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           'The server will assign the invoice number and post receivable, revenue and VAT. The invoice and its lines cannot be edited afterward.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Issue invoice'),
           ),
@@ -1279,11 +1279,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               : 'A new draft invoice with the same customer, totals and lines will be created.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               action == 'send' ? 'Finalize quotation' : 'Create draft invoice',
@@ -1357,11 +1357,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             'The server will verify salary totals and post salary expense and liabilities. The payroll cannot be edited afterward.',
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Approve payroll'),
             ),
@@ -1423,11 +1423,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             'The server will post the acquisition to Fixed Assets and the selected Cash or Bank account. The financial details will then be locked.',
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Capitalize asset'),
             ),
@@ -1473,11 +1473,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           'The server will debit the selected Cash or Bank account and credit Shareholder Equity. The contribution cannot be edited afterward.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Post contribution'),
           ),
@@ -1533,11 +1533,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             'The server will debit Cash or Bank and credit Shareholder Loan liability. The loan details will then be locked.',
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Post loan'),
             ),
@@ -1904,13 +1904,13 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     ),
                 ],
               ),
-              IconButton(
+              LoadingButton.iconOnly(
                 tooltip: 'Refresh records',
                 onPressed: busy ? null : () => _load(force: true),
                 icon: const Icon(Icons.refresh),
               ),
               if (_editable && table != 'CompanyProfile')
-                FilledButton.icon(
+                LoadingButton.icon(
                   onPressed: busy || widget.writes!.pending.isNotEmpty
                       ? null
                       : () => _editCustomer(),
@@ -1988,9 +1988,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           alignment: Alignment.centerRight,
           child:
               busy ||
-                  _loading ||
+                  (_loading && _hasData) ||
                   widget.api.cache.state(_path)?.refreshing == true
-              ? const CupertinoActivityIndicator(radius: 8)
+              ? const AppActivityIndicator(radius: 8)
               : null,
         ),
       ),
@@ -2006,290 +2006,303 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           child: Text('No records yet.'),
         ),
       Expanded(
-        child: RefreshIndicator.noSpinner(
-          onRefresh: () => _load(force: true),
-          child: ListView.builder(
-            key: PageStorageKey((widget.companyId, table)),
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            itemCount: _visibleRows.length,
-            itemBuilder: (context, index) {
-              final row = _visibleRows[index];
-              return RecordCard(
-                key: PageStorageKey((table, row['recordId'] ?? index)),
-                title: Text(
-                  _title(row),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
+        child: _loading && !_hasData
+            ? const CenteredLoading(label: 'Loading records')
+            : RefreshIndicator.noSpinner(
+                onRefresh: () => _load(force: true),
+                child: ListView.builder(
+                  key: PageStorageKey((widget.companyId, table)),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 8,
                   ),
+                  itemCount: _visibleRows.length,
+                  itemBuilder: (context, index) {
+                    final row = _visibleRows[index];
+                    return RecordCard(
+                      key: PageStorageKey((table, row['recordId'] ?? index)),
+                      title: Text(
+                        _title(row),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      collapsedBackgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surface,
+                      subtitle: RecordSummary(record: row),
+                      children: [
+                        if (table == 'Invoices' && row['status'] != 'DRAFT')
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text(
+                              'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
+                            ),
+                          ),
+                        if (table == 'CompanyProfile' &&
+                            '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
+                          PrivateCompanyLogo(
+                            key: ValueKey((
+                              widget.companyId,
+                              row['logoDocumentId'],
+                              row['recordVersion'],
+                            )),
+                            api: widget.api,
+                            companyId: widget.companyId,
+                            documentId: row['logoDocumentId'],
+                            employee: widget.employee,
+                          ),
+                        if (documentSections.contains(table) &&
+                            row['recordId'] != null)
+                          LoadingButton.textIcon(
+                            icon: const Icon(Icons.attach_file),
+                            label: Text(
+                              table == 'CompanyProfile'
+                                  ? 'Manage logo'
+                                  : 'Documents',
+                            ),
+                            onPressed: busy
+                                ? null
+                                : () async {
+                                    await showDialog<void>(
+                                      context: context,
+                                      builder: (_) => RecordDocumentsView(
+                                        api: widget.api,
+                                        companyId: widget.companyId,
+                                        section: table,
+                                        record: row,
+                                        employee: widget.employee,
+                                        uploads: widget.uploads,
+                                        writes: widget.writes,
+                                      ),
+                                    );
+                                    if (mounted) await _load();
+                                  },
+                          ),
+                        if (_editable &&
+                            table == 'Invoices' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _issueInvoice(row),
+                            child: const Text('Issue invoice'),
+                          ),
+                        if (_editable &&
+                            table == 'Invoices' &&
+                            row['status'] == 'ISSUED' &&
+                            num.tryParse('${row['paidAmount']}') == 0)
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _voidInvoice(row),
+                            child: const Text('Void invoice'),
+                          ),
+                        if (_editable &&
+                            table == 'Invoices' &&
+                            const [
+                              'ISSUED',
+                              'PARTIALLY_PAID',
+                              'PAID',
+                              'PARTIALLY_RETURNED',
+                            ].contains(row['status']))
+                          LoadingButton.textIcon(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _returnInvoice(row),
+                            icon: const Icon(Icons.assignment_return_outlined),
+                            label: const Text('Return items / credit note'),
+                          ),
+                        if (_editable &&
+                            table == 'Quotations' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _quotationAction(row, 'send'),
+                            child: const Text('Finalize quotation'),
+                          ),
+                        if (_editable &&
+                            table == 'Quotations' &&
+                            row['status'] == 'SENT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _quotationAction(row, 'convert'),
+                            child: const Text('Create draft invoice'),
+                          ),
+                        if (_editable &&
+                            table == 'Payroll' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _payrollAction(row, 'approve'),
+                            child: const Text('Approve payroll'),
+                          ),
+                        if (_editable &&
+                            table == 'Payroll' &&
+                            row['status'] == 'APPROVED')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _payrollAction(row, 'payrollPay'),
+                            child: const Text('Pay payroll'),
+                          ),
+                        if (_editable &&
+                            table == 'Payroll' &&
+                            const ['APPROVED', 'PAID'].contains(row['status']))
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _payrollAction(row, 'payrollReverse'),
+                            child: Text(
+                              row['status'] == 'PAID'
+                                  ? 'Refund and reverse payroll'
+                                  : 'Reverse payroll',
+                            ),
+                          ),
+                        if (_editable &&
+                            table == 'Assets' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _assetAction(row, 'capitalize'),
+                            child: const Text('Capitalize asset'),
+                          ),
+                        if (_editable &&
+                            table == 'Assets' &&
+                            row['status'] == 'ACTIVE')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _assetAction(row, 'depreciate'),
+                            child: const Text('Post monthly depreciation'),
+                          ),
+                        if (_editable &&
+                            table == 'Assets' &&
+                            row['status'] == 'ACTIVE')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _assetAction(row, 'assetDispose'),
+                            child: const Text('Dispose asset'),
+                          ),
+                        if (_editable &&
+                            table == 'CapitalTransactions' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _postCapital(row),
+                            child: const Text('Post contribution'),
+                          ),
+                        if (_editable &&
+                            table == 'ShareholderLoans' &&
+                            row['status'] == 'DRAFT')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _loanAction(row, 'loanPost'),
+                            child: const Text('Post loan'),
+                          ),
+                        if (_editable &&
+                            table == 'ShareholderLoans' &&
+                            row['status'] == 'ACTIVE')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _loanAction(row, 'loanRepay'),
+                            child: const Text('Repay loan in full'),
+                          ),
+                        if (_editable &&
+                            table == 'Receipts' &&
+                            row['status'] == 'POSTED')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _reverseReceipt(row),
+                            child: const Text('Reverse receipt'),
+                          ),
+                        if (_editable &&
+                            const ['Income', 'Expenses'].contains(table) &&
+                            row['ledgerStatus'] == 'LINKED' &&
+                            const [
+                              'UNPAID',
+                              'PAID',
+                            ].contains(row['paymentStatus']))
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _payCash(row, reverse: true),
+                            child: Text(
+                              row['paymentStatus'] == 'PAID'
+                                  ? 'Refund and reverse entry'
+                                  : 'Reverse entry',
+                            ),
+                          ),
+                        if (_editable &&
+                            const ['Income', 'Expenses'].contains(table) &&
+                            row['ledgerStatus'] == 'LINKED' &&
+                            row['paymentStatus'] == 'UNPAID')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _payCash(row),
+                            child: const Text('Record payment'),
+                          ),
+                        if (_editable &&
+                            const ['Income', 'Expenses'].contains(table) &&
+                            row['ledgerStatus'] == 'UNPOSTED')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _postCash(row),
+                            child: const Text('Post to ledger'),
+                          ),
+                        if (_editable &&
+                            !const [
+                              'LINKED',
+                              'REVERSED',
+                            ].contains(row['ledgerStatus']) &&
+                            (table != 'FinancialPeriods' ||
+                                row['status'] == 'OPEN') &&
+                            (table != 'Invoices' || row['status'] == 'DRAFT') &&
+                            (table != 'Quotations' ||
+                                row['status'] == 'DRAFT') &&
+                            (table != 'Payroll' || row['status'] == 'DRAFT') &&
+                            (table != 'Assets' || row['status'] == 'DRAFT') &&
+                            (table != 'CapitalTransactions' ||
+                                row['status'] == 'DRAFT') &&
+                            (table != 'ShareholderLoans' ||
+                                row['status'] == 'DRAFT') &&
+                            table != 'Receipts')
+                          LoadingButton.text(
+                            onPressed: busy || widget.writes!.pending.isNotEmpty
+                                ? null
+                                : () => _editCustomer(row),
+                            child: Text('Edit $_recordLabel'),
+                          ),
+                        RecordDetails(record: row),
+                      ],
+                    );
+                  },
                 ),
-                collapsedShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-                subtitle: RecordSummary(record: row),
-                children: [
-                  if (table == 'Invoices' && row['status'] != 'DRAFT')
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
-                      ),
-                    ),
-                  if (table == 'CompanyProfile' &&
-                      '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
-                    PrivateCompanyLogo(
-                      key: ValueKey((
-                        widget.companyId,
-                        row['logoDocumentId'],
-                        row['recordVersion'],
-                      )),
-                      api: widget.api,
-                      companyId: widget.companyId,
-                      documentId: row['logoDocumentId'],
-                      employee: widget.employee,
-                    ),
-                  if (documentSections.contains(table) &&
-                      row['recordId'] != null)
-                    TextButton.icon(
-                      icon: const Icon(Icons.attach_file),
-                      label: Text(
-                        table == 'CompanyProfile' ? 'Manage logo' : 'Documents',
-                      ),
-                      onPressed: busy
-                          ? null
-                          : () async {
-                              await showDialog<void>(
-                                context: context,
-                                builder: (_) => RecordDocumentsView(
-                                  api: widget.api,
-                                  companyId: widget.companyId,
-                                  section: table,
-                                  record: row,
-                                  employee: widget.employee,
-                                  uploads: widget.uploads,
-                                  writes: widget.writes,
-                                ),
-                              );
-                              if (mounted) await _load();
-                            },
-                    ),
-                  if (_editable &&
-                      table == 'Invoices' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _issueInvoice(row),
-                      child: const Text('Issue invoice'),
-                    ),
-                  if (_editable &&
-                      table == 'Invoices' &&
-                      row['status'] == 'ISSUED' &&
-                      num.tryParse('${row['paidAmount']}') == 0)
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _voidInvoice(row),
-                      child: const Text('Void invoice'),
-                    ),
-                  if (_editable &&
-                      table == 'Invoices' &&
-                      const [
-                        'ISSUED',
-                        'PARTIALLY_PAID',
-                        'PAID',
-                        'PARTIALLY_RETURNED',
-                      ].contains(row['status']))
-                    TextButton.icon(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _returnInvoice(row),
-                      icon: const Icon(Icons.assignment_return_outlined),
-                      label: const Text('Return items / credit note'),
-                    ),
-                  if (_editable &&
-                      table == 'Quotations' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _quotationAction(row, 'send'),
-                      child: const Text('Finalize quotation'),
-                    ),
-                  if (_editable &&
-                      table == 'Quotations' &&
-                      row['status'] == 'SENT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _quotationAction(row, 'convert'),
-                      child: const Text('Create draft invoice'),
-                    ),
-                  if (_editable &&
-                      table == 'Payroll' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _payrollAction(row, 'approve'),
-                      child: const Text('Approve payroll'),
-                    ),
-                  if (_editable &&
-                      table == 'Payroll' &&
-                      row['status'] == 'APPROVED')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _payrollAction(row, 'payrollPay'),
-                      child: const Text('Pay payroll'),
-                    ),
-                  if (_editable &&
-                      table == 'Payroll' &&
-                      const ['APPROVED', 'PAID'].contains(row['status']))
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _payrollAction(row, 'payrollReverse'),
-                      child: Text(
-                        row['status'] == 'PAID'
-                            ? 'Refund and reverse payroll'
-                            : 'Reverse payroll',
-                      ),
-                    ),
-                  if (_editable &&
-                      table == 'Assets' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _assetAction(row, 'capitalize'),
-                      child: const Text('Capitalize asset'),
-                    ),
-                  if (_editable &&
-                      table == 'Assets' &&
-                      row['status'] == 'ACTIVE')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _assetAction(row, 'depreciate'),
-                      child: const Text('Post monthly depreciation'),
-                    ),
-                  if (_editable &&
-                      table == 'Assets' &&
-                      row['status'] == 'ACTIVE')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _assetAction(row, 'assetDispose'),
-                      child: const Text('Dispose asset'),
-                    ),
-                  if (_editable &&
-                      table == 'CapitalTransactions' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _postCapital(row),
-                      child: const Text('Post contribution'),
-                    ),
-                  if (_editable &&
-                      table == 'ShareholderLoans' &&
-                      row['status'] == 'DRAFT')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _loanAction(row, 'loanPost'),
-                      child: const Text('Post loan'),
-                    ),
-                  if (_editable &&
-                      table == 'ShareholderLoans' &&
-                      row['status'] == 'ACTIVE')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _loanAction(row, 'loanRepay'),
-                      child: const Text('Repay loan in full'),
-                    ),
-                  if (_editable &&
-                      table == 'Receipts' &&
-                      row['status'] == 'POSTED')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _reverseReceipt(row),
-                      child: const Text('Reverse receipt'),
-                    ),
-                  if (_editable &&
-                      const ['Income', 'Expenses'].contains(table) &&
-                      row['ledgerStatus'] == 'LINKED' &&
-                      const ['UNPAID', 'PAID'].contains(row['paymentStatus']))
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _payCash(row, reverse: true),
-                      child: Text(
-                        row['paymentStatus'] == 'PAID'
-                            ? 'Refund and reverse entry'
-                            : 'Reverse entry',
-                      ),
-                    ),
-                  if (_editable &&
-                      const ['Income', 'Expenses'].contains(table) &&
-                      row['ledgerStatus'] == 'LINKED' &&
-                      row['paymentStatus'] == 'UNPAID')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _payCash(row),
-                      child: const Text('Record payment'),
-                    ),
-                  if (_editable &&
-                      const ['Income', 'Expenses'].contains(table) &&
-                      row['ledgerStatus'] == 'UNPOSTED')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _postCash(row),
-                      child: const Text('Post to ledger'),
-                    ),
-                  if (_editable &&
-                      !const [
-                        'LINKED',
-                        'REVERSED',
-                      ].contains(row['ledgerStatus']) &&
-                      (table != 'FinancialPeriods' ||
-                          row['status'] == 'OPEN') &&
-                      (table != 'Invoices' || row['status'] == 'DRAFT') &&
-                      (table != 'Quotations' || row['status'] == 'DRAFT') &&
-                      (table != 'Payroll' || row['status'] == 'DRAFT') &&
-                      (table != 'Assets' || row['status'] == 'DRAFT') &&
-                      (table != 'CapitalTransactions' ||
-                          row['status'] == 'DRAFT') &&
-                      (table != 'ShareholderLoans' ||
-                          row['status'] == 'DRAFT') &&
-                      table != 'Receipts')
-                    TextButton(
-                      onPressed: busy || widget.writes!.pending.isNotEmpty
-                          ? null
-                          : () => _editCustomer(row),
-                      child: Text('Edit $_recordLabel'),
-                    ),
-                  RecordDetails(record: row),
-                ],
-              );
-            },
-          ),
-        ),
+              ),
       ),
     ],
   );

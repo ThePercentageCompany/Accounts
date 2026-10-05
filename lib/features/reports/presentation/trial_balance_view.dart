@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -562,12 +562,12 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
             ),
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
             if (!widget.employee)
-              FilledButton(
+              LoadingButton(
                 onPressed: () => Navigator.pop(context, 'save'),
                 child: const Text('Save current view'),
               ),
@@ -587,11 +587,11 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               decoration: const InputDecoration(labelText: 'View name'),
             ),
             actions: [
-              TextButton(
+              LoadingButton.text(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel'),
               ),
-              FilledButton(
+              LoadingButton(
                 onPressed: () => controller.text.trim().isEmpty
                     ? null
                     : Navigator.pop(context, controller.text.trim()),
@@ -742,10 +742,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
             builder: (context, snapshot) {
               if (snapshot.hasError) return Text('${snapshot.error}');
               if (!snapshot.hasData) {
-                return const SizedBox(
-                  height: 80,
-                  child: Center(child: CircularProgressIndicator()),
-                );
+                return const SizedBox(height: 80, child: CenteredLoading());
               }
               final lines = <List<Widget>>[];
               for (final a in snapshot.data!['accounts'] as List? ?? []) {
@@ -776,7 +773,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       dense: _dense,
                     ),
                     if ('${entry['sourceId'] ?? ''}'.isNotEmpty)
-                      TextButton(
+                      LoadingButton.text(
                         onPressed: () => _source(entry),
                         child: const Text('Open source record'),
                       ),
@@ -787,7 +784,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
           ),
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context),
             child: const Text('Return to ledger'),
           ),
@@ -871,7 +868,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
           ),
           actions: [
             if (documentSections.contains(table))
-              TextButton(
+              LoadingButton.text(
                 onPressed: () => showDialog<void>(
                   context: context,
                   builder: (context) => RecordDocumentsView(
@@ -884,7 +881,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                 ),
                 child: const Text('Documents'),
               ),
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
@@ -908,7 +905,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
       ),
       actions: [
-        TextButton(
+        LoadingButton.text(
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
@@ -1016,7 +1013,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                   ),
                 ],
               ),
-              IconButton(
+              LoadingButton.iconOnly(
                 tooltip: 'Saved report views',
                 onPressed: _savingView ? null : _savedViews,
                 icon: const Icon(Icons.bookmarks_outlined),
@@ -1158,7 +1155,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       _selectedAccountId != null ||
                       _transactionSearch.isNotEmpty ||
                       _sourceFilter.isNotEmpty)
-                    TextButton(
+                    LoadingButton.text(
                       onPressed: () => setState(() {
                         _search = '';
                         _hideZero = false;
@@ -1185,7 +1182,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
           builder: (context, snapshot) {
             if (_displayed == null &&
                 snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CupertinoActivityIndicator());
+              return const CenteredLoading();
             }
             if (_displayed == null && snapshot.hasError) {
               return Center(
@@ -1206,19 +1203,18 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               key: PageStorageKey(_path),
               child: Column(
                 children: [
-                  if (widget.api.cache.state(_path)?.refreshing == true)
-                    SizedBox(
-                      height: 18,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: widget.api.cache.state(_path)?.refreshing == true
-                            ? const Padding(
-                                padding: EdgeInsets.only(right: 24),
-                                child: CupertinoActivityIndicator(radius: 8),
-                              )
-                            : null,
-                      ),
+                  SizedBox(
+                    height: 18,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: widget.api.cache.state(_path)?.refreshing == true
+                          ? const Padding(
+                              padding: EdgeInsets.only(right: 24),
+                              child: AppActivityIndicator(radius: 8),
+                            )
+                          : null,
                     ),
+                  ),
                   if (widget.api.cache.state(_path)?.offline == true)
                     const Text('Offline - showing saved data.'),
                   if (widget.api.cache.state(_path)?.error != null &&

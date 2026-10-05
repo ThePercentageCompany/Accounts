@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 
@@ -172,11 +173,11 @@ class _InvoiceReturnEditorState extends State<InvoiceReturnEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           final items = [

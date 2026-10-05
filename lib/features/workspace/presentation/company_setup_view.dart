@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
@@ -55,11 +55,11 @@ class _CompanySetupViewState extends State<CompanySetupView> {
           ),
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete all workspace data'),
           ),
@@ -181,13 +181,13 @@ class _CompanySetupViewState extends State<CompanySetupView> {
               runSpacing: 12,
               children: [
                 if (session.ready && widget.onOpen != null)
-                  FilledButton.icon(
+                  LoadingButton.icon(
                     onPressed: state.busy ? null : widget.onOpen,
                     icon: const Icon(Icons.arrow_forward),
                     label: const Text('Open company workspace'),
                   ),
                 if (action == 'CONNECT_GOOGLE' || action == 'RECONNECT_GOOGLE')
-                  FilledButton.icon(
+                  LoadingButton.icon(
                     onPressed: state.busy
                         ? null
                         : () => session.connectGoogle(widget.navigate),
@@ -199,13 +199,13 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                     ),
                   ),
                 if (company != null && !session.ready)
-                  OutlinedButton.icon(
+                  LoadingButton.outlinedIcon(
                     onPressed: state.busy ? null : session.refreshSetup,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Refresh setup status'),
                   ),
                 if (company?['stage'] == 'RECOVERABLE_FAILURE')
-                  FilledButton(
+                  LoadingButton(
                     onPressed: state.busy ? null : session.retrySetup,
                     child: const Text('Retry setup'),
                   ),
@@ -259,7 +259,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                   ),
                 ),
                 if (state.owner != null || state.employee != null)
-                  IconButton(
+                  LoadingButton.iconOnly(
                     tooltip: 'Sign out',
                     onPressed: state.busy ? null : session.signOut,
                     icon: const Icon(Icons.logout),
@@ -274,7 +274,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                     ? Semantics(
                         label: 'Loading company setup',
                         liveRegion: true,
-                        child: const CupertinoActivityIndicator(),
+                        child: const AppActivityIndicator(),
                       )
                     : null,
               ),
@@ -313,7 +313,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                       'Sign in to create a workspace or continue managing an existing company.',
                     ),
                     const SizedBox(height: 24),
-                    FilledButton(
+                    LoadingButton(
                       onPressed: state.busy
                           ? null
                           : () => session.signIn(widget.navigate),
@@ -481,7 +481,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                FilledButton.icon(
+                                LoadingButton.icon(
                                   onPressed: state.busy
                                       ? null
                                       : () => session.createCompany(

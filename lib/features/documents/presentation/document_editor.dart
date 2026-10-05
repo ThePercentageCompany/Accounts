@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/draft_navigation_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/network/draft_navigation_web.dart';
@@ -88,11 +89,11 @@ class _DocumentEditorState extends State<DocumentEditor> {
             'Your changes in this editor have not been saved.',
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Keep editing'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Discard'),
             ),
@@ -494,7 +495,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
           ),
           section(
             'Items',
-            action: TextButton.icon(
+            action: LoadingButton.textIcon(
               key: const Key('add-document-item'),
               onPressed: lines.length == 100
                   ? null
@@ -821,15 +822,10 @@ class _DocumentEditorState extends State<DocumentEditor> {
           onPressed: _saving ? null : _discard,
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        LoadingButton(
+          busy: _saving,
           onPressed: _saving ? null : _save,
-          child: Text(
-            _saving
-                ? 'Saving…'
-                : preview
-                ? 'Back to editing'
-                : 'Save draft',
-          ),
+          child: Text(preview ? 'Back to editing' : 'Save draft'),
         ),
       ],
     ),

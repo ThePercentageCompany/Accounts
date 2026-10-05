@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,11 +65,11 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Save draft'));
         await tester.pump();
-        expect(find.text('Saving…'), findsOneWidget);
+        expect(find.byType(AppActivityIndicator), findsOneWidget);
         expect(
           tester
               .widget<FilledButton>(
-                find.widgetWithText(FilledButton, 'Saving…'),
+                find.widgetWithText(FilledButton, 'Save draft'),
               )
               .onPressed,
           isNull,

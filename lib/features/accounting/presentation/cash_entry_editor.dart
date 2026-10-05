@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/widgets/forms/category_field.dart';
 import 'package:flutter/material.dart';
@@ -135,11 +136,11 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!_form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{

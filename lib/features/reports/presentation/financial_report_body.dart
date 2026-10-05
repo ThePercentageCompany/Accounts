@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../data/report_format.dart';
@@ -349,7 +350,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
                             else if (c == 'date')
                               Text(widget.format.date(e[c]))
                             else if (c == 'number')
-                              TextButton(
+                              LoadingButton.text(
                                 onPressed: widget.onJournal == null
                                     ? null
                                     : () => widget.onJournal!(e),
@@ -637,7 +638,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
           ] else if (widget.rows.isNotEmpty) ...[
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
+              child: LoadingButton.textIcon(
                 onPressed: () => setState(() => _ascending = !_ascending),
                 icon: Icon(
                   _ascending ? Icons.arrow_upward : Icons.arrow_downward,

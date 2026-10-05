@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
@@ -101,11 +102,11 @@ class _PayrollEditorState extends State<PayrollEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{
@@ -183,11 +184,11 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{

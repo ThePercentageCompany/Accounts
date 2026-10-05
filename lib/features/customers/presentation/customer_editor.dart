@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
@@ -72,11 +73,11 @@ class _CustomerEditorState extends State<CustomerEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (_form.currentState!.validate()) {
             Navigator.pop(context, <String, Object?>{

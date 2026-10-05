@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
@@ -108,11 +109,11 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{
@@ -239,11 +240,11 @@ class _CapitalContributionEditorState extends State<CapitalContributionEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{
@@ -387,11 +388,11 @@ class _ShareholderLoanEditorState extends State<ShareholderLoanEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{
@@ -473,11 +474,11 @@ class _ShareholderLoanRepaymentEditorState
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (!form.currentState!.validate()) return;
           Navigator.pop(context, <String, Object?>{

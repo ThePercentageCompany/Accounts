@@ -1,7 +1,7 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/utils/file_download.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -79,7 +79,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
                 alignLabelWithHint: true,
               ),
             ),
-            if (busy) const CupertinoActivityIndicator(),
+            if (busy) const AppActivityIndicator(),
             if (message != null)
               Semantics(liveRegion: true, child: Text(message!)),
             const Text(
@@ -90,7 +90,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: busy
             ? null
             : () => run(() async {
@@ -112,11 +112,11 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               }),
         child: const Text('Import HTML'),
       ),
-      TextButton(
+      LoadingButton.text(
         onPressed: busy ? null : () => source.text = defaultHtmlDocumentDesign,
         child: const Text('Reset source'),
       ),
-      TextButton(
+      LoadingButton.text(
         onPressed: busy
             ? null
             : () => run(() async {
@@ -129,7 +129,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               }),
         child: const Text('Export design'),
       ),
-      TextButton(
+      LoadingButton.text(
         onPressed: busy
             ? null
             : () => run(() async {
@@ -142,7 +142,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               }),
         child: const Text('Preview HTML'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: busy
             ? null
             : () => run(() async {
@@ -153,7 +153,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               }),
         child: const Text('Save design'),
       ),
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Close'),
       ),

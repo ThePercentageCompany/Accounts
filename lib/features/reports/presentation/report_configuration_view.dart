@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import '../data/report_settings.dart';
@@ -257,11 +258,11 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
             ),
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => form.currentState!.validate()
                   ? Navigator.pop(context, {
                       'accountId': id.text.trim(),
@@ -297,6 +298,9 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
   @override
   Widget build(BuildContext context) {
     final settings = _settings;
+    if (_busy && settings == null) {
+      return const CenteredLoading(label: 'Loading report settings');
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -313,18 +317,27 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                 : 'Company reporting configuration · changes require Save',
           ),
           const SizedBox(height: 16),
-          if (_busy) const LinearProgressIndicator(),
+          SizedBox(
+            height: 20,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _busy ? const AppActivityIndicator(radius: 8) : null,
+            ),
+          ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(_error!),
             ),
           if (settings == null && !_busy)
-            OutlinedButton(onPressed: _load, child: const Text('Retry')),
+            LoadingButton.outlined(
+              onPressed: _load,
+              child: const Text('Retry'),
+            ),
           if (settings != null) ...[
             if (widget.chart) ...[
               if (!widget.employee)
-                FilledButton.icon(
+                LoadingButton.icon(
                   onPressed: _busy ? null : () => _editAccount(),
                   icon: const Icon(Icons.add),
                   label: const Text('Register account'),
@@ -339,7 +352,7 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                     ),
                     trailing: widget.employee
                         ? null
-                        : IconButton(
+                        : LoadingButton.iconOnly(
                             tooltip: 'Edit classification',
                             onPressed: _busy
                                 ? null
@@ -367,7 +380,7 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                     ),
                     trailing: widget.employee
                         ? null
-                        : OutlinedButton(
+                        : LoadingButton.outlined(
                             onPressed: _busy
                                 ? null
                                 : () => _editAccount(null, account),
@@ -471,11 +484,11 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
               Wrap(
                 spacing: 12,
                 children: [
-                  FilledButton(
+                  LoadingButton(
                     onPressed: _busy || !_dirty ? null : _save,
                     child: const Text('Save configuration'),
                   ),
-                  TextButton(
+                  LoadingButton.text(
                     onPressed: _busy
                         ? null
                         : () async {
@@ -485,12 +498,12 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                                 builder: (context) => AlertDialog(
                                   title: const Text('Discard unsaved changes?'),
                                   actions: [
-                                    TextButton(
+                                    LoadingButton.text(
                                       onPressed: () =>
                                           Navigator.pop(context, false),
                                       child: const Text('Keep editing'),
                                     ),
-                                    TextButton(
+                                    LoadingButton.text(
                                       onPressed: () =>
                                           Navigator.pop(context, true),
                                       child: const Text('Discard'),

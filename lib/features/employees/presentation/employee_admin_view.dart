@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
@@ -70,11 +70,11 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
           'The server rejected this edit without saving it. Discard it and reload the current employee details before editing again.',
         ),
         actions: [
-          TextButton(
+          LoadingButton.text(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Keep edit'),
           ),
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Discard edit'),
           ),
@@ -99,11 +99,11 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
             'Existing sessions for ${employee['fullName']} will stop working.',
           ),
           actions: [
-            TextButton(
+            LoadingButton.text(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton(
+            LoadingButton(
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Confirm'),
             ),
@@ -150,7 +150,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
           ),
         ),
         actions: [
-          FilledButton(
+          LoadingButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('I saved the code'),
           ),
@@ -166,6 +166,10 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
     bloc: widget.controller,
     builder: (context, _) {
       final c = widget.controller;
+      if (c.employees.isEmpty &&
+          c.api.cache.state(c.resourcePath)?.initialLoading == true) {
+        return const CenteredLoading(label: 'Loading employees');
+      }
       return ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -178,12 +182,12 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                 'Employees',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              FilledButton.icon(
+              LoadingButton.icon(
                 onPressed: c.busy || c.hasPending ? null : () => _edit(),
                 icon: const Icon(Icons.person_add_outlined),
                 label: const Text('Add employee'),
               ),
-              IconButton(
+              LoadingButton.iconOnly(
                 tooltip: 'Refresh employees',
                 onPressed: c.busy ? null : c.refresh,
                 icon: const Icon(Icons.refresh),
@@ -208,7 +212,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
               child:
                   c.busy ||
                       c.api.cache.state(c.resourcePath)?.refreshing == true
-                  ? const CupertinoActivityIndicator(radius: 8)
+                  ? const AppActivityIndicator(radius: 8)
                   : null,
             ),
           ),
@@ -231,12 +235,12 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                   ? 'The last save was rejected. Retry the saved edit after the service is fixed, or discard it to correct the details.'
                   : 'The employee save has not been confirmed. Retry to confirm the saved edit and unlock editing.',
             ),
-            TextButton(
+            LoadingButton.text(
               onPressed: c.busy ? null : c.retry,
               child: const Text('Retry saved edit'),
             ),
             if (c.canDiscardRejected)
-              TextButton(
+              LoadingButton.text(
                 onPressed: c.busy ? null : _discardRejected,
                 child: const Text('Discard rejected change'),
               ),
@@ -293,14 +297,14 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     Wrap(
                       spacing: 8,
                       children: [
-                        TextButton(
+                        LoadingButton.text(
                           onPressed: c.busy || c.hasPending
                               ? null
                               : () => _edit(row),
                           child: const Text('Edit permissions'),
                         ),
                         for (final action in ['issue', 'reset', 'revoke'])
-                          TextButton(
+                          LoadingButton.text(
                             onPressed:
                                 c.busy ||
                                     c.hasPending ||
@@ -317,7 +321,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                             ),
                           ),
                         if (widget.onDocuments != null)
-                          TextButton(
+                          LoadingButton.text(
                             onPressed: c.busy || c.hasPending
                                 ? null
                                 : () => widget.onDocuments!(row),
@@ -482,11 +486,11 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      LoadingButton.text(
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      LoadingButton(
         onPressed: () {
           if (form.currentState!.validate()) {
             Navigator.pop(context, <String, Object?>{
