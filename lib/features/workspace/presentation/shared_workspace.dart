@@ -744,6 +744,16 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         ].join(' ').toLowerCase().contains(_search.toLowerCase()),
       )
       .toList();
+  ButtonStyle get _destructiveActionStyle => ButtonStyle(
+    foregroundColor: WidgetStatePropertyAll(
+      Theme.of(context).colorScheme.error,
+    ),
+    side: WidgetStatePropertyAll(
+      BorderSide(
+        color: Theme.of(context).colorScheme.error.withValues(alpha: .5),
+      ),
+    ),
+  );
   bool busy = false;
   String? error;
   int _request = 0;
@@ -2046,11 +2056,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       subtitle: RecordSummary(record: row),
                       children: [
                         if (table == 'Invoices' && row['status'] != 'DRAFT')
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
-                            ),
+                          const RecordNotice(
+                            title: 'Invoice history is protected',
+                            icon: Icons.lock_outline,
+                            message:
+                                'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
                           ),
                         if (table == 'CompanyProfile' &&
                             '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
@@ -2067,7 +2077,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           ),
                         if (documentSections.contains(table) &&
                             row['recordId'] != null)
-                          LoadingButton.textIcon(
+                          LoadingButton.outlinedIcon(
                             icon: const Icon(Icons.attach_file),
                             label: Text(
                               table == 'CompanyProfile'
@@ -2095,7 +2105,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Invoices' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _issueInvoice(row),
@@ -2105,7 +2115,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                             table == 'Invoices' &&
                             row['status'] == 'ISSUED' &&
                             num.tryParse('${row['paidAmount']}') == 0)
-                          LoadingButton.text(
+                          LoadingButton.outlined(
+                            style: _destructiveActionStyle,
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _voidInvoice(row),
@@ -2119,7 +2130,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               'PAID',
                               'PARTIALLY_RETURNED',
                             ].contains(row['status']))
-                          LoadingButton.textIcon(
+                          LoadingButton.icon(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _returnInvoice(row),
@@ -2129,7 +2140,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Quotations' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _quotationAction(row, 'send'),
@@ -2138,7 +2149,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Quotations' &&
                             row['status'] == 'SENT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _quotationAction(row, 'convert'),
@@ -2147,7 +2158,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Payroll' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _payrollAction(row, 'approve'),
@@ -2156,7 +2167,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Payroll' &&
                             row['status'] == 'APPROVED')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _payrollAction(row, 'payrollPay'),
@@ -2165,7 +2176,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Payroll' &&
                             const ['APPROVED', 'PAID'].contains(row['status']))
-                          LoadingButton.text(
+                          LoadingButton.outlined(
+                            style: _destructiveActionStyle,
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _payrollAction(row, 'payrollReverse'),
@@ -2178,7 +2190,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Assets' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _assetAction(row, 'capitalize'),
@@ -2187,7 +2199,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Assets' &&
                             row['status'] == 'ACTIVE')
-                          LoadingButton.text(
+                          LoadingButton.outlined(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _assetAction(row, 'depreciate'),
@@ -2196,7 +2208,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Assets' &&
                             row['status'] == 'ACTIVE')
-                          LoadingButton.text(
+                          LoadingButton.outlined(
+                            style: _destructiveActionStyle,
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _assetAction(row, 'assetDispose'),
@@ -2205,7 +2218,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'CapitalTransactions' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _postCapital(row),
@@ -2214,7 +2227,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'ShareholderLoans' &&
                             row['status'] == 'DRAFT')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _loanAction(row, 'loanPost'),
@@ -2223,7 +2236,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'ShareholderLoans' &&
                             row['status'] == 'ACTIVE')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _loanAction(row, 'loanRepay'),
@@ -2232,7 +2245,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             table == 'Receipts' &&
                             row['status'] == 'POSTED')
-                          LoadingButton.text(
+                          LoadingButton.outlined(
+                            style: _destructiveActionStyle,
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _reverseReceipt(row),
@@ -2245,7 +2259,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               'UNPAID',
                               'PAID',
                             ].contains(row['paymentStatus']))
-                          LoadingButton.text(
+                          LoadingButton.outlined(
+                            style: _destructiveActionStyle,
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _payCash(row, reverse: true),
@@ -2259,7 +2274,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                             const ['Income', 'Expenses'].contains(table) &&
                             row['ledgerStatus'] == 'LINKED' &&
                             row['paymentStatus'] == 'UNPAID')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _payCash(row),
@@ -2268,7 +2283,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         if (_editable &&
                             const ['Income', 'Expenses'].contains(table) &&
                             row['ledgerStatus'] == 'UNPOSTED')
-                          LoadingButton.text(
+                          LoadingButton(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _postCash(row),
@@ -2291,7 +2306,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                             (table != 'ShareholderLoans' ||
                                 row['status'] == 'DRAFT') &&
                             table != 'Receipts')
-                          LoadingButton.text(
+                          LoadingButton.outlined(
                             onPressed: busy || widget.writes!.pending.isNotEmpty
                                 ? null
                                 : () => _editCustomer(row),

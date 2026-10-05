@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 export 'package:tpc_invoice/core/widgets/forms/date_time_field.dart';
 export 'package:tpc_invoice/core/widgets/forms/currency_field.dart';
 import 'package:flutter/material.dart';
@@ -313,87 +314,115 @@ class RecordCard extends StatelessWidget {
   final Color? collapsedBackgroundColor;
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width < 600;
-    bool action(Widget child) => child is ButtonStyleButton;
+    final colors = Theme.of(context).colorScheme;
+    bool action(Widget child) =>
+        child is ButtonStyleButton || child is LoadingButton;
     final actions = children.where(action).toList();
+    final content = children.where((child) => !action(child)).toList();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        key: key,
+        title: title,
+        subtitle: subtitle,
+        shape: shape,
+        collapsedShape: collapsedShape,
+        backgroundColor: backgroundColor,
+        collapsedBackgroundColor: collapsedBackgroundColor,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ExpansionTile(
-            key: key,
-            title: title,
-            subtitle: subtitle,
-            shape: shape,
-            collapsedShape: collapsedShape,
-            backgroundColor: backgroundColor,
-            collapsedBackgroundColor: collapsedBackgroundColor,
-            tilePadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 8,
-            ),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Divider(height: 24),
-              if (!mobile && actions.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 8,
+          const Divider(height: 24),
+          ...content.where((child) => child is! RecordDetails),
+          if (actions.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Use the actual card width, including sidebars and split views.
+                  if (constraints.maxWidth < 480) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < actions.length; i++) ...[
+                          if (i > 0) const SizedBox(height: 10),
+                          actions[i],
+                        ],
+                      ],
+                    );
+                  }
+                  return Wrap(
+                    alignment: WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: actions,
-                  ),
-                ),
-              ...children.where((child) => !action(child)),
-            ],
-          ),
-          if (mobile && actions.isNotEmpty)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                icon: const Icon(Icons.more_horiz),
-                label: const Text('Actions'),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  showDragHandle: true,
-                  isScrollControlled: true,
-                  builder: (context) => SafeArea(
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'Record actions',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            for (final action
-                                in actions.cast<ButtonStyleButton>())
-                              OutlinedButton(
-                                onPressed: action.onPressed == null
-                                    ? null
-                                    : () {
-                                        Navigator.pop(context);
-                                        action.onPressed!();
-                                      },
-                                child: action.child ?? const Text('Open'),
-                              ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
+          ...content.whereType<RecordDetails>(),
+        ],
+      ),
+    );
+  }
+}
+
+/// An aligned, readable notice above the actions for a saved record.
+class RecordNotice extends StatelessWidget {
+  const RecordNotice({
+    super.key,
+    required this.title,
+    required this.message,
+    this.icon = Icons.info_outline,
+  });
+  final String title, message;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer.withValues(alpha: .45),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: colors.onSecondaryContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

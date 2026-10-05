@@ -71,8 +71,14 @@ class ReportTrends extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(format.date(trends.first['from'])),
-                Text(format.date(trends.last['asOf'])),
+                Expanded(child: Text(format.date(trends.first['from']))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    format.date(trends.last['asOf']),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
               ],
             ),
             ExpansionTile(
