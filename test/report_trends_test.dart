@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/theme/app_theme.dart';
 import 'package:tpc_invoice/features/reports/data/report_format.dart';
-import 'package:tpc_invoice/features/reports/presentation/report_grid.dart';
 import 'package:tpc_invoice/features/reports/presentation/workspace_dashboard.dart';
 
 void main() {
@@ -17,7 +16,9 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         await tester.pumpWidget(
           MaterialApp(
-            theme: largeText ? AppTheme.dark() : AppTheme.light(),
+            theme: (largeText ? AppTheme.dark() : AppTheme.light()).copyWith(
+              platform: TargetPlatform.windows,
+            ),
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(
                 context,
@@ -55,8 +56,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('Net profit'), findsOneWidget);
-        final grid = find.byType(ReportGrid);
-        final rows = find.descendant(of: grid, matching: find.byType(ListView));
+        final grid = find.byKey(const Key('exact-trend-table'));
+        final rows = find.byKey(const Key('exact-trend-vertical-scroll'));
         await tester.ensureVisible(rows);
         await tester.dragFrom(
           Offset(tester.getCenter(grid).dx, tester.getCenter(rows).dy),
@@ -64,11 +65,23 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('-119.00'), findsOneWidget);
-        final horizontal = find.descendant(
-          of: grid,
-          matching: find.byType(SingleChildScrollView),
+        expect(
+          tester.widget<SingleChildScrollView>(rows).controller!.offset,
+          greaterThan(0),
         );
-        await tester.drag(horizontal, const Offset(-800, 0));
+        await tester.dragFrom(tester.getCenter(grid), const Offset(-800, 0));
+        await tester.pumpAndSettle();
+        if (width < 800) {
+          expect(
+            tester
+                .widget<SingleChildScrollView>(
+                  find.byKey(const Key('exact-trend-horizontal-scroll')),
+                )
+                .controller!
+                .offset,
+            greaterThan(0),
+          );
+        }
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         await tester.ensureVisible(expand);
