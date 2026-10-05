@@ -300,6 +300,26 @@ export class EmployeeService {
     const result = await writer.sync(token, principal.companyId, { operations });
     return { results: result.results.map((r, i) => ({ ...r, operationId: original[i].operationId })) };
   }
+  async references(token, table, section, context = {}) {
+    const fields = {
+      Customers: { sections: ['Invoices', 'Quotations'], fields: ['name', 'email', 'phone', 'taxNumber', 'address'] },
+      CompanyProfile: { sections: ['Invoices', 'Quotations'], fields: ['name', 'address', 'email', 'phone', 'taxNumber', 'currency', 'invoicePrefix', 'quotationPrefix'] },
+      Employees: { sections: ['Payroll'], fields: ['fullName', 'employmentStatus'] },
+      Shareholders: { sections: ['Capital & Equity'], fields: ['name', 'status'] },
+    };
+    const reference = fields[table];
+    requireThat(reference && reference.sections.includes(section), 403, 'REFERENCE_FORBIDDEN', 'This editor reference is unavailable.');
+    const p = await this.principal(token); this.verifyContext(p, context);
+    const authorize = principal => requireThat(principal.writableSections.includes(section),
+      403, 'WRITE_FORBIDDEN', 'Edit access is required to load these references.');
+    authorize(p);
+    const names = [...new Set([table, 'Employees', 'Roles', 'RolePermissions'])];
+    const rows = await this.sheets.read(p.companyId, names);
+    authorize(principalFromRows(p.companyId, p.employeeId, rows, this.now()));
+    this.session((await this.registry.read()).state, token);
+    return rows[table].filter(r => r.companyId === p.companyId && ![true, 'TRUE'].includes(r.isDeleted))
+      .map(r => Object.fromEntries(['recordId', ...reference.fields].map(k => [k, r[k] ?? ''])));
+  }
   async records(token, table, context = {}) {
     requireThat(Object.hasOwn(SECTION_TABLES, table), 403, 'TABLE_FORBIDDEN', 'This table is not available to employees.');
     const p = await this.principal(token);

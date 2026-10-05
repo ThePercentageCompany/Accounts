@@ -1,0 +1,10 @@
+﻿steps:
+- name: node:24-bookworm-slim
+  entrypoint: bash
+  args: ['-c', 'npm ci --ignore-scripts && npm test']
+- name: gcr.io/cloud-builders/docker
+  args: ['build', '-t', 'me-central1-docker.pkg.dev/accounts-508118/tpc-backend-v2/api:employee-crud-20261006-011814', '.']
+images: ['me-central1-docker.pkg.dev/accounts-508118/tpc-backend-v2/api:employee-crud-20261006-011814']
+serviceAccount: projects/accounts-508118/serviceAccounts/tpc-build-v2@accounts-508118.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY

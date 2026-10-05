@@ -868,12 +868,15 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     try {
       await _openRecordEditor(record);
     } on SaasApiException catch (e) {
-      if (mounted) setState(() => error = e.message);
+      if (mounted) {
+        setState(() => error = e.message);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } catch (_) {
       if (mounted) {
-        setState(
-          () => error = 'Could not open the editor. Refresh and try again.',
-        );
+        const message = 'Could not open the editor. Please retry.';
+        setState(() => error = message);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -917,13 +920,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       final itemTable = table == 'Invoices' ? 'InvoiceItems' : 'QuotationItems';
       final parentKey = table == 'Invoices' ? 'invoiceId' : 'quotationId';
       final references = await Future.wait([
-        widget.api.records(
-          widget.companyId,
-          'Customers',
-          employee: widget.employee,
-        ),
-        if (!widget.employee)
-          widget.api.records(widget.companyId, 'CompanyProfile'),
+        widget.api.editorReferences(widget.companyId, 'Customers', table, employee: widget.employee),
+        widget.api.editorReferences(widget.companyId, 'CompanyProfile', table, employee: widget.employee),
         if (record != null)
           widget.api.records(
             widget.companyId,
@@ -949,9 +947,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                 ),
               );
       }
-      // Company settings are owner-only unless separately assigned to employees.
-      // Employee editing must not acquire extra permissions just for a preview.
-      if (!widget.employee) {
+      { // Only public company fields are exposed to authorized employee editors.
         final response = references[1];
         documentCompany = (response['records'] as List).isEmpty
             ? {}
@@ -962,18 +958,17 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (!mounted) return;
     }
     if (table == 'Payroll') {
-      final response = await widget.api.employees(widget.companyId);
-      choices = (response['employees'] as List)
+      final response = widget.employee
+          ? await widget.api.editorReferences(widget.companyId, 'Employees', 'Payroll', employee: true)
+          : await widget.api.employees(widget.companyId);
+      choices = (response[widget.employee ? 'records' : 'employees'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['employmentStatus'] == 'ACTIVE')
           .toList();
       if (!mounted) return;
     }
     if (const ['CapitalTransactions', 'ShareholderLoans'].contains(table)) {
-      final response = await widget.api.records(
-        widget.companyId,
-        'Shareholders',
-      );
+      final response = await widget.api.editorReferences(widget.companyId, 'Shareholders', 'Capital & Equity', employee: widget.employee);
       choices = (response['records'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['status'] == 'ACTIVE')

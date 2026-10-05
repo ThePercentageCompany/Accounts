@@ -198,6 +198,12 @@ export function createApi(service, config, { log = console.error, workspace, que
         if (route === 'POST /v1/employee/sync') {
           json(200, await employees.sync(jar[EMPLOYEE], await body(request), business)); return;
         }
+        const references = /^\/v1\/employee\/references\/([A-Za-z]+)$/.exec(url.pathname);
+        if (request.method === 'GET' && references) {
+          requireThat(url.searchParams.size === 1 && url.searchParams.getAll('section').length === 1,
+            400, 'INVALID_QUERY', 'Supply one editor section.');
+          json(200, { records: await employees.references(jar[EMPLOYEE], references[1], url.searchParams.get('section'), employeeContext) }); return;
+        }
         const records = /^\/v1\/employee\/records\/([A-Za-z]+)$/.exec(url.pathname);
         if (request.method === 'GET' && records) {
           json(200, { records: await employees.records(jar[EMPLOYEE], records[1], employeeContext) }); return;

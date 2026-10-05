@@ -1,0 +1,7 @@
+﻿# Employee editor CRUD fix — 6 October 2026
+
+The employee invoice/quotation editor previously fetched customers through the Customers section, preventing authorized document editors from opening without an unrelated Customers grant. Payroll and capital editors also requested references through owner-only routes.
+
+Added `GET /v1/employee/references/{table}?section={editorSection}`. It requires the current editor's explicit company-wide write grant, verifies workspace context, rechecks grants after reading Sheets, and returns only approved reference fields. Customers and public company identity/currency are available to authorized invoice/quotation editors; employee names/status to Payroll editors; shareholder names/status to Capital & Equity editors. Bank, payroll, credential, and resource metadata are not exposed by these references. Generic record permissions remain unchanged.
+
+Frontend editor initialization now uses this endpoint, and failed initialization shows an immediate error message. Verified 242 backend tests, 218 Flutter tests (one skipped), clean analysis, and release compilation. Backend revision `tpc-accounts-api-00014-cit` and Vercel deployment `dpl_3hng6kVooTJvBEQZp3DeTS6h82Bk` were published after tagged backend route checks. Public production routes and frontend artifact checks passed. Real authenticated employee CRUD remains to be verified by the affected user; no customer records were created during deployment checks.

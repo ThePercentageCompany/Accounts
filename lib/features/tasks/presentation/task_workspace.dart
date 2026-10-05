@@ -108,7 +108,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           !_fetching &&
           !_saving &&
           _surfaceDepth == 0 &&
-          _mutationDepth == 0) _load(quiet: true);
+          _mutationDepth == 0) {
+        _load(quiet: true);
+      }
     });
   }
 
@@ -160,7 +162,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   void didUpdateWidget(covariant TaskWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
     if ((!oldWidget.active && widget.active) ||
-        oldWidget.calendar != widget.calendar) _load();
+        oldWidget.calendar != widget.calendar) {
+      _load();
+    }
   }
 
   @override
@@ -414,9 +418,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         } else if (queue.pending.length != 1 ||
             queue.pending.single['table'] != 'Tasks' ||
             queue.pending.single['action'] != 'delete' ||
-            queue.pending.single['recordId'] != task['recordId'])
+            queue.pending.single['recordId'] != task['recordId']) {
           throw const SaasApiException(
               'PENDING', 'Confirm the pending change first.');
+        }
         await queue.flush();
       } else {
         final key = 'delete:${task['recordId']}:${task['recordVersion']}';

@@ -50,3 +50,11 @@ Deploy the backend before publishing the frontend. No new OAuth scope or backend
 The existing Sheets adapter has a 10,000-record capacity per table. API pagination/date filtering bounds client payloads; the backend still scans bounded Sheets tables to filter and authorize them. A database/indexed storage migration is needed before exceeding that capacity. Activity history consumes one row for each task change.
 
 Validation covers backend authorization, tenant isolation, task validation, mutation retry safety, activity history, soft deletion, employee search, additive sheet/folder migrations, and Flutter layouts at 320, 360, 375, 390, 412, 430, 768, 820, 1024, 1280, 1440, and 1920 pixels. Journey tests exercise creation, assignment, comments, completion, calendar navigation, durable queue acknowledgements, and landscape layout. Automated widget checks do not replace verification on physical phones or the deployed Google workspace.
+
+## Live endpoint connection — 6 October 2026
+
+Cloud Build `677828da-007b-4a19-b714-437fdd98af12` passed the backend test suite and built the API image. Cloud Run revision `tpc-accounts-api-00012-vow` was verified at its `task-management` tag before being promoted to 100% production traffic.
+
+The application domain `https://accounts.thepercentagecompany.com` now routes owner and employee task list, detail, and assignee endpoints to this revision through the existing `/v1` proxy. The expanded `scripts/check-live-backend.mjs` passed against both the tagged revision and the production domain, including health capabilities, route authentication boundaries, CORS/preflight, and employee renewal.
+
+No company records were created or modified during deployment verification. Authenticated CRUD against a real company and physical-device verification remain required. The Flutter source uses these endpoints; this deployment updated the API only.

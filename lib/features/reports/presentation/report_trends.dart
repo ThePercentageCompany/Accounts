@@ -9,6 +9,12 @@ class ReportTrends extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    if (trends.isEmpty) {
+      return const Card(
+          child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No trend data for this period.')));
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -161,8 +167,8 @@ class _TrendPainter extends CustomPainter {
       old.grid != grid;
 }
 
-/// An eagerly laid out native table avoids a lazy viewport inside the
-/// expansion animation. Each scroll axis owns its controller and scrollbar.
+/// Both axes have finite viewports. Fixed table columns avoid intrinsic sizing
+/// through scroll views while the expansion tile is animating.
 class _ExactTrendTable extends StatefulWidget {
   const _ExactTrendTable({required this.trends, required this.format});
   final List<Map<String, dynamic>> trends;
@@ -184,113 +190,99 @@ class _ExactTrendTableState extends State<_ExactTrendTable> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final scale = math.max(
-      1.0,
-      MediaQuery.textScalerOf(context).scale(14) / 14,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewportHeight = math.min(
-          420 * scale,
-          (56 + math.max(1, widget.trends.length) * 64) * scale,
-        );
-        return SizedBox(
-          key: const Key('exact-trend-table'),
-          width: constraints.maxWidth,
-          height: viewportHeight,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(
-              context,
-            ).copyWith(scrollbars: false),
+    final scale =
+        math.max(1.0, MediaQuery.textScalerOf(context).scale(14) / 14);
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.hasBoundedWidth
+          ? constraints.maxWidth
+          : MediaQuery.sizeOf(context).width;
+      final height = math.min(
+          420 * scale, (56 + math.max(1, widget.trends.length) * 64) * scale);
+      final tableWidth = math.max(800 * scale, width);
+      Widget cell(String value, {bool numeric = false, bool heading = false}) =>
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Text(value,
+                  textAlign: numeric ? TextAlign.right : TextAlign.left,
+                  style: TextStyle(
+                      fontWeight: heading ? FontWeight.w600 : null,
+                      fontFeatures: numeric
+                          ? const [FontFeature.tabularFigures()]
+                          : null)));
+      return SizedBox(
+        key: const Key('exact-trend-table'),
+        width: width,
+        height: height,
+        child: ScrollConfiguration(
+            behavior:
+                ScrollConfiguration.of(context).copyWith(scrollbars: false),
             child: Scrollbar(
-              controller: _vertical,
-              notificationPredicate: (notification) =>
-                  notification.metrics.axis == Axis.vertical,
+              controller: _horizontal,
+              notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
               child: SingleChildScrollView(
-                key: const Key('exact-trend-vertical-scroll'),
-                controller: _vertical,
-                primary: false,
-                child: Scrollbar(
+                  key: const Key('exact-trend-horizontal-scroll'),
                   controller: _horizontal,
-                  notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                  child: SingleChildScrollView(
-                    key: const Key('exact-trend-horizontal-scroll'),
-                    controller: _horizontal,
-                    primary: false,
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: math.max(800, constraints.maxWidth),
-                      ),
-                      child: DataTable(
-                        headingRowColor: WidgetStatePropertyAll(
-                          colors.surfaceContainerHighest,
-                        ),
-                        headingRowHeight: 56 * scale,
-                        dataRowMinHeight: 48 * scale,
-                        dataRowMaxHeight: 88 * scale,
-                        horizontalMargin: 16,
-                        columnSpacing: 24,
-                        columns: const [
-                          DataColumn(label: Text('From')),
-                          DataColumn(label: Text('To')),
-                          DataColumn(label: Text('Income'), numeric: true),
-                          DataColumn(label: Text('Expenses'), numeric: true),
-                          DataColumn(label: Text('Net profit'), numeric: true),
-                        ],
-                        rows: [
-                          for (var i = 0; i < widget.trends.length; i++)
-                            DataRow(
-                              color: WidgetStatePropertyAll(
-                                i.isOdd
-                                    ? colors.surfaceContainerLow
-                                    : colors.surface,
-                              ),
-                              cells: [
-                                DataCell(
-                                  Text(
-                                    widget.format.date(
-                                      widget.trends[i]['from'],
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    widget.format.date(
-                                      widget.trends[i]['asOf'],
-                                    ),
-                                  ),
-                                ),
-                                for (final key in [
-                                  'income',
-                                  'expenses',
-                                  'netProfit',
-                                ])
-                                  DataCell(
-                                    Text(
-                                      widget.format.money(
-                                        widget.trends[i][key],
-                                      ),
-                                      style: const TextStyle(
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
+                  primary: false,
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    height: height,
+                    child: Scrollbar(
+                        controller: _vertical,
+                        notificationPredicate: (n) =>
+                            n.metrics.axis == Axis.vertical,
+                        child: SingleChildScrollView(
+                          key: const Key('exact-trend-vertical-scroll'),
+                          controller: _vertical,
+                          primary: false,
+                          child: Table(
+                              defaultColumnWidth: const FlexColumnWidth(),
+                              border: TableBorder(
+                                  horizontalInside:
+                                      BorderSide(color: colors.outlineVariant)),
+                              children: [
+                                TableRow(
+                                    decoration: BoxDecoration(
+                                        color: colors.surfaceContainerHighest),
+                                    children: [
+                                      for (final title in [
+                                        'From',
+                                        'To',
+                                        'Income',
+                                        'Expenses',
+                                        'Net profit'
+                                      ])
+                                        cell(title,
+                                            heading: true,
+                                            numeric: !['From', 'To']
+                                                .contains(title)),
+                                    ]),
+                                for (var i = 0; i < widget.trends.length; i++)
+                                  TableRow(
+                                      decoration: BoxDecoration(
+                                          color: i.isOdd
+                                              ? colors.surfaceContainerLow
+                                              : colors.surface),
+                                      children: [
+                                        cell(widget.format
+                                            .date(widget.trends[i]['from'])),
+                                        cell(widget.format
+                                            .date(widget.trends[i]['asOf'])),
+                                        for (final key in [
+                                          'income',
+                                          'expenses',
+                                          'netProfit'
+                                        ])
+                                          cell(
+                                              widget.format
+                                                  .money(widget.trends[i][key]),
+                                              numeric: true),
+                                      ]),
+                              ]),
+                        )),
+                  )),
+            )),
+      );
+    });
   }
 }

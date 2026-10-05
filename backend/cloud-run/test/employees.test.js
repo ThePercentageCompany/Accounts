@@ -399,3 +399,16 @@ test('Staff task writes are limited to assigned status and comments, including u
   assert.equal((await f.employees.records(session.token, 'Tasks')).length, 1);
   assert.equal((await run('Tasks', 'update', other, { status: 'COMPLETED' })).results[0].error.code, 'WRITE_FORBIDDEN');
 });
+test('document editors load scoped customer and company references without Customers or Settings grants', async () => {
+  const f = await setup(); f.input.allowedSections = ['Quotations']; f.input.writableSections = ['Quotations'];
+  const id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  f.rows.Customers = [{recordId: opaque(), companyId: f.companyId, name: 'Client', email: 'client@example.com', privateField: 'hidden'}];
+  f.rows.CompanyProfile = [{recordId: 'company', companyId: f.companyId, name: 'Company', currency: 'USD', accountNumber: 'secret', iban: 'secret'}];
+  await assert.rejects(f.employees.records(session.token, 'Customers'), e => e.code === 'SECTION_FORBIDDEN');
+  const customers = await f.employees.references(session.token, 'Customers', 'Quotations'); assert.equal(customers[0].name, 'Client'); assert.equal(customers[0].privateField, undefined);
+  const company = await f.employees.references(session.token, 'CompanyProfile', 'Quotations'); assert.equal(company[0].currency, 'USD'); assert.equal(company[0].iban, undefined);
+  await assert.rejects(f.employees.references(session.token, 'Customers', 'Invoices'), e => e.code === 'WRITE_FORBIDDEN');
+  await assert.rejects(f.employees.references(session.token, 'EmployeeAccess', 'Quotations'), e => e.code === 'REFERENCE_FORBIDDEN');
+  const read = f.sheets.read; f.sheets.read = async (...args) => { const rows = await read(...args); if (args[1]?.includes('Customers')) rows.RolePermissions.forEach(p => { p.action = 'none'; }); return rows; };
+  await assert.rejects(f.employees.references(session.token, 'Customers', 'Quotations'), e => e.code === 'WRITE_FORBIDDEN');
+});

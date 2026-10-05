@@ -206,8 +206,9 @@ void main() {
     final service = SaasApi(
         origin: 'https://api.test',
         client: MockClient((request) async {
-          if (request.url.path.endsWith('/assignees'))
+          if (request.url.path.endsWith('/assignees')) {
             return http.Response('{"employees":[]}', 200);
+          }
           final query = request.url.queryParameters;
           ranges.add(query);
           final day = query['from'] == today && query['to'] == today;

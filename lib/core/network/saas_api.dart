@@ -175,7 +175,7 @@ class SaasApi implements SessionRepository {
     if (cache.scope == null) return false;
     final uri = Uri.parse(path);
     if (_cacheEmployee) {
-      return uri.path.startsWith('/v1/employee/records/') ||
+      return uri.path.startsWith('/v1/employee/records/') || uri.path.startsWith('/v1/employee/references/') ||
           uri.path.startsWith('/v1/employee/reports/') ||
           uri.path.startsWith('/v1/employee/companies/$_cacheCompany/tasks');
     }
@@ -355,7 +355,7 @@ class SaasApi implements SessionRepository {
     }
     if (_cacheEmployee &&
         _cacheCompany != null &&
-        (path.startsWith('/v1/employee/records/') ||
+        (path.startsWith('/v1/employee/records/') || path.startsWith('/v1/employee/references/') ||
             path.startsWith('/v1/employee/reports/') ||
             path.startsWith('/v1/employee/companies/'))) {
       request.headers['X-TPC-Company'] = _cacheCompany!;
@@ -866,6 +866,11 @@ class SaasApi implements SessionRepository {
   Future<Map<String, dynamic>> taskAssignees(String companyId, {
     bool employee = false, String search = '', int offset = 0,
   }) => _json('GET', '${tasksPath(companyId, employee: employee)}/assignees?${Uri(queryParameters: {'search': search, 'offset': '$offset', 'limit': '40'}).query}');
+  Future<Map<String, dynamic>> editorReferences(String companyId, String table, String section, {bool employee = false}) {
+    if (!employee) return records(companyId, table);
+    if (!RegExp(r'^[A-Za-z]+$').hasMatch(table)) throw const SaasApiException('INVALID_TABLE', 'Invalid reference table.');
+    return _json('GET', '/v1/employee/references/$table?section=${Uri.encodeQueryComponent(section)}');
+  }
   Future<Map<String, dynamic>> records(
     String companyId,
     String table, {

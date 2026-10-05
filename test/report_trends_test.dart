@@ -53,12 +53,27 @@ void main() {
         final expand = find.text('View exact trend data');
         await tester.ensureVisible(expand);
         await tester.tap(expand);
+        for (var frame = 0; frame < 12; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(tester.takeException(), isNull);
+        }
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('Net profit'), findsOneWidget);
         final grid = find.byKey(const Key('exact-trend-table'));
         final rows = find.byKey(const Key('exact-trend-vertical-scroll'));
         await tester.ensureVisible(rows);
+        for (final key in [
+          'exact-trend-vertical-scroll',
+          'exact-trend-horizontal-scroll'
+        ]) {
+          final position = tester
+              .widget<SingleChildScrollView>(find.byKey(Key(key)))
+              .controller!
+              .position;
+          expect(position.viewportDimension.isFinite, isTrue);
+          expect(position.maxScrollExtent.isFinite, isTrue);
+        }
         await tester.dragFrom(
           Offset(tester.getCenter(grid).dx, tester.getCenter(rows).dy),
           const Offset(0, -12000),

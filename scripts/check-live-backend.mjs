@@ -31,7 +31,27 @@ const results = await Promise.all([
     requireCheck(response.status === 200, `HTTP ${response.status}`);
     const value = await json(response);
     requireCheck(value.status === 'ok' && value.phase === 4, 'Unexpected backend health contract.');
-    requireCheck(value.capabilities?.includes('report-configuration'), 'Deployed backend is missing report configuration support.');
+    for (const capability of ['report-configuration', 'task-management', 'task-calendar', 'task-attachments']) {
+      requireCheck(value.capabilities?.includes(capability), `Deployed backend is missing ${capability} support.`);
+    }
+  }),
+  ...['', '/assignees', '/' + 'b'.repeat(43)].map(suffix =>
+    check('owner task route ' + (suffix || '/'), '/v1/companies/' + 'a'.repeat(43) + '/tasks' + suffix, {}, async response => {
+      requireCheck(response.status === 401, 'Expected unauthenticated task route 401; received ' + response.status);
+      const value = await json(response);
+      requireCheck(value.error?.code === 'UNAUTHORIZED', 'Task endpoint is missing or returned an unexpected authentication response.');
+      requireCheck(response.headers.get('cache-control')?.includes('no-store'), 'Task routes must disable caching.');
+    })),
+  ...['', '/assignees', '/' + 'b'.repeat(43)].map(suffix =>
+    check('employee task route ' + (suffix || '/'), '/v1/employee/companies/' + 'a'.repeat(43) + '/tasks' + suffix, {}, async response => {
+      requireCheck(response.status === 401, 'Expected unauthenticated employee task route 401; received ' + response.status);
+      const value = await json(response);
+      requireCheck(value.error?.code === 'EMPLOYEE_SESSION_INVALID', 'Employee task endpoint is missing or returned an unexpected authentication response.');
+    })),
+  check('employee invoice editor references', '/v1/employee/references/Customers?section=Invoices', {}, async response => {
+    requireCheck(response.status === 401, 'Expected employee reference authentication boundary; received ' + response.status);
+    const value = await json(response);
+    requireCheck(value.error?.code === 'EMPLOYEE_SESSION_INVALID', 'Employee editor reference endpoint is unavailable.');
   }),
   check('owner authentication boundary', '/v1/me', { headers: { Origin: appOrigin } }, async response => {
     requireCheck(response.status === 401, `Expected unauthenticated 401; received ${response.status}.`);
