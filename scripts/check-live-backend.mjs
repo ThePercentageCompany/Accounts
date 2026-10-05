@@ -63,6 +63,15 @@ const results = await Promise.all([
     requireCheck(response.headers.get('access-control-allow-methods')?.includes('POST'), 'POST missing from allowed methods.');
     const headers = response.headers.get('access-control-allow-headers')?.toLowerCase() || '';
     requireCheck(headers.includes('content-type') && headers.includes('x-tpc-csrf'), 'Required request headers missing.');
+    requireCheck(headers.includes('x-tpc-company') && headers.includes('x-tpc-employee'), 'Employee workspace context headers missing.');
+  }),
+  check('employee renewal authentication boundary', '/v1/employee/refresh', { method: 'POST', headers: {
+    Origin: appOrigin, 'Content-Type': 'application/json', 'X-TPC-CSRF': '1',
+  }, body: '{}' }, async response => {
+    requireCheck(response.status === 401, `Expected unauthenticated 401; received ${response.status}.`);
+    const value = await json(response);
+    requireCheck(value.error?.code === 'EMPLOYEE_SESSION_INVALID', 'Deployed backend is missing stable employee session renewal.');
+    requireCheck(!response.headers.has('set-cookie'), 'Failed renewal must not overwrite the session cookie.');
   }),
 ]);
 if (results.some(result => !result)) process.exitCode = 1;

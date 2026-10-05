@@ -58,7 +58,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       if (request.method === 'OPTIONS') {
         requireThat(origin === config.appOrigin, 403, 'ORIGIN_DENIED', 'Request origin is not allowed.');
         response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-        response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-TPC-CSRF');
+        response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-TPC-CSRF, X-TPC-Company, X-TPC-Employee');
         response.writeHead(204); response.end(); return;
       }
       const url = new URL(request.url, config.apiOrigin);
@@ -81,6 +81,7 @@ export function createApi(service, config, { log = console.error, workspace, que
           403, 'CSRF_REJECTED', 'Request verification failed.');
       }
       const jar = cookies(request), token = jar[SESSION];
+      const employeeContext = { companyId: request.headers['x-tpc-company'], employeeId: request.headers['x-tpc-employee'] };
       const route = `${request.method} ${url.pathname}`;
       if (documents) {
         const document = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
@@ -157,7 +158,7 @@ export function createApi(service, config, { log = console.error, workspace, que
         if (employeeReport && request.method === 'GET') {
           if (employeeReport[1] === 'settings') {
             requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Report settings do not accept query parameters.');
-            json(200, await employees.report(jar[EMPLOYEE], 'settings', null, null)); return;
+            json(200, await employees.report(jar[EMPLOYEE], 'settings', null, null, { context: employeeContext })); return;
           }
           const kind = employeeReport[1], period = ['dashboard', 'general-ledger', 'profit-and-loss'].includes(kind);
           const allowed = ['asOf', 'compareAsOf', ...(kind !== 'balance-sheet' ? ['from', 'compareFrom'] : [])];
@@ -167,12 +168,12 @@ export function createApi(service, config, { log = console.error, workspace, que
             (!period || !url.searchParams.has('compareAsOf') || url.searchParams.has('compareFrom')),
           400, 'INVALID_QUERY', 'Supply each report and comparison date once.');
           json(200, await employees.report(jar[EMPLOYEE], kind, url.searchParams.get('from'), url.searchParams.get('asOf'),
-            { compareFrom: url.searchParams.get('compareFrom'), compareAsOf: url.searchParams.get('compareAsOf') })); return;
+            { compareFrom: url.searchParams.get('compareFrom'), compareAsOf: url.searchParams.get('compareAsOf'), context: employeeContext })); return;
         }
         if (route === 'POST /v1/employee/login' || route === 'POST /v1/employee/refresh') {
           const input = await body(request);
           const result = route.endsWith('/login') ? await employees.login(input) : await employees.refresh(jar[EMPLOYEE]);
-          response.setHeader('Set-Cookie', cookie(EMPLOYEE, result.token, Math.max(0, Math.floor((result.expiresAt - employees.now()) / 1000))));
+          response.setHeader('Set-Cookie', cookie(EMPLOYEE, result.token, Math.max(0, Math.floor(((result.absoluteExpiresAt || result.expiresAt) - employees.now()) / 1000))));
           json(200, { employee: result.employee, expiresAt: result.expiresAt }); return;
         }
         if (route === 'POST /v1/employee/logout') {
@@ -187,7 +188,7 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
         const records = /^\/v1\/employee\/records\/([A-Za-z]+)$/.exec(url.pathname);
         if (request.method === 'GET' && records) {
-          json(200, { records: await employees.records(jar[EMPLOYEE], records[1]) }); return;
+          json(200, { records: await employees.records(jar[EMPLOYEE], records[1], employeeContext) }); return;
         }
         const access = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/employees\/([A-Za-z0-9_-]{43})\/access\/(issue|reset|revoke)$/.exec(url.pathname);
         if (request.method === 'POST' && access) {

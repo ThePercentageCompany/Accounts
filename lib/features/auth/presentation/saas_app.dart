@@ -47,6 +47,7 @@ class _SaasAppState extends State<SaasApp> {
       if (!_employee) await session.restore();
       if (!mounted) return;
       if (session.employee != null) _employee = true;
+      _workspace = session.restoreWorkspace;
       setState(() {});
     } catch (_) {
       if (mounted) {
@@ -98,7 +99,8 @@ class _SaasAppState extends State<SaasApp> {
       );
     }
     final session = _session;
-    if (session == null) {
+    if (session == null ||
+        (session.busy && session.owner == null && session.employee == null)) {
       return const Scaffold(body: Center(child: CupertinoActivityIndicator()));
     }
     if (_employee) {
@@ -122,7 +124,10 @@ class _SaasAppState extends State<SaasApp> {
         title: session.company!['name'] as String,
         ownerId: session.owner!['ownerId'] as String,
         preferences: session.preferences,
-        onBack: () => setState(() => _workspace = false),
+        onBack: () {
+          unawaited(session.rememberWorkspace(false));
+          setState(() => _workspace = false);
+        },
       );
     }
     return Scaffold(
@@ -143,7 +148,10 @@ class _SaasAppState extends State<SaasApp> {
           child: CompanySetupView(
             session: session,
             navigate: _navigate,
-            onOpen: () => setState(() => _workspace = true),
+            onOpen: () {
+              unawaited(session.rememberWorkspace(true));
+              setState(() => _workspace = true);
+            },
           ),
         ),
       ),

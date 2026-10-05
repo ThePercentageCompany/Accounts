@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:tpc_invoice/core/network/invite_location_stub.dart'
+    if (dart.library.js_interop) 'package:tpc_invoice/core/network/invite_location_web.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tpc_invoice/features/auth/presentation/employee_qr_scanner.dart';
@@ -58,6 +60,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
       if (widget.restoreSession && _link.text.isEmpty) {
         await _session!.restore(employeeOnly: true);
         if (!mounted) return;
+        _workspace = _session!.employee != null;
       }
       // A new invite always asks for its private code, even if another employee
       // has a session cookie on this device.
@@ -106,6 +109,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
     }
     setState(() => _error = null);
     await _session!.employeeLogin(invite, _code.text.trim());
+    if (_session!.employee != null) clearInviteLocation();
     // Do not retain a private code after either successful or failed login.
     if (mounted) _code.clear();
   }

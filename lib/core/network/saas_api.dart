@@ -24,7 +24,15 @@ class SaasApiException implements Exception {
   final String message;
   final int status;
   final Duration? retryAfter;
-  bool get requiresSignIn => status == 401;
+  bool get requiresSignIn =>
+      status == 401 &&
+      const {
+        'UNAUTHORIZED',
+        'EMPLOYEE_ACCESS_DENIED',
+        'EMPLOYEE_SESSION_INVALID',
+        'EMPLOYEE_SESSION_EXPIRED',
+        'OAUTH_STATE_INVALID',
+      }.contains(code);
   @override
   String toString() => message;
 }
@@ -53,14 +61,19 @@ class SaasApi implements SessionRepository {
   final CacheStore? _cacheStore;
   @override
   void Function()? onAccessRevoked;
+  @override
+  void Function(Map<String, dynamic>)? onEmployeeChanged;
+  Future<void>? _employeeRenewal;
+  int _employeeRenewalVersion = 0;
+  DateTime? _employeeExpiresAt;
   String? _cacheCompany, _cacheUser, _permissionKey;
   bool _cacheEmployee = false;
   DateTime _verifiedAt = DateTime.now();
   late final ReadCache cache = ReadCache(
     store: _cacheStore,
-    isAuthorizationError: (e) =>
-        e is SaasApiException && (e.status == 401 || e.status == 403),
+    isAuthorizationError: (e) => e is SaasApiException && e.requiresSignIn,
     isOfflineError: (e) => e is SaasApiException && e.code == 'NETWORK',
+    isPermissionError: (e) => e is SaasApiException && e.status == 403,
     retryDelay: (e) => e is SaasApiException ? e.retryAfter : null,
     onAuthorizationFailure: (_) {
       _cancelReads();
@@ -132,13 +145,16 @@ class SaasApi implements SessionRepository {
       if (scope != cache.scope) return;
       final employee = Map<String, dynamic>.from(result['employee'] as Map);
       if (employee['employeeId'] != user ||
-          employee['companyId'] != companyId ||
-          _permissions(employee) != _permissionKey) {
+          employee['companyId'] != companyId) {
         throw const SaasApiException(
           'PERMISSIONS_CHANGED',
           'Your access changed. Sign in again to load current permissions.',
-          status: 403,
+          status: 401,
         );
+      }
+      if (_permissions(employee) != _permissionKey) {
+        useVerifiedWorkspace(companyId!, employee: employee);
+        onEmployeeChanged?.call(employee);
       }
     } else {
       final identity = await _networkJson('GET', '/v1/me');
@@ -330,6 +346,13 @@ class SaasApi implements SessionRepository {
       }
       request.headers['Idempotency-Key'] = operationId;
     }
+    if (_cacheEmployee &&
+        _cacheCompany != null &&
+        (path.startsWith('/v1/employee/records/') ||
+            path.startsWith('/v1/employee/reports/'))) {
+      request.headers['X-TPC-Company'] = _cacheCompany!;
+      request.headers['X-TPC-Employee'] = _cacheUser!;
+    }
     late http.Response response;
     try {
       response = await _client
@@ -398,13 +421,16 @@ class SaasApi implements SessionRepository {
     if (method == 'GET' && _cacheable(path)) {
       return cache.read(path, () => _networkJson(method, path), force: force);
     }
+    final mutationScope = cache.scope;
     final result = await _networkJson(
       method,
       path,
       data: data,
       operationId: operationId,
     );
-    if (method != 'GET') _invalidateMutation(path, data, result);
+    if (method != 'GET' && mutationScope == cache.scope) {
+      _invalidateMutation(path, data, result);
+    }
     return result;
   }
 
@@ -414,17 +440,71 @@ class SaasApi implements SessionRepository {
     Map<String, Object?>? data,
     String? operationId,
   }) async {
-    final response = await _send(
-      method,
-      path,
-      data: data,
-      operationId: operationId,
-    );
+    final employeeRequest =
+        path.startsWith('/v1/employee/') &&
+        ![
+          '/v1/employee/login',
+          '/v1/employee/logout',
+          '/v1/employee/refresh',
+        ].contains(path);
+    final requestedScope = cache.scope;
+    if (employeeRequest &&
+        _employeeExpiresAt != null &&
+        DateTime.now().isAfter(
+          _employeeExpiresAt!.subtract(const Duration(minutes: 5)),
+        )) {
+      await _renewEmployee();
+      if (requestedScope != cache.scope) {
+        throw const SaasApiException(
+          'CONTEXT_CHANGED',
+          'Workspace access changed. Review your pending change before retrying.',
+        );
+      }
+    }
+    final renewalVersion = _employeeRenewalVersion;
+    late http.Response response;
+    try {
+      response = await _send(
+        method,
+        path,
+        data: data,
+        operationId: operationId,
+      );
+    } on SaasApiException catch (error) {
+      // Only the explicit renewable-session error permits a single replay.
+      // Sync carries stable per-operation identifiers; other mutations are not replayed.
+      if (!employeeRequest ||
+          error.code != 'EMPLOYEE_SESSION_EXPIRED' ||
+          !(method == 'GET' || path == '/v1/employee/sync')) {
+        rethrow;
+      }
+      if (renewalVersion == _employeeRenewalVersion) {
+        await _renewEmployee();
+      }
+      if (requestedScope != cache.scope) {
+        throw const SaasApiException(
+          'CONTEXT_CHANGED',
+          'Workspace access changed. Review your pending change before retrying.',
+        );
+      }
+      response = await _send(
+        method,
+        path,
+        data: data,
+        operationId: operationId,
+      );
+    }
     if (response.statusCode == 204) return {};
     try {
       final result = Map<String, dynamic>.from(
         jsonDecode(response.body) as Map,
       );
+      if ((path == '/v1/employee/login' || path == '/v1/employee/refresh') &&
+          result['expiresAt'] is num) {
+        _employeeExpiresAt = DateTime.fromMillisecondsSinceEpoch(
+          (result['expiresAt'] as num).toInt(),
+        );
+      }
       final uri = Uri.parse(path);
       final listKey = uri.path.contains('/records/')
           ? 'records'
@@ -444,6 +524,41 @@ class SaasApi implements SessionRepository {
         'The company service returned an invalid response.',
       );
     }
+  }
+
+  Future<void> _renewEmployee() {
+    final pending = _employeeRenewal;
+    if (pending != null) return pending;
+    final scope = cache.scope;
+    final future = (() async {
+      final result = await _networkJson('POST', '/v1/employee/refresh');
+      if (cache.scope != scope) return;
+      final employee = Map<String, dynamic>.from(result['employee'] as Map);
+      if (_cacheUser != null &&
+          (employee['employeeId'] != _cacheUser ||
+              employee['companyId'] != _cacheCompany)) {
+        throw const SaasApiException(
+          'EMPLOYEE_SESSION_INVALID',
+          'Employee account changed. Sign in again.',
+          status: 401,
+        );
+      }
+      if (_cacheCompany != null && _permissions(employee) != _permissionKey) {
+        useVerifiedWorkspace(_cacheCompany!, employee: employee);
+        onEmployeeChanged?.call(employee);
+      }
+      _employeeRenewalVersion++;
+    })();
+    _employeeRenewal = future;
+    future.then(
+      (_) {
+        if (identical(_employeeRenewal, future)) _employeeRenewal = null;
+      },
+      onError: (Object _, StackTrace __) {
+        if (identical(_employeeRenewal, future)) _employeeRenewal = null;
+      },
+    );
+    return future;
   }
 
   Future<Uri> _authorization(String path) async {
@@ -467,7 +582,11 @@ class SaasApi implements SessionRepository {
   }
 
   @override
-  Future<Uri> startSignIn() => _authorization('/v1/auth/google/start');
+  Future<Uri> startSignIn() async {
+    await clearWorkspace();
+    return _authorization('/v1/auth/google/start');
+  }
+
   @override
   Future<Map<String, dynamic>> me() => _json('GET', '/v1/me');
   Future<Map<String, dynamic>> employeeReport(
@@ -665,15 +784,24 @@ class SaasApi implements SessionRepository {
   Future<Map<String, dynamic>> employeeLogin(
     String inviteId,
     String privateCode,
-  ) => _json(
-    'POST',
-    '/v1/employee/login',
-    data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
-  );
+  ) async {
+    await clearWorkspace();
+    _employeeExpiresAt = null;
+    return _json(
+      'POST',
+      '/v1/employee/login',
+      data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
+    );
+  }
+
   @override
   Future<Map<String, dynamic>> employeeMe() => _json('GET', '/v1/employee/me');
   @override
   Future<Map<String, dynamic>> employeeLogout() async {
+    try {
+      await _employeeRenewal;
+    } catch (_) {}
+    _employeeExpiresAt = null;
     await clearWorkspace();
     return _json('POST', '/v1/employee/logout');
   }
@@ -731,10 +859,16 @@ class SaasApi implements SessionRepository {
     String companyId,
     List<Map<String, Object?>> operations, {
     bool employee = false,
+    String? expectedEmployeeId,
   }) => _json(
     'POST',
     employee ? '/v1/employee/sync' : '/v1/companies/${_id(companyId)}/sync',
-    data: {'operations': operations},
+    data: {
+      'operations': operations,
+      if (employee) 'companyId': _id(companyId),
+      if (employee && (expectedEmployeeId ?? _cacheUser) != null)
+        'employeeId': _id(expectedEmployeeId ?? _cacheUser!),
+    },
   );
 
   Future<Map<String, dynamic>> upload(

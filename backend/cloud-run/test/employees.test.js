@@ -6,6 +6,7 @@ import { digest, opaque } from '../src/crypto.js';
 import { PrivateCode } from '../src/private-code.js';
 import { authorizeDocument } from '../src/employee-policy.js';
 import { ApiError } from '../src/errors.js';
+import { TABLES } from '../src/company-schema.js';
 
 async function setup() {
   const f = fixture(), owner = await f.login();
@@ -38,7 +39,7 @@ async function setup() {
   return { ...f, owner, companyId, rows, sheets, employees, codes, input, create, issue, loginEmployee: login,
     writes: () => writes, company: () => f.storage.state.companies[companyId] };
 }
-const denied = e => e.code === 'EMPLOYEE_ACCESS_DENIED';
+const denied = e => ['EMPLOYEE_ACCESS_DENIED', 'EMPLOYEE_SESSION_INVALID', 'EMPLOYEE_SESSION_EXPIRED'].includes(e.code);
 
 test('employee reports require company-wide Reports permission and recheck revocation', async () => {
   const f = await setup();
@@ -133,6 +134,8 @@ test('reset invalidates previous invite, code and active sessions; refresh rotat
   await assert.rejects(f.employees.principal(session.token), denied);
   const fresh = await f.loginEmployee(replacement);
   const refreshed = await f.employees.refresh(fresh.token);
+  await f.employees.principal(fresh.token);
+  f.advance(60001);
   await assert.rejects(f.employees.principal(fresh.token), denied);
   await f.employees.principal(refreshed.token);
   await f.employees.logout(refreshed.token);
@@ -177,6 +180,44 @@ test('refresh cannot extend absolute lifetime past 24 hours', async () => {
   for (let i = 0; i < 3; i++) { f.advance(7 * 3600000); session = await f.employees.refresh(session.token); }
   f.advance(3 * 3600000 + 1);
   await assert.rejects(f.employees.refresh(session.token), denied);
+});
+
+test('expired access can renew before the absolute limit after unrelated registry writes', async () => {
+  const f = await setup(), id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  f.advance(8 * 3600000 + 1);
+  await assert.rejects(f.employees.principal(session.token), e => e.code === 'EMPLOYEE_SESSION_EXPIRED' && !e.message.includes('code'));
+  await f.registry.transact(() => {});
+  const renewed = await f.employees.refresh(session.token);
+  assert.equal((await f.employees.principal(renewed.token)).employeeId, id);
+  assert.equal(renewed.absoluteExpiresAt, session.absoluteExpiresAt);
+});
+
+test('concurrent renewal keeps in-flight requests valid and logout revokes the entire family', async () => {
+  const f = await setup(), id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  const [first, second] = await Promise.all([f.employees.refresh(session.token), f.employees.refresh(session.token)]);
+  for (const token of [session.token, first.token, second.token]) await f.employees.principal(token);
+  f.advance(60001);
+  await assert.rejects(f.employees.principal(session.token), e => e.code === 'EMPLOYEE_SESSION_INVALID');
+  await f.employees.logout(first.token);
+  await assert.rejects(f.employees.principal(second.token), e => e.code === 'EMPLOYEE_SESSION_INVALID');
+});
+
+test('renewal checks current permissions and never resurrects revoked access', async () => {
+  const f = await setup(), id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  f.rows.RolePermissions.find(p => p.section === 'Invoices').isDeleted = true;
+  const renewed = await f.employees.refresh(session.token);
+  assert.ok(!renewed.employee.allowedSections.includes('Invoices'));
+  await f.employees.revoke(f.owner, f.companyId, id);
+  await assert.rejects(f.employees.refresh(renewed.token), e => e.code === 'EMPLOYEE_SESSION_INVALID');
+});
+
+test('old workspace and actor contexts fail before reading or submitting another employee data', async () => {
+  const f = await setup(), id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  const wrong = { companyId: 'x'.repeat(43), employeeId: id };
+  await assert.rejects(f.employees.records(session.token, 'Invoices', wrong), e => e.code === 'WORKSPACE_CHANGED');
+  await assert.rejects(f.employees.sync(session.token, { ...wrong, operations: [] }, {}), e => e.code === 'WORKSPACE_CHANGED');
+  await assert.rejects(f.employees.sync(session.token, { companyId: f.companyId, employeeId: 'x'.repeat(43), operations: [] }, {}), e => e.code === 'WORKSPACE_CHANGED');
+  assert.equal((await f.employees.principal(session.token)).employeeId, id);
 });
 test('global distributed attempt budget covers unknown invites too', async () => {
   const f = await setup();
@@ -281,3 +322,50 @@ test('self-only employee sections cannot receive write grants', async () => {
   await assert.rejects(() => f.employees.save(f.owner, f.companyId, null,
     { ...f.input, writableSections: ['Payroll'] }, 'invalid_self_write_001'), e => e.code === 'INVALID_EMPLOYEE');
 });
+
+for (const [table, child] of [['Invoices', 'InvoiceItems'], ['Quotations', 'QuotationItems']]) {
+  test(`employee ${table} create/update survive renewal and reconcile uncertain saves once`, async () => {
+    const f = await setup();
+    f.input.role = 'Accountant';
+    f.input.allowedSections = ['Invoices', 'Quotations', 'Customers'];
+    f.input.writableSections = ['Invoices', 'Quotations'];
+    const id = await f.create();
+    let session = await f.loginEmployee(await f.issue(id));
+    const data = Object.fromEntries(TABLES.map(t => [t.title, []]));
+    data.Customers.push({ companyId: f.companyId, recordId: 'c'.repeat(43), name: 'Client', _row: 2 });
+    let batches = 0, uncertain = true;
+    const sheets = {
+      table: name => TABLES.find(t => t.title === name),
+      read: async (_id, names) => Object.fromEntries(names.map(name => [name, structuredClone(data[name])])),
+      writeBatch: async (_id, changes) => {
+        batches++;
+        for (const { table, row, values } of changes) {
+          const old = data[table].find(r => r._row === row);
+          if (old) Object.assign(old, values); else data[table].push({ ...values, _row: row });
+        }
+        if (uncertain) { uncertain = false; throw new Error('Uncertain delivery'); }
+      },
+    };
+    const values = { customerId: 'c'.repeat(43), issueDate: '2026-10-05', currency: 'AED',
+      ...(table === 'Quotations' ? { validUntil: '2026-11-05' } : {}),
+      items: [{ description: 'Service', quantity: 1, unitPrice: 100, discount: 0, taxRate: 5 }] };
+    const operation = { operationId: `employee_create_${table}`, table, action: 'create', expectedVersion: 0, values };
+    const run = op => f.employees.sync(session.token, { operations: [op] }, { sheets });
+    assert.equal((await run(operation)).results[0].status, 'FAILED');
+    session = await f.employees.refresh(session.token);
+    assert.equal((await run(operation)).results[0].status, 'APPLIED');
+    assert.equal(batches, 1);
+    assert.equal(data[table].length, 1);
+    assert.equal(data[child].length, 1);
+    assert.equal(data[table][0].createdBy, id);
+    f.advance(8 * 3600000 + 1);
+    session = await f.employees.refresh(session.token);
+    const update = { ...operation, operationId: `employee_update_${table}`, action: 'update', recordId: data[table][0].recordId,
+      expectedVersion: 1, values: { ...values, notes: 'Revised' } };
+    assert.equal((await run(update)).results[0].status, 'APPLIED');
+    assert.equal((await run(update)).results[0].replayed, true);
+    assert.equal(data[table][0].notes, 'Revised');
+    assert.equal(data[table].length, 1);
+    assert.equal(batches, 2);
+  });
+}

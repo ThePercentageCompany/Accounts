@@ -857,19 +857,63 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   }
 
   Future<void> _openRecordEditor(Map<String, dynamic>? record) async {
+    Map<String, Object?>? submittedDraft;
+    Future<void> saveDocument(Map<String, Object?> draft) async {
+      if (widget.writes!.canDiscardRejected) {
+        await widget.writes!.discardRejected();
+      }
+      if (submittedDraft != null &&
+          widget.writes!.pending.isNotEmpty &&
+          dataFingerprint(Map<String, dynamic>.from(submittedDraft!)) !=
+              dataFingerprint(Map<String, dynamic>.from(draft))) {
+        throw const SaasApiException(
+          'PENDING',
+          'The previous save is still pending. Restore those values and retry before changing this draft.',
+        );
+      }
+      if (widget.writes!.pending.isEmpty) {
+        submittedDraft = draft;
+        await widget.writes!.enqueue(
+          table,
+          record == null ? 'create' : 'update',
+          draft,
+          recordId: record?['recordId'] as String?,
+          expectedVersion: record == null
+              ? 0
+              : int.parse('${record['recordVersion']}'),
+        );
+      }
+      await widget.writes!.flush();
+    }
+
     List<Map<String, dynamic>> choices = const [];
     List<Map<String, dynamic>> documentItems = const [];
     Map<String, dynamic> documentCompany = const {};
     if (const ['Invoices', 'Quotations'].contains(table)) {
       final itemTable = table == 'Invoices' ? 'InvoiceItems' : 'QuotationItems';
       final parentKey = table == 'Invoices' ? 'invoiceId' : 'quotationId';
-      if (record != null) {
-        final response = await widget.api.records(
+      final references = await Future.wait([
+        widget.api.records(
           widget.companyId,
-          itemTable,
+          'Customers',
           employee: widget.employee,
-          force: true,
-        );
+        ),
+        if (!widget.employee)
+          widget.api.records(widget.companyId, 'CompanyProfile'),
+        if (record != null)
+          widget.api.records(
+            widget.companyId,
+            itemTable,
+            employee: widget.employee,
+            force: true,
+          ),
+      ]);
+      if (!mounted) return;
+      choices = (references.first['records'] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      if (record != null) {
+        final response = references.last;
         documentItems =
             (response['records'] as List)
                 .map((row) => Map<String, dynamic>.from(row as Map))
@@ -884,10 +928,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       // Company settings are owner-only unless separately assigned to employees.
       // Employee editing must not acquire extra permissions just for a preview.
       if (!widget.employee) {
-        final response = await widget.api.records(
-          widget.companyId,
-          'CompanyProfile',
-        );
+        final response = references[1];
         documentCompany = (response['records'] as List).isEmpty
             ? {}
             : Map<String, dynamic>.from(
@@ -915,12 +956,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           .toList();
       if (!mounted) return;
     }
-    if (const ['Invoices', 'Receipts', 'Quotations'].contains(table)) {
+    if (table == 'Receipts') {
       final response = await widget.api.records(
         widget.companyId,
-        const ['Invoices', 'Quotations'].contains(table)
-            ? 'Customers'
-            : 'Invoices',
+        'Invoices',
         employee: widget.employee,
       );
       choices = (response['records'] as List)
@@ -941,10 +980,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
     final values = await showDialog<Map<String, Object?>>(
       context: context,
+      barrierDismissible: !const ['Invoices', 'Quotations'].contains(table),
       builder: (_) => table == 'CompanyProfile'
           ? CompanyProfileEditor(record: record!)
           : table == 'Invoices'
           ? InvoiceEditor(
+              onSave: saveDocument,
               customers: choices,
               record: record,
               items: documentItems,
@@ -954,6 +995,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           ? ReceiptEditor(invoices: choices)
           : table == 'Quotations'
           ? QuotationEditor(
+              onSave: saveDocument,
               customers: choices,
               record: record,
               items: documentItems,
@@ -976,6 +1018,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           : CashEntryEditor(expense: table == 'Expenses', record: record),
     );
     if (values == null || !mounted) return;
+    if (const ['Invoices', 'Quotations'].contains(table)) {
+      await _load(force: true);
+      return;
+    }
     setState(() {
       busy = true;
       error = null;
@@ -1672,10 +1718,16 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               ? null
               : 'Refresh failed. Showing saved data.';
         });
-      } else if (widget.api.cache.scope == null && _hasData) {
+      } else if ((widget.api.cache.scope == null ||
+              (state?.error is SaasApiException &&
+                  (state!.error as SaasApiException).status == 403)) &&
+          _hasData) {
         setState(() {
           rows = [];
           _hasData = false;
+          if (state?.error is SaasApiException) {
+            error = (state!.error as SaasApiException).message;
+          }
         });
       } else {
         setState(() {});

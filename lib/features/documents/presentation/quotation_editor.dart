@@ -8,11 +8,13 @@ class QuotationEditor extends StatelessWidget {
     this.record,
     this.items = const [],
     this.company = const {},
+    this.onSave,
   });
   final List<Map<String, dynamic>> customers;
   final Map<String, dynamic>? record;
   final List<Map<String, dynamic>> items;
   final Map<String, dynamic> company;
+  final Future<void> Function(Map<String, Object?>)? onSave;
   @override
   Widget build(BuildContext context) => DocumentEditor(
     quotation: true,
@@ -20,5 +22,6 @@ class QuotationEditor extends StatelessWidget {
     record: record,
     items: items,
     company: company,
+    onSave: onSave,
   );
 }

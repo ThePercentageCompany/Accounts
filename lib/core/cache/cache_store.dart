@@ -6,6 +6,7 @@ import 'package:tpc_invoice/core/cache/cache_store_factory_stub.dart'
 abstract class CacheStore {
   Future<Map<String, dynamic>?> read(String key);
   Future<void> write(String key, Map<String, dynamic> value);
+  Future<void> removeEntry(String key);
   Future<void> removeAccount(String account);
   Future<void> removeScope(String scope);
   Future<void> invalidateScope(
@@ -91,6 +92,13 @@ class IndexedCacheStore implements CacheStore {
   @override
   Future<void> removeAccount(String account) => _remove('account', account);
   @override
+  Future<void> removeEntry(String key) => _serialize(() async {
+    final db = await _db();
+    final tx = db.transaction('responses', idbModeReadWrite);
+    await tx.objectStore('responses').delete(key);
+    await tx.completed;
+  });
+  @override
   Future<void> removeScope(String scope) => _remove('scope', scope);
   @override
   Future<void> invalidateScope(
@@ -128,6 +136,11 @@ class MemoryCacheStore implements CacheStore {
   @override
   Future<void> removeAccount(String account) async =>
       entries.removeWhere((_, v) => v['account'] == account);
+  @override
+  Future<void> removeEntry(String key) async {
+    entries.remove(key);
+  }
+
   @override
   Future<void> removeScope(String scope) async =>
       entries.removeWhere((_, v) => v['scope'] == scope);

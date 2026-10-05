@@ -207,18 +207,26 @@ export class EmployeeService {
       current.failedAttempts = 0; current.lockedUntil = 0;
       state.employeeSessions ??= {};
       state.employeeSessions[digest(token)] = { companyId, employeeId, version: current.version,
-        expiresAt, absoluteExpiresAt: this.now() + 24 * 3600000 };
+        expiresAt, absoluteExpiresAt: this.now() + 24 * 3600000, familyId: digest(token) };
     });
-    return { token, expiresAt, employee: this.publicPrincipal(principal) };
+    return { token, expiresAt, absoluteExpiresAt: this.now() + 24 * 3600000, employee: this.publicPrincipal(principal) };
   }
-  session(state, token, allowBusiness = false) {
+  session(state, token, allowBusiness = false, allowExpired = false) {
     const session = validId(token) && state.employeeSessions?.[digest(token)];
-    if (!session || session.expiresAt <= this.now() || session.absoluteExpiresAt <= this.now()) throw accessDenied();
+    requireThat(session && session.absoluteExpiresAt > this.now() && (!session.rotatedUntil || session.rotatedUntil > this.now()),
+      401, 'EMPLOYEE_SESSION_INVALID', 'Your employee session ended or was revoked. Sign in again.');
+    requireThat(allowExpired || session.expiresAt > this.now(), 401, 'EMPLOYEE_SESSION_EXPIRED', 'Your employee session needs renewal.');
     const c = this.ready(state, session.companyId, false, allowBusiness), access = c.employeeAccess?.[session.employeeId];
-    if (!access || access.status !== 'ACTIVE' || access.version !== session.version) throw accessDenied();
+    requireThat(access && access.status === 'ACTIVE' && access.version === session.version,
+      401, 'EMPLOYEE_SESSION_INVALID', 'Your employee access was revoked. Contact your administrator.');
     return session;
   }
   publicPrincipal(p) { return { companyId: p.companyId, employeeId: p.employeeId, name: p.name, role: p.role, allowedSections: p.allowedSections, writableSections: p.writableSections }; }
+  verifyContext(principal, context = {}) {
+    requireThat((context.companyId === undefined || context.companyId === principal.companyId) &&
+      (context.employeeId === undefined || context.employeeId === principal.employeeId),
+      403, 'WORKSPACE_CHANGED', 'This request belongs to a different employee or workspace. Sign in with the original account before retrying.');
+  }
   async principal(token, allowBusiness = false) {
     const session = this.session((await this.registry.read()).state, token, allowBusiness);
     const principal = principalFromRows(session.companyId, session.employeeId, await this.sheets.read(session.companyId), this.now());
@@ -226,20 +234,38 @@ export class EmployeeService {
     return principal;
   }
   async refresh(token) {
-    const principal = await this.principal(token), replacement = opaque();
-    const expiresAt = await this.registry.transact(state => {
-      const session = this.session(state, token);
-      delete state.employeeSessions[digest(token)];
-      session.expiresAt = Math.min(this.now() + 8 * 3600000, session.absoluteExpiresAt);
-      state.employeeSessions[digest(replacement)] = session; return session.expiresAt;
+    const current = this.session((await this.registry.read()).state, token, true, true);
+    const principal = principalFromRows(current.companyId, current.employeeId, await this.sheets.read(current.companyId), this.now());
+    const replacement = opaque();
+    const renewed = await this.registry.transact(state => {
+      const session = this.session(state, token, true, true);
+      const familyId = session.familyId || digest(token);
+      const next = { ...session, familyId, expiresAt: Math.min(this.now() + 8 * 3600000, session.absoluteExpiresAt) };
+      delete next.rotatedUntil;
+      // Requests already carrying the old cookie may finish during this bounded
+      // overlap. Concurrent tabs can renew without invalidating each other's saves.
+      session.familyId = familyId;
+      session.rotatedUntil ??= Math.min(this.now() + 60000, session.absoluteExpiresAt);
+      session.expiresAt = Math.max(session.expiresAt, session.rotatedUntil);
+      state.employeeSessions[digest(replacement)] = next;
+      return next;
     });
-    return { token: replacement, expiresAt, employee: this.publicPrincipal(principal) };
+    return { token: replacement, expiresAt: renewed.expiresAt, absoluteExpiresAt: renewed.absoluteExpiresAt, employee: this.publicPrincipal(principal) };
   }
   async logout(token) {
-    await this.registry.transact(state => { if (validId(token)) delete (state.employeeSessions || {})[digest(token)]; });
+    await this.registry.transact(state => {
+      if (!validId(token)) return;
+      const sessions = state.employeeSessions || {}, key = digest(token), family = sessions[key]?.familyId || key;
+      for (const [id, session] of Object.entries(sessions)) {
+        if (id === key || session.familyId === family) delete sessions[id];
+      }
+    });
   }
   async sync(token, input, business) {
     const principal = await this.principal(token, true);
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => ['operations', 'companyId', 'employeeId'].includes(k)),
+      400, 'INVALID_BATCH', 'Supply record operations and workspace context.');
+    this.verifyContext(principal, input);
     const authorizeWrite = async (_token, companyId, table) => {
       const latest = await this.principal(token, true);
       requireThat(latest.companyId === companyId && latest.writableSections.includes(SECTION_TABLES[table]),
@@ -255,13 +281,14 @@ export class EmployeeService {
     const original = input.operations;
     requireThat(original.every(op => op && typeof op.operationId === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(op.operationId)), 400, 'INVALID_BATCH', 'Invalid operation ID.');
     const operations = original.map(op => ({ ...op, operationId: digest('employee:' + principal.employeeId + ':' + op.operationId) }));
-    const result = await writer.sync(token, principal.companyId, { ...input, operations });
+    const result = await writer.sync(token, principal.companyId, { operations });
     return { results: result.results.map((r, i) => ({ ...r, operationId: original[i].operationId })) };
   }
-  async records(token, table) {
+  async records(token, table, context = {}) {
     requireThat(Object.hasOwn(SECTION_TABLES, table), 403, 'TABLE_FORBIDDEN', 'This table is not available to employees.');
     const p = await this.principal(token);
-    requireThat(p.permissions[SECTION_TABLES[table]], 403, 'SECTION_FORBIDDEN', 'This section is not assigned to you.');
+    this.verifyContext(p, context);
+    requireThat(p.permissions[SECTION_TABLES[table]], 403, 'SECTION_FORBIDDEN', `${SECTION_TABLES[table]} access is not assigned to you. Ask your administrator to enable it.`);
     const names = [...new Set([table, ...(CHILDREN[table] ? [CHILDREN[table][0]] : []), 'Employees', 'Roles', 'RolePermissions'])];
     const rows = await this.sheets.read(p.companyId, names);
     const latest = principalFromRows(p.companyId, p.employeeId, rows, this.now());
@@ -274,6 +301,7 @@ export class EmployeeService {
     const authorize = p => requireThat(p.permissions.Reports === 'COMPANY',
       403, 'SECTION_FORBIDDEN', 'Company-wide reporting is not assigned to you.');
     const p = await this.principal(token); authorize(p);
+    this.verifyContext(p, options.context);
     const rows = await this.sheets.read(p.companyId, ['Journals', 'JournalLines', 'CompanyProfile', 'Employees', 'Roles', 'RolePermissions']);
     authorize(principalFromRows(p.companyId, p.employeeId, rows, this.now()));
     this.session((await this.registry.read()).state, token);

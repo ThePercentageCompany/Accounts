@@ -12,7 +12,9 @@ class RecordWriteQueue {
     String ownerId,
     this.companyId, {
     this.employee = false,
-  }) : storageKey = 'saas_records_${ownerId}_$companyId';
+  }) : storageKey = 'saas_records_${ownerId}_$companyId',
+       employeeId = employee ? ownerId.replaceFirst('employee_', '') : null;
+  final String? employeeId;
   final bool employee;
   final SaasApi api;
   final SharedPreferences preferences;
@@ -130,7 +132,12 @@ class RecordWriteQueue {
       final batch = operations.take(20).toList();
       late final Map<String, dynamic> response;
       try {
-        response = await api.sync(companyId, batch, employee: employee);
+        response = await api.sync(
+          companyId,
+          batch,
+          employee: employee,
+          expectedEmployeeId: employeeId,
+        );
       } on SaasApiException catch (error) {
         // INVALID_RECORD at batch validation occurs before any write starts.
         if (error.status == 400 &&

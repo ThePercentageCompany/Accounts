@@ -51,6 +51,7 @@ class ReadCache extends ChangeNotifier {
     this.retention = const Duration(days: 7),
     this.onAuthorizationFailure,
     this.isAuthorizationError,
+    this.isPermissionError,
     this.isOfflineError,
     this.retryDelay,
     this.isVisible,
@@ -68,6 +69,7 @@ class ReadCache extends ChangeNotifier {
   final Duration recordsFreshness, reportsFreshness, retention;
   final void Function(Object)? onAuthorizationFailure;
   final bool Function(Object)? isAuthorizationError, isOfflineError;
+  final bool Function(Object)? isPermissionError;
   final Duration? Function(Object)? retryDelay;
   final bool Function()? isVisible;
   final Future<void> Function()? validateContext;
@@ -340,6 +342,14 @@ class ReadCache extends ChangeNotifier {
           }
           onAuthorizationFailure?.call(error);
           rethrow;
+        }
+        if (isPermissionError?.call(error) == true) {
+          state.data = null;
+          unawaited(
+            _safe(
+              () => store.removeEntry(jsonEncode([requestedScope, key])),
+            ),
+          );
         }
         state.error = error;
         state.stale = true;

@@ -17,10 +17,13 @@ export class Registry {
   async transact(update) {
     for (let attempt = 0; attempt < 12; attempt++) {
       const { state, generation } = await this.read();
-      for (const collection of [state.sessions, state.oauth, state.employeeSessions || {}]) {
+      for (const collection of [state.sessions, state.oauth]) {
         for (const [key, value] of Object.entries(collection)) {
           if (value.expiresAt <= this.now()) delete collection[key];
         }
+      }
+      for (const [key, value] of Object.entries(state.employeeSessions || {})) {
+        if ((value.rotatedUntil || value.absoluteExpiresAt || value.expiresAt) <= this.now()) delete state.employeeSessions[key];
       }
       const result = update(state);
       if (result instanceof Promise) throw new Error('Registry transaction callbacks cannot perform I/O');

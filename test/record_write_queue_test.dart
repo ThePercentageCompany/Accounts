@@ -91,7 +91,7 @@ void main() {
       final employee = RecordWriteQueue(
         api,
         prefs,
-        'employee_e',
+        'employee_${'e' * 43}',
         'c' * 43,
         employee: true,
       );

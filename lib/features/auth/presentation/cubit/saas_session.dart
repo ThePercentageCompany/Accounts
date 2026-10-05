@@ -28,6 +28,13 @@ abstract class SessionState with _$SessionState {
 class SaasSession extends Cubit<SessionState> {
   SaasSession(this.api, this.preferences) : super(const SessionState()) {
     api.onAccessRevoked = _accessRevoked;
+    api.onEmployeeChanged = _employeeChanged;
+  }
+
+  void _employeeChanged(Map<String, dynamic> current) {
+    if (_disposed || employee == null) return;
+    employee = Map.of(current);
+    _notify();
   }
 
   void _accessRevoked() {
@@ -49,6 +56,14 @@ class SaasSession extends Cubit<SessionState> {
   bool _disposed = false;
 
   String get _registrationKey => 'tpc_saas_registration_${owner!['ownerId']}';
+  String get _selectedKey => 'tpc_saas_selected_company_${owner!['ownerId']}';
+  String get _openKey => 'tpc_saas_open_workspace_${owner!['ownerId']}';
+  bool get restoreWorkspace =>
+      owner != null && ready && preferences.getBool(_openKey) == true;
+  Future<void> rememberWorkspace(bool open) async {
+    if (owner != null) await preferences.setBool(_openKey, open);
+  }
+
   bool get ready => company?['stage'] == 'READY';
 
   Future<void> _run(Future<void> Function() action) async {
@@ -81,7 +96,10 @@ class SaasSession extends Cubit<SessionState> {
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
     _clearIdentity();
-    if (!employeeOnly) {
+    final employeeMode =
+        employeeOnly ||
+        preferences.getString('tpc_saas_session_mode') == 'employee';
+    if (!employeeMode) {
       try {
         owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
       } on SaasApiException catch (failure) {
@@ -106,14 +124,25 @@ class SaasSession extends Cubit<SessionState> {
   });
 
   Future<void> _loadCompanies() async {
-    final previousId = company?['companyId'];
+    final previousId =
+        company?['companyId'] ?? preferences.getString(_selectedKey);
     final result = await api.companies();
     companies = (result['companies'] as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
+    if (previousId != null &&
+        !companies.any((row) => row['companyId'] == previousId)) {
+      await preferences.remove(_openKey);
+    }
     company =
         companies.where((row) => row['companyId'] == previousId).firstOrNull ??
         companies.firstOrNull;
+    if (company != null) {
+      await preferences.setString(
+        _selectedKey,
+        company!['companyId'] as String,
+      );
+    }
   }
 
   Future<void> selectCompany(String companyId) => _run(() async {
@@ -126,6 +155,7 @@ class SaasSession extends Cubit<SessionState> {
     company = Map<String, dynamic>.from(
       (await api.setup(companyId))['company'] as Map,
     );
+    await preferences.setString(_selectedKey, companyId);
   });
 
   Future<void> createCompany(String name) => _run(() async {
@@ -216,6 +246,7 @@ class SaasSession extends Cubit<SessionState> {
   });
 
   Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
+    await preferences.setString('tpc_saas_session_mode', 'owner');
     await navigate(await api.startSignIn());
   });
 
@@ -230,6 +261,7 @@ class SaasSession extends Cubit<SessionState> {
     final result = await api.employeeLogin(invite, code);
     _clearIdentity();
     employee = Map<String, dynamic>.from(result['employee'] as Map);
+    await preferences.setString('tpc_saas_session_mode', 'employee');
   });
 
   Future<void> signOut() => _run(() async {
@@ -244,6 +276,11 @@ class SaasSession extends Cubit<SessionState> {
     }
     if (employee != null) await api.employeeLogout();
     if (owner != null) await api.logout();
+    await preferences.remove('tpc_saas_session_mode');
+    if (owner != null) {
+      await preferences.remove(_openKey);
+      await preferences.remove(_selectedKey);
+    }
     _clearIdentity();
   });
 
@@ -252,6 +289,7 @@ class SaasSession extends Cubit<SessionState> {
     // Owner and employee views can share the transport. Restore the callback
     // when this session becomes active again after the other view is disposed.
     api.onAccessRevoked = _accessRevoked;
+    api.onEmployeeChanged = _employeeChanged;
     if (employee != null) {
       api.useVerifiedWorkspace(
         employee!['companyId'] as String,
@@ -282,6 +320,7 @@ class SaasSession extends Cubit<SessionState> {
   Future<void> close() {
     _disposed = true;
     if (api.onAccessRevoked == _accessRevoked) api.onAccessRevoked = null;
+    if (api.onEmployeeChanged == _employeeChanged) api.onEmployeeChanged = null;
     return super.close();
   }
 

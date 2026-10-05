@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:tpc_invoice/core/network/draft_navigation_stub.dart'
+    if (dart.library.js_interop) 'package:tpc_invoice/core/network/draft_navigation_web.dart';
 import 'package:invoice_kit/invoice_kit.dart' as kit;
 import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -11,12 +13,14 @@ class DocumentEditor extends StatefulWidget {
     this.record,
     this.items = const [],
     this.company = const {},
+    this.onSave,
   });
   final bool quotation;
   final List<Map<String, dynamic>> customers;
   final Map<String, dynamic>? record;
   final List<Map<String, dynamic>> items;
   final Map<String, dynamic> company;
+  final Future<void> Function(Map<String, Object?>)? onSave;
   @override
   State<DocumentEditor> createState() => _DocumentEditorState();
 }
@@ -59,6 +63,82 @@ class _DraftLine {
 }
 
 class _DocumentEditorState extends State<DocumentEditor> {
+  bool _saving = false, _allowClose = false;
+  String? _saveError;
+  late final String _initialDraft;
+  late final DraftNavigationGuard _navigationGuard;
+  String get _fingerprint => '$header|$values';
+  @override
+  void initState() {
+    super.initState();
+    _initialDraft = _fingerprint;
+    _navigationGuard = DraftNavigationGuard(
+      () => !_allowClose && (_saving || _fingerprint != _initialDraft),
+    );
+  }
+
+  Future<void> _discard() async {
+    if (_saving) return;
+    if (_fingerprint != _initialDraft) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard unsaved changes?'),
+          content: const Text(
+            'Your changes in this editor have not been saved.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    setState(() => _allowClose = true);
+    await Future<void>.delayed(Duration.zero);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (preview) {
+      setState(() => preview = false);
+      return;
+    }
+    if (!form.currentState!.validate()) return;
+    final draft = <String, Object?>{
+      'customerId': customerId!,
+      'issueDate': issueDate.text,
+      endKey: endDate.text,
+      'currency': currency.text.trim().toUpperCase(),
+      'notes': notes.text.trim(),
+      'paymentTerms': terms.text.trim(),
+      'items': values,
+    };
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await widget.onSave?.call(draft);
+      if (!mounted) return;
+      setState(() => _allowClose = true);
+      await Future<void>.delayed(Duration.zero);
+      if (mounted) Navigator.pop(context, draft);
+    } catch (error) {
+      if (mounted) setState(() => _saveError = '$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   final form = GlobalKey<FormState>();
   late String? customerId = widget.record?['customerId'] as String?;
   late final issueDate = TextEditingController(
@@ -133,6 +213,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
 
   @override
   void dispose() {
+    _navigationGuard.dispose();
     for (final field in [issueDate, endDate, currency, notes, terms]) {
       field.dispose();
     }
@@ -617,130 +698,140 @@ class _DocumentEditorState extends State<DocumentEditor> {
   );
 
   @override
-  Widget build(BuildContext context) => AdaptiveFormDialog(
-    expanded: true,
-    title: Text('${widget.record == null ? 'Create' : 'Edit'} draft $title'),
-    content: SizedBox(
-      width: MediaQuery.sizeOf(context).width >= 1200 ? 1280 : 820,
-      height: 620,
-      child: Column(
-        children: [
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+  Widget build(BuildContext context) => PopScope(
+    canPop: _allowClose,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _discard();
+    },
+    child: AdaptiveFormDialog(
+      expanded: true,
+      title: Text('${widget.record == null ? 'Create' : 'Edit'} draft $title'),
+      content: AbsorbPointer(
+        absorbing: _saving,
+        child: SizedBox(
+          width: MediaQuery.sizeOf(context).width >= 1200 ? 1280 : 820,
+          height: 620,
+          child: Column(
             children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(
-                    value: false,
-                    icon: Icon(Icons.edit_outlined),
-                    label: Text('Edit'),
+              if (_saveError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    _saveError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
-                  ButtonSegment(
-                    value: true,
-                    icon: Icon(Icons.picture_as_pdf_outlined),
-                    label: Text('Preview'),
+                ),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.edit_outlined),
+                        label: Text('Edit'),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.picture_as_pdf_outlined),
+                        label: Text('Preview'),
+                      ),
+                    ],
+                    selected: {preview},
+                    onSelectionChanged: (selected) {
+                      if (selected.first && !form.currentState!.validate()) {
+                        return;
+                      }
+                      setState(() => preview = selected.first);
+                    },
+                  ),
+                  PopupMenuButton<DocumentStyle>(
+                    tooltip: 'PDF style',
+                    initialValue: style,
+                    icon: const Icon(Icons.tune),
+                    onSelected: (value) => setState(() => style = value),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: DocumentStyle.modern,
+                        child: Text('Modern'),
+                      ),
+                      const PopupMenuItem(
+                        value: DocumentStyle.classic,
+                        child: Text('Classic'),
+                      ),
+                    ],
                   ),
                 ],
-                selected: {preview},
-                onSelectionChanged: (selected) {
-                  if (selected.first && !form.currentState!.validate()) {
-                    return;
-                  }
-                  setState(() => preview = selected.first);
-                },
               ),
-              PopupMenuButton<DocumentStyle>(
-                tooltip: 'PDF style',
-                initialValue: style,
-                icon: const Icon(Icons.tune),
-                onSelected: (value) => setState(() => style = value),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: DocumentStyle.modern,
-                    child: Text('Modern'),
-                  ),
-                  const PopupMenuItem(
-                    value: DocumentStyle.classic,
-                    child: Text('Classic'),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Expanded(
+                child: preview
+                    ? kit.InvoiceGenerator.preview(
+                        data: documentData(
+                          quotation: widget.quotation,
+                          record: header,
+                          company: widget.company,
+                          customer: customer,
+                          items: values,
+                          estimate: true,
+                        ),
+                        template: BusinessDocumentTemplate(style: style),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 1040) return editor();
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Card(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(20),
+                                    child: editor(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                flex: 2,
+                                child: Card(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(20),
+                                    child: livePreview(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: preview
-                ? kit.InvoiceGenerator.preview(
-                    data: documentData(
-                      quotation: widget.quotation,
-                      record: header,
-                      company: widget.company,
-                      customer: customer,
-                      items: values,
-                      estimate: true,
-                    ),
-                    template: BusinessDocumentTemplate(style: style),
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.maxWidth < 1040) return editor();
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: editor(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            flex: 2,
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: livePreview(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : _discard,
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(
+            _saving
+                ? 'Saving…'
+                : preview
+                ? 'Back to editing'
+                : 'Save draft',
           ),
-        ],
-      ),
+        ),
+      ],
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (preview) {
-            setState(() => preview = false);
-            return;
-          }
-          if (!form.currentState!.validate()) return;
-          Navigator.pop(context, <String, Object?>{
-            'customerId': customerId!,
-            'issueDate': issueDate.text,
-            endKey: endDate.text,
-            'currency': currency.text.trim().toUpperCase(),
-            'notes': notes.text.trim(),
-            'paymentTerms': terms.text.trim(),
-            'items': values,
-          });
-        },
-        child: Text(preview ? 'Back to editing' : 'Save draft'),
-      ),
-    ],
   );
 }

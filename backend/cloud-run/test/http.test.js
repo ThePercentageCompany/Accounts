@@ -15,6 +15,20 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('employee renewal cookie lasts to the absolute limit and exposes no token', async t => {
+  const employee = { employeeId: 'e'.repeat(43), companyId: 'c'.repeat(43) };
+  const employees = { now: () => 1000, refresh: async () => ({ token: 's'.repeat(43),
+    expiresAt: 1000 + 8 * 3600000, absoluteExpiresAt: 1000 + 24 * 3600000, employee }) };
+  const f = await running(t, { employees });
+  const response = await f.request('/v1/employee/refresh', { method: 'POST', headers, body: '{}' });
+  assert.equal(response.status, 200);
+  const cookie = response.headers.get('set-cookie');
+  for (const part of ['__Host-tpc_employee=', 'Path=/', 'HttpOnly', 'Secure', 'SameSite=None', 'Max-Age=86400']) assert.ok(cookie.includes(part));
+  const result = await response.json();
+  assert.equal(result.token, undefined);
+  assert.deepEqual(result.employee, employee);
+});
+
 test('balance-sheet HTTP accepts exactly one asOf and uses private responses', async t => {
   let calls = 0;
   const f = await running(t, { business: { async balanceSheet(token, id, date) {

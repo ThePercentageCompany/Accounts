@@ -3,6 +3,8 @@
 abstract interface class SessionRepository {
   set onAccessRevoked(void Function()? callback);
   void Function()? get onAccessRevoked;
+  set onEmployeeChanged(void Function(Map<String, dynamic>)? callback);
+  void Function(Map<String, dynamic>)? get onEmployeeChanged;
   Future<Map<String, dynamic>> me();
   Future<Map<String, dynamic>> companies();
   Future<Map<String, dynamic>> setup(String companyId);
