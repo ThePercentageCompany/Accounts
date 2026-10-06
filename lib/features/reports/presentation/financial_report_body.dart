@@ -303,6 +303,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
             .toList();
     return Card(
       child: ExpansionTile(
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         key: PageStorageKey('ledger-$id'),
         initiallyExpanded: widget.rows.length == 1,
         title: Text(
@@ -650,6 +651,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
             for (final group in groups.entries)
               Card(
                 child: ExpansionTile(
+                  expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                   key: PageStorageKey('${widget.kind}-${group.key}'),
                   initiallyExpanded: true,
                   title: Text(
@@ -683,6 +685,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
               (data['trends'] as List).isNotEmpty)
             Card(
               child: ExpansionTile(
+                expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                 title: const Text('Monthly period breakdown'),
                 children: [
                   ReportGrid(

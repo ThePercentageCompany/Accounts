@@ -87,6 +87,7 @@ class ReportTrends extends StatelessWidget {
               ],
             ),
             ExpansionTile(
+              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
               title: const Text('View exact trend data'),
               children: [_ExactTrendTable(trends: trends, format: format)],
             ),

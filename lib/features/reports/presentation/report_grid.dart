@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// Horizontally scrolls all columns; the header and footer stay visible while rows scroll.
-class ReportGrid extends StatelessWidget {
+class ReportGrid extends StatefulWidget {
   const ReportGrid({
     super.key,
     required this.headers,
@@ -17,7 +17,27 @@ class ReportGrid extends StatelessWidget {
   final Set<int> numeric;
   final bool dense;
   @override
+  State<ReportGrid> createState() => _ReportGridState();
+}
+
+class _ReportGridState extends State<ReportGrid> {
+  final _horizontal = ScrollController();
+  final _vertical = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontal.dispose();
+    _vertical.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final headers = widget.headers;
+    final rows = widget.rows;
+    final footer = widget.footer;
+    final numeric = widget.numeric;
+    final dense = widget.dense;
     final colors = Theme.of(context).colorScheme;
     final widths = [
       for (var i = 0; i < headers.length; i++)
@@ -53,11 +73,15 @@ class ReportGrid extends StatelessWidget {
           ),
       ],
     );
+    // Give nested viewports independent positions, including desktop scrollbars.
     return SingleChildScrollView(
+      controller: _horizontal,
+      primary: false,
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         width: widths.fold<double>(0, (a, b) => a + b),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               color: colors.surfaceContainerHighest,
@@ -69,6 +93,7 @@ class ReportGrid extends StatelessWidget {
                 math.max(height, rows.length * height),
               ),
               child: ListView.builder(
+                controller: _vertical,
                 primary: false,
                 itemCount: rows.length,
                 itemBuilder: (context, index) => DecoratedBox(
@@ -87,7 +112,7 @@ class ReportGrid extends StatelessWidget {
             if (footer != null)
               Container(
                 color: colors.surfaceContainerHighest,
-                child: row(footer!, header: true),
+                child: row(footer, header: true),
               ),
           ],
         ),
