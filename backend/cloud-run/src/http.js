@@ -166,6 +166,14 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (employees) {
+        const payrollPreview = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/payroll\/preview$/.exec(url.pathname);
+        if (business && request.method === 'POST' && payrollPreview) {
+          json(200, await employees.payrollPreview(token, payrollPreview[1], await body(request), business)); return;
+        }
+        if (business && route === 'POST /v1/employee/payroll/preview') {
+          const principal = await employees.principal(jar[EMPLOYEE]);
+          json(200, await employees.payrollPreview(jar[EMPLOYEE], principal.companyId, await body(request), business, true, employeeContext)); return;
+        }
         const employeeReport = /^\/v1\/employee\/reports\/(dashboard|general-ledger|trial-balance|profit-and-loss|balance-sheet|settings)$/.exec(url.pathname);
         if (employeeReport && request.method === 'GET') {
           if (employeeReport[1] === 'settings') {

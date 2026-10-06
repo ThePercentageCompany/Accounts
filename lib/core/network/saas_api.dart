@@ -829,6 +829,8 @@ class SaasApi implements SessionRepository {
     data: values,
     operationId: operationId,
   );
+  Future<Map<String, dynamic>> payrollPreview(String companyId, Map<String, Object?> values, {bool employee = false}) =>
+      _json('POST', employee ? '/v1/employee/payroll/preview' : '/v1/companies/${_id(companyId)}/payroll/preview', data: values);
   Future<Map<String, dynamic>> employeeAccess(
     String companyId,
     String employeeId,

@@ -15,6 +15,25 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('owner and employee payroll previews route with their own cookies and workspace context', async t => {
+  const company = 'c'.repeat(43), calls = [], business = {};
+  const employees = {
+    principal: async token => { assert.equal(token, 'employee-token'); return { companyId: company }; },
+    payrollPreview: async (...args) => { calls.push(args); return { totals: { netSalary: 1000 } }; },
+  };
+  const f = await running(t, { employees, business });
+  for (const employee of [false, true]) {
+    const response = await f.request(employee ? '/v1/employee/payroll/preview' : `/v1/companies/${company}/payroll/preview`, {
+      method: 'POST', headers: { ...headers, Cookie: '__Host-tpc_session=owner-token; __Host-tpc_employee=employee-token',
+        'X-TPC-Company': company }, body: JSON.stringify({ employeeId: 'e'.repeat(43), month: '2026-09', bonus: 0, deductions: 0 }),
+    });
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal((await response.json()).totals.netSalary, 1000);
+    const call = calls.at(-1); assert.equal(call[0], employee ? 'employee-token' : 'owner-token');
+    assert.equal(call[1], company); assert.equal(call[4] ?? false, employee);
+  }
+});
+
 test('employee renewal cookie lasts to the absolute limit and exposes no token', async t => {
   const employee = { employeeId: 'e'.repeat(43), companyId: 'c'.repeat(43) };
   const employees = { now: () => 1000, refresh: async () => ({ token: 's'.repeat(43),

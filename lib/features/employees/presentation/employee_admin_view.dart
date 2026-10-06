@@ -253,9 +253,10 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
               ),
             ),
           for (final row in c.employees.where(
-            (row) => '${row['fullName']} ${row['email']} ${row['role']}'
-                .toLowerCase()
-                .contains(_search),
+            (row) =>
+                '${row['fullName']} ${row['email']} ${row['role']} ${row['employeeCode']} ${row['department']} ${row['designation']}'
+                    .toLowerCase()
+                    .contains(_search),
           ))
             Card(
               child: Padding(
@@ -287,6 +288,16 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     const SizedBox(height: 12),
                     Text('${row['role']} · ${row['employmentStatus']}'),
                     Text(row['email'] as String? ?? ''),
+                    if ('${row['designation'] ?? ''}${row['department'] ?? ''}'
+                        .isNotEmpty)
+                      Text(
+                        [row['designation'], row['department']]
+                            .where((v) => v != null && '$v'.isNotEmpty)
+                            .join(' • '),
+                      ),
+                    Text(
+                      'Basic salary: ${row['basicSalary'] == null || row['basicSalary'] == '' ? 'Not set' : row['basicSalary']} | Allowances: ${row['allowances'] == null || row['allowances'] == '' ? '0' : row['allowances']}',
+                    ),
                     Wrap(
                       spacing: 8,
                       children: [
@@ -301,7 +312,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                           onPressed: c.busy || c.hasPending
                               ? null
                               : () => _edit(row),
-                          child: const Text('Edit permissions'),
+                          child: const Text('Edit employee'),
                         ),
                         for (final action in ['issue', 'reset', 'revoke'])
                           LoadingButton.text(
@@ -348,6 +359,76 @@ class _EmployeeEditor extends StatefulWidget {
 
 class _EmployeeEditorState extends State<_EmployeeEditor> {
   final form = GlobalKey<FormState>();
+  late final details = <String, TextEditingController>{
+    for (final key in [
+      'employeeCode',
+      'phone',
+      'department',
+      'designation',
+      'joinDate',
+      'lastEmploymentDate',
+      'basicSalary',
+      'allowances',
+      'bankName',
+      'iban',
+      'address',
+      'emiratesId',
+      'passportNumber',
+      'visaExpiry',
+    ])
+      key: TextEditingController(
+        text:
+            '${widget.employee?[key] == null || widget.employee?[key] == '' ? (key == 'basicSalary' || key == 'allowances' ? 0 : '') : widget.employee?[key]}',
+      ),
+  };
+  Widget detail(String key, String label, {bool money = false}) =>
+      TextFormField(
+        controller: details[key],
+        maxLength: money
+            ? 16
+            : key == 'address'
+            ? 1000
+            : 200,
+        keyboardType: money
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : key == 'phone'
+            ? TextInputType.phone
+            : TextInputType.text,
+        decoration: InputDecoration(labelText: label),
+        validator: money
+            ? (value) {
+                final text = value?.trim() ?? '';
+                final number = double.tryParse(text);
+                return number == null ||
+                        !number.isFinite ||
+                        number < 0 ||
+                        number > 1e12 ||
+                        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)
+                    ? 'Enter a nonnegative amount with up to two decimals.'
+                    : null;
+              }
+            : null,
+      );
+  Widget date(String key, String label) => CalendarFormField(
+    controller: details[key]!,
+    decoration: InputDecoration(labelText: label),
+    validator: (value) {
+      final text = value?.trim() ?? '';
+      if (text.isEmpty) return null;
+      final parsed = DateTime.tryParse(text);
+      if (parsed == null ||
+          !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
+          !parsed.toIso8601String().startsWith(text)) {
+        return 'Enter a valid date.';
+      }
+      if (key == 'lastEmploymentDate' &&
+          details['joinDate']!.text.isNotEmpty &&
+          text.compareTo(details['joinDate']!.text) < 0) {
+        return 'Must be on or after joining date.';
+      }
+      return null;
+    },
+  );
   late final name = TextEditingController(
     text: widget.employee?['fullName'] as String? ?? '',
   );
@@ -387,6 +468,9 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
   void dispose() {
     name.dispose();
     email.dispose();
+    for (final controller in details.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -402,6 +486,10 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
             mainAxisSize: MainAxisSize.min,
             spacing: 12,
             children: [
+              const Text(
+                'Personal & contact details',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
               TextFormField(
                 controller: name,
                 maxLength: 160,
@@ -423,6 +511,39 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                         ).hasMatch(v.trim())
                     ? 'Enter a valid email.'
                     : null,
+              ),
+              detail('phone', 'Phone (optional)'),
+              detail('address', 'Address (optional)'),
+              const Text(
+                'Employment details',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              detail('employeeCode', 'Employee code (optional)'),
+              detail('department', 'Department (optional)'),
+              detail('designation', 'Job title (optional)'),
+              date('joinDate', 'Joining date (optional)'),
+              date('lastEmploymentDate', 'Last employment date (optional)'),
+              const Text(
+                'Monthly compensation',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const Text(
+                'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the company currency.',
+              ),
+              detail('basicSalary', 'Basic salary', money: true),
+              detail('allowances', 'Monthly allowances', money: true),
+              const Text(
+                'Bank & identity details',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              detail('bankName', 'Bank name (optional)'),
+              detail('iban', 'IBAN (optional)'),
+              detail('emiratesId', 'Emirates ID (optional)'),
+              detail('passportNumber', 'Passport number (optional)'),
+              date('visaExpiry', 'Visa expiry (optional)'),
+              const Text(
+                'Workspace access',
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
               DropdownButtonFormField<String>(
                 initialValue: role,
@@ -498,6 +619,10 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
             Navigator.pop(context, <String, Object?>{
               'fullName': name.text.trim(),
               'email': email.text.trim(),
+              for (final entry in details.entries)
+                entry.key: ['basicSalary', 'allowances'].contains(entry.key)
+                    ? double.parse(entry.value.text.trim())
+                    : entry.value.text.trim(),
               'role': role,
               'employmentStatus': status,
               'allowedSections': sections.toList(),
@@ -508,7 +633,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
             });
           }
         },
-        child: const Text('Save permissions'),
+        child: const Text('Save employee'),
       ),
     ],
   );

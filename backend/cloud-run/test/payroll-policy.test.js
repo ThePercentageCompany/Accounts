@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { payrollChanges } from '../src/payroll-policy.js';
+import { payrollChanges, previewPayroll } from '../src/payroll-policy.js';
 
 const employeeId = 'e'.repeat(43);
 function fixture() {
@@ -12,6 +12,18 @@ function fixture() {
 }
 const system = { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKey: 'marker', isDeleted: false, syncStatus: 'SYNCED' };
 
+test('payroll handles empty legacy allowances and enforces employment dates', async () => {
+  const f = fixture(); f.data.Employees[0].allowances = '';
+  const values = { employeeId, month: '2026-09', bonus: 0, deductions: 0 };
+  assert.equal((await previewPayroll(f.sheets, 'c', values)).netSalary, 5100);
+  f.data.Employees[0].joinDate = '2026-10-01';
+  await assert.rejects(previewPayroll(f.sheets, 'c', values), e => e.code === 'PAYROLL_EMPLOYEE_INVALID');
+  f.data.Employees[0].joinDate = '2026-09-15';
+  assert.equal((await previewPayroll(f.sheets, 'c', values)).basicSalary, 5000);
+  f.data.Employees[0].lastEmploymentDate = '2026-08-31';
+  await assert.rejects(previewPayroll(f.sheets, 'c', values), e => e.code === 'PAYROLL_EMPLOYEE_INVALID');
+});
+
 test('draft payroll derives salary and approved overtime exactly', async () => {
   const f = fixture();
   const result = await payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'create', null,
@@ -19,6 +31,21 @@ test('draft payroll derives salary and approved overtime exactly', async () => {
   assert.deepEqual(result.values, { month: '2026-09', employeeId, basicSalary: 5000, allowances: 500,
     overtimeAmount: 100, bonus: 250, deductions: 100, grossSalary: 5850, netSalary: 5750,
     status: 'DRAFT', paidDate: '', paymentAccount: '', paymentReference: '' });
+});
+
+test('compensation edits require draft refresh before approval and preserve posted salary history', async () => {
+  const f = fixture(), values = { employeeId, month: '2026-09', bonus: 0, deductions: 0 };
+  const draft = (await payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'create', null, values, system, 'create')).values;
+  f.data.Employees[0].basicSalary = 6000;
+  await assert.rejects(payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'approve', draft, {}, system, 'approve'),
+    e => e.code === 'PAYROLL_TOTAL_MISMATCH');
+  const refreshed = (await payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'update', draft, values, system, 'refresh')).values;
+  const approved = (await payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'approve', refreshed, {}, system, 'approve')).values;
+  assert.equal(approved.basicSalary, 6000);
+  f.data.Employees[0].basicSalary = 7000;
+  await assert.rejects(payrollChanges(f.sheets, 'c', 'Payroll', 'p', 'update', approved, values, system, 'update'),
+    e => e.code === 'PAYROLL_LOCKED');
+  assert.equal(approved.basicSalary, 6000);
 });
 
 test('approval accrues gross payroll and liabilities in a balanced journal', async () => {

@@ -41,6 +41,52 @@ async function setup() {
 }
 const denied = e => ['EMPLOYEE_ACCESS_DENIED', 'EMPLOYEE_SESSION_INVALID', 'EMPLOYEE_SESSION_EXPIRED'].includes(e.code);
 
+test('employee profile and compensation round-trip, partial edits preserve salary, payroll uses saved amounts', async () => {
+  const f = await setup();
+  Object.assign(f.input, { employeeCode: 'EMP-001', phone: '+971500000000', department: 'Accounts', designation: 'Accountant',
+    joinDate: '2026-09-01', basicSalary: 5000.25, allowances: 500, bankName: 'Bank', iban: 'AE123',
+    address: 'Dubai', emiratesId: '784-test', passportNumber: 'P123', visaExpiry: '2028-09-01' });
+  const id = await f.create();
+  const employee = (await f.employees.list(f.owner, f.companyId))[0];
+  for (const key of ['employeeCode', 'joinDate', 'basicSalary', 'allowances', 'iban', 'visaExpiry']) assert.equal(employee[key], f.input[key]);
+  await f.employees.save(f.owner, f.companyId, id, { fullName: 'Updated', role: 'Staff', employmentStatus: 'ACTIVE',
+    allowedSections: [], expectedVersion: 1 }, 'employee_profile_update');
+  assert.equal(f.rows.Employees[0].basicSalary, 5000.25);
+  const business = { sheets: { readReferences: (company, names) => f.sheets.read(company, names) } };
+  const result = await f.employees.payrollPreview(f.owner, f.companyId,
+    { employeeId: id, month: '2026-09', bonus: 100, deductions: 25 }, business);
+  assert.equal(result.totals.netSalary, 5575.25);
+  assert.equal(f.writes(), 2); // Preview does not save records.
+});
+
+test('employee rejects invalid compensation, dates and duplicate codes before writing', async () => {
+  const f = await setup();
+  for (const change of [{ basicSalary: -1 }, { allowances: 1.234 }, { basicSalary: '5000' }, { joinDate: '2026-02-30' },
+    { joinDate: '2026-10-01', lastEmploymentDate: '2026-09-01' }]) {
+    await assert.rejects(f.employees.save(f.owner, f.companyId, null, { ...f.input, ...change }, 'invalid_employee_key'),
+      e => e.code === 'INVALID_EMPLOYEE');
+  }
+  assert.equal(f.writes(), 0);
+  f.input.employeeCode = 'EMP-001'; await f.create();
+  await assert.rejects(f.employees.save(f.owner, f.companyId, null, { ...f.input, employeeCode: 'emp-001' }, 'duplicate_employee_key'),
+    e => e.code === 'INVALID_EMPLOYEE');
+  assert.equal(f.writes(), 1);
+});
+
+test('payroll preview and salary references require current payroll edit access', async () => {
+  const f = await setup();
+  Object.assign(f.input, { basicSalary: 1000, role: 'Accountant', writableSections: ['Payroll'] });
+  const id = await f.create(), session = await f.loginEmployee(await f.issue(id));
+  const business = { sheets: { readReferences: (company, names) => f.sheets.read(company, names) } };
+  const values = { employeeId: id, month: '2026-09', bonus: 0, deductions: 0 };
+  assert.equal((await f.employees.references(session.token, 'Employees', 'Payroll'))[0].basicSalary, 1000);
+  assert.equal((await f.employees.payrollPreview(session.token, f.companyId, values, business, true)).totals.netSalary, 1000);
+  await assert.rejects(f.employees.payrollPreview(session.token, f.companyId, values, business, true, { companyId: opaque() }),
+    e => e.code === 'WORKSPACE_CHANGED');
+  f.rows.RolePermissions.find(row => row.section === 'Payroll').action = 'read';
+  await assert.rejects(f.employees.payrollPreview(session.token, f.companyId, values, business, true), e => e.code === 'WRITE_FORBIDDEN');
+});
+
 test('employee reports require company-wide Reports permission and recheck revocation', async () => {
   const f = await setup();
   const id = await f.create(), session = await f.loginEmployee(await f.issue(id));

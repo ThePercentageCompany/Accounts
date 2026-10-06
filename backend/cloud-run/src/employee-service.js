@@ -4,13 +4,17 @@ import { financialReport } from './financial-report.js';
 import { reportConfiguration } from './report-configuration.js';
 import { requireThat, ApiError } from './errors.js';
 import { PrivateCode } from './private-code.js';
+import { validLedgerDate } from './financial-period-policy.js';
+import { previewPayroll } from './payroll-policy.js';
 import { SECTIONS, WRITE_SECTIONS, ROLES, scopeFor, principalFromRows, SECTION_TABLES, CHILDREN, visible, projectRecord } from './employee-policy.js';
 
 const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 const keyRequired = key => requireThat(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key),
   400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
 const accessDenied = () => new ApiError(401, 'EMPLOYEE_ACCESS_DENIED', 'The invite or private code is invalid, expired or disabled.');
-const cleanEmployee = row => Object.fromEntries(['recordId', 'fullName', 'email', 'phone', 'department', 'designation', 'employmentStatus', 'recordVersion'].map(k => [k, row[k] ?? '']));
+const profileFields = ['employeeCode', 'email', 'phone', 'department', 'designation', 'joinDate', 'lastEmploymentDate',
+  'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry'];
+const cleanEmployee = row => Object.fromEntries(['recordId', 'fullName', ...profileFields, 'employmentStatus', 'recordVersion'].map(k => [k, row[k] ?? '']));
 
 export class EmployeeService {
   constructor({ accounts, sheets, codes = new PrivateCode(), now = Date.now }) {
@@ -36,7 +40,7 @@ export class EmployeeService {
       writableSections: rows.RolePermissions.filter(p => p.roleId === e.roleId && p.action === 'write' && ![true, 'TRUE'].includes(p.isDeleted)).map(p => p.section) }));
   }
   input(input) {
-    const allowed = ['fullName', 'email', 'phone', 'department', 'designation', 'employmentStatus', 'role', 'allowedSections', 'writableSections', 'expectedVersion'];
+    const allowed = ['fullName', ...profileFields, 'employmentStatus', 'role', 'allowedSections', 'writableSections', 'expectedVersion'];
     requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => allowed.includes(k)), 400, 'INVALID_EMPLOYEE', 'Unsupported employee fields.');
     requireThat(typeof input.fullName === 'string' && input.fullName.trim().length > 0 && input.fullName.length <= 160 && !/[\x00-\x1f]/.test(input.fullName) &&
       ROLES.includes(input.role) && ['ACTIVE', 'INACTIVE'].includes(input.employmentStatus) &&
@@ -48,13 +52,24 @@ export class EmployeeService {
     requireThat(Array.isArray(writableSections) && new Set(writableSections).size === writableSections.length && writableSections.every(s => WRITE_SECTIONS.includes(s) && input.allowedSections.includes(s) && scopeFor(input.role, s) === 'COMPANY'), 400, 'INVALID_EMPLOYEE', 'Edit access requires an assigned company-wide section.');
     const value = { writableSections, fullName: input.fullName.trim(), role: input.role, employmentStatus: input.employmentStatus,
       allowedSections: SECTIONS.filter(s => input.allowedSections.includes(s)), expectedVersion: input.expectedVersion };
-    for (const key of ['email', 'phone', 'department', 'designation']) {
+    for (const key of profileFields.filter(k => !['basicSalary', 'allowances'].includes(k))) {
       if (!Object.hasOwn(input, key)) continue;
       const text = input[key];
-      requireThat(typeof text === 'string' && text.length <= 200 && !/[\x00-\x1f]/.test(text), 400, 'INVALID_EMPLOYEE', 'Invalid employee contact details.');
+      requireThat(typeof text === 'string' && text.length <= (key === 'address' ? 1000 : 200) && !/[\x00-\x1f]/.test(text), 400, 'INVALID_EMPLOYEE', 'Invalid employee details.');
       value[key] = text.trim();
     }
     requireThat(!value.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email), 400, 'INVALID_EMPLOYEE', 'Invalid employee email.');
+    for (const key of ['basicSalary', 'allowances']) {
+      if (!Object.hasOwn(input, key)) continue;
+      requireThat(typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0 && input[key] <= 1e12 &&
+        /^\d+(\.\d{1,2})?$/.test(String(input[key])), 400, 'INVALID_EMPLOYEE', 'Salary and allowances must be nonnegative amounts with up to two decimals.');
+      value[key] = input[key];
+    }
+    for (const key of ['joinDate', 'lastEmploymentDate', 'visaExpiry']) {
+      requireThat(!value[key] || validLedgerDate(value[key]), 400, 'INVALID_EMPLOYEE', 'Enter valid employment and visa dates.');
+    }
+    requireThat(!value.joinDate || !value.lastEmploymentDate || value.lastEmploymentDate >= value.joinDate,
+      400, 'INVALID_EMPLOYEE', 'Last employment date cannot precede joining date.');
     return value;
   }
   async save(token, companyId, employeeId, input, key) {
@@ -92,6 +107,12 @@ export class EmployeeService {
     if (op.completed) return { employeeId: op.employeeId, version: op.version, replayed: true };
     const rows = await this.sheets.read(companyId);
     const old = rows.Employees.find(e => e.recordId === op.employeeId);
+    const profile = { ...old, ...values };
+    requireThat(!profile.joinDate || !profile.lastEmploymentDate || profile.lastEmploymentDate >= profile.joinDate,
+      400, 'INVALID_EMPLOYEE', 'Last employment date cannot precede joining date.');
+    requireThat(!values.employeeCode || !rows.Employees.some(e => e.recordId !== op.employeeId && ![true, 'TRUE'].includes(e.isDeleted) &&
+      e.employeeCode?.trim().toLowerCase() === values.employeeCode.toLowerCase()),
+      400, 'INVALID_EMPLOYEE', 'Employee code is already in use.');
     const roleId = digest(`role:${op.employeeId}`);
     const role = rows.Roles.find(r => r.recordId === roleId);
     const marker = `employee:${opKey}`;
@@ -110,7 +131,7 @@ export class EmployeeService {
       const nextRow = records => Math.max(1, ...records.map(r => r._row)) + 1;
       const changes = [{ table: 'Employees', row: old?._row || nextRow(rows.Employees), values: {
         ...common(op.employeeId, old), fullName: values.fullName,
-        ...Object.fromEntries(['email', 'phone', 'department', 'designation'].filter(k => Object.hasOwn(values, k)).map(k => [k, values[k]])),
+        ...Object.fromEntries(profileFields.filter(k => Object.hasOwn(values, k)).map(k => [k, values[k]])),
         employmentStatus: values.employmentStatus, roleId } },
       { table: 'Roles', row: role?._row || nextRow(rows.Roles), values: { ...common(roleId, role), roleName: values.role, description: 'Employee assigned role' } }];
       let permissionRow = nextRow(rows.RolePermissions);
@@ -304,7 +325,7 @@ export class EmployeeService {
     const fields = {
       Customers: { sections: ['Invoices', 'Quotations'], fields: ['name', 'email', 'phone', 'taxNumber', 'address'] },
       CompanyProfile: { sections: ['Invoices', 'Quotations'], fields: ['name', 'address', 'email', 'phone', 'taxNumber', 'currency', 'invoicePrefix', 'quotationPrefix'] },
-      Employees: { sections: ['Payroll'], fields: ['fullName', 'employmentStatus'] },
+      Employees: { sections: ['Payroll'], fields: ['fullName', 'employeeCode', 'department', 'designation', 'employmentStatus', 'joinDate', 'lastEmploymentDate', 'basicSalary', 'allowances'] },
       Shareholders: { sections: ['Capital & Equity'], fields: ['name', 'status'] },
     };
     const reference = fields[table];
@@ -319,6 +340,20 @@ export class EmployeeService {
     this.session((await this.registry.read()).state, token);
     return rows[table].filter(r => r.companyId === p.companyId && ![true, 'TRUE'].includes(r.isDeleted))
       .map(r => Object.fromEntries(['recordId', ...reference.fields].map(k => [k, r[k] ?? ''])));
+  }
+  async payrollPreview(token, companyId, input, business, employee = false, context = {}) {
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(k =>
+      ['employeeId', 'month', 'bonus', 'deductions'].includes(k)), 400, 'INVALID_PAYROLL', 'Supply employee, month and adjustments.');
+    const authorize = async () => {
+      if (!employee) { this.owner((await this.registry.read()).state, token, companyId); return; }
+      const p = await this.principal(token); this.verifyContext(p, context);
+      requireThat(p.companyId === companyId && p.writableSections.includes('Payroll'),
+        403, 'WRITE_FORBIDDEN', 'Payroll edit access is required.');
+    };
+    await authorize();
+    const totals = await previewPayroll(business.sheets, companyId, input);
+    await authorize();
+    return { totals };
   }
   async records(token, table, context = {}) {
     requireThat(Object.hasOwn(SECTION_TABLES, table), 403, 'TABLE_FORBIDDEN', 'This table is not available to employees.');

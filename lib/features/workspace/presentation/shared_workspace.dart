@@ -1022,7 +1022,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               company: documentCompany,
             )
           : table == 'Payroll'
-          ? PayrollEditor(employees: choices, record: record)
+          ? PayrollEditor(
+              employees: choices,
+              record: record,
+              preview: (values) => widget.api.payrollPreview(widget.companyId, values, employee: widget.employee),
+            )
           : table == 'Assets'
           ? AssetEditor(record: record)
           : table == 'Shareholders'

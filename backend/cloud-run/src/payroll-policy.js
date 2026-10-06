@@ -12,7 +12,8 @@ const monthEnd = month => {
 };
 
 function calculated(employee, overtime, values) {
-  const basic = minor(employee.basicSalary ?? 0), allowances = minor(employee.allowances ?? 0);
+  const basic = minor(employee.basicSalary === '' ? 0 : employee.basicSalary ?? 0),
+    allowances = minor(employee.allowances === '' ? 0 : employee.allowances ?? 0);
   let overtimeAmount = 0n;
   for (const entry of overtime) {
     const hours = minor(entry.hours), rate = minor(entry.rate);
@@ -23,6 +24,20 @@ function calculated(employee, overtime, values) {
   requireThat(gross > 0n && deductions <= gross, 400, 'INVALID_PAYROLL', 'Payroll deductions cannot exceed gross salary.');
   return { basicSalary: money(basic), allowances: money(allowances), overtimeAmount: money(overtimeAmount),
     bonus: money(bonus), deductions: money(deductions), grossSalary: money(gross), netSalary: money(gross - deductions) };
+}
+
+export async function previewPayroll(sheets, companyId, values) {
+  requireThat(values && typeof values.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(values.month) &&
+    typeof values.employeeId === 'string', 400, 'INVALID_PAYROLL', 'Choose an employee and payroll month.');
+  const data = await sheets.readReferences(companyId, ['Employees', 'Overtime']);
+  const employee = data.Employees.find(row => row.companyId === companyId && row.recordId === values.employeeId && active(row));
+  requireThat(employee && employee.employmentStatus === 'ACTIVE', 409, 'PAYROLL_EMPLOYEE_INVALID', 'Choose an active employee.');
+  requireThat((!employee.joinDate || employee.joinDate <= monthEnd(values.month)) &&
+    (!employee.lastEmploymentDate || employee.lastEmploymentDate >= `${values.month}-01`),
+    409, 'PAYROLL_EMPLOYEE_INVALID', 'Payroll month must overlap the employee employment dates.');
+  const overtime = data.Overtime.filter(row => row.companyId === companyId && row.employeeId === values.employeeId && active(row) &&
+    row.date?.startsWith(`${values.month}-`) && row.approvalStatus === 'APPROVED');
+  return calculated(employee, overtime, values);
 }
 
 export async function payrollChanges(sheets, companyId, table, id, action, old, values, system, operation) {
@@ -92,20 +107,15 @@ export async function payrollChanges(sheets, companyId, table, id, action, old, 
   }
   requireThat(!old || old.status === 'DRAFT', 409, 'PAYROLL_LOCKED', 'Approved payroll cannot be edited or deleted.');
   if (action === 'delete') return { values, extra: [] };
-  const data = await sheets.readReferences(companyId, ['Employees', 'Overtime']);
   const next = { ...old, ...values };
   requireThat(typeof next.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(next.month) &&
     typeof next.employeeId === 'string', 400, 'INVALID_PAYROLL', 'Choose an employee and payroll month.');
-  const employee = data.Employees.find(row => row.companyId === companyId && row.recordId === next.employeeId && active(row));
-  requireThat(employee && employee.employmentStatus === 'ACTIVE', 409, 'PAYROLL_EMPLOYEE_INVALID', 'Choose an active employee.');
   requireThat(!Object.keys(values).some(key => ['status', 'basicSalary', 'allowances', 'overtimeAmount', 'grossSalary', 'netSalary',
     'paidDate', 'paymentAccount', 'paymentReference'].includes(key)), 400, 'PAYROLL_DERIVED_FIELD', 'Payroll totals and status are assigned by the server.');
   const all = await sheets.read(companyId, ['Payroll']);
   requireThat(!all.Payroll.some(row => row.companyId === companyId && row.recordId !== id && active(row) &&
     row.employeeId === next.employeeId && row.month === next.month), 409, 'PAYROLL_DUPLICATE', 'Payroll already exists for this employee and month.');
-  const overtime = data.Overtime.filter(row => row.companyId === companyId && row.employeeId === next.employeeId && active(row) &&
-    row.date?.startsWith(`${next.month}-`) && row.approvalStatus === 'APPROVED');
-  const totals = calculated(employee, overtime, next);
+  const totals = await previewPayroll(sheets, companyId, next);
   if (action === 'approve') {
     requireThat(old && old.basicSalary === totals.basicSalary && old.allowances === totals.allowances &&
       old.overtimeAmount === totals.overtimeAmount && old.bonus === totals.bonus && old.deductions === totals.deductions &&

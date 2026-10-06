@@ -152,6 +152,34 @@ without discarding pending edits. Downloads recheck owner authorization after th
 Sheets request. This is a bounded full-table read, not a paginated change feed or
 an atomic snapshot across tables.
 
+## Employee profiles and payroll preview
+
+Employee `POST /v1/companies/:companyId/employees` and `PATCH
+/v1/companies/:companyId/employees/:employeeId` accept `employeeCode`, `phone`,
+`department`, `designation`, `joinDate`, `lastEmploymentDate`, `basicSalary`,
+`allowances`, `bankName`, `iban`, `address`, `emiratesId`, `passportNumber` and
+`visaExpiry`, in addition to name, email, role, status, permissions and
+`expectedVersion`. Salary and allowances are nonnegative JSON numbers with at
+most two decimal places; dates are optional ISO dates. Employee codes are unique
+among non-deleted employees (case insensitive). Omitted profile fields are
+preserved on update. These fields use the existing Employees sheet schema.
+Owner employee lists return the full profile; employee record reads retain
+existing identity/bank privacy restrictions.
+
+`POST /v1/companies/:companyId/payroll/preview` (owner) and
+`POST /v1/employee/payroll/preview` (employee with company-wide Payroll edit
+access) accept `{employeeId, month, bonus, deductions}` and return
+`{totals: {basicSalary, allowances, overtimeAmount, bonus, deductions,
+grossSalary, netSalary}}`. Preview is read-only and never posts ledger entries.
+Employee requests honor the workspace and employee context headers.
+Payroll references expose compensation only to authorized Payroll editors.
+Preview and payroll draft saves share the same calculation: full monthly salary
+and allowances, approved overtime for that month, bonus, less deductions.
+Employment dates must overlap the payroll month. No automatic prorating or
+statutory deductions are applied. Draft saves recalculate; approval rejects stale
+totals after compensation or overtime changes. Approved and paid records remain
+locked under the existing payroll workflow.
+
 ## Journal validation
 
 Income/expense entry policy (2026-09-26): owner writes require a valid entry date,

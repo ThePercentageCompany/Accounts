@@ -4,6 +4,84 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/features/employees/presentation/payroll_editor.dart';
 
 void main() {
+  testWidgets(
+    'payroll preview uses endpoint totals and invalidates after adjustment changes',
+    (tester) async {
+      Map<String, Object?>? submitted;
+      var calls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                child: const Text('Open'),
+                onPressed: () async =>
+                    submitted = await showDialog<Map<String, Object?>>(
+                      context: context,
+                      builder: (_) => PayrollEditor(
+                        employees: [
+                          {
+                            'recordId': 'e' * 43,
+                            'fullName': 'Employee',
+                            'basicSalary': 5000,
+                            'allowances': 500,
+                          },
+                        ],
+                        record: {
+                          'employeeId': 'e' * 43,
+                          'month': '2026-09',
+                          'bonus': 0,
+                          'deductions': 0,
+                        },
+                        preview: (values) async {
+                          calls++;
+                          expect(values.containsKey('netSalary'), isFalse);
+                          return {
+                            'totals': {
+                              'basicSalary': 5000,
+                              'allowances': 500,
+                              'overtimeAmount': 100,
+                              'bonus': values['bonus'],
+                              'deductions': 0,
+                              'grossSalary': 5600,
+                              'netSalary': 5600,
+                            },
+                          };
+                        },
+                      ),
+                    ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(submitted, isNull);
+      expect(find.text('Net salary: 5600.00'), findsOneWidget);
+      final bonus = find.ancestor(
+        of: find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.labelText == 'Bonus',
+        ),
+        matching: find.byType(TextFormField),
+      );
+      await tester.ensureVisible(bonus);
+      await tester.enterText(bonus, '250');
+      await tester.pumpAndSettle();
+      expect(find.text('Payroll preview'), findsNothing);
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(calls, 2);
+      expect(submitted, isNull);
+      await tester.tap(find.text('Save draft'));
+      await tester.pumpAndSettle();
+      expect(submitted?['bonus'], 250);
+      expect(submitted?.containsKey('netSalary'), isFalse);
+    },
+  );
   testWidgets('payroll draft submits only employee month and adjustments', (
     tester,
   ) async {
