@@ -522,6 +522,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 for (final section in group.value.where(sections.contains)) ...[
                   if (_children(section).length > 1)
                     ExpansionTile(
+                      key: PageStorageKey(('workspace-section', section)),
                       expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                       leading: Icon(_sectionIcon(section)),
                       title: Text(section),

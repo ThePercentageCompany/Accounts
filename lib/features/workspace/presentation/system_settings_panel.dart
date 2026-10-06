@@ -45,6 +45,7 @@ class SystemSettingsPanel extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     child: Card(
       child: ExpansionTile(
+        key: const PageStorageKey('system-settings-expansion'),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         initiallyExpanded: true,
         leading: const Icon(Icons.settings_outlined),

@@ -322,7 +322,9 @@ class RecordCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
-        key: key,
+        // Saved records supply a stable PageStorageKey. A standalone card
+        // still needs an address distinct from its containing scroll view.
+        key: PageStorageKey(('record-card-expansion', key)),
         title: title,
         subtitle: subtitle,
         shape: shape,

@@ -669,9 +669,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
                 ),
               ),
           ],
-          if (profit &&
-              data['trends'] is List &&
-              (data['trends'] as List).isNotEmpty)
+          if (profit && data['trends'] is List)
             ReportTrends(
               trends: List<Map<String, dynamic>>.from(
                 (data['trends'] as List).map(
@@ -685,6 +683,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
               (data['trends'] as List).isNotEmpty)
             Card(
               child: ExpansionTile(
+                key: const PageStorageKey('monthly-period-breakdown'),
                 expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                 title: const Text('Monthly period breakdown'),
                 children: [

@@ -230,8 +230,7 @@ class WorkspaceDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 28),
-              if (data['trends'] is List &&
-                  (data['trends'] as List).isNotEmpty) ...[
+              if (data['trends'] is List) ...[
                 ReportTrends(
                   trends: List<Map<String, dynamic>>.from(
                     (data['trends'] as List).map(

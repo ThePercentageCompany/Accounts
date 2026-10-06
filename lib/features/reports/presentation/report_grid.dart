@@ -75,6 +75,9 @@ class _ReportGridState extends State<ReportGrid> {
     );
     // Give nested viewports independent positions, including desktop scrollbars.
     return SingleChildScrollView(
+      // Tile expansion flags and each axis's offsets must have separate
+      // PageStorage addresses. Controllers alone do not isolate saved state.
+      key: PageStorageKey(('report-grid-horizontal', headers.join('|'))),
       controller: _horizontal,
       primary: false,
       scrollDirection: Axis.horizontal,
@@ -93,6 +96,10 @@ class _ReportGridState extends State<ReportGrid> {
                 math.max(height, rows.length * height),
               ),
               child: ListView.builder(
+                key: PageStorageKey((
+                  'report-grid-vertical',
+                  headers.join('|'),
+                )),
                 controller: _vertical,
                 primary: false,
                 itemCount: rows.length,

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:intl/intl.dart';
 
 BigInt? reportMinor(Object? value) {
@@ -44,7 +45,31 @@ class ReportFormat {
 
   String date(Object? value) {
     final parsed = DateTime.tryParse('$value');
-    return parsed == null ? '\u2014' : DateFormat(datePattern).format(parsed);
+    if (parsed == null) return '\u2014';
+    try {
+      return DateFormat(datePattern).format(parsed);
+    } on UnsupportedError catch (error, stack) {
+      // Metadata can contain a pattern unsupported by intl (e.g. EEEEEE).
+      // Retain the date and report the configuration failure, rather than
+      // letting one display preference prevent the entire report from building.
+      developer.log(
+        'Unsupported report date pattern: $datePattern',
+        name: 'ReportFormat',
+        error: error,
+        stackTrace: stack,
+        level: 900,
+      );
+      return DateFormat('yyyy-MM-dd').format(parsed);
+    } on FormatException catch (error, stack) {
+      developer.log(
+        'Invalid report date pattern: $datePattern',
+        name: 'ReportFormat',
+        error: error,
+        stackTrace: stack,
+        level: 900,
+      );
+      return DateFormat('yyyy-MM-dd').format(parsed);
+    }
   }
 }
 
