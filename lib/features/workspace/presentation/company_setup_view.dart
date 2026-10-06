@@ -260,7 +260,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                 ),
                 if (state.owner != null || state.employee != null)
                   LoadingButton.iconOnly(
-                    tooltip: 'Sign out',
+                    tooltip: 'Sign out. Pending changes stay on this device for this account.',
                     onPressed: state.busy ? null : session.signOut,
                     icon: const Icon(Icons.logout),
                   ),

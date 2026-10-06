@@ -54,10 +54,12 @@ export class BusinessService {
     return Object.fromEntries(Object.keys(input).sort().map(key => [key, input[key]]));
   }
   async sync(token, companyId, input) {
-    this.owner((await this.registry.read()).state, token, companyId, true);
-    requireThat(input && !Array.isArray(input) && Object.keys(input).length === 1 &&
+    const principal = this.owner((await this.registry.read()).state, token, companyId, true);
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => ['operations', 'ownerId'].includes(k)) &&
       Array.isArray(input.operations) && input.operations.length > 0 && input.operations.length <= 20,
     400, 'INVALID_BATCH', 'Supply between 1 and 20 operations.');
+    requireThat(input.ownerId === undefined || input.ownerId === principal.owner.id,
+      401, 'SYNC_ACCOUNT_MISMATCH', 'Sign in to the original account to sync these changes.');
     const seen = new Set();
     for (const op of input.operations) {
       requireThat(op && !Array.isArray(op) && Object.keys(op).every(k =>

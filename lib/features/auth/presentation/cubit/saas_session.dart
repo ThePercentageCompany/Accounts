@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:tpc_invoice/core/offline/durable_value.dart';
 
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
@@ -56,6 +57,27 @@ class SaasSession extends Cubit<SessionState> {
   bool _disposed = false;
 
   String get _registrationKey => 'tpc_saas_registration_${owner!['ownerId']}';
+  DurableValue? _registration;
+  Future<String?> _readRegistration() async {
+    final client = api;
+    if (client is SaasApi && client.offlineEnabled) {
+      _registration = DurableValue(
+          client.offlineStore,
+          jsonEncode(
+              [client.origin.toString(), 'owner', owner!['ownerId'], 'setup']),
+          _registrationKey,
+          preferences);
+      await _registration!.load();
+      return _registration!.value;
+    }
+    return preferences.getString(_registrationKey);
+  }
+
+  Future<bool> _saveRegistration(String value) =>
+      _registration?.put(value) ??
+      preferences.setString(_registrationKey, value);
+  Future<bool> _removeRegistration() =>
+      _registration?.remove() ?? preferences.remove(_registrationKey);
   String get _selectedKey => 'tpc_saas_selected_company_${owner!['ownerId']}';
   String get _openKey => 'tpc_saas_open_workspace_${owner!['ownerId']}';
   bool get restoreWorkspace =>
@@ -86,6 +108,7 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   void _clearIdentity() {
+    _registration = null;
     api.detachWorkspace();
     owner = null;
     employee = null;
@@ -95,33 +118,32 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
-    _clearIdentity();
-    final employeeMode =
-        employeeOnly ||
-        preferences.getString('tpc_saas_session_mode') == 'employee';
-    if (!employeeMode) {
-      try {
-        owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
-      } on SaasApiException catch (failure) {
-        if (!failure.requiresSignIn) rethrow;
-      }
-    }
-    if (owner != null) {
-      final pending = preferences.getString(_registrationKey);
-      if (pending != null) {
-        pendingCompanyName = (jsonDecode(pending) as Map)['name'] as String;
-      }
-      await _loadCompanies();
-      return;
-    }
-    try {
-      employee = Map<String, dynamic>.from(
-        (await api.employeeMe())['employee'] as Map,
-      );
-    } on SaasApiException catch (failure) {
-      if (!failure.requiresSignIn) rethrow;
-    }
-  });
+        _clearIdentity();
+        final employeeMode = employeeOnly ||
+            preferences.getString('tpc_saas_session_mode') == 'employee';
+        if (!employeeMode) {
+          try {
+            owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
+          } on SaasApiException catch (failure) {
+            if (!failure.requiresSignIn) rethrow;
+          }
+        }
+        if (owner != null) {
+          final pending = await _readRegistration();
+          if (pending != null) {
+            pendingCompanyName = (jsonDecode(pending) as Map)['name'] as String;
+          }
+          await _loadCompanies();
+          return;
+        }
+        try {
+          employee = Map<String, dynamic>.from(
+            (await api.employeeMe())['employee'] as Map,
+          );
+        } on SaasApiException catch (failure) {
+          if (!failure.requiresSignIn) rethrow;
+        }
+      });
 
   Future<void> _loadCompanies() async {
     final previousId =
@@ -136,7 +158,7 @@ class SaasSession extends Cubit<SessionState> {
     }
     company =
         companies.where((row) => row['companyId'] == previousId).firstOrNull ??
-        companies.firstOrNull;
+            companies.firstOrNull;
     if (company != null) {
       await preferences.setString(
         _selectedKey,
@@ -146,91 +168,102 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   Future<void> selectCompany(String companyId) => _run(() async {
-    if (!companies.any((row) => row['companyId'] == companyId)) {
-      throw const SaasApiException(
-        'COMPANY_NOT_FOUND',
-        'Choose a company from your account.',
-      );
-    }
-    company = Map<String, dynamic>.from(
-      (await api.setup(companyId))['company'] as Map,
-    );
-    await preferences.setString(_selectedKey, companyId);
-  });
+        if (!companies.any((row) => row['companyId'] == companyId)) {
+          throw const SaasApiException(
+            'COMPANY_NOT_FOUND',
+            'Choose a company from your account.',
+          );
+        }
+        company = Map<String, dynamic>.from(
+          (await api.setup(companyId))['company'] as Map,
+        );
+        await preferences.setString(_selectedKey, companyId);
+      });
 
   Future<void> createCompany(String name) => _run(() async {
-    if (owner == null) {
-      throw const SaasApiException(
-        'UNAUTHORIZED',
-        'Sign in first.',
-        status: 401,
-      );
-    }
-    final cleaned = name.trim();
-    if (cleaned.isEmpty || cleaned.length > 160) {
-      throw const SaasApiException(
-        'INVALID_COMPANY',
-        'Enter a company name between 1 and 160 characters.',
-      );
-    }
-    final saved = preferences.getString(_registrationKey);
-    final operation = saved == null
-        ? {'name': cleaned, 'key': const Uuid().v4()}
-        : Map<String, dynamic>.from(jsonDecode(saved) as Map);
-    if (operation['name'] != cleaned) {
-      throw const SaasApiException(
-        'REGISTRATION_PENDING',
-        'Retry the pending company name before registering another company.',
-      );
-    }
-    // Persist before sending: a lost response must not create a second company.
-    if (!await preferences.setString(_registrationKey, jsonEncode(operation))) {
-      throw const SaasApiException(
-        'LOCAL_STORAGE',
-        'Cannot save setup progress on this device.',
-      );
-    }
-    pendingCompanyName = cleaned;
-    final result = await api.createCompany(cleaned, operation['key'] as String);
-    company = Map<String, dynamic>.from(result['company'] as Map);
-    if (!await preferences.remove(_registrationKey)) {
-      throw const SaasApiException(
-        'LOCAL_STORAGE',
-        'Company created. Retry to confirm saved setup progress.',
-      );
-    }
-    pendingCompanyName = null;
-    await _loadCompanies();
-  });
+        if (owner == null) {
+          throw const SaasApiException(
+            'UNAUTHORIZED',
+            'Sign in first.',
+            status: 401,
+          );
+        }
+        final cleaned = name.trim();
+        if (cleaned.isEmpty || cleaned.length > 160) {
+          throw const SaasApiException(
+            'INVALID_COMPANY',
+            'Enter a company name between 1 and 160 characters.',
+          );
+        }
+        final saved = await _readRegistration();
+        final operation = saved == null
+            ? {'name': cleaned, 'key': const Uuid().v4()}
+            : Map<String, dynamic>.from(jsonDecode(saved) as Map);
+        if (operation['name'] != cleaned) {
+          throw const SaasApiException(
+            'REGISTRATION_PENDING',
+            'Retry the pending company name before registering another company.',
+          );
+        }
+        // Persist before sending: a lost response must not create a second company.
+        if (!await _saveRegistration(jsonEncode(operation))) {
+          throw const SaasApiException(
+            'LOCAL_STORAGE',
+            'Cannot save setup progress on this device.',
+          );
+        }
+        pendingCompanyName = cleaned;
+        final result =
+            await api.createCompany(cleaned, operation['key'] as String);
+        company = Map<String, dynamic>.from(result['company'] as Map);
+        if (!await _removeRegistration()) {
+          throw const SaasApiException(
+            'LOCAL_STORAGE',
+            'Company created. Retry to confirm saved setup progress.',
+          );
+        }
+        pendingCompanyName = null;
+        await _loadCompanies();
+      });
 
   Future<void> refreshSetup() => _run(() async {
-    if (company == null) return;
-    company = Map<String, dynamic>.from(
-      (await api.setup(company!['companyId'] as String))['company'] as Map,
-    );
-  });
+        if (company == null) return;
+        company = Map<String, dynamic>.from(
+          (await api.setup(company!['companyId'] as String))['company'] as Map,
+        );
+      });
 
   Future<void> retrySetup() => _run(() async {
-    if (company == null) return;
-    company = Map<String, dynamic>.from(
-      (await api.retrySetup(company!['companyId'] as String))['company'] as Map,
-    );
-  });
+        if (company == null) return;
+        company = Map<String, dynamic>.from(
+          (await api.retrySetup(company!['companyId'] as String))['company']
+              as Map,
+        );
+      });
 
   Future<void> deleteCompany() => _run(() async {
-    if (company == null || owner == null) return;
-    final id = company!['companyId'] as String;
-    try {
-      await api.deleteCompany(id);
-    } on SaasApiException catch (failure) {
-      // A previous deletion may have succeeded with its response lost.
-      if (failure.code != 'COMPANY_NOT_FOUND' || failure.status != 404) {
-        rethrow;
-      }
-    }
-    await api.clearWorkspace();
-    for (final key
-        in preferences
+        if (company == null || owner == null) return;
+        final id = company!['companyId'] as String;
+        final client = api;
+        if (client is SaasApi && client.offlineEnabled) {
+          final box = client.outbox(owner!['ownerId'] as String, id);
+          await box.reload();
+          if (box.pending.isNotEmpty ||
+              (box.data['aux'] as Map? ?? {}).isNotEmpty) {
+            throw const SaasApiException('PENDING',
+                'Sync or export pending changes before deleting this workspace.');
+          }
+        }
+        try {
+          await api.deleteCompany(id);
+        } on SaasApiException catch (failure) {
+          // A previous deletion may have succeeded with its response lost.
+          if (failure.code != 'COMPANY_NOT_FOUND' || failure.status != 404) {
+            rethrow;
+          }
+        }
+        await api.clearWorkspace();
+        for (final key in preferences
             .getKeys()
             .where(
               (key) =>
@@ -239,50 +272,50 @@ class SaasSession extends Cubit<SessionState> {
                       key.startsWith('tpc_workspace_cache_')),
             )
             .toList()) {
-      await preferences.remove(key);
-    }
-    companies.removeWhere((entry) => entry['companyId'] == id);
-    company = companies.isEmpty ? null : companies.first;
-  });
+          await preferences.remove(key);
+        }
+        companies.removeWhere((entry) => entry['companyId'] == id);
+        company = companies.isEmpty ? null : companies.first;
+      });
 
   Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
-    await preferences.setString('tpc_saas_session_mode', 'owner');
-    await navigate(await api.startSignIn());
-  });
+        await preferences.setString('tpc_saas_session_mode', 'owner');
+        await navigate(await api.startSignIn());
+      });
 
   Future<void> connectGoogle(Future<void> Function(Uri) navigate) => _run(
-    () async {
-      if (company == null) return;
-      await navigate(await api.connectGoogle(company!['companyId'] as String));
-    },
-  );
+        () async {
+          if (company == null) return;
+          await navigate(
+              await api.connectGoogle(company!['companyId'] as String));
+        },
+      );
 
   Future<void> employeeLogin(String invite, String code) => _run(() async {
-    final result = await api.employeeLogin(invite, code);
-    _clearIdentity();
-    employee = Map<String, dynamic>.from(result['employee'] as Map);
-    await preferences.setString('tpc_saas_session_mode', 'employee');
-  });
+        final result = await api.employeeLogin(invite, code);
+        _clearIdentity();
+        employee = Map<String, dynamic>.from(result['employee'] as Map);
+        await preferences.setString('tpc_saas_session_mode', 'employee');
+      });
 
   Future<void> signOut() => _run(() async {
-    // Purge optional read snapshots before logout; preserve the existing
-    // authenticated session/error behavior if remote logout fails.
-    for (final key
-        in preferences
+        // Purge optional read snapshots before logout; preserve the existing
+        // authenticated session/error behavior if remote logout fails.
+        for (final key in preferences
             .getKeys()
             .where((k) => k.startsWith('tpc_workspace_cache_v1_'))
             .toList()) {
-      await preferences.remove(key);
-    }
-    if (employee != null) await api.employeeLogout();
-    if (owner != null) await api.logout();
-    await preferences.remove('tpc_saas_session_mode');
-    if (owner != null) {
-      await preferences.remove(_openKey);
-      await preferences.remove(_selectedKey);
-    }
-    _clearIdentity();
-  });
+          await preferences.remove(key);
+        }
+        if (employee != null) await api.employeeLogout();
+        if (owner != null) await api.logout();
+        await preferences.remove('tpc_saas_session_mode');
+        if (owner != null) {
+          await preferences.remove(_openKey);
+          await preferences.remove(_selectedKey);
+        }
+        _clearIdentity();
+      });
 
   void _notify() {
     if (_disposed) return;

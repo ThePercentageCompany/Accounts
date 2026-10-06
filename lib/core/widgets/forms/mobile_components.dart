@@ -445,6 +445,10 @@ class RecordDetails extends StatelessWidget {
     'syncStatus',
     'isDeleted',
     'idempotencyKey',
+    '_operationId',
+    '_localOnly',
+    '_syncError',
+    'items',
   };
   static const _money = {
     'subtotal',

@@ -57,13 +57,14 @@ class ReadCache extends ChangeNotifier {
     this.isVisible,
     this.validateContext,
     bool automatic = true,
-  }) : store = store ?? createCacheStore(),
-       now = now ?? DateTime.now {
+  })  : store = store ?? createCacheStore(),
+        now = now ?? DateTime.now {
     _lifecycle = CacheLifecycle(() => resume(restartRetries: true), _message);
     if (automatic) {
       _timer = Timer.periodic(const Duration(seconds: 30), (_) => resume());
     }
   }
+  Object? storageError;
   final CacheStore store;
   final DateTime Function() now;
   final Duration recordsFreshness, reportsFreshness, retention;
@@ -140,6 +141,10 @@ class ReadCache extends ChangeNotifier {
   Duration freshness(String path) =>
       path.contains('/reports/') ? reportsFreshness : recordsFreshness;
   ReadCacheState? state(String path) => _states[normalizedResource(path)];
+
+  /// Outbox overlays are separate from server snapshots. Notify consumers
+  /// without invalidating/fetching a server resource after a local-only write.
+  void localChanged(String path) => _notify();
   void activate(String path) {
     final key = normalizedResource(path);
     _active[key] = (_active[key] ?? 0) + 1;
@@ -162,7 +167,14 @@ class ReadCache extends ChangeNotifier {
   Future<void> _safe(Future<void> Function() action) async {
     try {
       await action().timeout(const Duration(seconds: 3));
-    } catch (_) {}
+      if (storageError != null) {
+        storageError = null;
+        _notify();
+      }
+    } catch (error) {
+      storageError = error;
+      _notify();
+    }
   }
 
   void _notify() {
@@ -177,20 +189,19 @@ class ReadCache extends ChangeNotifier {
     if (scope == null) return loader();
     final key = normalizedResource(path);
     if (_states.length >= 128 && !_states.containsKey(key)) {
-      final victims =
-          _states.keys
-              .where(
-                (k) =>
-                    !_active.containsKey(k) &&
-                    !_refreshes.containsKey(k) &&
-                    !_loads.containsKey(k),
-              )
-              .toList()
-            ..sort(
-              (a, b) => (_states[a]!.syncedAt ?? DateTime(1970)).compareTo(
-                _states[b]!.syncedAt ?? DateTime(1970),
-              ),
-            );
+      final victims = _states.keys
+          .where(
+            (k) =>
+                !_active.containsKey(k) &&
+                !_refreshes.containsKey(k) &&
+                !_loads.containsKey(k),
+          )
+          .toList()
+        ..sort(
+          (a, b) => (_states[a]!.syncedAt ?? DateTime(1970)).compareTo(
+            _states[b]!.syncedAt ?? DateTime(1970),
+          ),
+        );
       if (victims.isNotEmpty) {
         final victim = victims.first;
         _states.remove(victim);
@@ -216,10 +227,12 @@ class ReadCache extends ChangeNotifier {
       final state = _states.putIfAbsent(key, ReadCacheState.new);
       Map<String, dynamic>? entry;
       try {
-        entry = await store
-            .read(storageKey)
-            .timeout(const Duration(seconds: 2));
-      } catch (_) {}
+        entry =
+            await store.read(storageKey).timeout(const Duration(seconds: 2));
+      } catch (error) {
+        storageError = error;
+        _notify();
+      }
       if (!_current(generation)) throw StateError('Workspace context changed.');
       try {
         if (state.data == null &&
@@ -265,8 +278,7 @@ class ReadCache extends ChangeNotifier {
   void _refreshIfStale(String key) {
     final state = _states[key];
     if (state == null || _loaders[key] == null) return;
-    state.stale =
-        state.stale ||
+    state.stale = state.stale ||
         state.syncedAt == null ||
         now().difference(state.syncedAt!) >= freshness(_paths[key]!);
     if (state.stale &&
@@ -360,8 +372,8 @@ class ReadCache extends ChangeNotifier {
         state.retryAt = serverDelay != null
             ? now().add(serverDelay)
             : state.failures >= 4
-            ? DateTime(9999)
-            : now().add(Duration(seconds: [5, 15, 60][state.failures - 1]));
+                ? DateTime(9999)
+                : now().add(Duration(seconds: [5, 15, 60][state.failures - 1]));
         if (state.data != null) return _copy(state.data!);
         rethrow;
       } finally {
@@ -404,8 +416,7 @@ class ReadCache extends ChangeNotifier {
       unawaited(_safe(() => store.invalidateScope(currentScope, affected)));
       if (broadcast) {
         // Send only resource paths, never records, credentials or permission claims.
-        final paths =
-            (broadcastPaths ??
+        final paths = (broadcastPaths ??
             _paths.values
                 .where(affected)
                 .map((p) => Uri.parse(p).path)

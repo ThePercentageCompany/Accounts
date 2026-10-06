@@ -22,6 +22,18 @@ async function setup() {
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
 
+test('sync verifies the original owner before applying a queued operation', async () => {
+  const f = await setup();
+  const ownerId = (await f.service.me(f.token)).ownerId;
+  const operations = [{ operationId: 'offline_owner_guard_01', table: 'Customers',
+    action: 'create', expectedVersion: 0, values: { name: 'Cached draft' } }];
+  await assert.rejects(f.business.sync(f.token, f.companyId,
+    { ownerId: 'another-owner', operations }), e => e.code === 'SYNC_ACCOUNT_MISMATCH');
+  assert.equal(f.data.Customers.length, 0);
+  assert.equal((await f.business.sync(f.token, f.companyId,
+    { ownerId, operations })).results[0].status, 'APPLIED');
+});
+
 test('company profile validates identity and locks established currency after posting', async () => {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);

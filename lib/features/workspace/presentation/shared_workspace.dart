@@ -1,9 +1,11 @@
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/features/employees/presentation/cubit/employee_admin_controller.dart';
@@ -131,9 +133,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   String _subsection(String section) =>
       _subsections[section] ?? _children(section).keys.first;
   void _navigate(String section, String child) => setState(() {
-    _selected = section;
-    _subsections[section] = child;
-  });
+        _selected = section;
+        _subsections[section] = child;
+      });
   String _destinationTitle(String section) => _children(section).isEmpty
       ? section
       : _children(section)[_subsection(section)]!;
@@ -146,6 +148,17 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       ownerId: widget.ownerId,
       employee: widget.employee,
     );
+    _writes?.initialize().catchError((Object error) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Device storage is unavailable. Changes have not been saved: $error',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -162,11 +175,14 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       if (widget.employee == null || allowed!.contains('Reports')) 'Reports',
       if (_employees != null || allowed!.contains('Employees')) 'Employees',
       for (final section in workspaceTables.keys)
-        if (allowed == null || (section == 'Calendar' ? allowed.contains('Tasks') : allowed.contains(section))) section,
+        if (allowed == null ||
+            (section == 'Calendar'
+                ? allowed.contains('Tasks')
+                : allowed.contains(section)))
+          section,
     ];
-    final selected = sections.contains(_selected)
-        ? _selected
-        : sections.firstOrNull;
+    final selected =
+        sections.contains(_selected) ? _selected : sections.firstOrNull;
     if (selected != null) _visited.add(selected);
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final shortcuts = <String>[
@@ -187,28 +203,28 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       ? const Iterable<String>.empty()
                       : sections.where(
                           (s) => s.toLowerCase().contains(
-                            value.text.toLowerCase(),
-                          ),
+                                value.text.toLowerCase(),
+                              ),
                         ),
                   onSelected: (value) => setState(() => _selected = value),
                   fieldViewBuilder: (context, controller, focus, submit) =>
                       TextField(
-                        controller: controller,
-                        focusNode: focus,
-                        decoration: const InputDecoration(
-                          hintText: 'Search workspace sections...',
-                          prefixIcon: Icon(Icons.search),
-                          isDense: true,
-                        ),
-                      ),
+                    controller: controller,
+                    focusNode: focus,
+                    decoration: const InputDecoration(
+                      hintText: 'Search workspace sections...',
+                      prefixIcon: Icon(Icons.search),
+                      isDense: true,
+                    ),
+                  ),
                 ),
               )
             : Text(
                 wide
                     ? widget.title
                     : selected == 'Reports'
-                    ? 'Home'
-                    : selected ?? 'Workspace',
+                        ? 'Home'
+                        : selected ?? 'Workspace',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -239,8 +255,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           icon: const Icon(Icons.arrow_back),
         ),
       ),
-      bottomNavigationBar:
-          wide ||
+      bottomNavigationBar: wide ||
               (sections.length < 2 &&
                   !sections.any((section) => _children(section).length > 1))
           ? null
@@ -330,10 +345,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                             Text(
                               selected == 'Reports'
                                   ? (_subsection('Reports') == 'dashboard'
-                                        ? 'Business overview'
-                                        : _destinationTitle('Reports'))
+                                      ? 'Business overview'
+                                      : _destinationTitle('Reports'))
                                   : selected ?? 'Workspace',
-                              style: Theme.of(context).textTheme.headlineSmall
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                             if (wide) const SizedBox(height: 6),
@@ -379,99 +396,106 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           ),
         )
       : ['Tasks', 'Calendar'].contains(selected)
-      ? TaskWorkspace(
-          api: widget.api, companyId: widget.companyId, employee: widget.employee,
-          calendar: selected == 'Calendar', active: active, uploads: _uploads, writes: _writes,
-        )
-      : selected == 'Reports'
-      ? [
-              'chart-of-accounts',
-              'report-settings',
-            ].contains(_subsection('Reports'))
-            ? ReportConfigurationView(
-                key: ValueKey((widget.companyId, _subsection('Reports'))),
-                api: widget.api,
-                companyId: widget.companyId,
-                employee: widget.employee != null,
-                chart: _subsection('Reports') == 'chart-of-accounts',
-              )
-            : _subsection('Reports') == 'journal-entries'
-            ? _RecordsPanel(
-                key: ValueKey((widget.companyId, 'report-journals')),
-                api: widget.api,
-                companyId: widget.companyId,
-                employee: widget.employee != null,
-                active: active,
-                tables: const ['Journals', 'JournalLines'],
-                selectedTable: 'Journals',
-                writes:
-                    widget.employee == null ||
-                        (widget.employee!['writableSections'] as List? ?? [])
-                            .contains('Balance Sheet')
-                    ? _writes
-                    : null,
-                uploads: _uploads,
-              )
-            : TrialBalanceView(
-                key: ValueKey(widget.companyId),
-                api: widget.api,
-                companyId: widget.companyId,
-                employee: widget.employee != null,
-                initialDashboard: true,
-                reportKind: _subsection('Reports'),
-                active: active,
-                companyName: widget.title,
-                onReportSelected: (kind) => _navigate('Reports', kind),
-              )
-      : selected == 'Employees' && _employees != null
-      ? EmployeeAdminView(
-          controller: _employees,
-          active: active,
-          onDocuments: (row) {
-            showDialog<void>(
-              context: context,
-              builder: (_) => RecordDocumentsView(
-                api: widget.api,
-                companyId: widget.companyId,
-                section: 'Employees',
-                record: row,
-                uploads: _uploads,
-                writes: _writes,
-              ),
-            );
-          },
-        )
-      : _RecordsPanel(
-          key: ValueKey((widget.companyId, selected)),
-          api: widget.api,
-          companyId: widget.companyId,
-          employee: widget.employee != null,
-          active: active,
-          writes:
-              widget.employee == null ||
-                  (widget.employee!['writableSections'] as List? ?? [])
-                      .contains(selected)
-              ? _writes
-              : null,
-          uploads: _uploads,
-          selectedTable: _children(selected).isEmpty
-              ? 'Employees'
-              : _subsection(selected),
-          tables: selected == 'Employees'
-              ? ['Employees']
-              : workspaceTables[selected]!,
-        );
+          ? TaskWorkspace(
+              api: widget.api,
+              companyId: widget.companyId,
+              employee: widget.employee,
+              calendar: selected == 'Calendar',
+              active: active,
+              uploads: _uploads,
+              writes: _writes,
+            )
+          : selected == 'Reports'
+              ? [
+                  'chart-of-accounts',
+                  'report-settings',
+                ].contains(_subsection('Reports'))
+                  ? ReportConfigurationView(
+                      key: ValueKey((widget.companyId, _subsection('Reports'))),
+                      api: widget.api,
+                      companyId: widget.companyId,
+                      employee: widget.employee != null,
+                      chart: _subsection('Reports') == 'chart-of-accounts',
+                    )
+                  : _subsection('Reports') == 'journal-entries'
+                      ? _RecordsPanel(
+                          key: ValueKey((widget.companyId, 'report-journals')),
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee != null,
+                          active: active,
+                          tables: const ['Journals', 'JournalLines'],
+                          selectedTable: 'Journals',
+                          writes: widget.employee == null ||
+                                  (widget.employee!['writableSections']
+                                              as List? ??
+                                          [])
+                                      .contains('Balance Sheet')
+                              ? _writes
+                              : null,
+                          uploads: _uploads,
+                        )
+                      : TrialBalanceView(
+                          key: ValueKey(widget.companyId),
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee != null,
+                          initialDashboard: true,
+                          reportKind: _subsection('Reports'),
+                          active: active,
+                          companyName: widget.title,
+                          onReportSelected: (kind) =>
+                              _navigate('Reports', kind),
+                        )
+              : selected == 'Employees' && _employees != null
+                  ? EmployeeAdminView(
+                      controller: _employees,
+                      active: active,
+                      onDocuments: (row) {
+                        showDialog<void>(
+                          context: context,
+                          builder: (_) => RecordDocumentsView(
+                            api: widget.api,
+                            companyId: widget.companyId,
+                            section: 'Employees',
+                            record: row,
+                            uploads: _uploads,
+                            writes: _writes,
+                          ),
+                        );
+                      },
+                    )
+                  : _RecordsPanel(
+                      key: ValueKey((widget.companyId, selected)),
+                      api: widget.api,
+                      companyId: widget.companyId,
+                      employee: widget.employee != null,
+                      active: active,
+                      writes: widget.employee == null ||
+                              (widget.employee!['writableSections'] as List? ??
+                                      [])
+                                  .contains(selected)
+                          ? _writes
+                          : null,
+                      uploads: _uploads,
+                      selectedTable: _children(selected).isEmpty
+                          ? 'Employees'
+                          : _subsection(selected),
+                      tables: selected == 'Employees'
+                          ? ['Employees']
+                          : workspaceTables[selected]!,
+                    );
 
   IconData _sectionIcon(String section) => switch (section) {
-    'Tasks' => Icons.task_alt,
-    'Calendar' => Icons.calendar_month_outlined,
-    'Reports' => Icons.space_dashboard_outlined,
-    'Invoices' => Icons.receipt_long_outlined,
-    'Customers' => Icons.people_outline,
-    'Employees' => Icons.badge_outlined,
-    'Settings' => Icons.settings_outlined,
-    _ => Icons.folder_outlined,
-  };
+        'Tasks' => Icons.task_alt,
+        'Calendar' => Icons.calendar_month_outlined,
+        'Reports' => Icons.space_dashboard_outlined,
+        'Invoices' => Icons.receipt_long_outlined,
+        'Customers' => Icons.people_outline,
+        'Employees' => Icons.badge_outlined,
+        'Settings' => Icons.settings_outlined,
+        _ => Icons.folder_outlined,
+      };
 
   Future<void> _showSections(List<String> sections, String? selected) async {
     final choice = await showModalBottomSheet<String>(
@@ -535,8 +559,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                               right: 16,
                             ),
                             title: Text(child.value),
-                            selected:
-                                section == selected &&
+                            selected: section == selected &&
                                 _subsection(section) == child.key,
                             onTap: () => Navigator.pop(
                               context,
@@ -550,9 +573,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       leading: Icon(_sectionIcon(section)),
                       title: Text(section),
                       selected: section == selected,
-                      trailing: section == selected
-                          ? const Icon(Icons.check)
-                          : null,
+                      trailing:
+                          section == selected ? const Icon(Icons.check) : null,
                       onTap: () => Navigator.pop(context, section),
                     ),
                 ],
@@ -669,9 +691,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   selected: selected == section,
-                  selectedTileColor: dark
-                      ? const Color(0xFF333333)
-                      : colors.primaryContainer,
+                  selectedTileColor:
+                      dark ? const Color(0xFF333333) : colors.primaryContainer,
                   selectedColor: dark ? colors.onSurface : colors.primary,
                   textColor: colors.onSurfaceVariant,
                   iconColor: colors.onSurfaceVariant,
@@ -761,25 +782,25 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       )
       .toList();
   ButtonStyle get _destructiveActionStyle => ButtonStyle(
-    foregroundColor: WidgetStatePropertyAll(
-      Theme.of(context).colorScheme.error,
-    ),
-    side: WidgetStatePropertyAll(
-      BorderSide(
-        color: Theme.of(context).colorScheme.error.withValues(alpha: .5),
-      ),
-    ),
-  );
+        foregroundColor: WidgetStatePropertyAll(
+          Theme.of(context).colorScheme.error,
+        ),
+        side: WidgetStatePropertyAll(
+          BorderSide(
+            color: Theme.of(context).colorScheme.error.withValues(alpha: .5),
+          ),
+        ),
+      );
   bool busy = false;
   String? error;
   int _request = 0;
   bool _hasData = false;
   bool _loading = false;
   String get _path => widget.api.recordsPath(
-    widget.companyId,
-    table,
-    employee: widget.employee,
-  );
+        widget.companyId,
+        table,
+        employee: widget.employee,
+      );
   final _searchController = TextEditingController();
   final Map<String, String> _tableSearch = {};
   String? _watchedPath;
@@ -819,6 +840,199 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
+  Future<void> _exportPending() async {
+    final text =
+        const JsonEncoder.withIndent('  ').convert(widget.writes!.pending);
+    await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Pending changes on this device'),
+              content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(child: SelectableText(text))),
+              actions: [
+                TextButton(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('Copy JSON')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'))
+              ],
+            ));
+  }
+
+  Future<void> _reviewRejected() async {
+    final box = widget.writes?.outbox;
+    final op = box?.pending
+        .where((op) => op['state'] == 'failed' && op['local'] == true)
+        .firstOrNull;
+    if (box == null || op == null) return;
+    final entity = op['table'] as String;
+    try {
+      final user = jsonDecode(box.scope)[2] as String;
+      await widget.api.verifySyncIdentity(
+        user,
+        widget.companyId,
+        employee: widget.employee,
+      );
+      await widget.api.records(
+        widget.companyId,
+        entity,
+        employee: widget.employee,
+        force: true,
+      );
+      final path = widget.api.recordsPath(
+        widget.companyId,
+        entity,
+        employee: widget.employee,
+      );
+      final state = widget.api.cache.state(path);
+      if (state?.error != null) throw state!.error!;
+      final server = (state?.data?['records'] as List? ?? [])
+          .where((r) => r['recordId'] == op['recordId'])
+          .firstOrNull;
+      if (server == null && op['action'] != 'create') {
+        throw const SaasApiException(
+          'VERSION_CONFLICT',
+          'The server record was deleted. Export or discard this rejected edit.',
+        );
+      }
+      if (!mounted) return;
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Review rejected change'),
+          content: SingleChildScrollView(
+            child: Text(
+              '${op['error']}\n\nYour saved values:\n${const JsonEncoder.withIndent('  ').convert(op['values'])}\n\nLatest server values:\n${const JsonEncoder.withIndent('  ').convert(server)}',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep saved change'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Edit and resubmit'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+      final saved = Map<String, dynamic>.from(
+        box.data['records']['$entity:${op['localId']}'] as Map,
+      );
+      final version = server?['recordVersion'] as int? ?? 0;
+      Future<void> correct(Map<String, Object?> values) => box.correctRejected(
+            op['operationId'] as String,
+            values,
+            expectedVersion: version,
+          );
+      if (op['action'] == 'delete') {
+        await correct({});
+      } else if (entity == 'Customers') {
+        final values = await showDialog<Map<String, Object?>>(
+          context: context,
+          builder: (_) => CustomerEditor(record: saved),
+        );
+        if (values != null) await correct(values);
+      } else if (const ['Invoices', 'Quotations'].contains(entity)) {
+        final references = await Future.wait([
+          widget.api.editorReferences(
+            widget.companyId,
+            'Customers',
+            entity,
+            employee: widget.employee,
+          ),
+          widget.api.editorReferences(
+            widget.companyId,
+            'CompanyProfile',
+            entity,
+            employee: widget.employee,
+          ),
+        ]);
+        final customers = (references[0]['records'] as List)
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        final company = (references[1]['records'] as List).firstOrNull as Map?;
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (_) => entity == 'Invoices'
+              ? InvoiceEditor(
+                  customers: customers,
+                  company: Map<String, dynamic>.from(company ?? {}),
+                  record: saved,
+                  items: (saved['items'] as List? ?? [])
+                      .map((r) => Map<String, dynamic>.from(r as Map))
+                      .toList(),
+                  onSave: correct,
+                )
+              : QuotationEditor(
+                  customers: customers,
+                  company: Map<String, dynamic>.from(company ?? {}),
+                  record: saved,
+                  items: (saved['items'] as List? ?? [])
+                      .map((r) => Map<String, dynamic>.from(r as Map))
+                      .toList(),
+                  onSave: correct,
+                ),
+        );
+      }
+    } catch (failure) {
+      if (mounted) {
+        setState(
+          () => error =
+              failure is SaasApiException ? failure.message : '$failure',
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteLocalRecord(Map<String, dynamic> record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete $_recordLabel?'),
+        content: const Text(
+          'The deletion is saved on this device and remains pending until the server confirms it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.writes!.enqueue(
+        table,
+        'delete',
+        {},
+        recordId: record['recordId'] as String,
+        expectedVersion: record['recordVersion'] as int? ?? 0,
+      );
+      if (mounted) await _load();
+    } catch (failure) {
+      if (mounted) {
+        setState(
+          () => error =
+              failure is SaasApiException ? failure.message : '$failure',
+        );
+      }
+    }
+  }
+
   bool get _editable =>
       widget.writes != null &&
       const [
@@ -839,28 +1053,28 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   String get _recordLabel => table == 'CompanyProfile'
       ? 'company profile'
       : table == 'FinancialPeriods'
-      ? 'financial period'
-      : table == 'Customers'
-      ? 'customer'
-      : table == 'Invoices'
-      ? 'draft invoice'
-      : table == 'Receipts'
-      ? 'receipt'
-      : table == 'Quotations'
-      ? 'draft quotation'
-      : table == 'Payroll'
-      ? 'payroll draft'
-      : table == 'Assets'
-      ? 'asset draft'
-      : table == 'Shareholders'
-      ? 'shareholder'
-      : table == 'CapitalTransactions'
-      ? 'capital contribution draft'
-      : table == 'ShareholderLoans'
-      ? 'shareholder loan draft'
-      : table == 'Expenses'
-      ? 'expense'
-      : 'income';
+          ? 'financial period'
+          : table == 'Customers'
+              ? 'customer'
+              : table == 'Invoices'
+                  ? 'draft invoice'
+                  : table == 'Receipts'
+                      ? 'receipt'
+                      : table == 'Quotations'
+                          ? 'draft quotation'
+                          : table == 'Payroll'
+                              ? 'payroll draft'
+                              : table == 'Assets'
+                                  ? 'asset draft'
+                                  : table == 'Shareholders'
+                                      ? 'shareholder'
+                                      : table == 'CapitalTransactions'
+                                          ? 'capital contribution draft'
+                                          : table == 'ShareholderLoans'
+                                              ? 'shareholder loan draft'
+                                              : table == 'Expenses'
+                                                  ? 'expense'
+                                                  : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
     if (busy) return;
     setState(() {
@@ -872,13 +1086,17 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     } on SaasApiException catch (e) {
       if (mounted) {
         setState(() => error = e.message);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (mounted) {
         const message = 'Could not open the editor. Please retry.';
         setState(() => error = message);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -888,6 +1106,21 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   Future<void> _openRecordEditor(Map<String, dynamic>? record) async {
     Map<String, Object?>? submittedDraft;
     Future<void> saveDocument(Map<String, Object?> draft) async {
+      if (widget.writes!.supportsLocal(
+        table,
+        record == null ? 'create' : 'update',
+        record,
+      )) {
+        await widget.writes!.enqueue(
+          table,
+          record == null ? 'create' : 'update',
+          draft,
+          recordId: record?['recordId'] as String?,
+          expectedVersion:
+              record == null ? 0 : int.parse('${record['recordVersion']}'),
+        );
+        return;
+      }
       if (widget.writes!.canDiscardRejected) {
         await widget.writes!.discardRejected();
       }
@@ -907,9 +1140,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           record == null ? 'create' : 'update',
           draft,
           recordId: record?['recordId'] as String?,
-          expectedVersion: record == null
-              ? 0
-              : int.parse('${record['recordVersion']}'),
+          expectedVersion:
+              record == null ? 0 : int.parse('${record['recordVersion']}'),
         );
       }
       await widget.writes!.flush();
@@ -922,14 +1154,24 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       final itemTable = table == 'Invoices' ? 'InvoiceItems' : 'QuotationItems';
       final parentKey = table == 'Invoices' ? 'invoiceId' : 'quotationId';
       final references = await Future.wait([
-        widget.api.editorReferences(widget.companyId, 'Customers', table, employee: widget.employee),
-        widget.api.editorReferences(widget.companyId, 'CompanyProfile', table, employee: widget.employee),
-        if (record != null)
+        widget.api.editorReferences(
+          widget.companyId,
+          'Customers',
+          table,
+          employee: widget.employee,
+        ),
+        widget.api.editorReferences(
+          widget.companyId,
+          'CompanyProfile',
+          table,
+          employee: widget.employee,
+        ),
+        if (record != null && record['items'] is! List)
           widget.api.records(
             widget.companyId,
             itemTable,
             employee: widget.employee,
-            force: true,
+            force: !widget.writes!.supportsLocal(table, 'update', record),
           ),
       ]);
       if (!mounted) return;
@@ -937,19 +1179,25 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
       if (record != null) {
-        final response = references.last;
-        documentItems =
-            (response['records'] as List)
-                .map((row) => Map<String, dynamic>.from(row as Map))
-                .where((row) => row[parentKey] == record['recordId'])
-                .toList()
-              ..sort(
-                (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
-                  num.tryParse('${b['lineNumber']}') ?? 0,
-                ),
-              );
+        if (record['items'] is List) {
+          documentItems = (record['items'] as List)
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .toList();
+        } else {
+          final response = references.last;
+          documentItems = (response['records'] as List)
+              .map((row) => Map<String, dynamic>.from(row as Map))
+              .where((row) => row[parentKey] == record['recordId'])
+              .toList()
+            ..sort(
+              (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
+                num.tryParse('${b['lineNumber']}') ?? 0,
+              ),
+            );
+        }
       }
-      { // Only public company fields are exposed to authorized employee editors.
+      {
+        // Only public company fields are exposed to authorized employee editors.
         final response = references[1];
         documentCompany = (response['records'] as List).isEmpty
             ? {}
@@ -961,7 +1209,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
     if (table == 'Payroll') {
       final response = widget.employee
-          ? await widget.api.editorReferences(widget.companyId, 'Employees', 'Payroll', employee: true)
+          ? await widget.api.editorReferences(
+              widget.companyId,
+              'Employees',
+              'Payroll',
+              employee: true,
+            )
           : await widget.api.employees(widget.companyId);
       choices = (response[widget.employee ? 'records' : 'employees'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
@@ -970,7 +1223,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (!mounted) return;
     }
     if (const ['CapitalTransactions', 'ShareholderLoans'].contains(table)) {
-      final response = await widget.api.editorReferences(widget.companyId, 'Shareholders', 'Capital & Equity', employee: widget.employee);
+      final response = await widget.api.editorReferences(
+        widget.companyId,
+        'Shareholders',
+        'Capital & Equity',
+        employee: widget.employee,
+      );
       choices = (response['records'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['status'] == 'ACTIVE')
@@ -1005,46 +1263,57 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       builder: (_) => table == 'CompanyProfile'
           ? CompanyProfileEditor(record: record!)
           : table == 'Invoices'
-          ? InvoiceEditor(
-              onSave: saveDocument,
-              customers: choices,
-              record: record,
-              items: documentItems,
-              company: documentCompany,
-            )
-          : table == 'Receipts'
-          ? ReceiptEditor(invoices: choices)
-          : table == 'Quotations'
-          ? QuotationEditor(
-              onSave: saveDocument,
-              customers: choices,
-              record: record,
-              items: documentItems,
-              company: documentCompany,
-            )
-          : table == 'Payroll'
-          ? PayrollEditor(
-              employees: choices,
-              record: record,
-              preview: (values) => widget.api.payrollPreview(widget.companyId, values, employee: widget.employee),
-            )
-          : table == 'Assets'
-          ? AssetEditor(record: record)
-          : table == 'Shareholders'
-          ? ShareholderEditor(record: record)
-          : table == 'CapitalTransactions'
-          ? CapitalContributionEditor(shareholders: choices, record: record)
-          : table == 'ShareholderLoans'
-          ? ShareholderLoanEditor(shareholders: choices, record: record)
-          : table == 'Customers'
-          ? CustomerEditor(record: record)
-          : table == 'FinancialPeriods'
-          ? FinancialPeriodEditor(record: record)
-          : CashEntryEditor(expense: table == 'Expenses', record: record),
+              ? InvoiceEditor(
+                  onSave: saveDocument,
+                  customers: choices,
+                  record: record,
+                  items: documentItems,
+                  company: documentCompany,
+                )
+              : table == 'Receipts'
+                  ? ReceiptEditor(invoices: choices)
+                  : table == 'Quotations'
+                      ? QuotationEditor(
+                          onSave: saveDocument,
+                          customers: choices,
+                          record: record,
+                          items: documentItems,
+                          company: documentCompany,
+                        )
+                      : table == 'Payroll'
+                          ? PayrollEditor(
+                              employees: choices,
+                              record: record,
+                              preview: (values) => widget.api.payrollPreview(
+                                widget.companyId,
+                                values,
+                                employee: widget.employee,
+                              ),
+                            )
+                          : table == 'Assets'
+                              ? AssetEditor(record: record)
+                              : table == 'Shareholders'
+                                  ? ShareholderEditor(record: record)
+                                  : table == 'CapitalTransactions'
+                                      ? CapitalContributionEditor(
+                                          shareholders: choices, record: record)
+                                      : table == 'ShareholderLoans'
+                                          ? ShareholderLoanEditor(
+                                              shareholders: choices,
+                                              record: record)
+                                          : table == 'Customers'
+                                              ? CustomerEditor(record: record)
+                                              : table == 'FinancialPeriods'
+                                                  ? FinancialPeriodEditor(
+                                                      record: record)
+                                                  : CashEntryEditor(
+                                                      expense:
+                                                          table == 'Expenses',
+                                                      record: record),
     );
     if (values == null || !mounted) return;
     if (const ['Invoices', 'Quotations'].contains(table)) {
-      await _load(force: true);
+      await _load(force: widget.writes!.outbox == null);
       return;
     }
     setState(() {
@@ -1057,20 +1326,24 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         table == 'Receipts'
             ? 'receive'
             : record == null
-            ? 'create'
-            : 'update',
+                ? 'create'
+                : 'update',
         values,
         recordId: record?['recordId'] as String?,
-        expectedVersion: record == null
-            ? 0
-            : int.parse('${record['recordVersion']}'),
+        expectedVersion:
+            record == null ? 0 : int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
-      if (mounted) await _load(force: true);
+      if (!widget.writes!.supportsLocal(
+        table,
+        record == null ? 'create' : 'update',
+        record,
+      )) {
+        await widget.writes!.flush();
+      }
+      if (mounted) await _load(force: widget.writes!.outbox == null);
     } on SaasApiException catch (e) {
       if (mounted) {
-        final rejectedDraft =
-            record == null &&
+        final rejectedDraft = record == null &&
             const ['Invoices', 'Quotations'].contains(table) &&
             widget.writes!.pending.isEmpty;
         setState(
@@ -1690,6 +1963,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   void initState() {
     super.initState();
     widget.api.cache.addListener(_cacheChanged);
+    widget.writes?.outbox?.addListener(_cacheChanged);
     _watch();
     _load();
   }
@@ -1727,11 +2001,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       final state = widget.api.cache.state(_path);
       final data = state?.data;
       if (data != null) {
-        final fresh = (data['records'] as List)
+        final serverRows = (data['records'] as List)
             .map((r) => Map<String, dynamic>.from(r as Map))
             .toList();
-        final changed =
-            dataFingerprint({'records': fresh}) !=
+        final fresh =
+            widget.writes?.visibleRows(table, serverRows) ?? serverRows;
+        final changed = dataFingerprint({'records': fresh}) !=
             dataFingerprint({'records': rows});
         setState(() {
           if (changed) rows = fresh;
@@ -1740,8 +2015,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           error = state.error is SaasApiException
               ? (state.error as SaasApiException).message
               : state.error == null
-              ? null
-              : 'Refresh failed. Showing saved data.';
+                  ? null
+                  : 'Refresh failed. Showing saved data.';
         });
       } else if ((widget.api.cache.scope == null ||
               (state?.error is SaasApiException &&
@@ -1764,6 +2039,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   void dispose() {
     _request++;
     widget.api.cache.removeListener(_cacheChanged);
+    widget.writes?.outbox?.removeListener(_cacheChanged);
     if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
     _searchController.dispose();
     super.dispose();
@@ -1775,9 +2051,15 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     setState(() {
       _loading = true;
       if (cached != null) {
-        rows = (cached['records'] as List)
-            .map((r) => Map<String, dynamic>.from(r as Map))
-            .toList();
+        rows = widget.writes?.visibleRows(
+              table,
+              (cached['records'] as List)
+                  .map((r) => Map<String, dynamic>.from(r as Map))
+                  .toList(),
+            ) ??
+            (cached['records'] as List)
+                .map((r) => Map<String, dynamic>.from(r as Map))
+                .toList();
         _hasData = true;
       }
       error = null;
@@ -1818,522 +2100,595 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
-  String _title(Map<String, dynamic> row) =>
-      const ['Invoices', 'Quotations'].contains(table) &&
+  String _title(Map<String, dynamic> row) => const ['Invoices', 'Quotations']
+              .contains(table) &&
           '${row['number'] ?? ''}'.trim().isEmpty
       ? 'Draft ${table == 'Invoices' ? 'invoice' : 'quotation'} · ${row['issueDate'] ?? ''}'
       : '${row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
   @override
   Widget build(BuildContext context) => Column(
-    children: [
-      if (table == 'CompanyProfile' && !widget.employee)
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * .4,
-          ),
-          child: SingleChildScrollView(
-            child: SystemSettingsPanel(
-              api: widget.api,
-              companyId: widget.companyId,
+        children: [
+          if (table == 'CompanyProfile' && !widget.employee)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * .4,
+              ),
+              child: SingleChildScrollView(
+                child: SystemSettingsPanel(
+                  api: widget.api,
+                  companyId: widget.companyId,
+                ),
+              ),
             ),
-          ),
-        ),
-      Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
-        ),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (widget.selectedTable != null)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    tableTitles[table] ?? table,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              if (widget.selectedTable == null)
-                PopupMenuButton<String>(
-                  tooltip: 'Choose record type',
-                  enabled: !busy,
-                  initialValue: table,
-                  onSelected: (value) {
-                    _tableSearch[table] = _search;
-                    rows = [];
-                    _hasData = false;
-                    table = value;
-                    _search = _tableSearch[table] ?? '';
-                    _searchController.text = _search;
-                    _watch();
-                    _load();
-                  },
-                  itemBuilder: (_) => [
-                    for (final t in widget.tables)
-                      PopupMenuItem(value: t, child: Text(tableTitles[t] ?? t)),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          tableTitles[table] ?? table,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.expand_more, size: 18),
-                      ],
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (widget.selectedTable != null)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        tableTitles[table] ?? table,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
-                ),
-              PopupMenuButton<String>(
-                tooltip: 'Filter statuses',
-                icon: Icon(
-                  (_statusFilters[table]?.isNotEmpty ?? false)
-                      ? Icons.filter_alt
-                      : Icons.filter_alt_outlined,
-                ),
-                onSelected: (status) => setState(() {
-                  if (status == '__all') {
-                    _statusFilters[table] = {};
-                  } else {
-                    final values = _statusFilters.putIfAbsent(table, () => {});
-                    values.contains(status)
-                        ? values.remove(status)
-                        : values.add(status);
-                  }
-                }),
-                itemBuilder: (_) => [
-                  CheckedPopupMenuItem(
-                    value: '__all',
-                    checked: _statusFilters[table]?.isEmpty ?? true,
-                    child: const Text('All statuses'),
-                  ),
-                  for (final status
-                      in rows
+                  if (widget.selectedTable == null)
+                    PopupMenuButton<String>(
+                      tooltip: 'Choose record type',
+                      enabled: !busy,
+                      initialValue: table,
+                      onSelected: (value) {
+                        _tableSearch[table] = _search;
+                        rows = [];
+                        _hasData = false;
+                        table = value;
+                        _search = _tableSearch[table] ?? '';
+                        _searchController.text = _search;
+                        _watch();
+                        _load();
+                      },
+                      itemBuilder: (_) => [
+                        for (final t in widget.tables)
+                          PopupMenuItem(
+                              value: t, child: Text(tableTitles[t] ?? t)),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              tableTitles[table] ?? table,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.expand_more, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Filter statuses',
+                    icon: Icon(
+                      (_statusFilters[table]?.isNotEmpty ?? false)
+                          ? Icons.filter_alt
+                          : Icons.filter_alt_outlined,
+                    ),
+                    onSelected: (status) => setState(() {
+                      if (status == '__all') {
+                        _statusFilters[table] = {};
+                      } else {
+                        final values =
+                            _statusFilters.putIfAbsent(table, () => {});
+                        values.contains(status)
+                            ? values.remove(status)
+                            : values.add(status);
+                      }
+                    }),
+                    itemBuilder: (_) => [
+                      CheckedPopupMenuItem(
+                        value: '__all',
+                        checked: _statusFilters[table]?.isEmpty ?? true,
+                        child: const Text('All statuses'),
+                      ),
+                      for (final status in rows
                           .map(
                             (row) =>
                                 '${row['status'] ?? row['paymentStatus'] ?? ''}',
                           )
                           .where((value) => value.isNotEmpty)
                           .toSet())
-                    CheckedPopupMenuItem(
-                      value: status,
-                      checked: _statusFilters[table]?.contains(status) ?? false,
-                      child: Text(status.toLowerCase().replaceAll('_', ' ')),
+                        CheckedPopupMenuItem(
+                          value: status,
+                          checked:
+                              _statusFilters[table]?.contains(status) ?? false,
+                          child:
+                              Text(status.toLowerCase().replaceAll('_', ' ')),
+                        ),
+                    ],
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh records',
+                    onPressed:
+                        busy || _loading ? null : () => _load(force: true),
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  if (_editable && table != 'CompanyProfile')
+                    LoadingButton.icon(
+                      onPressed: busy || widget.writes!.hasBlockingPending
+                          ? null
+                          : () => _editCustomer(),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: Text('Add $_recordLabel'),
+                    ),
+                  if (widget.writes?.pending.isNotEmpty == true)
+                    PopupMenuButton<String>(
+                      tooltip: 'Pending change options',
+                      enabled: !busy,
+                      onSelected: (value) {
+                        if (value == 'retry') {
+                          _retryWrite();
+                        } else if (value == 'export') {
+                          _exportPending();
+                        } else if (value == 'review') {
+                          _reviewRejected();
+                        } else {
+                          _discardRejected();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'retry',
+                          child: Text('Retry pending change'),
+                        ),
+                        const PopupMenuItem(
+                            value: 'export',
+                            child: Text('Export pending changes')),
+                        if (widget.writes?.canDiscardRejected == true)
+                          const PopupMenuItem(
+                            value: 'review',
+                            child: Text('Review rejected change'),
+                          ),
+                        if (widget.writes?.canDiscardRejected == true)
+                          const PopupMenuItem(
+                            value: 'discard',
+                            child: Text('Discard rejected edit'),
+                          ),
+                      ],
                     ),
                 ],
               ),
-              IconButton(
-                tooltip: 'Refresh records',
-                onPressed: busy || _loading ? null : () => _load(force: true),
-                icon: const Icon(Icons.refresh),
-              ),
-              if (_editable && table != 'CompanyProfile')
-                LoadingButton.icon(
-                  onPressed: busy || widget.writes!.pending.isNotEmpty
-                      ? null
-                      : () => _editCustomer(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text('Add $_recordLabel'),
-                ),
-              if (widget.writes?.pending.isNotEmpty == true)
-                PopupMenuButton<String>(
-                  tooltip: 'Pending change options',
-                  enabled: !busy,
-                  onSelected: (value) {
-                    if (value == 'retry') {
-                      _retryWrite();
-                    } else {
-                      _discardRejected();
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'retry',
-                      child: Text('Retry pending change'),
-                    ),
-                    if (widget.writes?.canDiscardRejected == true)
-                      const PopupMenuItem(
-                        value: 'discard',
-                        child: Text('Discard rejected edit'),
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search records',
-            prefixIcon: const Icon(Icons.search),
-            isDense: true,
-            suffixIcon: _search.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Clear record search',
-                    onPressed: () => setState(() {
-                      _search = '';
-                      _searchController.clear();
-                    }),
-                    icon: const Icon(Icons.close, size: 18),
-                  ),
-          ),
-          onChanged: (value) => setState(() => _search = value),
-        ),
-      ),
-      if (_statusFilters[table]?.isNotEmpty == true)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Status: ${_statusFilters[table]!.map((value) => value.toLowerCase().replaceAll('_', ' ')).join(', ')}',
-              style: const TextStyle(fontSize: 12),
             ),
           ),
-        ),
-      if (!busy && error == null && rows.isNotEmpty && _visibleRows.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No records match your search.'),
-        ),
-      SizedBox(
-        height: 28,
-        child: Align(
-          alignment: Alignment.centerRight,
-          child:
-              busy ||
-                  (_loading && _hasData) ||
-                  widget.api.cache.state(_path)?.refreshing == true
-              ? const AppActivityIndicator(radius: 8)
-              : null,
-        ),
-      ),
-      if (_savedData) const Text('Offline - showing saved data.'),
-      if (error != null)
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Semantics(liveRegion: true, child: Text(error!)),
-        ),
-      if (!busy && !_loading && error == null && _hasData && rows.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No records yet.'),
-        ),
-      Expanded(
-        child: _loading && !_hasData
-            ? const CenteredLoading(label: 'Loading records')
-            : RefreshIndicator.noSpinner(
-                onRefresh: () => _load(force: true),
-                child: ListView.builder(
-                  key: PageStorageKey((widget.companyId, table)),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 8,
-                  ),
-                  itemCount: _visibleRows.length,
-                  itemBuilder: (context, index) {
-                    final row = _visibleRows[index];
-                    return RecordCard(
-                      key: PageStorageKey((table, row['recordId'] ?? index)),
-                      title: Text(
-                        _title(row),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search records',
+                prefixIcon: const Icon(Icons.search),
+                isDense: true,
+                suffixIcon: _search.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear record search',
+                        onPressed: () => setState(() {
+                          _search = '';
+                          _searchController.clear();
+                        }),
+                        icon: const Icon(Icons.close, size: 18),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                      ),
-                      collapsedShape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                      ),
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      collapsedBackgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.surface,
-                      subtitle: RecordSummary(record: row),
-                      children: [
-                        if (table == 'Invoices' && row['status'] != 'DRAFT')
-                          const RecordNotice(
-                            title: 'Invoice history is protected',
-                            icon: Icons.lock_outline,
-                            message:
-                                'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
-                          ),
-                        if (table == 'CompanyProfile' &&
-                            '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
-                          PrivateCompanyLogo(
-                            key: ValueKey((
-                              widget.companyId,
-                              row['logoDocumentId'],
-                              row['recordVersion'],
-                            )),
-                            api: widget.api,
-                            companyId: widget.companyId,
-                            documentId: row['logoDocumentId'],
-                            employee: widget.employee,
-                          ),
-                        if (documentSections.contains(table) &&
-                            row['recordId'] != null)
-                          LoadingButton.outlinedIcon(
-                            icon: const Icon(Icons.attach_file),
-                            label: Text(
-                              table == 'CompanyProfile'
-                                  ? 'Manage logo'
-                                  : 'Documents',
-                            ),
-                            onPressed: busy
-                                ? null
-                                : () async {
-                                    await showDialog<void>(
-                                      context: context,
-                                      builder: (_) => RecordDocumentsView(
-                                        api: widget.api,
-                                        companyId: widget.companyId,
-                                        section: table,
-                                        record: row,
-                                        employee: widget.employee,
-                                        uploads: widget.uploads,
-                                        writes: widget.writes,
-                                      ),
-                                    );
-                                    if (mounted) await _load();
-                                  },
-                          ),
-                        if (_editable &&
-                            table == 'Invoices' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _issueInvoice(row),
-                            child: const Text('Issue invoice'),
-                          ),
-                        if (_editable &&
-                            table == 'Invoices' &&
-                            row['status'] == 'ISSUED' &&
-                            num.tryParse('${row['paidAmount']}') == 0)
-                          LoadingButton.outlined(
-                            style: _destructiveActionStyle,
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _voidInvoice(row),
-                            child: const Text('Void invoice'),
-                          ),
-                        if (_editable &&
-                            table == 'Invoices' &&
-                            const [
-                              'ISSUED',
-                              'PARTIALLY_PAID',
-                              'PAID',
-                              'PARTIALLY_RETURNED',
-                            ].contains(row['status']))
-                          LoadingButton.icon(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _returnInvoice(row),
-                            icon: const Icon(Icons.assignment_return_outlined),
-                            label: const Text('Return items / credit note'),
-                          ),
-                        if (_editable &&
-                            table == 'Quotations' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _quotationAction(row, 'send'),
-                            child: const Text('Finalize quotation'),
-                          ),
-                        if (_editable &&
-                            table == 'Quotations' &&
-                            row['status'] == 'SENT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _quotationAction(row, 'convert'),
-                            child: const Text('Create draft invoice'),
-                          ),
-                        if (_editable &&
-                            table == 'Payroll' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _payrollAction(row, 'approve'),
-                            child: const Text('Approve payroll'),
-                          ),
-                        if (_editable &&
-                            table == 'Payroll' &&
-                            row['status'] == 'APPROVED')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _payrollAction(row, 'payrollPay'),
-                            child: const Text('Pay payroll'),
-                          ),
-                        if (_editable &&
-                            table == 'Payroll' &&
-                            const ['APPROVED', 'PAID'].contains(row['status']))
-                          LoadingButton.outlined(
-                            style: _destructiveActionStyle,
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _payrollAction(row, 'payrollReverse'),
-                            child: Text(
-                              row['status'] == 'PAID'
-                                  ? 'Refund and reverse payroll'
-                                  : 'Reverse payroll',
-                            ),
-                          ),
-                        if (_editable &&
-                            table == 'Assets' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _assetAction(row, 'capitalize'),
-                            child: const Text('Capitalize asset'),
-                          ),
-                        if (_editable &&
-                            table == 'Assets' &&
-                            row['status'] == 'ACTIVE')
-                          LoadingButton.outlined(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _assetAction(row, 'depreciate'),
-                            child: const Text('Post monthly depreciation'),
-                          ),
-                        if (_editable &&
-                            table == 'Assets' &&
-                            row['status'] == 'ACTIVE')
-                          LoadingButton.outlined(
-                            style: _destructiveActionStyle,
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _assetAction(row, 'assetDispose'),
-                            child: const Text('Dispose asset'),
-                          ),
-                        if (_editable &&
-                            table == 'CapitalTransactions' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _postCapital(row),
-                            child: const Text('Post contribution'),
-                          ),
-                        if (_editable &&
-                            table == 'ShareholderLoans' &&
-                            row['status'] == 'DRAFT')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _loanAction(row, 'loanPost'),
-                            child: const Text('Post loan'),
-                          ),
-                        if (_editable &&
-                            table == 'ShareholderLoans' &&
-                            row['status'] == 'ACTIVE')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _loanAction(row, 'loanRepay'),
-                            child: const Text('Repay loan in full'),
-                          ),
-                        if (_editable &&
-                            table == 'Receipts' &&
-                            row['status'] == 'POSTED')
-                          LoadingButton.outlined(
-                            style: _destructiveActionStyle,
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _reverseReceipt(row),
-                            child: const Text('Reverse receipt'),
-                          ),
-                        if (_editable &&
-                            const ['Income', 'Expenses'].contains(table) &&
-                            row['ledgerStatus'] == 'LINKED' &&
-                            const [
-                              'UNPAID',
-                              'PAID',
-                            ].contains(row['paymentStatus']))
-                          LoadingButton.outlined(
-                            style: _destructiveActionStyle,
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _payCash(row, reverse: true),
-                            child: Text(
-                              row['paymentStatus'] == 'PAID'
-                                  ? 'Refund and reverse entry'
-                                  : 'Reverse entry',
-                            ),
-                          ),
-                        if (_editable &&
-                            const ['Income', 'Expenses'].contains(table) &&
-                            row['ledgerStatus'] == 'LINKED' &&
-                            row['paymentStatus'] == 'UNPAID')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _payCash(row),
-                            child: const Text('Record payment'),
-                          ),
-                        if (_editable &&
-                            const ['Income', 'Expenses'].contains(table) &&
-                            row['ledgerStatus'] == 'UNPOSTED')
-                          LoadingButton(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _postCash(row),
-                            child: const Text('Post to ledger'),
-                          ),
-                        if (_editable &&
-                            !const [
-                              'LINKED',
-                              'REVERSED',
-                            ].contains(row['ledgerStatus']) &&
-                            (table != 'FinancialPeriods' ||
-                                row['status'] == 'OPEN') &&
-                            (table != 'Invoices' || row['status'] == 'DRAFT') &&
-                            (table != 'Quotations' ||
-                                row['status'] == 'DRAFT') &&
-                            (table != 'Payroll' || row['status'] == 'DRAFT') &&
-                            (table != 'Assets' || row['status'] == 'DRAFT') &&
-                            (table != 'CapitalTransactions' ||
-                                row['status'] == 'DRAFT') &&
-                            (table != 'ShareholderLoans' ||
-                                row['status'] == 'DRAFT') &&
-                            table != 'Receipts')
-                          LoadingButton.outlined(
-                            onPressed: busy || widget.writes!.pending.isNotEmpty
-                                ? null
-                                : () => _editCustomer(row),
-                            child: Text('Edit $_recordLabel'),
-                          ),
-                        RecordDetails(record: row),
-                      ],
-                    );
-                  },
+              ),
+              onChanged: (value) => setState(() => _search = value),
+            ),
+          ),
+          if (_statusFilters[table]?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Status: ${_statusFilters[table]!.map((value) => value.toLowerCase().replaceAll('_', ' ')).join(', ')}',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
-      ),
-    ],
-  );
+            ),
+          if (!busy && error == null && rows.isNotEmpty && _visibleRows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('No records match your search.'),
+            ),
+          SizedBox(
+            height: 28,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: busy ||
+                      (_loading && _hasData) ||
+                      widget.api.cache.state(_path)?.refreshing == true
+                  ? const AppActivityIndicator(radius: 8)
+                  : null,
+            ),
+          ),
+          if (_savedData) const Text('Offline - showing saved data.'),
+          if (widget.writes?.outbox != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(widget.api.cache.storageError != null
+                    ? 'Read cache unavailable on this device'
+                    : widget.writes!.outbox!.status),
+              ),
+            ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Semantics(liveRegion: true, child: Text(error!)),
+            ),
+          if (!busy && !_loading && error == null && _hasData && rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('No records yet.'),
+            ),
+          Expanded(
+            child: _loading && !_hasData
+                ? const RecordSkeleton()
+                : RefreshIndicator.noSpinner(
+                    onRefresh: () => _load(force: true),
+                    child: ListView.builder(
+                      key: PageStorageKey((widget.companyId, table)),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      itemCount: _visibleRows.length,
+                      itemBuilder: (context, index) {
+                        final row = _visibleRows[index];
+                        return RecordCard(
+                          key:
+                              PageStorageKey((table, row['recordId'] ?? index)),
+                          title: Text(
+                            _title(row),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          collapsedShape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          backgroundColor:
+                              Theme.of(context).colorScheme.surface,
+                          collapsedBackgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.surface,
+                          subtitle: RecordSummary(record: row),
+                          children: [
+                            if (row['_localOnly'] == true)
+                              RecordNotice(
+                                title: row['syncStatus'] == 'SYNCED'
+                                    ? 'Synced'
+                                    : 'Saved on this device',
+                                message: row['_syncError'] as String? ??
+                                    'Changes pending. Financial totals and final numbering are confirmed by the server.',
+                              ),
+                            if (table == 'Invoices' && row['status'] != 'DRAFT')
+                              const RecordNotice(
+                                title: 'Invoice history is protected',
+                                icon: Icons.lock_outline,
+                                message:
+                                    'Issued invoices are locked. Use Return items / credit note to correct returned goods or services. Credit notes preserve the original invoice and payment history.',
+                              ),
+                            if (table == 'CompanyProfile' &&
+                                '${row['logoDocumentId'] ?? ''}'.isNotEmpty)
+                              PrivateCompanyLogo(
+                                key: ValueKey((
+                                  widget.companyId,
+                                  row['logoDocumentId'],
+                                  row['recordVersion'],
+                                )),
+                                api: widget.api,
+                                companyId: widget.companyId,
+                                documentId: row['logoDocumentId'],
+                                employee: widget.employee,
+                              ),
+                            if (documentSections.contains(table) &&
+                                row['recordId'] != null)
+                              LoadingButton.outlinedIcon(
+                                icon: const Icon(Icons.attach_file),
+                                label: Text(
+                                  table == 'CompanyProfile'
+                                      ? 'Manage logo'
+                                      : 'Documents',
+                                ),
+                                onPressed: busy
+                                    ? null
+                                    : () async {
+                                        await showDialog<void>(
+                                          context: context,
+                                          builder: (_) => RecordDocumentsView(
+                                            api: widget.api,
+                                            companyId: widget.companyId,
+                                            section: table,
+                                            record: row,
+                                            employee: widget.employee,
+                                            uploads: widget.uploads,
+                                            writes: widget.writes,
+                                          ),
+                                        );
+                                        if (mounted) await _load();
+                                      },
+                              ),
+                            if (_editable &&
+                                table == 'Invoices' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _issueInvoice(row),
+                                child: const Text('Issue invoice'),
+                              ),
+                            if (_editable &&
+                                table == 'Invoices' &&
+                                row['status'] == 'ISSUED' &&
+                                num.tryParse('${row['paidAmount']}') == 0)
+                              LoadingButton.outlined(
+                                style: _destructiveActionStyle,
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _voidInvoice(row),
+                                child: const Text('Void invoice'),
+                              ),
+                            if (_editable &&
+                                table == 'Invoices' &&
+                                const [
+                                  'ISSUED',
+                                  'PARTIALLY_PAID',
+                                  'PAID',
+                                  'PARTIALLY_RETURNED',
+                                ].contains(row['status']))
+                              LoadingButton.icon(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _returnInvoice(row),
+                                icon: const Icon(
+                                    Icons.assignment_return_outlined),
+                                label: const Text('Return items / credit note'),
+                              ),
+                            if (_editable &&
+                                table == 'Quotations' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _quotationAction(row, 'send'),
+                                child: const Text('Finalize quotation'),
+                              ),
+                            if (_editable &&
+                                table == 'Quotations' &&
+                                row['status'] == 'SENT')
+                              LoadingButton(
+                                onPressed: busy ||
+                                        widget.writes!.pending.isNotEmpty
+                                    ? null
+                                    : () => _quotationAction(row, 'convert'),
+                                child: const Text('Create draft invoice'),
+                              ),
+                            if (_editable &&
+                                table == 'Payroll' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _payrollAction(row, 'approve'),
+                                child: const Text('Approve payroll'),
+                              ),
+                            if (_editable &&
+                                table == 'Payroll' &&
+                                row['status'] == 'APPROVED')
+                              LoadingButton(
+                                onPressed: busy ||
+                                        widget.writes!.pending.isNotEmpty
+                                    ? null
+                                    : () => _payrollAction(row, 'payrollPay'),
+                                child: const Text('Pay payroll'),
+                              ),
+                            if (_editable &&
+                                table == 'Payroll' &&
+                                const ['APPROVED', 'PAID']
+                                    .contains(row['status']))
+                              LoadingButton.outlined(
+                                style: _destructiveActionStyle,
+                                onPressed: busy ||
+                                        widget.writes!.pending.isNotEmpty
+                                    ? null
+                                    : () =>
+                                        _payrollAction(row, 'payrollReverse'),
+                                child: Text(
+                                  row['status'] == 'PAID'
+                                      ? 'Refund and reverse payroll'
+                                      : 'Reverse payroll',
+                                ),
+                              ),
+                            if (_editable &&
+                                table == 'Assets' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _assetAction(row, 'capitalize'),
+                                child: const Text('Capitalize asset'),
+                              ),
+                            if (_editable &&
+                                table == 'Assets' &&
+                                row['status'] == 'ACTIVE')
+                              LoadingButton.outlined(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _assetAction(row, 'depreciate'),
+                                child: const Text('Post monthly depreciation'),
+                              ),
+                            if (_editable &&
+                                table == 'Assets' &&
+                                row['status'] == 'ACTIVE')
+                              LoadingButton.outlined(
+                                style: _destructiveActionStyle,
+                                onPressed: busy ||
+                                        widget.writes!.pending.isNotEmpty
+                                    ? null
+                                    : () => _assetAction(row, 'assetDispose'),
+                                child: const Text('Dispose asset'),
+                              ),
+                            if (_editable &&
+                                table == 'CapitalTransactions' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _postCapital(row),
+                                child: const Text('Post contribution'),
+                              ),
+                            if (_editable &&
+                                table == 'ShareholderLoans' &&
+                                row['status'] == 'DRAFT')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _loanAction(row, 'loanPost'),
+                                child: const Text('Post loan'),
+                              ),
+                            if (_editable &&
+                                table == 'ShareholderLoans' &&
+                                row['status'] == 'ACTIVE')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _loanAction(row, 'loanRepay'),
+                                child: const Text('Repay loan in full'),
+                              ),
+                            if (_editable &&
+                                table == 'Receipts' &&
+                                row['status'] == 'POSTED')
+                              LoadingButton.outlined(
+                                style: _destructiveActionStyle,
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _reverseReceipt(row),
+                                child: const Text('Reverse receipt'),
+                              ),
+                            if (_editable &&
+                                const ['Income', 'Expenses'].contains(table) &&
+                                row['ledgerStatus'] == 'LINKED' &&
+                                const [
+                                  'UNPAID',
+                                  'PAID',
+                                ].contains(row['paymentStatus']))
+                              LoadingButton.outlined(
+                                style: _destructiveActionStyle,
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _payCash(row, reverse: true),
+                                child: Text(
+                                  row['paymentStatus'] == 'PAID'
+                                      ? 'Refund and reverse entry'
+                                      : 'Reverse entry',
+                                ),
+                              ),
+                            if (_editable &&
+                                const ['Income', 'Expenses'].contains(table) &&
+                                row['ledgerStatus'] == 'LINKED' &&
+                                row['paymentStatus'] == 'UNPAID')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _payCash(row),
+                                child: const Text('Record payment'),
+                              ),
+                            if (_editable &&
+                                const ['Income', 'Expenses'].contains(table) &&
+                                row['ledgerStatus'] == 'UNPOSTED')
+                              LoadingButton(
+                                onPressed:
+                                    busy || widget.writes!.pending.isNotEmpty
+                                        ? null
+                                        : () => _postCash(row),
+                                child: const Text('Post to ledger'),
+                              ),
+                            if (_editable &&
+                                !const [
+                                  'LINKED',
+                                  'REVERSED',
+                                ].contains(row['ledgerStatus']) &&
+                                (table != 'FinancialPeriods' ||
+                                    row['status'] == 'OPEN') &&
+                                (table != 'Invoices' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'Quotations' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'Payroll' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'Assets' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'CapitalTransactions' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'ShareholderLoans' ||
+                                    row['status'] == 'DRAFT') &&
+                                table != 'Receipts')
+                              LoadingButton.outlined(
+                                onPressed:
+                                    busy || widget.writes!.hasBlockingPending
+                                        ? null
+                                        : () => _editCustomer(row),
+                                child: Text('Edit $_recordLabel'),
+                              ),
+                            if (_editable &&
+                                widget.writes!
+                                    .supportsLocal(table, 'delete', row))
+                              LoadingButton.outlined(
+                                onPressed:
+                                    busy || widget.writes!.hasBlockingPending
+                                        ? null
+                                        : () => _deleteLocalRecord(row),
+                                child: Text('Delete $_recordLabel'),
+                              ),
+                            RecordDetails(record: row),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ],
+      );
 }

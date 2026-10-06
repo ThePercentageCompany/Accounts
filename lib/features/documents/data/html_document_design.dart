@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:tpc_invoice/core/offline/durable_value.dart';
+import 'package:tpc_invoice/core/offline/offline_store.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
@@ -27,12 +30,27 @@ class HtmlDocumentDesignStore {
   HtmlDocumentDesignStore(this.scope);
   final String scope;
   String get key => 'html-document-design-v1:${Uri.encodeComponent(scope)}';
-  Future<String> load() async =>
-      (await SharedPreferences.getInstance()).getString(key) ??
-      defaultHtmlDocumentDesign;
+  DurableValue? _durable;
+  Future<String> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (kIsWeb) {
+      _durable = DurableValue(
+          createOfflineStore(), 'document-design:$scope', key, prefs);
+      await _durable!.load(migrateLegacy: jsonEncode);
+      return _durable!.value == null
+          ? defaultHtmlDocumentDesign
+          : jsonDecode(_durable!.value!) as String;
+    }
+    return prefs.getString(key) ?? defaultHtmlDocumentDesign;
+  }
+
   Future<void> save(String source) async {
     validateHtmlDocumentDesign(source);
-    if (!await (await SharedPreferences.getInstance()).setString(key, source)) {
+    if (kIsWeb && _durable == null) await load();
+    final saved = _durable != null
+        ? await _durable!.put(jsonEncode(source))
+        : await (await SharedPreferences.getInstance()).setString(key, source);
+    if (!saved) {
       throw StateError('The design could not be saved on this device.');
     }
   }
@@ -73,8 +91,7 @@ String renderHtmlDocument({
       escape(value is num ? value.toStringAsFixed(2) : value);
   final rows = items
       .map(
-        (item) =>
-            '<tr><td>${escape(item['description'])}</td>'
+        (item) => '<tr><td>${escape(item['description'])}</td>'
             '<td>${escape(item['quantity'])}</td><td>${money(item['unitPrice'])}</td>'
             '<td>${money(item['discount'])}</td><td>${escape(item['taxRate'])}</td>'
             '<td>${money(item['lineTotal'])}</td></tr>',
@@ -131,13 +148,12 @@ Future<String> savedRecordHtml(
   final company = find(await rows('CompanyProfile'), 'company');
   final customer = find(await rows('Customers'), record['customerId']);
   final invoice = section == 'Invoices';
-  final items =
-      (await rows(invoice ? 'InvoiceItems' : 'QuotationItems'))
-          .where((r) => r[invoice ? 'invoiceId' : 'quotationId'] == recordId)
-          .toList()
-        ..sort(
-          (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num),
-        );
+  final items = (await rows(invoice ? 'InvoiceItems' : 'QuotationItems'))
+      .where((r) => r[invoice ? 'invoiceId' : 'quotationId'] == recordId)
+      .toList()
+    ..sort(
+      (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num),
+    );
   final latest = find(await rows(section), recordId);
   final latestCompany = find(await rows('CompanyProfile'), 'company');
   if (record['recordVersion'] != latest['recordVersion'] ||

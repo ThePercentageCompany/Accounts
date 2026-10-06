@@ -33,6 +33,29 @@ class CenteredLoading extends StatelessWidget {
 
 enum _ButtonKind { filled, outlined, text, icon }
 
+/// First-load placeholder only. Refreshes keep the current records visible.
+class RecordSkeleton extends StatelessWidget {
+  const RecordSkeleton({super.key});
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading records',
+    child: ListView.builder(
+      itemCount: 5,
+      padding: const EdgeInsets.all(24),
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const SizedBox(height: 88),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Tracks the returned future independently for each button. Existing handlers
 /// retain validation and error handling; unexpected errors get recoverable feedback.
 class LoadingButton extends StatefulWidget {

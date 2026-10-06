@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/core/offline/durable_value.dart';
 part 'employee_admin_controller.freezed.dart';
 
 @freezed
@@ -57,9 +58,23 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   bool _disposed = false;
   String? error;
   String get _key => 'saas_employee_write_${ownerId}_$companyId';
-  bool get hasPending => preferences.containsKey(_key);
+  late final DurableValue? _durable = api.offlineEnabled
+      ? DurableValue(
+          api.offlineStore,
+          api.outbox(ownerId, companyId).scope,
+          _key,
+          preferences,
+        )
+      : null;
+  String? get _pendingValue =>
+      _durable != null ? _durable.value : preferences.getString(_key);
+  Future<bool> _savePending(String value) =>
+      _durable?.put(value) ?? preferences.setString(_key, value);
+  Future<bool> _removePending() =>
+      _durable?.remove() ?? preferences.remove(_key);
+  bool get hasPending => _pendingValue != null;
   bool get canDiscardRejected {
-    final raw = preferences.getString(_key);
+    final raw = _pendingValue;
     return raw != null && (jsonDecode(raw) as Map)['rejected'] == true;
   }
 
@@ -69,6 +84,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
     error = null;
     _notify();
     try {
+      await _durable?.load();
       return await action();
     } on SaasApiException catch (e) {
       error = e.message;
@@ -122,20 +138,20 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   }
 
   Future<void> _submitPending() async {
-    final raw = preferences.getString(_key);
+    final raw = _pendingValue;
     if (raw == null) return;
     final op = jsonDecode(raw) as Map;
     // A retry may now be accepted (for example after an API upgrade). Persist
     // its uncertain state before sending so a lost response cannot leave a
     // submitted operation marked safe to discard.
-    if (op.remove('rejected') == true &&
-        !await preferences.setString(_key, jsonEncode(op))) {
+    if (op.remove('rejected') == true && !await _savePending(jsonEncode(op))) {
       throw const SaasApiException(
         'LOCAL_STORAGE',
         'Could not prepare the saved edit for retry. Try again.',
       );
     }
     try {
+      if (api.offlineEnabled) await api.verifySyncIdentity(ownerId, companyId);
       await api.saveEmployee(
         companyId,
         op['employeeId'] as String?,
@@ -147,11 +163,11 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
       // network failure must never make a pending operation discardable.
       if (e.code == 'INVALID_EMPLOYEE' || e.code == 'VERSION_CONFLICT') {
         op['rejected'] = true;
-        await preferences.setString(_key, jsonEncode(op));
+        await _savePending(jsonEncode(op));
       }
       rethrow;
     }
-    if (!await preferences.remove(_key)) {
+    if (!await _removePending()) {
       throw const SaasApiException(
         'LOCAL_STORAGE',
         'Saved online. Retry to confirm local progress.',
@@ -173,7 +189,10 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
           'values': values,
           'operationId': const Uuid().v4(),
         };
-        if (!await preferences.setString(_key, jsonEncode(op))) {
+        if (api.offlineEnabled) {
+          await api.verifySyncIdentity(ownerId, companyId);
+        }
+        if (!await _savePending(jsonEncode(op))) {
           throw const SaasApiException(
             'LOCAL_STORAGE',
             'Cannot save pending change on this device.',
@@ -195,7 +214,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
           'Retry this change to confirm its result first.',
         );
       }
-      if (!await preferences.remove(_key)) {
+      if (!await _removePending()) {
         throw const SaasApiException(
           'LOCAL_STORAGE',
           'Could not discard the rejected change.',

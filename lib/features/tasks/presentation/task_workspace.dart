@@ -244,11 +244,25 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       if (more && _next != null) filters['offset'] = '$_next';
       _resource =
           '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
+      // Display the query's saved page immediately, before its refresh. Keep
+      // aggregate pages intact when loading more or doing background polling.
+      final saved = widget.api.cache.state(_resource!)?.data;
+      if (!_loaded && !more && saved != null && mounted) {
+        setState(() {
+          _tasks = (saved['records'] as List)
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .toList();
+          _summary = Map<String, dynamic>.from(saved['summary'] as Map? ?? {});
+          _dateCounts =
+              Map<String, dynamic>.from(saved['dateCounts'] as Map? ?? {});
+          _loaded = true;
+        });
+      }
       _lastRevision = widget.api.cache.state(_resource!)?.revision ?? 0;
       final data = Map<String, dynamic>.from(await widget.api.tasks(
           widget.companyId,
           employee: _employee,
-          force: true,
+          force: quiet || more,
           filters: filters));
       if (quiet && !more) {
         final rows = List<Map<String, dynamic>>.from(data['records'] as List);

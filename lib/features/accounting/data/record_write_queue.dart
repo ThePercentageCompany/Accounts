@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/core/offline/offline_outbox.dart';
+import 'package:tpc_invoice/core/offline/offline_store.dart';
 
 /// One durable owner/company queue. Only individually acknowledged operations
 /// are removed; an HTTP 200 batch can still contain a failed operation.
@@ -12,8 +14,65 @@ class RecordWriteQueue {
     String ownerId,
     this.companyId, {
     this.employee = false,
-  }) : storageKey = 'saas_records_${ownerId}_$companyId',
-       employeeId = employee ? ownerId.replaceFirst('employee_', '') : null;
+  })  : storageKey = 'saas_records_${ownerId}_$companyId',
+        employeeId = employee ? ownerId.replaceFirst('employee_', '') : null,
+        outbox = api.offlineEnabled
+            ? api.outbox(ownerId, companyId, employee: employee)
+            : null;
+  final OfflineOutbox? outbox;
+  Future<void>? _initialization;
+  Future<void> initialize() => _initialization ??= _initialize().catchError((
+        Object error,
+      ) {
+        _initialization = null;
+        throw SaasApiException(
+          'LOCAL_STORAGE',
+          'Not saved on this device. Offline storage could not be opened: $error',
+        );
+      });
+  Future<void> _initialize() async {
+    if (outbox == null) return;
+    await outbox!.reload();
+    // Migrate legacy localStorage operations before removing any source keys.
+    // Atomic insertion is idempotent if the browser closes during migration.
+    await preferences.reload();
+    final keys = preferences
+        .getKeys()
+        .where((k) => k.startsWith('${storageKey}_'))
+        .toList()
+      ..sort();
+    final rejected = preferences.getStringList(_rejectedKey) ?? [];
+    for (final key in keys) {
+      final op = copyJson(jsonDecode(preferences.getString(key)!) as Map);
+      await outbox!.enqueue(
+        op['table'] as String,
+        op['action'] as String,
+        Map<String, Object?>.from(op['values'] as Map? ?? {}),
+        recordId: op['recordId'] as String?,
+        expectedVersion: op['expectedVersion'] as int,
+        operationId: op['operationId'] as String,
+        local: false,
+        rejected: rejected.contains(op['operationId']),
+      );
+      if (!await preferences.remove(key)) {
+        throw StateError(
+          'Could not finish pending-change migration. Retry initialization.',
+        );
+      }
+    }
+    if (outbox!.automatic) outbox!.sync().ignore();
+  }
+
+  bool supportsLocal(String table, String action, [Map? record]) =>
+      outbox != null && OfflineOutbox.supports(table, action, record);
+  bool get hasBlockingPending => outbox == null
+      ? pending.isNotEmpty
+      : pending.any((op) => op['local'] != true || op['state'] == 'failed');
+  List<Map<String, dynamic>> visibleRows(
+    String table,
+    List<Map<String, dynamic>> rows,
+  ) =>
+      outbox?.overlay(table, rows) ?? rows;
   final String? employeeId;
   final bool employee;
   final SaasApi api;
@@ -23,8 +82,14 @@ class RecordWriteQueue {
   bool _busy = false;
   String get _rejectedKey => '$storageKey-rejected';
   bool get canDiscardRejected =>
+      outbox?.hasFailed ??
       (preferences.getStringList(_rejectedKey) ?? []).isNotEmpty;
   Future<void> discardRejected() async {
+    if (outbox != null) {
+      await initialize();
+      await outbox!.discardRejected();
+      return;
+    }
     if (_busy) {
       throw const SaasApiException('BUSY', 'Wait for the pending request.');
     }
@@ -53,6 +118,7 @@ class RecordWriteQueue {
   }
 
   List<Map<String, Object?>> get pending =>
+      outbox?.pending ??
       (preferences
               .getKeys()
               .where((key) => key.startsWith('${storageKey}_'))
@@ -83,6 +149,58 @@ class RecordWriteQueue {
     String? recordId,
     required int expectedVersion,
   }) async {
+    if (outbox != null) {
+      await initialize();
+      final rows = (api.cache
+                  .state(
+                    api.recordsPath(
+                      companyId,
+                      table,
+                      employee: employee,
+                    ),
+                  )
+                  ?.data?['records'] as List? ??
+              [])
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      final base = visibleRows(
+        table,
+        rows,
+      ).where((r) => r['recordId'] == recordId).firstOrNull;
+      final local = supportsLocal(table, action, base);
+      if (!local) {
+        if (recordId?.startsWith('local_') == true ||
+            hasBlockingPending ||
+            pending.isNotEmpty) {
+          throw const SaasApiException(
+            'PENDING',
+            'Sync existing changes before this online action.',
+          );
+        }
+        final user =
+            employee ? employeeId! : jsonDecode(outbox!.scope)[2] as String;
+        await api.verifySyncIdentity(user, companyId, employee: employee);
+      }
+      try {
+        await outbox!.enqueue(
+          table,
+          action,
+          values,
+          recordId: recordId,
+          expectedVersion: expectedVersion,
+          base: base,
+          local: local,
+        );
+      } on SaasApiException {
+        rethrow;
+      } catch (error) {
+        throw SaasApiException(
+          'LOCAL_STORAGE',
+          'Not saved on this device. Free storage space and retry: $error',
+        );
+      }
+      return;
+    }
     if (_busy) {
       throw const SaasApiException('BUSY', 'Wait for the pending request.');
     }
@@ -121,6 +239,18 @@ class RecordWriteQueue {
   }
 
   Future<void> flush() async {
+    if (outbox != null) {
+      await initialize();
+      await outbox!.retry();
+      if (outbox!.pending.isNotEmpty) {
+        final op = outbox!.pending.first;
+        throw SaasApiException(
+          '${op['errorCode'] ?? 'PENDING'}',
+          '${op['error'] ?? 'Saved on this device. Sync is still pending.'}',
+        );
+      }
+      return;
+    }
     if (_busy) {
       throw const SaasApiException('BUSY', 'Wait for the pending request.');
     }
@@ -174,9 +304,8 @@ class RecordWriteQueue {
           .where((r) => r['status'] == 'APPLIED')
           .map((r) => r['operationId'])
           .toSet();
-      operations = operations
-          .where((r) => !applied.contains(r['operationId']))
-          .toList();
+      operations =
+          operations.where((r) => !applied.contains(r['operationId'])).toList();
       for (final id in applied) {
         if (!await preferences.remove('${storageKey}_$id')) {
           throw const SaasApiException(
