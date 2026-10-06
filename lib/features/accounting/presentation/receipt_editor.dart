@@ -1,10 +1,12 @@
+import 'package:tpc_invoice/core/widgets/forms/payment_method_dropdown.dart';
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
 bool _validDate(String value) {
   final date = DateTime.tryParse(value);
-  return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value) &&
+  return AppValidators.datePattern.hasMatch(value) &&
       date != null &&
       date.toIso8601String().startsWith(value);
 }
@@ -38,103 +40,105 @@ class _ReceiptEditorState extends State<ReceiptEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: const Text('Record customer payment'),
-    content: SizedBox(
-      width: 520,
-      child: Form(
-        key: form,
-        child: SingleChildScrollView(
-          child: PopupFormFields(
-            children: [
-              SearchableRecordField(
-                initialValue: invoiceId,
-                decoration: const InputDecoration(labelText: 'Open invoice'),
-                items: [
-                  for (final row in widget.invoices)
-                    DropdownMenuItem(
-                      value: row['recordId'] as String,
-                      child: Text(
-                        '${row['number']} · ${row['currency']} ${row['balance']}',
-                      ),
+        title: const Text('Record customer payment'),
+        content: SizedBox(
+          width: 520,
+          child: Form(
+            key: form,
+            child: SingleChildScrollView(
+              child: PopupFormFields(
+                children: [
+                  SearchableRecordField(
+                    initialValue: invoiceId,
+                    decoration:
+                        const InputDecoration(labelText: 'Open invoice'),
+                    items: [
+                      for (final row in widget.invoices)
+                        DropdownMenuItem(
+                          value: row['recordId'] as String,
+                          child: Text(
+                            '${row['number']} · ${row['currency']} ${row['balance']}',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      invoiceId = value;
+                      amount.text = '${invoice?['balance'] ?? ''}';
+                    }),
+                    validator: (value) =>
+                        value == null ? 'Choose an open invoice.' : null,
+                  ),
+                  CalendarFormField(
+                    controller: date,
+                    decoration:
+                        const InputDecoration(labelText: 'Payment date'),
+                    validator: (value) => _validDate(value?.trim() ?? '')
+                        ? null
+                        : 'Enter a valid date.',
+                  ),
+                  ValidatedTextField(
+                    required: true,
+                    controller: amount,
+                    kind: AppInputKind.money,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
+                    decoration: const InputDecoration(labelText: 'Amount'),
+                    validator: (value) {
+                      final text = value?.trim() ?? '',
+                          number = double.tryParse(text),
+                          balance = double.tryParse('${invoice?['balance']}');
+                      if (number == null ||
+                          number <= 0 ||
+                          !AppValidators.decimalPattern.hasMatch(text)) {
+                        return 'Enter a positive amount, up to two decimals.';
+                      }
+                      if (balance != null && number > balance) {
+                        return 'Amount cannot exceed the outstanding balance.';
+                      }
+                      return null;
+                    },
+                  ),
+                  PaymentMethodDropdown(
+                    value: account,
+                    decoration:
+                        const InputDecoration(labelText: 'Deposit account'),
+                    onChanged: (value) => account = value ?? 'Bank',
+                  ),
+                  ValidatedTextField(
+                    controller: reference,
+                    kind: AppInputKind.reference,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      labelText: 'Reference (optional)',
+                    ),
+                  ),
                 ],
-                onChanged: (value) => setState(() {
-                  invoiceId = value;
-                  amount.text = '${invoice?['balance'] ?? ''}';
-                }),
-                validator: (value) =>
-                    value == null ? 'Choose an open invoice.' : null,
               ),
-              CalendarFormField(
-                controller: date,
-                decoration: const InputDecoration(labelText: 'Payment date'),
-                validator: (value) => _validDate(value?.trim() ?? '')
-                    ? null
-                    : 'Enter a valid date.',
-              ),
-              TextFormField(
-                controller: amount,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Amount'),
-                validator: (value) {
-                  final text = value?.trim() ?? '',
-                      number = double.tryParse(text),
-                      balance = double.tryParse('${invoice?['balance']}');
-                  if (number == null ||
-                      number <= 0 ||
-                      !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)) {
-                    return 'Enter a positive amount, up to two decimals.';
-                  }
-                  if (balance != null && number > balance) {
-                    return 'Amount cannot exceed the outstanding balance.';
-                  }
-                  return null;
-                },
-              ),
-              SearchableRecordField(
-                initialValue: account,
-                decoration: const InputDecoration(labelText: 'Deposit account'),
-                items: const [
-                  DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                  DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                ],
-                onChanged: (value) => account = value ?? 'Bank',
-              ),
-              TextFormField(
-                controller: reference,
-                maxLength: 500,
-                decoration: const InputDecoration(
-                  labelText: 'Reference (optional)',
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () {
-          if (!form.currentState!.validate()) return;
-          final selected = invoice!;
-          Navigator.pop(context, <String, Object?>{
-            'invoiceId': invoiceId!,
-            'customerId': selected['customerId'] as String,
-            'paymentDate': date.text.trim(),
-            'amount': double.parse(amount.text.trim()),
-            'currency': selected['currency'] as String,
-            'paymentAccount': account,
-            'reference': reference.text.trim(),
-          });
-        },
-        child: const Text('Record payment'),
-      ),
-    ],
-  );
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () {
+              if (!AppFormValidation.validate(form.currentState!)) return;
+              final selected = invoice!;
+              Navigator.pop(context, <String, Object?>{
+                'invoiceId': invoiceId!,
+                'customerId': selected['customerId'] as String,
+                'paymentDate': date.text.trim(),
+                'amount': double.parse(amount.text.trim()),
+                'currency': selected['currency'] as String,
+                'paymentAccount': account,
+                'reference': reference.text.trim(),
+              });
+            },
+            child: const Text('Record payment'),
+          ),
+        ],
+      );
 }

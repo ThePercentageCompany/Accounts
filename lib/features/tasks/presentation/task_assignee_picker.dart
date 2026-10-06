@@ -85,6 +85,10 @@ class _TaskAssigneePickerState extends State<TaskAssigneePicker> {
         Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
+                inputFormatters: [
+                  AppInputFormatters.text,
+                  AppInputFormatters.search
+                ],
                 controller: _search,
                 decoration: const InputDecoration(
                     labelText: 'Search name or department',

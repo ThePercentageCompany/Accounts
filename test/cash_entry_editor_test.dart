@@ -72,7 +72,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(saved, isNull);
     expect(
-      find.text('Enter a positive amount, up to two decimals.'),
+      find.text('This field is required.'),
       findsOneWidget,
     );
     await fill('Amount before tax', '10.10');

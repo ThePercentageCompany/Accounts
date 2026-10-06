@@ -30,7 +30,7 @@ void main() {
     await tester.tap(find.text('Record payment'));
     await tester.pumpAndSettle();
     expect(find.text('Enter a valid date.'), findsOneWidget);
-    expect(find.text('Choose an account.'), findsOneWidget);
+    expect(find.text('Select a payment method.'), findsOneWidget);
     await fillFormField(tester, find.byType(TextFormField).first, '2026-02-30');
     await tester.tap(find.text('Record payment'));
     await tester.pumpAndSettle();

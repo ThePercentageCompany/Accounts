@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -31,6 +32,8 @@ class EmployeeAccessView extends StatefulWidget {
 
 class _EmployeeAccessViewState extends State<EmployeeAccessView> {
   final _link = TextEditingController();
+  final _linkForm = GlobalKey<FormState>();
+  final _codeForm = GlobalKey<FormState>();
   final _code = TextEditingController();
   SaasSession? _session;
   StreamSubscription<SessionState>? _sessionSubscription;
@@ -97,6 +100,9 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
   }
 
   Future<void> _login() async {
+    final validCode = AppFormValidation.validate(_codeForm.currentState!);
+    final validLink = AppFormValidation.validate(_linkForm.currentState!);
+    if (!validLink || !validCode) return;
     final uri = Uri.tryParse(_link.text.trim());
     final invite = uri == null ? null : SaasApi.invitation(uri, _appUri);
     if (invite == null || _code.text.trim().isEmpty) {
@@ -197,37 +203,60 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                     label: const Text('Scan QR'),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _link,
-                    enabled: !busy,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee login link',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _code,
-                    enabled: !busy,
-                    obscureText: !_showCode,
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    decoration: InputDecoration(
-                      labelText: 'Private login code',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _showCode = !_showCode),
-                        tooltip: _showCode ? 'Hide code' : 'Show code',
-                        icon: Icon(
-                          _showCode ? Icons.visibility_off : Icons.visibility,
+                  Form(
+                      key: _linkForm,
+                      child: ValidatedTextField(
+                        inputFormatters: [AppInputFormatters.text],
+                        controller: _link,
+                        required: true,
+                        maxLength: 2048,
+                        validator: (v) {
+                          final uri = Uri.tryParse((v ?? '').trim());
+                          return uri != null &&
+                                  SaasApi.invitation(uri, _appUri) != null
+                              ? null
+                              : 'Use a new employee link from this app. Older Apps Script QR codes must be reissued.';
+                        },
+                        enabled: !busy,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Employee login link',
+                          counterText: '',
+                          border: OutlineInputBorder(),
                         ),
-                      ),
-                    ),
-                    onSubmitted: (_) {
-                      if (!busy) _login();
-                    },
-                  ),
+                      )),
+                  const SizedBox(height: 16),
+                  Form(
+                      key: _codeForm,
+                      child: ValidatedTextField(
+                        inputFormatters: [AppInputFormatters.text],
+                        controller: _code,
+                        required: true,
+                        kind: AppInputKind.reference,
+                        maxLength: 128,
+                        enabled: !busy,
+                        obscureText: !_showCode,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: 'Private login code',
+                          counterText: '',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            onPressed: () =>
+                                setState(() => _showCode = !_showCode),
+                            tooltip: _showCode ? 'Hide code' : 'Show code',
+                            icon: Icon(
+                              _showCode
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                          ),
+                        ),
+                        onFieldSubmitted: (_) {
+                          if (!busy) _login();
+                        },
+                      )),
                   const SizedBox(height: 20),
                   LoadingButton(
                     onPressed: busy ? null : _login,
@@ -255,9 +284,8 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                   ),
                   const SizedBox(height: 16),
                   LoadingButton(
-                    onPressed: busy
-                        ? null
-                        : () => setState(() => _workspace = true),
+                    onPressed:
+                        busy ? null : () => setState(() => _workspace = true),
                     child: const Text('Open workspace'),
                   ),
                   LoadingButton.outlined(

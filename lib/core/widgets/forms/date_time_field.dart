@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:flutter/material.dart';
 
 enum CalendarFieldMode { date, month, time, dateTime }
@@ -23,41 +24,44 @@ class CalendarFormField extends StatelessWidget {
   final CalendarFieldMode mode;
 
   @override
-  Widget build(BuildContext context) => TextFormField(
-    controller: controller,
-    enabled: enabled,
-    readOnly: true,
-    enableInteractiveSelection: false,
-    validator: validator,
-    onTap: () => pickCalendarValue(context, controller, mode: mode),
-    decoration: decoration.copyWith(
-      hintText: mode == CalendarFieldMode.time ? 'Select time' : 'Select date',
-      suffixIcon: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (optional)
-            IconButton(
-              tooltip: 'Clear ${decoration.labelText ?? 'date'}',
-              onPressed: enabled ? controller.clear : null,
-              icon: const Icon(Icons.clear, size: 18),
-            ),
-          IconButton(
-            tooltip: mode == CalendarFieldMode.time
-                ? 'Select time'
-                : 'Select date',
-            onPressed: enabled
-                ? () => pickCalendarValue(context, controller, mode: mode)
-                : null,
-            icon: Icon(
-              mode == CalendarFieldMode.time
-                  ? Icons.schedule_outlined
-                  : Icons.calendar_today_outlined,
-            ),
+  Widget build(BuildContext context) => ValidatedTextField(
+        controller: controller,
+        enabled: enabled,
+        readOnly: true,
+        enableInteractiveSelection: false,
+        validator: (value) =>
+            validator?.call(value) ??
+            AppValidators.calendar(value, mode: mode.name),
+        onTap: () => pickCalendarValue(context, controller, mode: mode),
+        decoration: decoration.copyWith(
+          hintText:
+              mode == CalendarFieldMode.time ? 'Select time' : 'Select date',
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (optional)
+                IconButton(
+                  tooltip: 'Clear ${decoration.labelText ?? 'date'}',
+                  onPressed: enabled ? controller.clear : null,
+                  icon: const Icon(Icons.clear, size: 18),
+                ),
+              IconButton(
+                tooltip: mode == CalendarFieldMode.time
+                    ? 'Select time'
+                    : 'Select date',
+                onPressed: enabled
+                    ? () => pickCalendarValue(context, controller, mode: mode)
+                    : null,
+                icon: Icon(
+                  mode == CalendarFieldMode.time
+                      ? Icons.schedule_outlined
+                      : Icons.calendar_today_outlined,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 Future<void> pickCalendarValue(
@@ -86,17 +90,15 @@ Future<void> pickCalendarValue(
                   children: [
                     IconButton(
                       tooltip: 'Previous year',
-                      onPressed: year > 1900
-                          ? () => update(() => year--)
-                          : null,
+                      onPressed:
+                          year > 1900 ? () => update(() => year--) : null,
                       icon: const Icon(Icons.chevron_left),
                     ),
                     Expanded(child: Center(child: Text('$year'))),
                     IconButton(
                       tooltip: 'Next year',
-                      onPressed: year < 2200
-                          ? () => update(() => year++)
-                          : null,
+                      onPressed:
+                          year < 2200 ? () => update(() => year++) : null,
                       icon: const Icon(Icons.chevron_right),
                     ),
                   ],
@@ -156,8 +158,8 @@ Future<void> pickCalendarValue(
       initialDate: initial.isBefore(first)
           ? first
           : initial.isAfter(last)
-          ? last
-          : initial,
+              ? last
+              : initial,
       firstDate: first,
       lastDate: last,
       initialEntryMode: DatePickerEntryMode.calendarOnly,

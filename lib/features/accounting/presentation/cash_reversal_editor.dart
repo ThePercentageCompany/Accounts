@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
@@ -30,57 +31,57 @@ class _CashReversalEditorState extends State<CashReversalEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: Text(widget.title),
-    content: SizedBox(
-      width: 420,
-      child: Form(
-        key: _form,
-        child: SingleChildScrollView(
-          child: PopupFormFields(
-            children: [
-              Text(widget.explanation),
-              CalendarFormField(
-                controller: _date,
-                decoration: const InputDecoration(
-                  labelText: 'Reversal date (YYYY-MM-DD)',
-                ),
-                validator: (v) {
-                  final text = v?.trim() ?? '',
-                      date = DateTime.tryParse(v?.trim() ?? '');
-                  return RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) &&
-                          date != null &&
-                          date.toIso8601String().startsWith(text)
-                      ? null
-                      : 'Enter a valid date.';
-                },
+        title: Text(widget.title),
+        content: SizedBox(
+          width: 420,
+          child: Form(
+            key: _form,
+            child: SingleChildScrollView(
+              child: PopupFormFields(
+                children: [
+                  Text(widget.explanation),
+                  CalendarFormField(
+                    controller: _date,
+                    decoration: const InputDecoration(
+                      labelText: 'Reversal date (YYYY-MM-DD)',
+                    ),
+                    validator: (v) {
+                      final text = v?.trim() ?? '',
+                          date = DateTime.tryParse(v?.trim() ?? '');
+                      return AppValidators.datePattern.hasMatch(text) &&
+                              date != null &&
+                              date.toIso8601String().startsWith(text)
+                          ? null
+                          : 'Enter a valid date.';
+                    },
+                  ),
+                  ValidatedTextField(
+                    controller: _reason,
+                    maxLength: 500,
+                    decoration: const InputDecoration(labelText: 'Reason'),
+                    validator: (v) =>
+                        (v?.trim().isEmpty ?? true) ? 'Enter a reason.' : null,
+                  ),
+                ],
               ),
-              TextFormField(
-                controller: _reason,
-                maxLength: 500,
-                decoration: const InputDecoration(labelText: 'Reason'),
-                validator: (v) =>
-                    (v?.trim().isEmpty ?? true) ? 'Enter a reason.' : null,
-              ),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () {
-          if (!_form.currentState!.validate()) return;
-          Navigator.pop(context, <String, Object?>{
-            'date': _date.text.trim(),
-            'description': _reason.text.trim(),
-          });
-        },
-        child: Text(widget.actionLabel),
-      ),
-    ],
-  );
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () {
+              if (!AppFormValidation.validate(_form.currentState!)) return;
+              Navigator.pop(context, <String, Object?>{
+                'date': _date.text.trim(),
+                'description': _reason.text.trim(),
+              });
+            },
+            child: Text(widget.actionLabel),
+          ),
+        ],
+      );
 }

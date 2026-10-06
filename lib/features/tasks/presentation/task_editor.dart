@@ -80,7 +80,7 @@ class _TaskEditorState extends State<TaskEditor> {
   }
 
   Future<void> _save() async {
-    if (_busy || !_form.currentState!.validate()) return;
+    if (_busy || !AppFormValidation.validate(_form.currentState!)) return;
     final values = <String, Object?>{
       for (final entry in _fields.entries) entry.key: entry.value.text.trim(),
       'employeeId': _employeeId,
@@ -110,8 +110,10 @@ class _TaskEditorState extends State<TaskEditor> {
   Widget build(BuildContext context) {
     Widget field(String key, String label,
             {int lines = 1, int? maxLength, bool required = false}) =>
-        TextFormField(
+        ValidatedTextField(
             controller: _fields[key],
+            required: required,
+            kind: AppValidators.kindForKey(key),
             enabled: !_busy,
             maxLines: lines,
             maxLength: maxLength,

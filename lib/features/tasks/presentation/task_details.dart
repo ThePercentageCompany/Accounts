@@ -31,6 +31,7 @@ class _TaskDetailsState extends State<TaskDetails> {
   late Map<String, dynamic> _task = widget.task;
   List<Map<String, dynamic>> _comments = [], _activity = [];
   final _comment = TextEditingController();
+  final _commentForm = GlobalKey<FormState>();
   String? _error;
   bool _loading = true, _busy = false, _unavailable = false;
   String _commentId = const Uuid().v4(), _lastComment = '';
@@ -90,7 +91,9 @@ class _TaskDetailsState extends State<TaskDetails> {
 
   Future<void> _addComment() async {
     final body = _comment.text.trim();
-    if (body.isEmpty || _busy) return;
+    if (_busy || !AppFormValidation.validate(_commentForm.currentState!)) {
+      return;
+    }
     if (_lastComment != body) {
       _lastComment = body;
       _commentId = const Uuid().v4();
@@ -237,13 +240,18 @@ class _TaskDetailsState extends State<TaskDetails> {
                           SelectableText('${c['body']}')
                         ]))),
           const SizedBox(height: 12),
-          TextField(
-              controller: _comment,
-              enabled: !_busy,
-              minLines: 2,
-              maxLines: 5,
-              maxLength: 5000,
-              decoration: const InputDecoration(labelText: 'Add a comment')),
+          Form(
+              key: _commentForm,
+              child: ValidatedTextField(
+                  inputFormatters: [AppInputFormatters.text],
+                  controller: _comment,
+                  required: true,
+                  enabled: !_busy,
+                  minLines: 2,
+                  maxLines: 5,
+                  maxLength: 5000,
+                  decoration:
+                      const InputDecoration(labelText: 'Add a comment'))),
           Align(
               alignment: Alignment.centerRight,
               child: FilledButton(

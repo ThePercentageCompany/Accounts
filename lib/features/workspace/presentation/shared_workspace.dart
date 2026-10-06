@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
@@ -30,6 +31,7 @@ import 'package:tpc_invoice/features/workspace/presentation/company_profile_edit
 import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/documents/presentation/record_documents_view.dart';
 import 'package:tpc_invoice/features/workspace/presentation/system_settings_panel.dart';
+import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart';
 
 const workspaceTables = <String, List<String>>{
   'Tasks': <String>[],
@@ -209,6 +211,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   onSelected: (value) => setState(() => _selected = value),
                   fieldViewBuilder: (context, controller, focus, submit) =>
                       TextField(
+                    inputFormatters: [
+                      AppInputFormatters.text,
+                      AppInputFormatters.search
+                    ],
                     controller: controller,
                     focusNode: focus,
                     decoration: const InputDecoration(
@@ -229,6 +235,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 overflow: TextOverflow.ellipsis,
               ),
         actions: [
+          IconButton(
+            tooltip: 'How to use / FAQ',
+            icon: const Icon(Icons.help_outline),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
+            ),
+          ),
           const AppearanceSelector(),
           if (wide) ...[
             const SizedBox(width: 12),
@@ -2271,6 +2284,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
             child: TextField(
+              inputFormatters: [
+                AppInputFormatters.text,
+                AppInputFormatters.search
+              ],
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search records',

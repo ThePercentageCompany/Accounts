@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
@@ -40,64 +41,66 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: const Text('Edit company profile'),
-    content: SizedBox(
-      width: 680,
-      child: SingleChildScrollView(
-        child: Form(
-          key: form,
-          child: PopupFormFields(
-            children: [
-              for (final field in fields.entries)
-                if (field.key == 'currency')
-                  CurrencyFormField(
-                    controller: controllers[field.key]!,
-                    label: field.value,
-                  )
-                else
-                  TextFormField(
-                    controller: controllers[field.key],
-                    maxLength: field.key == 'address' ? 1000 : 200,
-                    decoration: InputDecoration(labelText: field.value),
-                    validator: (value) {
-                      final v = value!.trim();
-                      if (field.key == 'name' && v.isEmpty) {
-                        return 'Enter a company name.';
-                      }
-                      if (field.key.endsWith('Prefix') &&
-                          v.isNotEmpty &&
-                          !RegExp(r'^[A-Z0-9-]{1,12}$').hasMatch(v)) {
-                        return 'Use 1–12 uppercase letters, digits or hyphens.';
-                      }
-                      if (field.key == 'email' &&
-                          v.isNotEmpty &&
-                          !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v)) {
-                        return 'Enter a valid email.';
-                      }
-                      return null;
-                    },
-                  ),
-            ],
+        title: const Text('Edit company profile'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: PopupFormFields(
+                children: [
+                  for (final field in fields.entries)
+                    if (field.key == 'currency')
+                      CurrencyFormField(
+                        controller: controllers[field.key]!,
+                        label: field.value,
+                      )
+                    else
+                      ValidatedTextField(
+                        controller: controllers[field.key],
+                        kind: AppValidators.kindForKey(field.key),
+                        required: field.key == 'name',
+                        maxLength: field.key == 'address' ? 1000 : 200,
+                        decoration: InputDecoration(labelText: field.value),
+                        validator: (value) {
+                          final v = value!.trim();
+                          if (field.key == 'name' && v.isEmpty) {
+                            return 'Enter a company name.';
+                          }
+                          if (field.key.endsWith('Prefix') &&
+                              v.isNotEmpty &&
+                              !AppValidators.invoicePrefixPattern.hasMatch(v)) {
+                            return 'Use 1–12 uppercase letters, digits or hyphens.';
+                          }
+                          if (field.key == 'email' &&
+                              v.isNotEmpty &&
+                              !AppValidators.emailPattern.hasMatch(v)) {
+                            return 'Enter a valid email.';
+                          }
+                          return null;
+                        },
+                      ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () {
-          if (form.currentState!.validate()) {
-            Navigator.pop(context, <String, Object?>{
-              for (final entry in controllers.entries)
-                entry.key: entry.value.text.trim(),
-            });
-          }
-        },
-        child: const Text('Save profile'),
-      ),
-    ],
-  );
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () {
+              if (AppFormValidation.validate(form.currentState!)) {
+                Navigator.pop(context, <String, Object?>{
+                  for (final entry in controllers.entries)
+                    entry.key: entry.value.text.trim(),
+                });
+              }
+            },
+            child: const Text('Save profile'),
+          ),
+        ],
+      );
 }

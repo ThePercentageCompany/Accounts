@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
@@ -32,62 +33,62 @@ class _CustomerEditorState extends State<CustomerEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: Text(widget.record == null ? 'Add customer' : 'Edit customer'),
-    content: SizedBox(
-      width: 680,
-      child: SingleChildScrollView(
-        child: Form(
-          key: _form,
-          child: PopupFormFields(
-            children: [
-              for (final field in _fields.entries)
-                TextFormField(
-                  controller: controllers[field.key],
-                  keyboardType: field.key == 'email'
-                      ? TextInputType.emailAddress
-                      : field.key == 'phone'
-                      ? TextInputType.phone
-                      : TextInputType.text,
-                  textInputAction: TextInputAction.next,
-                  maxLength: field.key == 'address' ? 1000 : 200,
-                  decoration: InputDecoration(labelText: field.value),
-                  validator: (v) {
-                    if (field.key == 'name' &&
-                        (v == null || v.trim().isEmpty)) {
-                      return 'Enter a customer name.';
-                    }
-                    if (field.key == 'email' &&
-                        v != null &&
-                        v.trim().isNotEmpty &&
-                        !RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        ).hasMatch(v.trim())) {
-                      return 'Enter a valid email.';
-                    }
-                    return null;
-                  },
-                ),
-            ],
+        title: Text(widget.record == null ? 'Add customer' : 'Edit customer'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Form(
+              key: _form,
+              child: PopupFormFields(
+                children: [
+                  for (final field in _fields.entries)
+                    ValidatedTextField(
+                      controller: controllers[field.key],
+                      kind: AppValidators.kindForKey(field.key),
+                      required: field.key == 'name',
+                      keyboardType: field.key == 'email'
+                          ? TextInputType.emailAddress
+                          : field.key == 'phone'
+                              ? TextInputType.phone
+                              : TextInputType.text,
+                      textInputAction: TextInputAction.next,
+                      maxLength: field.key == 'address' ? 1000 : 200,
+                      decoration: InputDecoration(labelText: field.value),
+                      validator: (v) {
+                        if (field.key == 'name' &&
+                            (v == null || v.trim().isEmpty)) {
+                          return 'Enter a customer name.';
+                        }
+                        if (field.key == 'email' &&
+                            v != null &&
+                            v.trim().isNotEmpty &&
+                            !AppValidators.emailPattern.hasMatch(v.trim())) {
+                          return 'Enter a valid email.';
+                        }
+                        return null;
+                      },
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () {
-          if (_form.currentState!.validate()) {
-            Navigator.pop(context, <String, Object?>{
-              for (final field in controllers.entries)
-                field.key: field.value.text.trim(),
-            });
-          }
-        },
-        child: const Text('Save customer'),
-      ),
-    ],
-  );
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () {
+              if (AppFormValidation.validate(_form.currentState!)) {
+                Navigator.pop(context, <String, Object?>{
+                  for (final field in controllers.entries)
+                    field.key: field.value.text.trim(),
+                });
+              }
+            },
+            child: const Text('Save customer'),
+          ),
+        ],
+      );
 }

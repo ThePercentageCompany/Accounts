@@ -96,6 +96,10 @@ class _TaskFiltersState extends State<TaskFilters> {
                           {for (final s in taskPriorities) s: taskLabel(s)}),
                       const SizedBox(height: 12),
                       TextField(
+                          inputFormatters: [
+                            AppInputFormatters.text,
+                            AppInputFormatters.search
+                          ],
                           controller: _project,
                           decoration:
                               const InputDecoration(labelText: 'Project')),

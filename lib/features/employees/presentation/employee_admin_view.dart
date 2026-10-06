@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -162,192 +163,198 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
   @override
   Widget build(
     BuildContext context,
-  ) => BlocBuilder<EmployeeAdminController, EmployeeAdminState>(
-    bloc: widget.controller,
-    builder: (context, _) {
-      final c = widget.controller;
-      if (c.employees.isEmpty &&
-          c.api.cache.state(c.resourcePath)?.initialLoading == true) {
-        return const CenteredLoading(label: 'Loading employees');
-      }
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 12,
-            runSpacing: 12,
+  ) =>
+      BlocBuilder<EmployeeAdminController, EmployeeAdminState>(
+        bloc: widget.controller,
+        builder: (context, _) {
+          final c = widget.controller;
+          if (c.employees.isEmpty &&
+              c.api.cache.state(c.resourcePath)?.initialLoading == true) {
+            return const CenteredLoading(label: 'Loading employees');
+          }
+          return ListView(
+            padding: const EdgeInsets.all(24),
             children: [
-              Text(
-                'Employees',
-                style: Theme.of(context).textTheme.headlineSmall,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  Text(
+                    'Employees',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  LoadingButton.icon(
+                    onPressed: c.busy || c.hasPending ? null : () => _edit(),
+                    icon: const Icon(Icons.person_add_outlined),
+                    label: const Text('Add employee'),
+                  ),
+                  LoadingButton.iconOnly(
+                    tooltip: 'Refresh employees',
+                    onPressed: c.busy ? null : c.refresh,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
               ),
-              LoadingButton.icon(
-                onPressed: c.busy || c.hasPending ? null : () => _edit(),
-                icon: const Icon(Icons.person_add_outlined),
-                label: const Text('Add employee'),
-              ),
-              LoadingButton.iconOnly(
-                tooltip: 'Refresh employees',
-                onPressed: c.busy ? null : c.refresh,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Search employees',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (value) =>
-                  setState(() => _search = value.toLowerCase()),
-            ),
-          ),
-          SizedBox(
-            height: 28,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child:
-                  c.busy ||
-                      c.api.cache.state(c.resourcePath)?.refreshing == true
-                  ? const AppActivityIndicator(radius: 8)
-                  : null,
-            ),
-          ),
-          if (c.api.cache.state(c.resourcePath)?.offline == true)
-            const Text('Offline - showing saved data.'),
-          if (c.api.cache.state(c.resourcePath)?.error != null &&
-              c.employees.isNotEmpty)
-            const Text('Refresh failed. Showing saved employees.'),
-          if (c.error != null)
-            Semantics(
-              liveRegion: true,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(c.error!),
-              ),
-            ),
-          if (c.hasPending) ...[
-            Text(
-              c.canDiscardRejected
-                  ? 'The last save was rejected. Retry the saved edit after the service is fixed, or discard it to correct the details.'
-                  : 'The employee save has not been confirmed. Retry to confirm the saved edit and unlock editing.',
-            ),
-            LoadingButton.text(
-              onPressed: c.busy ? null : c.retry,
-              child: const Text('Retry saved edit'),
-            ),
-            if (c.canDiscardRejected)
-              LoadingButton.text(
-                onPressed: c.busy ? null : _discardRejected,
-                child: const Text('Discard rejected change'),
-              ),
-          ],
-          if (!c.busy && c.employees.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'No employees to display. Add your first employee when the company workspace is ready.',
-              ),
-            ),
-          for (final row in c.employees.where(
-            (row) =>
-                '${row['fullName']} ${row['email']} ${row['role']} ${row['employeeCode']} ${row['department']} ${row['designation']}'
-                    .toLowerCase()
-                    .contains(_search),
-          ))
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          child: Icon(
-                            Icons.person_outline,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            row['fullName'] as String,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text('${row['role']} · ${row['employmentStatus']}'),
-                    Text(row['email'] as String? ?? ''),
-                    if ('${row['designation'] ?? ''}${row['department'] ?? ''}'
-                        .isNotEmpty)
-                      Text(
-                        [row['designation'], row['department']]
-                            .where((v) => v != null && '$v'.isNotEmpty)
-                            .join(' • '),
-                      ),
-                    Text(
-                      'Basic salary: ${row['basicSalary'] == null || row['basicSalary'] == '' ? 'Not set' : row['basicSalary']} | Allowances: ${row['allowances'] == null || row['allowances'] == '' ? '0' : row['allowances']}',
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final section in row['allowedSections'] as List)
-                          Chip(label: Text('$section')),
-                      ],
-                    ),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        LoadingButton.text(
-                          onPressed: c.busy || c.hasPending
-                              ? null
-                              : () => _edit(row),
-                          child: const Text('Edit employee'),
-                        ),
-                        for (final action in ['issue', 'reset', 'revoke'])
-                          LoadingButton.text(
-                            onPressed:
-                                c.busy ||
-                                    c.hasPending ||
-                                    (action != 'revoke' &&
-                                        row['employmentStatus'] != 'ACTIVE')
-                                ? null
-                                : () => _access(row, action),
-                            child: Text(
-                              {
-                                'issue': 'Issue QR & code',
-                                'reset': 'Reset code',
-                                'revoke': 'Revoke access',
-                              }[action]!,
-                            ),
-                          ),
-                        if (widget.onDocuments != null)
-                          LoadingButton.text(
-                            onPressed: c.busy || c.hasPending
-                                ? null
-                                : () => widget.onDocuments!(row),
-                            child: const Text('Documents'),
-                          ),
-                      ],
-                    ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: TextField(
+                  inputFormatters: [
+                    AppInputFormatters.text,
+                    AppInputFormatters.search
                   ],
+                  decoration: const InputDecoration(
+                    labelText: 'Search employees',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) =>
+                      setState(() => _search = value.toLowerCase()),
                 ),
               ),
-            ),
-        ],
+              SizedBox(
+                height: 28,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: c.busy ||
+                          c.api.cache.state(c.resourcePath)?.refreshing == true
+                      ? const AppActivityIndicator(radius: 8)
+                      : null,
+                ),
+              ),
+              if (c.api.cache.state(c.resourcePath)?.offline == true)
+                const Text('Offline - showing saved data.'),
+              if (c.api.cache.state(c.resourcePath)?.error != null &&
+                  c.employees.isNotEmpty)
+                const Text('Refresh failed. Showing saved employees.'),
+              if (c.error != null)
+                Semantics(
+                  liveRegion: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(c.error!),
+                  ),
+                ),
+              if (c.hasPending) ...[
+                Text(
+                  c.canDiscardRejected
+                      ? 'The last save was rejected. Retry the saved edit after the service is fixed, or discard it to correct the details.'
+                      : 'The employee save has not been confirmed. Retry to confirm the saved edit and unlock editing.',
+                ),
+                LoadingButton.text(
+                  onPressed: c.busy ? null : c.retry,
+                  child: const Text('Retry saved edit'),
+                ),
+                if (c.canDiscardRejected)
+                  LoadingButton.text(
+                    onPressed: c.busy ? null : _discardRejected,
+                    child: const Text('Discard rejected change'),
+                  ),
+              ],
+              if (!c.busy && c.employees.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'No employees to display. Add your first employee when the company workspace is ready.',
+                  ),
+                ),
+              for (final row in c.employees.where(
+                (row) =>
+                    '${row['fullName']} ${row['email']} ${row['role']} ${row['employeeCode']} ${row['department']} ${row['designation']}'
+                        .toLowerCase()
+                        .contains(_search),
+              ))
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.person_outline,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                row['fullName'] as String,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text('${row['role']} · ${row['employmentStatus']}'),
+                        Text(row['email'] as String? ?? ''),
+                        if ('${row['designation'] ?? ''}${row['department'] ?? ''}'
+                            .isNotEmpty)
+                          Text(
+                            [row['designation'], row['department']]
+                                .where((v) => v != null && '$v'.isNotEmpty)
+                                .join(' • '),
+                          ),
+                        Text(
+                          'Basic salary: ${row['basicSalary'] == null || row['basicSalary'] == '' ? 'Not set' : row['basicSalary']} | Allowances: ${row['allowances'] == null || row['allowances'] == '' ? '0' : row['allowances']}',
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final section
+                                in row['allowedSections'] as List)
+                              Chip(label: Text('$section')),
+                          ],
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            LoadingButton.text(
+                              onPressed: c.busy || c.hasPending
+                                  ? null
+                                  : () => _edit(row),
+                              child: const Text('Edit employee'),
+                            ),
+                            for (final action in ['issue', 'reset', 'revoke'])
+                              LoadingButton.text(
+                                onPressed: c.busy ||
+                                        c.hasPending ||
+                                        (action != 'revoke' &&
+                                            row['employmentStatus'] != 'ACTIVE')
+                                    ? null
+                                    : () => _access(row, action),
+                                child: Text(
+                                  {
+                                    'issue': 'Issue QR & code',
+                                    'reset': 'Reset code',
+                                    'revoke': 'Revoke access',
+                                  }[action]!,
+                                ),
+                              ),
+                            if (widget.onDocuments != null)
+                              LoadingButton.text(
+                                onPressed: c.busy || c.hasPending
+                                    ? null
+                                    : () => widget.onDocuments!(row),
+                                child: const Text('Documents'),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       );
-    },
-  );
 }
 
 class _EmployeeEditor extends StatefulWidget {
@@ -382,18 +389,20 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
       ),
   };
   Widget detail(String key, String label, {bool money = false}) =>
-      TextFormField(
+      ValidatedTextField(
         controller: details[key],
+        required: money,
+        kind: AppValidators.kindForKey(key),
         maxLength: money
             ? 16
             : key == 'address'
-            ? 1000
-            : 200,
+                ? 1000
+                : 200,
         keyboardType: money
             ? const TextInputType.numberWithOptions(decimal: true)
             : key == 'phone'
-            ? TextInputType.phone
-            : TextInputType.text,
+                ? TextInputType.phone
+                : TextInputType.text,
         decoration: InputDecoration(labelText: label),
         validator: money
             ? (value) {
@@ -403,32 +412,32 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                         !number.isFinite ||
                         number < 0 ||
                         number > 1e12 ||
-                        !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)
+                        !AppValidators.decimalPattern.hasMatch(text)
                     ? 'Enter a nonnegative amount with up to two decimals.'
                     : null;
               }
             : null,
       );
   Widget date(String key, String label) => CalendarFormField(
-    controller: details[key]!,
-    decoration: InputDecoration(labelText: label),
-    validator: (value) {
-      final text = value?.trim() ?? '';
-      if (text.isEmpty) return null;
-      final parsed = DateTime.tryParse(text);
-      if (parsed == null ||
-          !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
-          !parsed.toIso8601String().startsWith(text)) {
-        return 'Enter a valid date.';
-      }
-      if (key == 'lastEmploymentDate' &&
-          details['joinDate']!.text.isNotEmpty &&
-          text.compareTo(details['joinDate']!.text) < 0) {
-        return 'Must be on or after joining date.';
-      }
-      return null;
-    },
-  );
+        controller: details[key]!,
+        decoration: InputDecoration(labelText: label),
+        validator: (value) {
+          final text = value?.trim() ?? '';
+          if (text.isEmpty) return null;
+          final parsed = DateTime.tryParse(text);
+          if (parsed == null ||
+              !AppValidators.datePattern.hasMatch(text) ||
+              !parsed.toIso8601String().startsWith(text)) {
+            return 'Enter a valid date.';
+          }
+          if (key == 'lastEmploymentDate' &&
+              details['joinDate']!.text.isNotEmpty &&
+              text.compareTo(details['joinDate']!.text) < 0) {
+            return 'Must be on or after joining date.';
+          }
+          return null;
+        },
+      );
   late final name = TextEditingController(
     text: widget.employee?['fullName'] as String? ?? '',
   );
@@ -476,165 +485,166 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: Text(widget.employee == null ? 'Add employee' : 'Edit employee'),
-    content: SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 12,
-            children: [
-              const Text(
-                'Personal & contact details',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              TextFormField(
-                controller: name,
-                maxLength: 160,
-                decoration: const InputDecoration(labelText: 'Full name'),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Enter a name.' : null,
-              ),
-              TextFormField(
-                controller: email,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                ),
-                validator: (v) =>
-                    v != null &&
-                        v.trim().isNotEmpty &&
-                        !RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        ).hasMatch(v.trim())
-                    ? 'Enter a valid email.'
-                    : null,
-              ),
-              detail('phone', 'Phone (optional)'),
-              detail('address', 'Address (optional)'),
-              const Text(
-                'Employment details',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              detail('employeeCode', 'Employee code (optional)'),
-              detail('department', 'Department (optional)'),
-              detail('designation', 'Job title (optional)'),
-              date('joinDate', 'Joining date (optional)'),
-              date('lastEmploymentDate', 'Last employment date (optional)'),
-              const Text(
-                'Monthly compensation',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const Text(
-                'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the company currency.',
-              ),
-              detail('basicSalary', 'Basic salary', money: true),
-              detail('allowances', 'Monthly allowances', money: true),
-              const Text(
-                'Bank & identity details',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              detail('bankName', 'Bank name (optional)'),
-              detail('iban', 'IBAN (optional)'),
-              detail('emiratesId', 'Emirates ID (optional)'),
-              detail('passportNumber', 'Passport number (optional)'),
-              date('visaExpiry', 'Visa expiry (optional)'),
-              const Text(
-                'Workspace access',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: role,
-                decoration: const InputDecoration(labelText: 'Role'),
-                items: [
-                  for (final r in ['Staff', 'Manager', 'Accountant'])
-                    DropdownMenuItem(value: r, child: Text(r)),
-                ],
-                onChanged: (v) => setState(() {
-                  role = v!;
-                  writableSections.removeWhere((s) => !canGrantEdit(s));
-                }),
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: status,
-                decoration: const InputDecoration(
-                  labelText: 'Employment status',
-                ),
-                items: [
-                  for (final s in ['ACTIVE', 'INACTIVE'])
-                    DropdownMenuItem(value: s, child: Text(s)),
-                ],
-                onChanged: (v) => setState(() => status = v!),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Select sections to allow viewing; enable the switch to allow editing. Staff access remains limited to their own records where required.',
-              ),
-              for (final section in employeeSections)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(section),
-                  value: sections.contains(section),
-                  subtitle: Text(
-                    writableSections.contains(section)
-                        ? 'View and edit'
-                        : 'View only',
+        title: Text(widget.employee == null ? 'Add employee' : 'Edit employee'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 12,
+                children: [
+                  const Text(
+                    'Personal & contact details',
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  secondary: canGrantEdit(section) && sections.contains(section)
-                      ? Switch(
-                          value: writableSections.contains(section),
-                          onChanged: (value) => setState(() {
-                            if (value) {
-                              writableSections.add(section);
-                            } else {
-                              writableSections.remove(section);
-                            }
-                          }),
-                        )
-                      : null,
-                  onChanged: (v) => setState(() {
-                    if (v == true) {
-                      sections.add(section);
-                    } else {
-                      sections.remove(section);
-                      writableSections.remove(section);
-                    }
-                  }),
-                ),
-            ],
+                  ValidatedTextField(
+                    controller: name,
+                    kind: AppInputKind.name,
+                    required: true,
+                    maxLength: 160,
+                    decoration: const InputDecoration(labelText: 'Full name'),
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Enter a name.' : null,
+                  ),
+                  ValidatedTextField(
+                    controller: email,
+                    kind: AppInputKind.email,
+                    maxLength: 200,
+                    decoration: const InputDecoration(
+                      labelText: 'Email (optional)',
+                    ),
+                    validator: (v) => v != null &&
+                            v.trim().isNotEmpty &&
+                            !AppValidators.emailPattern.hasMatch(v.trim())
+                        ? 'Enter a valid email.'
+                        : null,
+                  ),
+                  detail('phone', 'Phone (optional)'),
+                  detail('address', 'Address (optional)'),
+                  const Text(
+                    'Employment details',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  detail('employeeCode', 'Employee code (optional)'),
+                  detail('department', 'Department (optional)'),
+                  detail('designation', 'Job title (optional)'),
+                  date('joinDate', 'Joining date (optional)'),
+                  date('lastEmploymentDate', 'Last employment date (optional)'),
+                  const Text(
+                    'Monthly compensation',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const Text(
+                    'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the company currency.',
+                  ),
+                  detail('basicSalary', 'Basic salary', money: true),
+                  detail('allowances', 'Monthly allowances', money: true),
+                  const Text(
+                    'Bank & identity details',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  detail('bankName', 'Bank name (optional)'),
+                  detail('iban', 'IBAN (optional)'),
+                  detail('emiratesId', 'Emirates ID (optional)'),
+                  detail('passportNumber', 'Passport number (optional)'),
+                  date('visaExpiry', 'Visa expiry (optional)'),
+                  const Text(
+                    'Workspace access',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: role,
+                    decoration: const InputDecoration(labelText: 'Role'),
+                    items: [
+                      for (final r in ['Staff', 'Manager', 'Accountant'])
+                        DropdownMenuItem(value: r, child: Text(r)),
+                    ],
+                    onChanged: (v) => setState(() {
+                      role = v!;
+                      writableSections.removeWhere((s) => !canGrantEdit(s));
+                    }),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(
+                      labelText: 'Employment status',
+                    ),
+                    items: [
+                      for (final s in ['ACTIVE', 'INACTIVE'])
+                        DropdownMenuItem(value: s, child: Text(s)),
+                    ],
+                    onChanged: (v) => setState(() => status = v!),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Select sections to allow viewing; enable the switch to allow editing. Staff access remains limited to their own records where required.',
+                  ),
+                  for (final section in employeeSections)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(section),
+                      value: sections.contains(section),
+                      subtitle: Text(
+                        writableSections.contains(section)
+                            ? 'View and edit'
+                            : 'View only',
+                      ),
+                      secondary:
+                          canGrantEdit(section) && sections.contains(section)
+                              ? Switch(
+                                  value: writableSections.contains(section),
+                                  onChanged: (value) => setState(() {
+                                    if (value) {
+                                      writableSections.add(section);
+                                    } else {
+                                      writableSections.remove(section);
+                                    }
+                                  }),
+                                )
+                              : null,
+                      onChanged: (v) => setState(() {
+                        if (v == true) {
+                          sections.add(section);
+                        } else {
+                          sections.remove(section);
+                          writableSections.remove(section);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () {
-          if (form.currentState!.validate()) {
-            Navigator.pop(context, <String, Object?>{
-              'fullName': name.text.trim(),
-              'email': email.text.trim(),
-              for (final entry in details.entries)
-                entry.key: ['basicSalary', 'allowances'].contains(entry.key)
-                    ? double.parse(entry.value.text.trim())
-                    : entry.value.text.trim(),
-              'role': role,
-              'employmentStatus': status,
-              'allowedSections': sections.toList(),
-              'writableSections': writableSections.toList(),
-              'expectedVersion': widget.employee == null
-                  ? 0
-                  : int.parse('${widget.employee!['recordVersion']}'),
-            });
-          }
-        },
-        child: const Text('Save employee'),
-      ),
-    ],
-  );
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () {
+              if (AppFormValidation.validate(form.currentState!)) {
+                Navigator.pop(context, <String, Object?>{
+                  'fullName': name.text.trim(),
+                  'email': email.text.trim(),
+                  for (final entry in details.entries)
+                    entry.key: ['basicSalary', 'allowances'].contains(entry.key)
+                        ? double.parse(entry.value.text.trim())
+                        : entry.value.text.trim(),
+                  'role': role,
+                  'employmentStatus': status,
+                  'allowedSections': sections.toList(),
+                  'writableSections': writableSections.toList(),
+                  'expectedVersion': widget.employee == null
+                      ? 0
+                      : int.parse('${widget.employee!['recordVersion']}'),
+                });
+              }
+            },
+            child: const Text('Save employee'),
+          ),
+        ],
+      );
 }

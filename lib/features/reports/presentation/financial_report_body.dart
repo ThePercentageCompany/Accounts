@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -171,27 +172,27 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
     final keys = statement
         ? ['amount']
         : widget.fullTrial
-        ? [
-            'openingDebit',
-            'openingCredit',
-            'periodDebit',
-            'periodCredit',
-            'debit',
-            'credit',
-          ]
-        : ['debit', 'credit'];
+            ? [
+                'openingDebit',
+                'openingCredit',
+                'periodDebit',
+                'periodCredit',
+                'debit',
+                'credit',
+              ]
+            : ['debit', 'credit'];
     final labels = statement
         ? ['Amount']
         : widget.fullTrial
-        ? [
-            'Opening debit',
-            'Opening credit',
-            'Period debit',
-            'Period credit',
-            'Closing debit',
-            'Closing credit',
-          ]
-        : ['Debit', 'Credit'];
+            ? [
+                'Opening debit',
+                'Opening credit',
+                'Period debit',
+                'Period credit',
+                'Closing debit',
+                'Closing credit',
+              ]
+            : ['Debit', 'Credit'];
     final totals = [
       for (final k in keys)
         reportDecimal(
@@ -208,8 +209,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
       ...labels,
       if (compare) ...['Comparison', 'Variance', 'Variance % / impact'],
     ];
-    final sorted = [...accounts]
-      ..sort(
+    final sorted = [...accounts]..sort(
         (a, b) => _ascending
             ? '${a['accountCode'] ?? a['accountId'] ?? ''}'.compareTo(
                 '${b['accountCode'] ?? b['accountId'] ?? ''}',
@@ -249,11 +249,7 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
               amount(a['comparison']?['previous']),
               amount(a['comparison']?['amount']),
               Text(
-                '${a['comparison']?['percent'] ?? 'Not defined'}${a['comparison']?['percent'] == null ? '' : '%'}${a['comparison']?['favorable'] == null
-                    ? ''
-                    : a['comparison']['favorable']
-                    ? ' | Favorable'
-                    : ' | Unfavorable'}',
+                '${a['comparison']?['percent'] ?? 'Not defined'}${a['comparison']?['percent'] == null ? '' : '%'}${a['comparison']?['favorable'] == null ? '' : a['comparison']['favorable'] ? ' | Favorable' : ' | Unfavorable'}',
               ),
             ],
           ],
@@ -332,9 +328,8 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
                   ),
                 if (entries.isNotEmpty)
                   ReportGrid(
-                    headers: columns
-                        .map((c) => ledgerColumnLabels[c]!)
-                        .toList(),
+                    headers:
+                        columns.map((c) => ledgerColumnLabels[c]!).toList(),
                     numeric: {
                       for (var i = 0; i < columns.length; i++)
                         if (['debit', 'credit', 'balance'].contains(columns[i]))
@@ -420,12 +415,12 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
     }
     final difference = balance
         ? data['difference'] ??
-              _difference(
-                data['totalAssets'],
-                data['totalLiabilitiesAndEquity'],
-              )
+            _difference(
+              data['totalAssets'],
+              data['totalLiabilitiesAndEquity'],
+            )
         : data['closingDifference'] ??
-              _difference(data['totalDebit'], data['totalCredit']);
+            _difference(data['totalDebit'], data['totalCredit']);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -570,6 +565,10 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
                 SizedBox(
                   width: 240,
                   child: TextField(
+                    inputFormatters: [
+                      AppInputFormatters.text,
+                      AppInputFormatters.search
+                    ],
                     controller: _transactionController,
                     decoration: const InputDecoration(
                       isDense: true,
@@ -716,10 +715,10 @@ class _FinancialReportBodyState extends State<FinancialReportBody> {
             balance
                 ? 'Account classifications are preserved, including abnormal balances. Assets = liabilities + equity.'
                 : ledger
-                ? 'Opening balances include posted entries before the selected start date. Drafts are excluded.'
-                : profit
-                ? 'Variance uses the absolute comparison value as denominator. A nonzero amount compared with zero has an undefined percentage.'
-                : 'Equal debit and credit totals confirm arithmetic balance; they do not prove that every accounting entry is correct.',
+                    ? 'Opening balances include posted entries before the selected start date. Drafts are excluded.'
+                    : profit
+                        ? 'Variance uses the absolute comparison value as denominator. A nonzero amount compared with zero has an undefined percentage.'
+                        : 'Equal debit and credit totals confirm arithmetic balance; they do not prove that every accounting entry is correct.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 12,

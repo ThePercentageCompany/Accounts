@@ -51,14 +51,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(calls, 0);
+    await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pump();
     expect(calls, 0);
     expect(
-      find.text('Enter the private login code from your manager.'),
+      find.text('This field is required.'),
       findsOneWidget,
     );
     await tester.enterText(find.byType(TextField).last, 'test-private-code');
+    await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     expect(calls, 1);
@@ -94,6 +96,7 @@ void main() {
       'https://other.example/#employee-invite=${'i' * 43}',
     );
     await tester.enterText(find.byType(TextField).last, 'test-private-code');
+    await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     expect(calls, 0);

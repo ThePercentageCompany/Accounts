@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -581,6 +582,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                   const SizedBox(height: 12),
                 ],
                 TextField(
+                    inputFormatters: [
+                      AppInputFormatters.text,
+                      AppInputFormatters.search
+                    ],
                     controller: _search,
                     decoration: InputDecoration(
                         hintText: 'Search tasks',
@@ -655,7 +660,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                             })),
                         SizedBox(
                             width: 180,
-                            child: TextFormField(
+                            child: ValidatedTextField(
                                 initialValue: _filters['project'],
                                 decoration:
                                     const InputDecoration(labelText: 'Project'),

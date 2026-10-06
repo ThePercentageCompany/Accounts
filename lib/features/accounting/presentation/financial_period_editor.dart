@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,7 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
   String? _date(String? value) {
     final text = (value ?? '').trim();
     final date = DateTime.tryParse(text);
-    return !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
+    return !AppValidators.datePattern.hasMatch(text) ||
             date == null ||
             date.toIso8601String().substring(0, 10) != text
         ? 'Use a valid YYYY-MM-DD date.'
@@ -41,94 +42,98 @@ class _FinancialPeriodEditorState extends State<FinancialPeriodEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: Text(
-      widget.record == null ? 'Add financial period' : 'Edit financial period',
-    ),
-    content: SizedBox(
-      width: 680,
-      child: SingleChildScrollView(
-        child: Form(
-          key: _form,
-          child: PopupFormFields(
-            children: [
-              TextFormField(
-                controller: name,
-                maxLength: 160,
-                decoration: const InputDecoration(labelText: 'Period name'),
-                validator: (v) =>
-                    (v ?? '').trim().isEmpty ? 'Enter a name.' : null,
-              ),
-              CalendarFormField(
-                controller: start,
-                decoration: const InputDecoration(labelText: 'Start date'),
-                validator: _date,
-              ),
-              CalendarFormField(
-                controller: end,
-                decoration: const InputDecoration(labelText: 'End date'),
-                validator: (v) =>
-                    _date(v) ??
-                    ((v ?? '').trim().compareTo(start.text.trim()) < 0
-                        ? 'End date must be on or after the start date.'
-                        : null),
-              ),
-              if (widget.record != null) ...[
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: close,
-                  onChanged: (v) => setState(() => close = v!),
-                  title: const Text('Close this period'),
-                ),
-                const Text(
-                  'Closing prevents further journal postings in this date range. Draft journals must be resolved first. Closed periods cannot be reopened from this screen.',
-                ),
-              ],
-            ],
-          ),
+        title: Text(
+          widget.record == null
+              ? 'Add financial period'
+              : 'Edit financial period',
         ),
-      ),
-    ),
-    actions: [
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      LoadingButton(
-        onPressed: () async {
-          if (!_form.currentState!.validate()) return;
-          if (close) {
-            final yes = await showDialog<bool>(
-              context: context,
-              builder: (context) => AdaptiveFormDialog(
-                title: const Text('Close financial period?'),
-                content: const Text(
-                  'This locks journal posting for the selected dates.',
-                ),
-                actions: [
-                  LoadingButton.text(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Form(
+              key: _form,
+              child: PopupFormFields(
+                children: [
+                  ValidatedTextField(
+                    controller: name,
+                    kind: AppInputKind.name,
+                    required: true,
+                    maxLength: 160,
+                    decoration: const InputDecoration(labelText: 'Period name'),
+                    validator: (v) =>
+                        (v ?? '').trim().isEmpty ? 'Enter a name.' : null,
                   ),
-                  LoadingButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Close period'),
+                  CalendarFormField(
+                    controller: start,
+                    decoration: const InputDecoration(labelText: 'Start date'),
+                    validator: _date,
                   ),
+                  CalendarFormField(
+                    controller: end,
+                    decoration: const InputDecoration(labelText: 'End date'),
+                    validator: (v) =>
+                        _date(v) ??
+                        ((v ?? '').trim().compareTo(start.text.trim()) < 0
+                            ? 'End date must be on or after the start date.'
+                            : null),
+                  ),
+                  if (widget.record != null) ...[
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: close,
+                      onChanged: (v) => setState(() => close = v!),
+                      title: const Text('Close this period'),
+                    ),
+                    const Text(
+                      'Closing prevents further journal postings in this date range. Draft journals must be resolved first. Closed periods cannot be reopened from this screen.',
+                    ),
+                  ],
                 ],
               ),
-            );
-            if (yes != true || !context.mounted) return;
-          }
-          if (context.mounted) {
-            Navigator.pop(context, <String, Object?>{
-              'name': name.text.trim(),
-              'startDate': start.text.trim(),
-              'endDate': end.text.trim(),
-              'status': close ? 'CLOSED' : 'OPEN',
-            });
-          }
-        },
-        child: const Text('Save period'),
-      ),
-    ],
-  );
+            ),
+          ),
+        ),
+        actions: [
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          LoadingButton(
+            onPressed: () async {
+              if (!AppFormValidation.validate(_form.currentState!)) return;
+              if (close) {
+                final yes = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AdaptiveFormDialog(
+                    title: const Text('Close financial period?'),
+                    content: const Text(
+                      'This locks journal posting for the selected dates.',
+                    ),
+                    actions: [
+                      LoadingButton.text(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      LoadingButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Close period'),
+                      ),
+                    ],
+                  ),
+                );
+                if (yes != true || !context.mounted) return;
+              }
+              if (context.mounted) {
+                Navigator.pop(context, <String, Object?>{
+                  'name': name.text.trim(),
+                  'startDate': start.text.trim(),
+                  'endDate': end.text.trim(),
+                  'status': close ? 'CLOSED' : 'OPEN',
+                });
+              }
+            },
+            child: const Text('Save period'),
+          ),
+        ],
+      );
 }

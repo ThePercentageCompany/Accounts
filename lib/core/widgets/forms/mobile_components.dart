@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 export 'package:tpc_invoice/core/widgets/forms/date_time_field.dart';
 export 'package:tpc_invoice/core/widgets/forms/currency_field.dart';
@@ -94,8 +95,7 @@ class AdaptiveFormDialog extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: 900,
-            maxHeight:
-                MediaQuery.sizeOf(context).height -
+            maxHeight: MediaQuery.sizeOf(context).height -
                 MediaQuery.viewInsetsOf(context).bottom -
                 48,
           ),
@@ -109,8 +109,8 @@ class AdaptiveFormDialog extends StatelessWidget {
                     Expanded(
                       child: DefaultTextStyle.merge(
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                              fontWeight: FontWeight.w700,
+                            ),
                         child: title,
                       ),
                     ),
@@ -192,32 +192,30 @@ class PopupFormFields extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final paired =
-          constraints.maxWidth >= 560 &&
-          MediaQuery.textScalerOf(context).scale(14) <= 21;
-      return SingleChildScrollView(
-        child: Wrap(
-          spacing: 24,
-          runSpacing: 24,
-          children: [
-            for (final child in children)
-              SizedBox(
-                width:
-                    paired &&
-                        (child is TextFormField ||
-                            child is SearchableRecordField ||
-                            child is CurrencyFormField ||
-                            child is CalendarFormField)
-                    ? (constraints.maxWidth - 24) / 2
-                    : constraints.maxWidth,
-                child: child,
-              ),
-          ],
-        ),
+        builder: (context, constraints) {
+          final paired = constraints.maxWidth >= 560 &&
+              MediaQuery.textScalerOf(context).scale(14) <= 21;
+          return SingleChildScrollView(
+            child: Wrap(
+              spacing: 24,
+              runSpacing: 24,
+              children: [
+                for (final child in children)
+                  SizedBox(
+                    width: paired &&
+                            (child is TextFormField ||
+                                child is SearchableRecordField ||
+                                child is CurrencyFormField ||
+                                child is CalendarFormField)
+                        ? (constraints.maxWidth - 24) / 2
+                        : constraints.maxWidth,
+                    child: child,
+                  ),
+              ],
+            ),
+          );
+        },
       );
-    },
-  );
 }
 
 class RecordSummary extends StatelessWidget {
@@ -225,14 +223,12 @@ class RecordSummary extends StatelessWidget {
   final Map<String, dynamic> record;
   @override
   Widget build(BuildContext context) {
-    final amount =
-        record['total'] ??
+    final amount = record['total'] ??
         record['totalAmount'] ??
         record['amount'] ??
         record['unitPrice'];
     final date = record['issueDate'] ?? record['date'] ?? record['dueDate'];
-    final status =
-        record['status'] ??
+    final status = record['status'] ??
         record['paymentStatus'] ??
         record['employmentStatus'];
     return Wrap(
@@ -278,17 +274,16 @@ class StatusChip extends StatelessWidget {
     final color = dark
         ? colors.onSurface
         : positive
-        ? const Color(0xFF20843A)
-        : warning
-        ? const Color(0xFF986A08)
-        : colors.primary;
+            ? const Color(0xFF20843A)
+            : warning
+                ? const Color(0xFF986A08)
+                : colors.primary;
     return Chip(
       visualDensity: VisualDensity.compact,
       label: Text(value.replaceAll('_', ' ').toLowerCase()),
       side: BorderSide.none,
-      backgroundColor: dark
-          ? colors.surfaceContainerHighest
-          : color.withValues(alpha: .09),
+      backgroundColor:
+          dark ? colors.surfaceContainerHighest : color.withValues(alpha: .09),
       labelStyle: TextStyle(color: color),
     );
   }
@@ -573,10 +568,10 @@ class RecordDetails extends StatelessWidget {
                       final columns = heading == 'Notes & description'
                           ? 1
                           : constraints.maxWidth >= 780
-                          ? 3
-                          : constraints.maxWidth >= 450
-                          ? 2
-                          : 1;
+                              ? 3
+                              : constraints.maxWidth >= 450
+                                  ? 2
+                                  : 1;
                       final width =
                           (constraints.maxWidth - (columns - 1) * 20) / columns;
                       return Wrap(
@@ -612,10 +607,10 @@ class RecordDetails extends StatelessWidget {
                                             : '${entry.value}',
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
-                                              fontWeight: entry.key == 'total'
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w400,
-                                            ),
+                                          fontWeight: entry.key == 'total'
+                                              ? FontWeight.w700
+                                              : FontWeight.w400,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -659,6 +654,10 @@ Future<String?> selectRecord(
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: TextField(
+                      inputFormatters: [
+                        AppInputFormatters.text,
+                        AppInputFormatters.search
+                      ],
                       autofocus: true,
                       decoration: InputDecoration(
                         labelText: 'Search $label',
@@ -717,9 +716,8 @@ class SearchableRecordField extends StatelessWidget {
   final FormFieldValidator<String>? validator;
   @override
   Widget build(BuildContext context) {
-    final selected = items.any((item) => item.value == initialValue)
-        ? initialValue
-        : null;
+    final selected =
+        items.any((item) => item.value == initialValue) ? initialValue : null;
     if (MediaQuery.sizeOf(context).width >= 600 || items.length <= 2) {
       return DropdownButtonFormField<String>(
         initialValue: selected,
@@ -753,8 +751,7 @@ class SearchableRecordField extends StatelessWidget {
             errorText: field.errorText,
             suffixIcon: const Icon(Icons.expand_more),
           ),
-          child:
-              items
+          child: items
                   .where((item) => item.value == field.value)
                   .firstOrNull
                   ?.child ??

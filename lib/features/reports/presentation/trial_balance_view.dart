@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
@@ -70,10 +71,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   };
   bool get _period => !_balance && (_profit || _extra != null || _fullTrial);
   ReportFormat get _format => ReportFormat(
-    locale: _settings['numberLocale'],
-    datePattern: _settings['dateFormat'],
-    parentheses: _parentheses,
-  );
+        locale: _settings['numberLocale'],
+        datePattern: _settings['dateFormat'],
+        parentheses: _parentheses,
+      );
   (String?, String?) get _comparisonDates {
     if (_comparison == 'none') return (null, null);
     DateTime start, end;
@@ -84,8 +85,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
       start = previousYearDate(_from);
       end = previousYearDate(_date);
     } else {
-      final length =
-          DateTime.utc(_date.year, _date.month, _date.day)
+      final length = DateTime.utc(_date.year, _date.month, _date.day)
               .difference(DateTime.utc(_from.year, _from.month, _from.day))
               .inDays +
           1;
@@ -103,12 +103,12 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   String get _title => _extra == 'dashboard'
       ? 'Dashboard'
       : _extra == 'general-ledger'
-      ? 'General ledger'
-      : _balance
-      ? 'Balance sheet'
-      : _profit
-      ? 'Profit and loss'
-      : 'Trial balance';
+          ? 'General ledger'
+          : _balance
+              ? 'Balance sheet'
+              : _profit
+                  ? 'Profit and loss'
+                  : 'Trial balance';
   String _search = '';
   bool _hideZero = false;
   bool _dense = false;
@@ -116,9 +116,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _visibleRows(
     Map<String, dynamic> data,
-  ) => (data['accounts'] as List? ?? [])
-      .map((row) => Map<String, dynamic>.from(row as Map))
-      .where((row) {
+  ) =>
+      (data['accounts'] as List? ?? [])
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .where((row) {
         final matches =
             '${row['accountName']} ${row['accountId']} ${row['accountCode']} ${row['accountGroup']}'
                 .toLowerCase()
@@ -133,10 +134,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                 'credit',
               ]
             : _kind == 'general-ledger'
-            ? ['opening', 'debit', 'credit', 'closing']
-            : (_profit || _balance)
-            ? ['amount']
-            : ['debit', 'credit'];
+                ? ['opening', 'debit', 'credit', 'closing']
+                : (_profit || _balance)
+                    ? ['amount']
+                    : ['debit', 'credit'];
         return matches &&
             (_selectedAccountId == null ||
                 row['accountId'] == _selectedAccountId) &&
@@ -144,8 +145,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                 !keys.every((key) => reportMinor(row[key]) == BigInt.zero) ||
                 row['comparison']?['previous'] != null &&
                     reportMinor(row['comparison']['previous']) != BigInt.zero);
-      })
-      .toList();
+      }).toList();
   late Future<Map<String, dynamic>> _report;
   Map<String, dynamic>? _displayed;
   String? _watchedPath;
@@ -155,17 +155,17 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
       (_balance
           ? 'balance-sheet'
           : _profit
-          ? 'profit-and-loss'
-          : 'trial-balance');
+              ? 'profit-and-loss'
+              : 'trial-balance');
   String get _path => widget.api.financialReportPath(
-    widget.companyId,
-    _kind,
-    asOf: _asOf,
-    from: _period ? _from.toIso8601String().substring(0, 10) : null,
-    compareFrom: _comparisonDates.$1,
-    compareAsOf: _comparisonDates.$2,
-    employee: widget.employee,
-  );
+        widget.companyId,
+        _kind,
+        asOf: _asOf,
+        from: _period ? _from.toIso8601String().substring(0, 10) : null,
+        compareFrom: _comparisonDates.$1,
+        compareAsOf: _comparisonDates.$2,
+        employee: widget.employee,
+      );
 
   void _watch() {
     if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
@@ -334,10 +334,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
       _date = DateTime(now.year, now.month, now.day);
       _from = switch (preset) {
         'This Year' => financialYearStart(
-          _date,
-          _settings['financialYearMonth'],
-          _settings['financialYearDay'],
-        ),
+            _date,
+            _settings['financialYearMonth'],
+            _settings['financialYearDay'],
+          ),
         'This Month' => DateTime(now.year, now.month),
         'Last Month' => DateTime(now.year, now.month - 1),
         'This Quarter' => DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1),
@@ -350,20 +350,20 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   }
 
   ReportSnapshot _snapshot() => ReportSnapshot(_title, {
-    ..._displayed!,
-    'kind': _kind,
-    'accounts': _exportRows(),
-    'accountSearch': _search,
-    'hideZeroBalances': _hideZero,
-    'fullTrial': _fullTrial,
-    'parentheses': _parentheses,
-    'accountId': _selectedAccountId,
-    'transactionSearch': _transactionSearch,
-    'sourceFilter': _sourceFilter,
-    'ledgerColumns': _ledgerColumns.toList(),
-    'totalsScope':
-        'All accounts in selected reporting period; account activity follows visible filters',
-  });
+        ..._displayed!,
+        'kind': _kind,
+        'accounts': _exportRows(),
+        'accountSearch': _search,
+        'hideZeroBalances': _hideZero,
+        'fullTrial': _fullTrial,
+        'parentheses': _parentheses,
+        'accountId': _selectedAccountId,
+        'transactionSearch': _transactionSearch,
+        'sourceFilter': _sourceFilter,
+        'ledgerColumns': _ledgerColumns.toList(),
+        'totalsScope':
+            'All accounts in selected reporting period; account activity follows visible filters',
+      });
   List<Map<String, dynamic>> _exportRows() => _visibleRows(_displayed!)
       .map(
         (a) => {
@@ -393,8 +393,8 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         final bytes = type == 'pdf'
             ? await snapshotPdf(snapshot)
             : type == 'xlsx'
-            ? snapshotXlsx(snapshot)
-            : snapshotCsv(snapshot);
+                ? snapshotXlsx(snapshot)
+                : snapshotCsv(snapshot);
         await downloadFile(
           bytes,
           filename:
@@ -402,8 +402,8 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
           mimeType: type == 'pdf'
               ? 'application/pdf'
               : type == 'xlsx'
-              ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-              : 'text/csv;charset=utf-8',
+                  ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                  : 'text/csv;charset=utf-8',
         );
       }
     } catch (e) {
@@ -452,30 +452,32 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   }
 
   Map<String, dynamic> _viewSettings(String name, String id) => {
-    'id': id,
-    'name': name,
-    'kind': _kind,
-    'from': _from.toIso8601String().substring(0, 10),
-    'asOf': _asOf,
-    'comparison': _comparison,
-    'compareFrom': (_customCompareFrom ?? _from).toIso8601String().substring(
-      0,
-      10,
-    ),
-    'compareAsOf': (_customCompareAsOf ?? _date).toIso8601String().substring(
-      0,
-      10,
-    ),
-    'search': _search,
-    'hideZero': _hideZero,
-    'fullTrial': _fullTrial,
-    'dense': _dense,
-    'parentheses': _parentheses,
-    'accountId': _selectedAccountId,
-    'transactionSearch': _transactionSearch,
-    'sourceFilter': _sourceFilter,
-    'ledgerColumns': _ledgerColumns.toList(),
-  };
+        'id': id,
+        'name': name,
+        'kind': _kind,
+        'from': _from.toIso8601String().substring(0, 10),
+        'asOf': _asOf,
+        'comparison': _comparison,
+        'compareFrom':
+            (_customCompareFrom ?? _from).toIso8601String().substring(
+                  0,
+                  10,
+                ),
+        'compareAsOf':
+            (_customCompareAsOf ?? _date).toIso8601String().substring(
+                  0,
+                  10,
+                ),
+        'search': _search,
+        'hideZero': _hideZero,
+        'fullTrial': _fullTrial,
+        'dense': _dense,
+        'parentheses': _parentheses,
+        'accountId': _selectedAccountId,
+        'transactionSearch': _transactionSearch,
+        'sourceFilter': _sourceFilter,
+        'ledgerColumns': _ledgerColumns.toList(),
+      };
   void _restoreView(Map view) {
     setState(() {
       _preset = 'Custom';
@@ -577,24 +579,32 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
       if (action == null || !mounted) return;
       if (action == 'save') {
         final controller = TextEditingController();
+        final viewForm = GlobalKey<FormState>();
         final name = await showDialog<String>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Save current view'),
-            content: TextField(
-              controller: controller,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'View name'),
-            ),
+            content: Form(
+                key: viewForm,
+                child: ValidatedTextField(
+                  inputFormatters: [AppInputFormatters.text],
+                  controller: controller,
+                  required: true,
+                  kind: AppInputKind.name,
+                  maxLength: 100,
+                  decoration: const InputDecoration(labelText: 'View name'),
+                )),
             actions: [
               LoadingButton.text(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel'),
               ),
               LoadingButton(
-                onPressed: () => controller.text.trim().isEmpty
-                    ? null
-                    : Navigator.pop(context, controller.text.trim()),
+                onPressed: () {
+                  if (AppFormValidation.validate(viewForm.currentState!)) {
+                    Navigator.pop(context, controller.text.trim());
+                  }
+                },
                 child: const Text('Save'),
               ),
             ],
@@ -662,8 +672,8 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         force: true,
       );
       final view = (settings['views'] as List).cast<Map>().firstWhere(
-        (v) => v['id'] == match[2],
-      );
+            (v) => v['id'] == match[2],
+          );
       if (mounted) _restoreView(view);
     } catch (e) {
       if (mounted) {
@@ -702,14 +712,13 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                   reportKind: account['derived'] == true
                       ? 'profit-and-loss'
                       : 'general-ledger',
-                  initialAccountId: account['derived'] == true
-                      ? null
-                      : account['accountId'],
+                  initialAccountId:
+                      account['derived'] == true ? null : account['accountId'],
                   initialFrom: account['derived'] == true
                       ? DateTime.parse(account['from'])
                       : _period
-                      ? _from
-                      : DateTime(1900),
+                          ? _from
+                          : DateTime(1900),
                   initialAsOf: account['derived'] == true
                       ? DateTime.parse(account['asOf'])
                       : _date,
@@ -798,38 +807,36 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         table = type.startsWith('Invoice')
             ? 'Invoices'
             : type.startsWith('Receipt')
-            ? 'Receipts'
-            : type.startsWith('Income')
-            ? 'Income'
-            : type.startsWith('Expenses')
-            ? 'Expenses'
-            : type.startsWith('Asset')
-            ? 'Assets'
-            : type.startsWith('Payroll')
-            ? 'Payroll'
-            : type.startsWith('ShareholderLoan')
-            ? 'ShareholderLoans'
-            : type == 'CapitalContribution'
-            ? 'CapitalTransactions'
-            : null;
+                ? 'Receipts'
+                : type.startsWith('Income')
+                    ? 'Income'
+                    : type.startsWith('Expenses')
+                        ? 'Expenses'
+                        : type.startsWith('Asset')
+                            ? 'Assets'
+                            : type.startsWith('Payroll')
+                                ? 'Payroll'
+                                : type.startsWith('ShareholderLoan')
+                                    ? 'ShareholderLoans'
+                                    : type == 'CapitalContribution'
+                                        ? 'CapitalTransactions'
+                                        : null;
     try {
       if (table == null) {
         throw const FormatException(
           'This journal has no supported source-record link.',
         );
       }
-      final records =
-          (await widget.api.records(
-                widget.companyId,
-                table,
-                employee: widget.employee,
-                force: true,
-              ))['records']
-              as List;
+      final records = (await widget.api.records(
+        widget.companyId,
+        table,
+        employee: widget.employee,
+        force: true,
+      ))['records'] as List;
       final record = Map<String, dynamic>.from(
         records.cast<Map>().firstWhere(
-          (r) => r['recordId'] == entry['sourceId'],
-        ),
+              (r) => r['recordId'] == entry['sourceId'],
+            ),
       );
       if (!mounted) return;
       showDialog<void>(
@@ -898,393 +905,406 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
   }
 
   void _reportInfo() => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('About this report'),
-      content: const Text(
-        'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
-      ),
-      actions: [
-        LoadingButton.text(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('About this report'),
+          content: const Text(
+            'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
+          ),
+          actions: [
+            LoadingButton.text(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (widget.reportKind == null)
-                PopupMenuButton<String>(
-                  tooltip: 'Choose report',
-                  initialValue: _kind,
-                  onSelected: (kind) => setState(() {
-                    _extra = ['dashboard', 'general-ledger'].contains(kind)
-                        ? kind
-                        : null;
-                    _profit = kind == 'profit-and-loss';
-                    _balance = kind == 'balance-sheet';
-                    if (_from.isAfter(_date)) _from = DateTime(_date.year);
-                    _load();
-                  }),
-                  itemBuilder: (_) => [
-                    for (final entry in const {
-                      'dashboard': 'Dashboard',
-                      'general-ledger': 'General ledger',
-                      'trial-balance': 'Trial balance',
-                      'profit-and-loss': 'Profit and loss',
-                      'balance-sheet': 'Balance sheet',
-                    }.entries)
-                      PopupMenuItem(value: entry.key, child: Text(entry.value)),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _title,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.expand_more, size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-              PopupMenuButton<String>(
-                tooltip: 'Filter dates',
-                icon: const Icon(Icons.calendar_month_outlined),
-                onSelected: _filterDates,
-                itemBuilder: (_) => [
-                  for (final preset in [
-                    'Today',
-                    'This Week',
-                    'This Month',
-                    'Last Month',
-                    'This Quarter',
-                    'This Year',
-                    'Custom',
-                  ])
-                    PopupMenuItem(value: preset, child: Text(preset)),
-                ],
-              ),
-              IconButton(
-                tooltip: 'Refresh report',
-                onPressed: () => setState(() => _load(force: true)),
-                icon: const Icon(Icons.refresh),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Compare periods',
-                onSelected: _chooseComparison,
-                icon: const Icon(Icons.compare_arrows),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'none',
-                    child: Text('No comparison'),
-                  ),
-                  PopupMenuItem(
-                    value: 'previous-period',
-                    child: Text(
-                      _period
-                          ? 'Previous comparable period'
-                          : 'Previous month-end',
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'previous-year',
-                    child: Text('Previous year'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'custom',
-                    child: Text('Custom comparison'),
-                  ),
-                ],
-              ),
-              LoadingButton.iconOnly(
-                tooltip: 'Saved report views',
-                onPressed: _savingView ? null : _savedViews,
-                icon: const Icon(Icons.bookmarks_outlined),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Report options',
-                onSelected: (value) {
-                  if (['csv', 'pdf', 'xlsx', 'print'].contains(value)) {
-                    _export(value);
-                  } else {
-                    _reportInfo();
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 'csv',
-                    enabled: _displayed != null && !_exporting,
-                    child: const Text('Export CSV'),
-                  ),
-                  for (final entry in const {
-                    'pdf': 'Export PDF',
-                    'xlsx': 'Export Excel',
-                    'print': 'Print',
-                  }.entries)
-                    PopupMenuItem(
-                      value: entry.key,
-                      enabled: _displayed != null && !_exporting,
-                      child: Text(entry.value),
-                    ),
-                  const PopupMenuItem(
-                    value: 'info',
-                    child: Text('About this report'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Workspace / Reports / $_title',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            Text(_title, style: Theme.of(context).textTheme.headlineSmall),
-            if (widget.companyName != null || _displayed?['metadata'] != null)
-              Text(
-                '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'} · ${_displayed?['metadata']?['accountingBasis'] ?? 'Posted journals'}',
-              ),
-            if (_displayed?['metadata']?['generatedAt'] != null)
-              Text(
-                'Generated: ${_displayed!['metadata']['generatedAt']}',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            if (_comparison != 'none')
-              Wrap(
-                spacing: 8,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  InputChip(
-                    label: Text(
-                      'Comparison: ${_comparisonDates.$1 == null ? 'As of' : '${_format.date(_comparisonDates.$1)} to'} ${_format.date(_comparisonDates.$2)}',
-                    ),
-                    onDeleted: () => _chooseComparison('none'),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 12),
-            if (_extra != 'dashboard')
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  SizedBox(
-                    width: 240,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Search accounts',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (value) => setState(() => _search = value),
-                    ),
-                  ),
-                  FilterChip(
-                    label: const Text('Hide zero balances'),
-                    selected: _hideZero,
-                    onSelected: (value) => setState(() => _hideZero = value),
-                  ),
-                  FilterChip(
-                    label: const Text('Dense view'),
-                    selected: _dense,
-                    onSelected: (value) => setState(() => _dense = value),
-                  ),
-                  if (_kind == 'trial-balance')
-                    FilterChip(
-                      label: const Text('Opening & movements'),
-                      selected: _fullTrial,
-                      onSelected: (v) => setState(() {
-                        _fullTrial = v;
+                  if (widget.reportKind == null)
+                    PopupMenuButton<String>(
+                      tooltip: 'Choose report',
+                      initialValue: _kind,
+                      onSelected: (kind) => setState(() {
+                        _extra = ['dashboard', 'general-ledger'].contains(kind)
+                            ? kind
+                            : null;
+                        _profit = kind == 'profit-and-loss';
+                        _balance = kind == 'balance-sheet';
+                        if (_from.isAfter(_date)) _from = DateTime(_date.year);
                         _load();
                       }),
-                    ),
-                  if (_kind == 'general-ledger' && _displayed != null)
-                    PopupMenuButton<String>(
-                      tooltip: 'Select ledger account',
-                      onSelected: (id) => setState(
-                        () => _selectedAccountId = id.isEmpty ? null : id,
-                      ),
                       itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: '',
-                          child: Text('All accounts'),
-                        ),
-                        for (final a in _displayed!['accounts'] as List? ?? [])
+                        for (final entry in const {
+                          'dashboard': 'Dashboard',
+                          'general-ledger': 'General ledger',
+                          'trial-balance': 'Trial balance',
+                          'profit-and-loss': 'Profit and loss',
+                          'balance-sheet': 'Balance sheet',
+                        }.entries)
                           PopupMenuItem(
-                            value: '${a['accountId']}',
-                            child: Text(
-                              '${a['accountCode'] ?? a['accountId']} · ${a['accountName']}',
-                            ),
-                          ),
+                              value: entry.key, child: Text(entry.value)),
                       ],
                       child: Padding(
                         padding: const EdgeInsets.all(12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _title,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.expand_more, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Filter dates',
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    onSelected: _filterDates,
+                    itemBuilder: (_) => [
+                      for (final preset in [
+                        'Today',
+                        'This Week',
+                        'This Month',
+                        'Last Month',
+                        'This Quarter',
+                        'This Year',
+                        'Custom',
+                      ])
+                        PopupMenuItem(value: preset, child: Text(preset)),
+                    ],
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh report',
+                    onPressed: () => setState(() => _load(force: true)),
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Compare periods',
+                    onSelected: _chooseComparison,
+                    icon: const Icon(Icons.compare_arrows),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'none',
+                        child: Text('No comparison'),
+                      ),
+                      PopupMenuItem(
+                        value: 'previous-period',
                         child: Text(
-                          _selectedAccountId == null
-                              ? 'All accounts'
-                              : 'Account: $_selectedAccountId',
+                          _period
+                              ? 'Previous comparable period'
+                              : 'Previous month-end',
                         ),
                       ),
-                    ),
-                  if (_search.isNotEmpty ||
-                      _hideZero ||
-                      _selectedAccountId != null ||
-                      _transactionSearch.isNotEmpty ||
-                      _sourceFilter.isNotEmpty)
-                    LoadingButton.text(
-                      onPressed: () => setState(() {
-                        _search = '';
-                        _hideZero = false;
-                        _selectedAccountId = null;
-                        _transactionSearch = '';
-                        _sourceFilter = '';
-                        _searchController.clear();
-                      }),
-                      child: const Text('Reset filters'),
-                    ),
-                  FilterChip(
-                    label: const Text('Negative (1.00)'),
-                    selected: _parentheses,
-                    onSelected: (value) => setState(() => _parentheses = value),
+                      const PopupMenuItem(
+                        value: 'previous-year',
+                        child: Text('Previous year'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'custom',
+                        child: Text('Custom comparison'),
+                      ),
+                    ],
+                  ),
+                  LoadingButton.iconOnly(
+                    tooltip: 'Saved report views',
+                    onPressed: _savingView ? null : _savedViews,
+                    icon: const Icon(Icons.bookmarks_outlined),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Report options',
+                    onSelected: (value) {
+                      if (['csv', 'pdf', 'xlsx', 'print'].contains(value)) {
+                        _export(value);
+                      } else {
+                        _reportInfo();
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'csv',
+                        enabled: _displayed != null && !_exporting,
+                        child: const Text('Export CSV'),
+                      ),
+                      for (final entry in const {
+                        'pdf': 'Export PDF',
+                        'xlsx': 'Export Excel',
+                        'print': 'Print',
+                      }.entries)
+                        PopupMenuItem(
+                          value: entry.key,
+                          enabled: _displayed != null && !_exporting,
+                          child: Text(entry.value),
+                        ),
+                      const PopupMenuItem(
+                        value: 'info',
+                        child: Text('About this report'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-          ],
-        ),
-      ),
-      Expanded(
-        child: FutureBuilder<Map<String, dynamic>>(
-          future: _report,
-          builder: (context, snapshot) {
-            if (_displayed == null &&
-                snapshot.connectionState != ConnectionState.done) {
-              return const CenteredLoading();
-            }
-            if (_displayed == null && snapshot.hasError) {
-              return Center(
-                child: Text(
-                  snapshot.error is SaasApiException
-                      ? (snapshot.error as SaasApiException).message
-                      : 'Report unavailable. Retry.',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Workspace / Reports / $_title',
+                  style: Theme.of(context).textTheme.labelMedium,
                 ),
-              );
-            }
-            if (_displayed == null) {
-              return const Center(
-                child: Text("Sign in again to load this report."),
-              );
-            }
-            final data = _displayed!;
-            return SingleChildScrollView(
-              key: PageStorageKey(_path),
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 18,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: widget.api.cache.state(_path)?.refreshing == true
-                          ? const Padding(
-                              padding: EdgeInsets.only(right: 24),
-                              child: AppActivityIndicator(radius: 8),
-                            )
-                          : null,
-                    ),
+                Text(_title, style: Theme.of(context).textTheme.headlineSmall),
+                if (widget.companyName != null ||
+                    _displayed?['metadata'] != null)
+                  Text(
+                    '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'} · ${_displayed?['metadata']?['accountingBasis'] ?? 'Posted journals'}',
                   ),
-                  if (widget.api.cache.state(_path)?.offline == true)
-                    const Text('Offline - showing saved data.'),
-                  if (widget.api.cache.state(_path)?.error != null &&
-                      _displayed != null)
-                    const Text(
-                      'Refresh failed. Showing saved report; use Refresh to retry.',
-                    ),
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: MediaQuery.sizeOf(context).width < 600
-                          ? 12
-                          : 24,
-                      vertical: 4,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${_period ? "${_from.toIso8601String().substring(0, 10)} to " : "As of "}$_asOf | ${data['journalCount'] ?? 0} posted journals',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                if (_displayed?['metadata']?['generatedAt'] != null)
+                  Text(
+                    'Generated: ${_displayed!['metadata']['generatedAt']}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                if (_comparison != 'none')
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      InputChip(
+                        label: Text(
+                          'Comparison: ${_comparisonDates.$1 == null ? 'As of' : '${_format.date(_comparisonDates.$1)} to'} ${_format.date(_comparisonDates.$2)}',
+                        ),
+                        onDeleted: () => _chooseComparison('none'),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                if (_extra != 'dashboard')
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      SizedBox(
+                        width: 240,
+                        child: TextField(
+                          inputFormatters: [
+                            AppInputFormatters.text,
+                            AppInputFormatters.search
+                          ],
+                          controller: _searchController,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            hintText: 'Search accounts',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          onChanged: (value) => setState(() => _search = value),
                         ),
                       ),
-                    ),
-                  ),
-                  if (_extra == 'dashboard')
-                    WorkspaceDashboard(
-                      data: data,
-                      format: _format,
-                      onReportSelected: (kind) {
-                        if (widget.onReportSelected != null) {
-                          widget.onReportSelected!(kind);
-                        } else {
-                          setState(() {
-                            _selectKind(kind);
+                      FilterChip(
+                        label: const Text('Hide zero balances'),
+                        selected: _hideZero,
+                        onSelected: (value) =>
+                            setState(() => _hideZero = value),
+                      ),
+                      FilterChip(
+                        label: const Text('Dense view'),
+                        selected: _dense,
+                        onSelected: (value) => setState(() => _dense = value),
+                      ),
+                      if (_kind == 'trial-balance')
+                        FilterChip(
+                          label: const Text('Opening & movements'),
+                          selected: _fullTrial,
+                          onSelected: (v) => setState(() {
+                            _fullTrial = v;
                             _load();
-                          });
-                        }
-                      },
+                          }),
+                        ),
+                      if (_kind == 'general-ledger' && _displayed != null)
+                        PopupMenuButton<String>(
+                          tooltip: 'Select ledger account',
+                          onSelected: (id) => setState(
+                            () => _selectedAccountId = id.isEmpty ? null : id,
+                          ),
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: '',
+                              child: Text('All accounts'),
+                            ),
+                            for (final a
+                                in _displayed!['accounts'] as List? ?? [])
+                              PopupMenuItem(
+                                value: '${a['accountId']}',
+                                child: Text(
+                                  '${a['accountCode'] ?? a['accountId']} · ${a['accountName']}',
+                                ),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              _selectedAccountId == null
+                                  ? 'All accounts'
+                                  : 'Account: $_selectedAccountId',
+                            ),
+                          ),
+                        ),
+                      if (_search.isNotEmpty ||
+                          _hideZero ||
+                          _selectedAccountId != null ||
+                          _transactionSearch.isNotEmpty ||
+                          _sourceFilter.isNotEmpty)
+                        LoadingButton.text(
+                          onPressed: () => setState(() {
+                            _search = '';
+                            _hideZero = false;
+                            _selectedAccountId = null;
+                            _transactionSearch = '';
+                            _sourceFilter = '';
+                            _searchController.clear();
+                          }),
+                          child: const Text('Reset filters'),
+                        ),
+                      FilterChip(
+                        label: const Text('Negative (1.00)'),
+                        selected: _parentheses,
+                        onSelected: (value) =>
+                            setState(() => _parentheses = value),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _report,
+              builder: (context, snapshot) {
+                if (_displayed == null &&
+                    snapshot.connectionState != ConnectionState.done) {
+                  return const CenteredLoading();
+                }
+                if (_displayed == null && snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      snapshot.error is SaasApiException
+                          ? (snapshot.error as SaasApiException).message
+                          : 'Report unavailable. Retry.',
                     ),
-                  if (_extra != 'dashboard')
-                    FinancialReportBody(
-                      data: data,
-                      kind: _kind,
-                      rows: _visibleRows(data),
-                      key: ValueKey(_kind),
-                      dense: _dense,
-                      parentheses: _parentheses,
-                      fullTrial: _kind == 'trial-balance' && _fullTrial,
-                      format: _format,
-                      transactionSearch: _transactionSearch,
-                      sourceFilter: _sourceFilter,
-                      ledgerColumns: _ledgerColumns,
-                      onDrillDown: _drillDown,
-                      onJournal: _journal,
-                      onTransactionSearch: (v) =>
-                          setState(() => _transactionSearch = v),
-                      onSourceFilter: (v) => setState(() => _sourceFilter = v),
-                      onColumnsChanged: (v) => setState(() {
-                        _ledgerColumns
-                          ..clear()
-                          ..addAll(v);
-                      }),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    ],
-  );
+                  );
+                }
+                if (_displayed == null) {
+                  return const Center(
+                    child: Text("Sign in again to load this report."),
+                  );
+                }
+                final data = _displayed!;
+                return SingleChildScrollView(
+                  key: PageStorageKey(_path),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 18,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child:
+                              widget.api.cache.state(_path)?.refreshing == true
+                                  ? const Padding(
+                                      padding: EdgeInsets.only(right: 24),
+                                      child: AppActivityIndicator(radius: 8),
+                                    )
+                                  : null,
+                        ),
+                      ),
+                      if (widget.api.cache.state(_path)?.offline == true)
+                        const Text('Offline - showing saved data.'),
+                      if (widget.api.cache.state(_path)?.error != null &&
+                          _displayed != null)
+                        const Text(
+                          'Refresh failed. Showing saved report; use Refresh to retry.',
+                        ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+                          vertical: 4,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${_period ? "${_from.toIso8601String().substring(0, 10)} to " : "As of "}$_asOf | ${data['journalCount'] ?? 0} posted journals',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_extra == 'dashboard')
+                        WorkspaceDashboard(
+                          data: data,
+                          format: _format,
+                          onReportSelected: (kind) {
+                            if (widget.onReportSelected != null) {
+                              widget.onReportSelected!(kind);
+                            } else {
+                              setState(() {
+                                _selectKind(kind);
+                                _load();
+                              });
+                            }
+                          },
+                        ),
+                      if (_extra != 'dashboard')
+                        FinancialReportBody(
+                          data: data,
+                          kind: _kind,
+                          rows: _visibleRows(data),
+                          key: ValueKey(_kind),
+                          dense: _dense,
+                          parentheses: _parentheses,
+                          fullTrial: _kind == 'trial-balance' && _fullTrial,
+                          format: _format,
+                          transactionSearch: _transactionSearch,
+                          sourceFilter: _sourceFilter,
+                          ledgerColumns: _ledgerColumns,
+                          onDrillDown: _drillDown,
+                          onJournal: _journal,
+                          onTransactionSearch: (v) =>
+                              setState(() => _transactionSearch = v),
+                          onSourceFilter: (v) =>
+                              setState(() => _sourceFilter = v),
+                          onColumnsChanged: (v) => setState(() {
+                            _ledgerColumns
+                              ..clear()
+                              ..addAll(v);
+                          }),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
 }

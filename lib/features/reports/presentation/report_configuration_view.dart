@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
@@ -54,9 +55,8 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
           asOf: DateTime.now().toIso8601String().substring(0, 10),
           employee: widget.employee,
         );
-        final ids = (settings['accounts'] as List)
-            .map((a) => a['accountId'])
-            .toSet();
+        final ids =
+            (settings['accounts'] as List).map((a) => a['accountId']).toSet();
         unregistered = (report['accounts'] as List? ?? [])
             .map((a) => Map<String, dynamic>.from(a as Map))
             .where((a) => !ids.contains(a['accountId']))
@@ -83,9 +83,9 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
   }
 
   void _change(String key, Object value) => setState(() {
-    _settings![key] = value;
-    _dirty = true;
-  });
+        _settings![key] = value;
+        _dirty = true;
+      });
   Future<void> _save() async {
     setState(() {
       _busy = true;
@@ -126,8 +126,10 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
     );
     var group = '${old?['group'] ?? ledger?['accountGroup'] ?? 'Asset'}';
     var role = '${old?['role'] ?? ''}';
-    var normal =
-        '${old?['normalSide'] ?? (['Asset', 'Expense'].contains(group) ? 'Debit' : 'Credit')}';
+    var normal = '${old?['normalSide'] ?? ([
+          'Asset',
+          'Expense'
+        ].contains(group) ? 'Debit' : 'Credit')}';
     var active = old?['active'] != false;
     final form = GlobalKey<FormState>();
     final result = await showDialog<Map<String, dynamic>>(
@@ -145,16 +147,14 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextFormField(
+                    ValidatedTextField(
                       controller: id,
                       readOnly: source != null,
                       decoration: const InputDecoration(
                         labelText: 'Account ID',
                       ),
                       validator: (v) {
-                        if (!RegExp(
-                          r'^[A-Za-z0-9_-]{1,100}$',
-                        ).hasMatch(v ?? '')) {
+                        if (!AppValidators.accountIdPattern.hasMatch(v ?? '')) {
                           return 'Use letters, numbers, underscores or hyphens.';
                         }
                         if (old == null &&
@@ -166,15 +166,15 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                         return null;
                       },
                     ),
-                    TextFormField(
+                    ValidatedTextField(
                       controller: code,
+                      kind: AppInputKind.reference,
                       decoration: const InputDecoration(
                         labelText: 'Account code',
                       ),
                       validator: (v) {
-                        if (!RegExp(
-                          r'^[A-Za-z0-9.-]{1,24}$',
-                        ).hasMatch(v ?? '')) {
+                        if (!AppValidators.accountCodePattern
+                            .hasMatch(v ?? '')) {
                           return 'Enter a code up to 24 characters.';
                         }
                         if ((_settings!['accounts'] as List).any(
@@ -187,15 +187,17 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                         return null;
                       },
                     ),
-                    TextFormField(
+                    ValidatedTextField(
                       controller: name,
+                      kind: AppInputKind.name,
+                      required: true,
                       decoration: const InputDecoration(
                         labelText: 'Account name',
                       ),
                       validator: (v) =>
                           v == null || v.trim().isEmpty || v.length > 200
-                          ? 'Enter a name up to 200 characters.'
-                          : null,
+                              ? 'Enter a name up to 200 characters.'
+                              : null,
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: group,
@@ -209,9 +211,9 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                       onChanged: ledger != null
                           ? null
                           : (v) => update(() {
-                              group = v!;
-                              role = '';
-                            }),
+                                group = v!;
+                                role = '';
+                              }),
                     ),
                     DropdownButtonFormField<String>(
                       key: ValueKey(group),
@@ -263,7 +265,7 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
               child: const Text('Cancel'),
             ),
             LoadingButton(
-              onPressed: () => form.currentState!.validate()
+              onPressed: () => AppFormValidation.validate(form.currentState!)
                   ? Navigator.pop(context, {
                       'accountId': id.text.trim(),
                       'code': code.text.trim(),
@@ -357,8 +359,8 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
                             onPressed: _busy
                                 ? null
                                 : () => _editAccount(
-                                    Map<String, dynamic>.from(account),
-                                  ),
+                                      Map<String, dynamic>.from(account),
+                                    ),
                             icon: const Icon(Icons.edit_outlined),
                           ),
                   ),
