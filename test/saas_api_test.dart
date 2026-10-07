@@ -5,6 +5,69 @@ import 'package:http/testing.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 
 void main() {
+  for (final sameOwner in [true, false]) {
+    test('legacy sync verifies owner before retry (same owner: $sameOwner)',
+        () async {
+      final batches = <Map<String, dynamic>>[];
+      final operation = <String, Object?>{
+        'operationId': 'sync_compatibility_001',
+        'table': 'Customers',
+        'action': 'create',
+        'expectedVersion': 0,
+        'values': {'name': 'Saved customer'},
+      };
+      final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((request) async {
+          if (request.url.path == '/v1/me') {
+            return http.Response(
+                jsonEncode({
+                  'owner': {'ownerId': sameOwner ? 'original' : 'different'},
+                }),
+                200);
+          }
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          batches.add(body);
+          if (body.containsKey('ownerId')) {
+            return http.Response(
+                jsonEncode({
+                  'error': {
+                    'code': 'INVALID_BATCH',
+                    'message': 'Supply between 1 and 20 operations.',
+                  },
+                }),
+                400);
+          }
+          return http.Response('{"results":[]}', 200);
+        }),
+      );
+      addTearDown(api.close);
+      final request =
+          api.sync('c' * 43, [operation], expectedOwnerId: 'original');
+      if (sameOwner) {
+        await request;
+        expect(batches, [
+          {
+            'operations': [operation],
+            'ownerId': 'original'
+          },
+          {
+            'operations': [operation]
+          },
+        ]);
+      } else {
+        await expectLater(
+            request,
+            throwsA(isA<SaasApiException>().having(
+              (e) => e.code,
+              'code',
+              'SYNC_ACCOUNT_MISMATCH',
+            )));
+        expect(batches, hasLength(1));
+      }
+    });
+  }
+
   test(
     'operator origin rejects insecure URLs and embedded credentials or paths',
     () {

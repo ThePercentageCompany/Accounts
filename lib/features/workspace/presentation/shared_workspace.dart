@@ -67,6 +67,28 @@ const tableTitles = {
   'JournalLines': 'Journal lines',
 };
 
+// Both navigation layouts must expose the same authorized destinations.
+const workspaceNavigationGroups = <String, List<String>>{
+  'Overview': ['Reports'],
+  'Daily operations': [
+    'Tasks',
+    'Calendar',
+    'Invoices',
+    'Quotations',
+    'Customers',
+    'Employees',
+    'Payroll',
+    'Office & Attendance',
+  ],
+  'Accounting': [
+    'Income & Expenses',
+    'Fixed Assets',
+    'Capital & Equity',
+    'Balance Sheet',
+  ],
+  'System': ['Settings'],
+};
+
 class SharedWorkspace extends StatefulWidget {
   const SharedWorkspace({
     super.key,
@@ -142,6 +164,71 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       ? section
       : _children(section)[_subsection(section)]!;
   final Set<String> _visited = {};
+  StreamSubscription<EmployeeAdminState>? _employeeSyncSubscription;
+  bool _forcingSync = false;
+  bool _syncReady = false;
+  String? _syncError;
+  void _syncChanged() {
+    if (mounted) {
+      setState(() {
+        if (_syncReady &&
+            (_writes?.pending.isEmpty ?? true) &&
+            _uploads?.pending == null &&
+            _employees?.hasPending != true &&
+            _writes?.outbox?.storageError == null &&
+            _writes?.outbox?.authenticationRequired != true) {
+          _syncError = null;
+        }
+      });
+    }
+  }
+
+  Future<void> _initializeSync() async {
+    try {
+      await _writes?.initialize();
+      await _uploads?.initialize();
+      await _employees?.initializePending();
+      if (mounted) setState(() => _syncReady = true);
+    } catch (error) {
+      if (mounted) setState(() => _syncError = '$error');
+    }
+  }
+
+  Future<void> _forceSync() async {
+    setState(() {
+      _forcingSync = true;
+      _syncError = null;
+    });
+    try {
+      await _initializeSync();
+      if (!_syncReady) return;
+      // Uploads and employee changes must be confirmed before business writes.
+      if (_uploads?.pending != null) await _uploads!.flush();
+      if (_employees?.hasPending == true) {
+        await _employees!.retry();
+        if (_employees.hasPending) {
+          throw SaasApiException('PENDING',
+              _employees.error ?? 'Employee change is still unsynced.');
+        }
+      }
+      while (_writes?.pending.isNotEmpty == true) {
+        final before = _writes!.pending.length;
+        try {
+          await _writes.flush();
+        } on SaasApiException catch (error) {
+          if (error.code != 'PENDING' || _writes.pending.length >= before) {
+            rethrow;
+          }
+        }
+        if (_writes.pending.length >= before) break;
+      }
+    } catch (error) {
+      if (mounted) setState(() => _syncError = '$error');
+    } finally {
+      if (mounted) setState(() => _forcingSync = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -150,21 +237,21 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       ownerId: widget.ownerId,
       employee: widget.employee,
     );
-    _writes?.initialize().catchError((Object error) {
-      if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Device storage is unavailable. Changes have not been saved: $error',
-            ),
-          ),
-        );
-      }
-    });
+    _writes?.addListener(_syncChanged);
+    _writes?.outbox?.addListener(_syncChanged);
+    _uploads?.addListener(_syncChanged);
+    _employeeSyncSubscription =
+        _employees?.stream.listen((_) => _syncChanged());
+    unawaited(_initializeSync());
   }
 
   @override
   void dispose() {
+    _employeeSyncSubscription?.cancel();
+    _writes?.outbox?.removeListener(_syncChanged);
+    _writes?.removeListener(_syncChanged);
+    _writes?.dispose();
+    _uploads?.removeListener(_syncChanged);
     _employees?.dispose();
     _uploads?.dispose();
     super.dispose();
@@ -196,6 +283,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     final moreSelected = !shortcuts.contains(selected);
     return Scaffold(
       appBar: AppBar(
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: _syncStatusBar(),
+        ),
         toolbarHeight: wide ? 64 : 56,
         title: wide
             ? SizedBox(
@@ -235,6 +326,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 overflow: TextOverflow.ellipsis,
               ),
         actions: [
+          if (!wide)
+            IconButton(
+              tooltip: 'All workspace sections',
+              icon: const Icon(Icons.grid_view_outlined),
+              onPressed: () => _showSections(sections, selected),
+            ),
           IconButton(
             tooltip: 'How to use / FAQ',
             icon: const Icon(Icons.help_outline),
@@ -260,13 +357,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             const SizedBox(width: 10),
             Text(widget.employee == null ? 'Admin' : 'Employee'),
           ],
-          const SizedBox(width: 20),
+          SizedBox(width: wide ? 20 : 4),
         ],
-        leading: IconButton(
-          onPressed: widget.onBack,
-          tooltip: 'Back to account',
-          icon: const Icon(Icons.arrow_back),
-        ),
+        automaticallyImplyLeading: false,
       ),
       bottomNavigationBar: wide ||
               (sections.length < 2 &&
@@ -342,6 +435,35 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                         );
                       },
                     ),
+                  if (!wide &&
+                      selected != null &&
+                      _children(selected).length > 1)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey((selected, _subsection(selected))),
+                        initialValue: _subsection(selected),
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: selected,
+                          isDense: true,
+                        ),
+                        items: [
+                          for (final child in _children(selected).entries)
+                            DropdownMenuItem(
+                              value: child.key,
+                              child: Text(
+                                child.value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (child) {
+                          if (child != null) _navigate(selected, child);
+                        },
+                      ),
+                    ),
                   if (wide)
                     Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -398,6 +520,68 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _syncStatusBar() {
+    final box = _writes?.outbox;
+    final pending = (_writes?.pending.length ?? 0) +
+        (_uploads?.pending == null ? 0 : 1) +
+        (_employees?.hasPending == true ? 1 : 0);
+    final busy = _forcingSync ||
+        _writes?.busy == true ||
+        _uploads?.busy == true ||
+        (_employees?.busy == true && _employees?.hasPending == true);
+    final issue = _syncError ??
+        (box?.storageError != null ? 'Device storage unavailable' : null) ??
+        (box?.authenticationRequired == true ? 'Sign in to sync' : null) ??
+        (box?.hasFailed == true ? "Couldn't sync" : null);
+    final label = busy
+        ? 'Syncing · $pending unsynced'
+        : issue != null
+            ? pending > 0
+                ? '$pending unsynced · Sync needs attention'
+                : 'Sync needs attention'
+            : !_syncReady
+                ? 'Checking sync status'
+                : pending > 0
+                    ? '$pending unsynced'
+                    : 'Synced';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(
+            busy
+                ? Icons.sync
+                : issue != null || pending > 0
+                    ? Icons.cloud_upload_outlined
+                    : Icons.cloud_done_outlined,
+            size: 20,
+            color: issue != null ? Theme.of(context).colorScheme.error : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Tooltip(
+              message: issue ??
+                  (pending > 0
+                      ? 'Changes saved on this device await server confirmation.'
+                      : 'All saved changes have been synced.'),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(label,
+                    maxLines: 2,
+                    style: Theme.of(context).textTheme.labelMedium),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Force sync',
+            onPressed: busy ? null : _forceSync,
+            icon: const Icon(Icons.sync),
+          ),
+        ],
       ),
     );
   }
@@ -528,26 +712,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              for (final group in const <String, List<String>>{
-                'Sales & customers': [
-                  'Reports',
-                  'Invoices',
-                  'Quotations',
-                  'Customers',
-                ],
-                'People & office': [
-                  'Employees',
-                  'Payroll',
-                  'Office & Attendance',
-                ],
-                'Accounting & setup': [
-                  'Income & Expenses',
-                  'Fixed Assets',
-                  'Capital & Equity',
-                  'Balance Sheet',
-                  'Settings',
-                ],
-              }.entries) ...[
+              for (final group in workspaceNavigationGroups.entries) ...[
                 if (group.value.any(sections.contains))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -560,7 +725,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   if (_children(section).length > 1)
                     ExpansionTile(
                       key: PageStorageKey(('workspace-section', section)),
-                      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                       leading: Icon(_sectionIcon(section)),
                       title: Text(section),
                       initiallyExpanded: false,
@@ -664,31 +828,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
               ),
             ),
           ),
-          for (final group in const <String, List<String>>{
-            'Overview': ['Reports'],
-            'DAILY OPERATIONS': [
-              'Tasks',
-              'Calendar',
-              'Invoices',
-              'Quotations',
-              'Customers',
-              'Employees',
-              'Payroll',
-              'Office & Attendance',
-            ],
-            'ACCOUNTING': [
-              'Income & Expenses',
-              'Fixed Assets',
-              'Capital & Equity',
-              'Balance Sheet',
-            ],
-            'SYSTEM': ['Settings'],
-          }.entries) ...[
+          for (final group in workspaceNavigationGroups.entries) ...[
             if (group.key != 'Overview' && group.value.any(sections.contains))
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
                 child: Text(
-                  group.key,
+                  group.key.toUpperCase(),
                   style: TextStyle(
                     fontSize: 11,
                     color: colors.onSurfaceVariant,

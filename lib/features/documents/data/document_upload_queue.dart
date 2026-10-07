@@ -28,6 +28,11 @@ class DocumentUploadQueue extends ChangeNotifier {
     await _durable?.load();
   }
 
+  Future<void> initialize() async {
+    await _reload();
+    notifyListeners();
+  }
+
   Future<bool> _save(String value) =>
       _durable?.put(value) ?? preferences.setString(storageKey, value);
   Future<bool> _remove() =>

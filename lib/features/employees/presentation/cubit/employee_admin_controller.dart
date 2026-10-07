@@ -73,6 +73,11 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   Future<bool> _removePending() =>
       _durable?.remove() ?? preferences.remove(_key);
   bool get hasPending => _pendingValue != null;
+  Future<void> initializePending() async {
+    await _durable?.load();
+    if (!_disposed) _notify();
+  }
+
   bool get canDiscardRejected {
     final raw = _pendingValue;
     return raw != null && (jsonDecode(raw) as Map)['rejected'] == true;
@@ -225,23 +230,23 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   }
 
   Future<Map<String, dynamic>?> access(String id, String action) => _run(
-    () async {
-      if (hasPending) {
-        throw const SaasApiException(
-          'PENDING',
-          'Confirm the pending employee change first.',
-        );
-      }
-      // Codes are returned once and never persisted. Lost issue/reset responses
-      // require an explicit reset; automatic retries cannot recover the secret.
-      return api.employeeAccess(
-        companyId,
-        id,
-        action,
-        operationId: action == 'revoke' ? null : const Uuid().v4(),
+        () async {
+          if (hasPending) {
+            throw const SaasApiException(
+              'PENDING',
+              'Confirm the pending employee change first.',
+            );
+          }
+          // Codes are returned once and never persisted. Lost issue/reset responses
+          // require an explicit reset; automatic retries cannot recover the secret.
+          return api.employeeAccess(
+            companyId,
+            id,
+            action,
+            operationId: action == 'revoke' ? null : const Uuid().v4(),
+          );
+        },
       );
-    },
-  );
 
   void _notify() {
     if (_disposed) return;

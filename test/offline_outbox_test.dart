@@ -71,6 +71,40 @@ void main() {
     sent = [];
   });
 
+  test('retry recovers saved changes rejected by the legacy sync envelope',
+      () async {
+    var attempts = 0;
+    final ids = <Object?>[];
+    final box = create(sender: (op) async {
+      ids.add(op['operationId']);
+      if (attempts++ == 0) {
+        throw const SaasApiException(
+          'INVALID_BATCH',
+          'Supply between 1 and 20 operations.',
+          status: 400,
+        );
+      }
+      return {
+        'results': [
+          {
+            'operationId': op['operationId'],
+            'status': 'APPLIED',
+            'recordId': 'server-customer',
+            'version': 1,
+          }
+        ]
+      };
+    });
+    await box.enqueue('Customers', 'create', {'name': 'Saved customer'},
+        expectedVersion: 0);
+    await box.sync();
+    expect(box.hasFailed, isTrue);
+    await box.retry();
+    expect(box.pending, isEmpty);
+    expect(ids, hasLength(2));
+    expect(ids.first, ids.last);
+  });
+
   test(
     'atomic record and operation survive recreation; IDs and dependencies reconcile',
     () async {

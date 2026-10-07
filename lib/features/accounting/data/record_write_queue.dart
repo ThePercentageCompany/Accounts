@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
@@ -7,7 +8,7 @@ import 'package:tpc_invoice/core/offline/offline_store.dart';
 
 /// One durable owner/company queue. Only individually acknowledged operations
 /// are removed; an HTTP 200 batch can still contain a failed operation.
-class RecordWriteQueue {
+class RecordWriteQueue extends ChangeNotifier {
   RecordWriteQueue(
     this.api,
     this.preferences,
@@ -80,6 +81,7 @@ class RecordWriteQueue {
   final String companyId;
   final String storageKey;
   bool _busy = false;
+  bool get busy => _busy || outbox?.syncing == true;
   String get _rejectedKey => '$storageKey-rejected';
   bool get canDiscardRejected =>
       outbox?.hasFailed ??
@@ -114,6 +116,7 @@ class RecordWriteQueue {
       await preferences.remove(_rejectedKey);
     } finally {
       _busy = false;
+      notifyListeners();
     }
   }
 
@@ -235,6 +238,7 @@ class RecordWriteQueue {
       });
     } finally {
       _busy = false;
+      notifyListeners();
     }
   }
 
@@ -436,6 +440,7 @@ class RecordWriteQueue {
       }
     } finally {
       _busy = false;
+      notifyListeners();
     }
   }
 

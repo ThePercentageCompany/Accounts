@@ -1077,18 +1077,34 @@ class SaasApi implements SessionRepository {
     bool employee = false,
     String? expectedEmployeeId,
     String? expectedOwnerId,
-  }) =>
-      _json(
-        'POST',
-        employee ? '/v1/employee/sync' : '/v1/companies/${_id(companyId)}/sync',
-        data: {
-          'operations': operations,
-          if (!employee && expectedOwnerId != null) 'ownerId': expectedOwnerId,
-          if (employee) 'companyId': _id(companyId),
-          if (employee && (expectedEmployeeId ?? _cacheUser) != null)
-            'employeeId': _id(expectedEmployeeId ?? _cacheUser!),
-        },
-      );
+  }) async {
+    final path =
+        employee ? '/v1/employee/sync' : '/v1/companies/${_id(companyId)}/sync';
+    final data = <String, Object?>{
+      'operations': operations,
+      if (!employee && expectedOwnerId != null) 'ownerId': expectedOwnerId,
+      if (employee) 'companyId': _id(companyId),
+      if (employee && (expectedEmployeeId ?? _cacheUser) != null)
+        'employeeId': _id(expectedEmployeeId ?? _cacheUser!),
+    };
+    try {
+      return await _json('POST', path, data: data);
+    } on SaasApiException catch (error) {
+      // Older owner endpoints accept only `operations`. This validation error
+      // occurs before writes; preserve operation IDs for the compatibility retry.
+      if (employee ||
+          expectedOwnerId == null ||
+          operations.isEmpty ||
+          operations.length > 20 ||
+          error.status != 400 ||
+          error.code != 'INVALID_BATCH' ||
+          error.message != 'Supply between 1 and 20 operations.') {
+        rethrow;
+      }
+      await verifySyncIdentity(expectedOwnerId, companyId);
+      return _json('POST', path, data: {'operations': operations});
+    }
+  }
 
   Future<Map<String, dynamic>> upload(
     String companyId, {

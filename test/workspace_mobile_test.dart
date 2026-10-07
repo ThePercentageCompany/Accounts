@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:tpc_invoice/core/offline/offline_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -8,7 +10,188 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
 import 'package:tpc_invoice/core/cache/cache_store.dart';
 
+class _WorkspaceOfflineStore implements OfflineStore {
+  final partitions = <String, Map<String, dynamic>>{};
+  @override
+  Future<Map<String, dynamic>> read(String scope) async =>
+      copyJson(partitions[scope] ?? emptyPartition());
+  @override
+  Future<Map<String, dynamic>> change(
+      String scope, void Function(Map<String, dynamic>) edit) async {
+    final data = await read(scope);
+    edit(data);
+    partitions[scope] = copyJson(data);
+    return data;
+  }
+}
+
 void main() {
+  testWidgets(
+      'app bar tracks unsynced changes and force sync acknowledges them',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    var submissions = 0;
+    final api = SaasApi(
+      origin: 'https://api.test',
+      offlineStore: _WorkspaceOfflineStore(),
+      offlineAutomatic: false,
+      client: MockClient((request) async {
+        if (request.url.path == '/v1/me') {
+          return http.Response('{"owner":{"ownerId":"owner"}}', 200);
+        }
+        if (request.url.path.endsWith('/sync')) {
+          submissions++;
+          final op = jsonDecode(request.body)['operations'][0];
+          return http.Response(
+              jsonEncode({
+                'results': [
+                  {
+                    'operationId': op['operationId'],
+                    'status': 'APPLIED',
+                    'recordId': 'r' * 43,
+                    'version': 1,
+                  }
+                ]
+              }),
+              200);
+        }
+        return http.Response(
+            '{"records":[],"accounts":[],"journalCount":0}', 200);
+      }),
+    );
+    await tester.pumpWidget(MaterialApp(
+        home: SharedWorkspace(
+      api: api,
+      companyId: 'c' * 43,
+      ownerId: 'owner',
+      preferences: prefs,
+      title: 'Company',
+      onBack: () {},
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Synced'), findsOneWidget);
+    await api.outbox('owner', 'c' * 43).enqueue(
+        'Customers', 'create', {'name': 'Local customer'},
+        expectedVersion: 0);
+    await tester.pumpAndSettle();
+    expect(find.text('1 unsynced'), findsOneWidget);
+    await tester.tap(find.byTooltip('Force sync'));
+    await tester.pumpAndSettle();
+    expect(submissions, 1);
+    expect(find.text('Synced'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
+  testWidgets('mobile selectors open reports and accounting subsections',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final paths = <String>[];
+    final api = SaasApi(
+      origin: 'https://api.test',
+      client: MockClient((request) async {
+        paths.add(request.url.path);
+        return http.Response(
+            '{"records":[],"accounts":[],"journalCount":0}', 200);
+      }),
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: SharedWorkspace(
+        api: api,
+        companyId: 'c' * 43,
+        title: 'Mobile workspace',
+        onBack: () {},
+        employee: const {
+          'allowedSections': ['Reports', 'Capital & Equity'],
+        },
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('General ledger').last);
+    await tester.pumpAndSettle();
+    expect(paths.last, '/v1/employee/reports/general-ledger');
+    await tester.tap(find.byTooltip('All workspace sections'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Capital & Equity').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Capital accounts'));
+    await tester.tap(find.text('Capital accounts'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Shareholder loans').last);
+    await tester.pumpAndSettle();
+    expect(paths.last, endsWith('/ShareholderLoans'));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
+  testWidgets(
+      'mobile admin menu exposes every section including Tasks and Calendar',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((_) async => http.Response(
+            '{"records":[],"employees":[],"accounts":[],"journalCount":0}',
+            200)));
+    await tester.pumpWidget(MaterialApp(
+        home: SharedWorkspace(
+      api: api,
+      companyId: 'c' * 43,
+      ownerId: 'owner',
+      preferences: prefs,
+      title: 'Admin workspace',
+      onBack: () {},
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('All workspace sections'));
+    await tester.pumpAndSettle();
+    for (final section in ['Reports', 'Employees', ...workspaceTables.keys]) {
+      final destination = find.descendant(
+          of: find.byType(BottomSheet), matching: find.text(section));
+      await tester.scrollUntilVisible(destination, 180,
+          scrollable: find
+              .descendant(
+                  of: find.byType(BottomSheet),
+                  matching: find.byType(Scrollable))
+              .first);
+      expect(destination, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    final tasks = find.descendant(
+        of: find.byType(BottomSheet), matching: find.text('Tasks'));
+    await tester.scrollUntilVisible(tasks, -180,
+        scrollable: find
+            .descendant(
+                of: find.byType(BottomSheet), matching: find.byType(Scrollable))
+            .first);
+    await tester.tap(tasks);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('Tasks'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
   for (final width in [390.0, 1366.0]) {
     testWidgets(
       'report sidebar destinations switch authorized routes at $width',
@@ -43,7 +226,10 @@ void main() {
         if (width < 900) {
           await tester.tap(find.text('More'));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Reports'));
+          await tester.tap(find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text('Reports'),
+          ));
           await tester.pumpAndSettle();
         }
         await tester.ensureVisible(find.text('General ledger').first);
@@ -149,9 +335,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('More'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Customers').last);
+      await tester.tap(find.text('Customers'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Saved customer'), findsOneWidget);

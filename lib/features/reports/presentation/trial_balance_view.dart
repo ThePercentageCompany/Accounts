@@ -1062,135 +1062,143 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Workspace / Reports / $_title',
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                Text(_title, style: Theme.of(context).textTheme.headlineSmall),
-                if (widget.companyName != null ||
-                    _displayed?['metadata'] != null)
-                  Text(
-                    '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'} · ${_displayed?['metadata']?['accountingBasis'] ?? 'Posted journals'}',
-                  ),
-                if (_displayed?['metadata']?['generatedAt'] != null)
-                  Text(
-                    'Generated: ${_displayed!['metadata']['generatedAt']}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                if (_comparison != 'none')
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      InputChip(
-                        label: Text(
-                          'Comparison: ${_comparisonDates.$1 == null ? 'As of' : '${_format.date(_comparisonDates.$1)} to'} ${_format.date(_comparisonDates.$2)}',
-                        ),
-                        onDeleted: () => _chooseComparison('none'),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Workspace / Reports / $_title',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    Text(_title,
+                        style: Theme.of(context).textTheme.headlineSmall),
+                    if (widget.companyName != null ||
+                        _displayed?['metadata'] != null)
+                      Text(
+                        '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'} · ${_displayed?['metadata']?['accountingBasis'] ?? 'Posted journals'}',
                       ),
-                    ],
-                  ),
-                const SizedBox(height: 12),
-                if (_extra != 'dashboard')
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: [
-                      SizedBox(
-                        width: 240,
-                        child: TextField(
-                          inputFormatters: [
-                            AppInputFormatters.text,
-                            AppInputFormatters.search
-                          ],
-                          controller: _searchController,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search),
-                            hintText: 'Search accounts',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          onChanged: (value) => setState(() => _search = value),
-                        ),
+                    if (_displayed?['metadata']?['generatedAt'] != null)
+                      Text(
+                        'Generated: ${_displayed!['metadata']['generatedAt']}',
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
-                      FilterChip(
-                        label: const Text('Hide zero balances'),
-                        selected: _hideZero,
-                        onSelected: (value) =>
-                            setState(() => _hideZero = value),
-                      ),
-                      FilterChip(
-                        label: const Text('Dense view'),
-                        selected: _dense,
-                        onSelected: (value) => setState(() => _dense = value),
-                      ),
-                      if (_kind == 'trial-balance')
-                        FilterChip(
-                          label: const Text('Opening & movements'),
-                          selected: _fullTrial,
-                          onSelected: (v) => setState(() {
-                            _fullTrial = v;
-                            _load();
-                          }),
-                        ),
-                      if (_kind == 'general-ledger' && _displayed != null)
-                        PopupMenuButton<String>(
-                          tooltip: 'Select ledger account',
-                          onSelected: (id) => setState(
-                            () => _selectedAccountId = id.isEmpty ? null : id,
-                          ),
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: '',
-                              child: Text('All accounts'),
+                    if (_comparison != 'none')
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          InputChip(
+                            label: Text(
+                              'Comparison: ${_comparisonDates.$1 == null ? 'As of' : '${_format.date(_comparisonDates.$1)} to'} ${_format.date(_comparisonDates.$2)}',
                             ),
-                            for (final a
-                                in _displayed!['accounts'] as List? ?? [])
-                              PopupMenuItem(
-                                value: '${a['accountId']}',
+                            onDeleted: () => _chooseComparison('none'),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 12),
+                    if (_extra != 'dashboard')
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          SizedBox(
+                            width: 240,
+                            child: TextField(
+                              inputFormatters: [
+                                AppInputFormatters.text,
+                                AppInputFormatters.search
+                              ],
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.search),
+                                hintText: 'Search accounts',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              onChanged: (value) =>
+                                  setState(() => _search = value),
+                            ),
+                          ),
+                          FilterChip(
+                            label: const Text('Hide zero balances'),
+                            selected: _hideZero,
+                            onSelected: (value) =>
+                                setState(() => _hideZero = value),
+                          ),
+                          FilterChip(
+                            label: const Text('Dense view'),
+                            selected: _dense,
+                            onSelected: (value) =>
+                                setState(() => _dense = value),
+                          ),
+                          if (_kind == 'trial-balance')
+                            FilterChip(
+                              label: const Text('Opening & movements'),
+                              selected: _fullTrial,
+                              onSelected: (v) => setState(() {
+                                _fullTrial = v;
+                                _load();
+                              }),
+                            ),
+                          if (_kind == 'general-ledger' && _displayed != null)
+                            PopupMenuButton<String>(
+                              tooltip: 'Select ledger account',
+                              onSelected: (id) => setState(
+                                () =>
+                                    _selectedAccountId = id.isEmpty ? null : id,
+                              ),
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: '',
+                                  child: Text('All accounts'),
+                                ),
+                                for (final a
+                                    in _displayed!['accounts'] as List? ?? [])
+                                  PopupMenuItem(
+                                    value: '${a['accountId']}',
+                                    child: Text(
+                                      '${a['accountCode'] ?? a['accountId']} · ${a['accountName']}',
+                                    ),
+                                  ),
+                              ],
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
                                 child: Text(
-                                  '${a['accountCode'] ?? a['accountId']} · ${a['accountName']}',
+                                  _selectedAccountId == null
+                                      ? 'All accounts'
+                                      : 'Account: $_selectedAccountId',
                                 ),
                               ),
-                          ],
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              _selectedAccountId == null
-                                  ? 'All accounts'
-                                  : 'Account: $_selectedAccountId',
                             ),
+                          if (_search.isNotEmpty ||
+                              _hideZero ||
+                              _selectedAccountId != null ||
+                              _transactionSearch.isNotEmpty ||
+                              _sourceFilter.isNotEmpty)
+                            LoadingButton.text(
+                              onPressed: () => setState(() {
+                                _search = '';
+                                _hideZero = false;
+                                _selectedAccountId = null;
+                                _transactionSearch = '';
+                                _sourceFilter = '';
+                                _searchController.clear();
+                              }),
+                              child: const Text('Reset filters'),
+                            ),
+                          FilterChip(
+                            label: const Text('Negative (1.00)'),
+                            selected: _parentheses,
+                            onSelected: (value) =>
+                                setState(() => _parentheses = value),
                           ),
-                        ),
-                      if (_search.isNotEmpty ||
-                          _hideZero ||
-                          _selectedAccountId != null ||
-                          _transactionSearch.isNotEmpty ||
-                          _sourceFilter.isNotEmpty)
-                        LoadingButton.text(
-                          onPressed: () => setState(() {
-                            _search = '';
-                            _hideZero = false;
-                            _selectedAccountId = null;
-                            _transactionSearch = '';
-                            _sourceFilter = '';
-                            _searchController.clear();
-                          }),
-                          child: const Text('Reset filters'),
-                        ),
-                      FilterChip(
-                        label: const Text('Negative (1.00)'),
-                        selected: _parentheses,
-                        onSelected: (value) =>
-                            setState(() => _parentheses = value),
+                        ],
                       ),
-                    ],
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
           Expanded(
