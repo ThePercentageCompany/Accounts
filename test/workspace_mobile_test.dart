@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:tpc_invoice/core/offline/offline_store.dart';
+import 'package:tpc_invoice/core/widgets/workspace_sync_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -36,6 +37,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     var submissions = 0;
+    var exited = false;
+    final syncGate = Completer<void>();
     final api = SaasApi(
       origin: 'https://api.test',
       offlineStore: _WorkspaceOfflineStore(),
@@ -47,6 +50,7 @@ void main() {
         if (request.url.path.endsWith('/sync')) {
           submissions++;
           final op = jsonDecode(request.body)['operations'][0];
+          await syncGate.future;
           return http.Response(
               jsonEncode({
                 'results': [
@@ -71,7 +75,7 @@ void main() {
       ownerId: 'owner',
       preferences: prefs,
       title: 'Company',
-      onBack: () {},
+      onBack: () => exited = true,
     )));
     await tester.pumpAndSettle();
     expect(find.text('Synced'), findsOneWidget);
@@ -81,9 +85,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('1 unsynced'), findsOneWidget);
     await tester.tap(find.byTooltip('Force sync'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+        tester
+            .widget<WorkspaceSyncIcon>(find.byType(WorkspaceSyncIcon))
+            .syncing,
+        isTrue);
+    expect(find.text('Syncing · 1 unsynced'), findsOneWidget);
+    syncGate.complete();
     await tester.pumpAndSettle();
     expect(submissions, 1);
     expect(find.text('Synced'), findsOneWidget);
+    expect(
+        tester
+            .widget<WorkspaceSyncIcon>(find.byType(WorkspaceSyncIcon))
+            .syncing,
+        isFalse);
+    await tester.tap(find.byTooltip('Quit workspace'));
+    expect(exited, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     api.close();

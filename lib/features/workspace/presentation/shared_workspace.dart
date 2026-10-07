@@ -1,6 +1,7 @@
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
+import 'package:tpc_invoice/core/widgets/workspace_sync_icon.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -340,6 +341,18 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             ),
           ),
           const AppearanceSelector(),
+          if (wide)
+            TextButton.icon(
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.exit_to_app),
+              label: const Text('Quit workspace'),
+            )
+          else
+            IconButton(
+              tooltip: 'Quit workspace',
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.exit_to_app),
+            ),
           if (wide) ...[
             const SizedBox(width: 12),
             CircleAvatar(
@@ -548,18 +561,28 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 : pending > 0
                     ? '$pending unsynced'
                     : 'Synced';
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final color = busy
+        ? (dark ? Colors.lightBlue.shade200 : Colors.blue.shade700)
+        : issue != null
+            ? Theme.of(context).colorScheme.error
+            : pending > 0
+                ? (dark ? Colors.amber.shade200 : Colors.orange.shade800)
+                : !_syncReady
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : (dark ? Colors.green.shade200 : Colors.green.shade700);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(
-            busy
-                ? Icons.sync
-                : issue != null || pending > 0
+          WorkspaceSyncIcon(
+            syncing: busy,
+            color: color,
+            icon: issue != null
+                ? Icons.cloud_off_outlined
+                : pending > 0
                     ? Icons.cloud_upload_outlined
                     : Icons.cloud_done_outlined,
-            size: 20,
-            color: issue != null ? Theme.of(context).colorScheme.error : null,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -579,7 +602,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
           IconButton(
             tooltip: 'Force sync',
             onPressed: busy ? null : _forceSync,
-            icon: const Icon(Icons.sync),
+            icon: Icon(Icons.sync, color: busy ? null : color),
           ),
         ],
       ),
