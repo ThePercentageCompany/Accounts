@@ -10,6 +10,57 @@ import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/company_setup_view.dart';
 
 void main() {
+  testWidgets('setup status refreshes automatically through completion',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final company = {
+      'companyId': 'c' * 43,
+      'name': 'New company',
+      'stage': 'GOOGLE_CONNECTED'
+    };
+    var checks = 0;
+    final api = SaasApi(
+        origin: 'https://api.test',
+        client: MockClient((r) async {
+          if (r.url.path == '/v1/me') {
+            return http.Response('{"owner":{"ownerId":"owner"}}', 200);
+          }
+          if (r.url.path == '/v1/companies') {
+            return http.Response(
+                jsonEncode({
+                  'companies': [company]
+                }),
+                200);
+          }
+          checks++;
+          return http.Response(
+              jsonEncode({
+                'company': {...company, 'stage': 'READY'}
+              }),
+              200);
+        }));
+    final session = SaasSession(api, await SharedPreferences.getInstance());
+    await session.restore();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MediaQuery(
+      data: const MediaQueryData(disableAnimations: true),
+      child: CompanySetupView(session: session, navigate: (_) async {}),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Preparing your workspace'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(checks, 1);
+    expect(find.text('Workspace setup complete'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+    expect(checks, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await session.close();
+    api.close();
+  });
+
   for (final dark in [false, true]) {
     for (final width in [320.0, 1200.0]) {
       testWidgets(

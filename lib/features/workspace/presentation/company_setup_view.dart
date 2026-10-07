@@ -1,5 +1,7 @@
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
+import 'dart:async';
+import 'workspace_setup_status.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
@@ -24,6 +26,61 @@ class _CompanySetupViewState extends State<CompanySetupView> {
   final _companyForm = GlobalKey<FormState>();
   String _search = '';
   bool _creating = false;
+  bool _registering = false;
+  final _progressKey = GlobalKey();
+  Timer? _statusPoll;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusPoll = Timer.periodic(const Duration(seconds: 5), (_) {
+      final session = widget.session;
+      if (!mounted ||
+          session.state.busy ||
+          session.state.error != null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+          WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.inactive ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden) {
+        return;
+      }
+      if (const [
+        'GOOGLE_CONNECTED',
+        'CREATING_FOLDER',
+        'FOLDER_READY',
+        'CREATING_SPREADSHEET',
+        'SPREADSHEET_READY',
+        'CREATING_SCHEMA',
+        'VERIFYING_SCHEMA'
+      ].contains(session.company?['stage'])) {
+        unawaited(session.refreshSetup());
+      }
+    });
+  }
+
+  Future<void> _createCompany() async {
+    final session = widget.session;
+    if (session.pendingCompanyName == null &&
+        !AppFormValidation.validate(_companyForm.currentState!)) {
+      return;
+    }
+    setState(() => _registering = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _progressKey.currentContext;
+      if (mounted && target != null) {
+        unawaited(Scrollable.ensureVisible(target,
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 300)));
+      }
+    });
+    try {
+      await session
+          .createCompany(session.pendingCompanyName ?? _name.text.trim());
+    } finally {
+      if (mounted) setState(() => _registering = false);
+    }
+  }
 
   Future<void> _deleteWorkspace() async {
     final company = widget.session.company;
@@ -73,6 +130,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
 
   @override
   void dispose() {
+    _statusPoll?.cancel();
     _name.dispose();
     super.dispose();
   }
@@ -81,6 +139,9 @@ class _CompanySetupViewState extends State<CompanySetupView> {
         'READY' => 'Ready',
         'DELETING' => 'Deletion in progress',
         'RECOVERABLE_FAILURE' => 'Needs attention',
+        'GOOGLE_CONNECTION_REQUIRED' ||
+        'RECONNECT_REQUIRED' =>
+          'Connect Google',
         _ => 'Setup in progress',
       };
 
@@ -337,6 +398,18 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                         'Company setup is managed by your company owner.'),
                   ),
                 if (state.owner != null) ...[
+                  if (company != null ||
+                      _registering ||
+                      state.pendingCompanyName != null) ...[
+                    WorkspaceSetupStatus(
+                      key: _progressKey,
+                      stage: company?['stage'] as String?,
+                      registering: _registering,
+                      registrationPending: state.pendingCompanyName != null,
+                      error: state.error,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final list = _card(
@@ -511,20 +584,8 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                                         )),
                                     const SizedBox(height: 12),
                                     LoadingButton.icon(
-                                      onPressed: state.busy
-                                          ? null
-                                          : () {
-                                              if (state.pendingCompanyName ==
-                                                      null &&
-                                                  !AppFormValidation.validate(
-                                                      _companyForm
-                                                          .currentState!)) {
-                                                return;
-                                              }
-                                              session.createCompany(
-                                                  state.pendingCompanyName ??
-                                                      _name.text.trim());
-                                            },
+                                      onPressed:
+                                          state.busy ? null : _createCompany,
                                       icon: const Icon(Icons.add),
                                       label: Text(
                                         state.pendingCompanyName == null
