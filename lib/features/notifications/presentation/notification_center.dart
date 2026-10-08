@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
-import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
 
 class NotificationCenter extends StatefulWidget {
   const NotificationCenter(
@@ -11,10 +10,12 @@ class NotificationCenter extends StatefulWidget {
       required this.api,
       required this.companyId,
       required this.employee,
-      required this.onTask});
+      required this.onTask,
+      this.settingsEntry = false});
   final SaasApi api;
   final String companyId;
   final bool employee;
+  final bool settingsEntry;
   final ValueChanged<String> onTask;
   @override
   State<NotificationCenter> createState() => _NotificationCenterState();
@@ -22,36 +23,24 @@ class NotificationCenter extends StatefulWidget {
 
 class _NotificationCenterState extends State<NotificationCenter>
     with WidgetsBindingObserver {
-  final _runtime = PwaRuntime();
   final _changes = ValueNotifier<int>(0);
   List<Map<String, dynamic>> _items = [];
   Timer? _timer;
-  bool _busy = false, _pushBusy = false;
-  String? _error, _publicKey;
-  int _notificationVersion = 0, _generation = 0;
-  bool _deviceEnabled = false;
+  bool _busy = false;
+  String? _error;
+  int _generation = 0;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _runtime.addListener(_runtimeChanged);
     widget.api.cache.addListener(_cacheChanged);
     unawaited(_load());
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(_load(force: true));
       }
     });
-  }
-
-  void _runtimeChanged() {
-    final version = _runtime.status['notificationVersion'] as int? ?? 0;
-    if (version != _notificationVersion) {
-      _notificationVersion = version;
-      unawaited(_load(force: true));
-    }
-    _notify();
   }
 
   @override
@@ -64,11 +53,8 @@ class _NotificationCenterState extends State<NotificationCenter>
       widget.api.cache.addListener(_cacheChanged);
       _generation++;
       _items = [];
-      _publicKey = null;
       _error = null;
       _busy = false;
-      _pushBusy = false;
-      _deviceEnabled = false;
       unawaited(_load(force: true));
     }
   }
@@ -99,7 +85,6 @@ class _NotificationCenterState extends State<NotificationCenter>
     _items = (data['notifications'] as List? ?? [])
         .map((n) => Map<String, dynamic>.from(n as Map))
         .toList();
-    _publicKey = data['publicKey'] as String?;
     _notify();
   }
 
@@ -112,15 +97,9 @@ class _NotificationCenterState extends State<NotificationCenter>
       final data = await widget.api.notifications(widget.companyId,
           employee: widget.employee, force: force);
       if (!mounted || generation != _generation) return;
-      final subscription = await _runtime.subscription();
-      if (!mounted || generation != _generation) return;
-      _deviceEnabled = subscription != null &&
-          (data['pushEndpoints'] as List? ?? [])
-              .contains(subscription['endpoint']);
       _items = (data['notifications'] as List? ?? [])
           .map((n) => Map<String, dynamic>.from(n as Map))
           .toList();
-      _publicKey = data['publicKey'] as String?;
       _error = null;
     } catch (error) {
       if (!mounted || generation != _generation) return;
@@ -136,71 +115,16 @@ class _NotificationCenterState extends State<NotificationCenter>
   }
 
   Future<void> _read(String id, bool read) async {
+    final generation = _generation;
     try {
       await widget.api.notificationRead(widget.companyId, id,
           employee: widget.employee, read: read);
+      if (!mounted || generation != _generation) return;
       await _load(force: true);
     } catch (_) {
+      if (!mounted || generation != _generation) return;
       _error = 'Could not update the read state. Please retry.';
       _notify();
-    }
-  }
-
-  Future<void> _enable() async {
-    if (_publicKey == null || _pushBusy) return;
-    _pushBusy = true;
-    final generation = _generation;
-    final api = widget.api;
-    final companyId = widget.companyId;
-    final employee = widget.employee;
-    _notify();
-    try {
-      final subscription = await _runtime.subscribe(_publicKey!);
-      if (!mounted || generation != _generation) return;
-      await api.subscribePush(companyId, subscription, employee: employee);
-      if (!mounted || generation != _generation) return;
-      _deviceEnabled = true;
-      _error = null;
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      _error = _runtime.status['permission'] == 'denied'
-          ? 'Notifications are blocked. Enable them in browser settings if you want task alerts.'
-          : 'Notifications could not be enabled. Reconnect and try again.';
-    } finally {
-      if (mounted && generation == _generation) {
-        _pushBusy = false;
-        _notify();
-      }
-    }
-  }
-
-  Future<void> _disable() async {
-    if (_pushBusy) return;
-    final generation = _generation;
-    final api = widget.api;
-    final companyId = widget.companyId;
-    final employee = widget.employee;
-    _pushBusy = true;
-    _notify();
-    try {
-      final subscription = await _runtime.subscription();
-      if (subscription != null) {
-        if (!mounted || generation != _generation) return;
-        await api.unsubscribePush(companyId,
-            employee: employee, endpoint: subscription['endpoint'] as String);
-        await _runtime.unsubscribe();
-      }
-      if (!mounted || generation != _generation) return;
-      _deviceEnabled = false;
-      _error = null;
-    } catch (_) {
-      if (!mounted || generation != _generation) return;
-      _error = 'Could not disable notifications. Please retry.';
-    } finally {
-      if (mounted && generation == _generation) {
-        _pushBusy = false;
-        _notify();
-      }
     }
   }
 
@@ -228,50 +152,10 @@ class _NotificationCenterState extends State<NotificationCenter>
                               onPressed: () => _read('all', true),
                               child: const Text('Mark all read')),
                         ]),
-                        Card(
-                            child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                          'Get task assignments and deadline reminders even when the app is closed, where your browser supports it.'),
-                                      const SizedBox(height: 12),
-                                      if (_runtime.status['pushSupported'] !=
-                                          true)
-                                        const Text(
-                                            'Push is unavailable in this browser. On iPhone/iPad, install the app from Safari first. You can still read notification history here.')
-                                      else if (_publicKey == null)
-                                        const Text(
-                                            'Push alerts are awaiting administrator configuration. Notification history is still available.')
-                                      else if (_runtime.status['permission'] ==
-                                          'denied')
-                                        const Text(
-                                            'Permission is blocked. You can change it in browser settings.')
-                                      else
-                                        Wrap(spacing: 8, children: [
-                                          FilledButton(
-                                              onPressed:
-                                                  _pushBusy || _deviceEnabled
-                                                      ? null
-                                                      : _enable,
-                                              child: Text(_pushBusy
-                                                  ? 'Enabling…'
-                                                  : _deviceEnabled
-                                                      ? 'Notifications enabled'
-                                                      : 'Enable notifications')),
-                                          TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context),
-                                              child: const Text('Not now')),
-                                          TextButton(
-                                              onPressed:
-                                                  _pushBusy ? null : _disable,
-                                              child: const Text(
-                                                  'Disable notifications')),
-                                        ]),
-                                    ]))),
+                        const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                                'Task assignments and deadline reminders appear here while you use the app. Notifications refresh automatically.')),
                         if (_error != null)
                           Padding(
                               padding: const EdgeInsets.all(12),
@@ -327,18 +211,23 @@ class _NotificationCenterState extends State<NotificationCenter>
     widget.api.cache.removeListener(_cacheChanged);
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
-    _runtime.removeListener(_runtimeChanged);
-    _runtime.dispose();
     _changes.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => IconButton(
-      tooltip: 'Notifications',
-      onPressed: _open,
-      icon: Badge(
-          isLabelVisible: _items.any((n) => n['readAt'] == null),
-          label: Text('${_items.where((n) => n['readAt'] == null).length}'),
-          child: const Icon(Icons.notifications_outlined)));
+  Widget build(BuildContext context) => widget.settingsEntry
+      ? ListTile(
+          leading: const Icon(Icons.notifications_outlined),
+          title: const Text('Notifications'),
+          subtitle: const Text('View task alerts and unread notifications'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _open())
+      : IconButton(
+          tooltip: 'Notifications',
+          onPressed: () => _open(),
+          icon: Badge(
+              isLabelVisible: _items.any((n) => n['readAt'] == null),
+              label: Text('${_items.where((n) => n['readAt'] == null).length}'),
+              child: const Icon(Icons.notifications_outlined)));
 }

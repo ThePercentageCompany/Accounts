@@ -25,6 +25,7 @@ export function loadConfig(env = process.env) {
     pushPublicKey: env.PUSH_VAPID_PUBLIC_KEY?.trim(),
     pushSecretVersion: env.PUSH_VAPID_SECRET_VERSION?.trim(),
     pushSubject: env.PUSH_VAPID_SUBJECT?.trim(),
+    firebaseProject: env.FIREBASE_PROJECT_ID?.trim(),
   };
   if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Invalid PORT');
   if (!/^projects\/[^/]+\/secrets\/[^/]+\/versions\/[^/]+$/.test(config.secretVersion)) throw new Error('Invalid Secret Manager version');

@@ -19,9 +19,8 @@ class SystemSettingsPanel extends StatelessWidget {
       builder: (_) => HtmlDocumentDesignEditor(
         store: HtmlDocumentDesignStore('${api.origin}|$companyId|$section'),
         preview: (source) async {
-          final records =
-              (await api.records(companyId, section, force: true))['records']
-                  as List;
+          final records = (await api.records(companyId, section,
+              force: true))['records'] as List;
           if (records.isEmpty) {
             throw const SaasApiException(
               'NO_PREVIEW_RECORD',
@@ -42,42 +41,44 @@ class SystemSettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    child: Card(
-      child: ExpansionTile(
-        key: const PageStorageKey('system-settings-expansion'),
-        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-        initiallyExpanded: true,
-        leading: const Icon(Icons.settings_outlined),
-        title: const Text('System settings'),
-        subtitle: const Text('Appearance and document designs'),
-        children: [
-          const ListTile(
-            leading: Icon(Icons.palette_outlined),
-            title: Text('Appearance'),
-            subtitle: Text('Light, dark or system theme'),
-            trailing: AppearanceSelector(),
-          ),
-          for (final section in const ['Invoices', 'Quotations'])
-            ListTile(
-              leading: const Icon(Icons.code),
-              title: Text(
-                section == 'Invoices' ? 'Invoice design' : 'Quotation design',
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Card(
+          child: ExpansionTile(
+            key: const PageStorageKey('system-settings-expansion'),
+            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+            initiallyExpanded: true,
+            leading: const Icon(Icons.settings_outlined),
+            title: const Text('System settings'),
+            subtitle: const Text('Appearance and document designs'),
+            children: [
+              const ListTile(
+                leading: Icon(Icons.palette_outlined),
+                title: Text('Appearance'),
+                subtitle: Text('Light, dark or system theme'),
+                trailing: AppearanceSelector(),
               ),
-              subtitle: const Text(
-                'Edit, import, preview and update HTML / CSS',
+              for (final section in const ['Invoices', 'Quotations'])
+                ListTile(
+                  leading: const Icon(Icons.code),
+                  title: Text(
+                    section == 'Invoices'
+                        ? 'Invoice design'
+                        : 'Quotation design',
+                  ),
+                  subtitle: const Text(
+                    'Edit, import, preview and update HTML / CSS',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => editDesign(context, section),
+                ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Text(
+                  'Designs and appearance are saved on this device. Company details and logo are managed below. Preview uses the first saved document.',
+                ),
               ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => editDesign(context, section),
-            ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Text(
-              'Designs and appearance are saved on this device. Company details and logo are managed below. Preview uses the first saved document.',
-            ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }

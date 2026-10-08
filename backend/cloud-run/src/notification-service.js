@@ -7,8 +7,8 @@ const publicItem = ({id, title, body, type, taskId, companyId, createdAt, readAt
   ({id, title, body, type, taskId, companyId, createdAt, readAt});
 
 export class NotificationService {
-  constructor({ accounts, employees, business, config, sendPush, queue, now = Date.now }) {
-    Object.assign(this, {accounts, employees, business, config, sendPush, queue, now});
+  constructor({ accounts, employees, business, config, sendPush, sendNativePush, queue, now = Date.now }) {
+    Object.assign(this, {accounts, employees, business, config, sendPush, sendNativePush, queue, now});
     this.registry = accounts.registry;
   }
   async principal(token, companyId, employee, context = {}) {
@@ -22,6 +22,8 @@ export class NotificationService {
   }
   async list(token, companyId, employee, context) {
     await this.principal(token, companyId, employee, context);
+    // Refresh in-app events even without a background scheduler.
+    await this.scanCompany(companyId);
     const tasks = (await this.business.sheets.read(companyId, ['Tasks'])).Tasks;
     const fresh = await this.principal(token, companyId, employee, context);
     const company = (await this.registry.read()).state.companies[companyId];
@@ -31,7 +33,9 @@ export class NotificationService {
       .sort((a, b) => b.createdAt - a.createdAt).slice(0, 100).map(publicItem);
     return {notifications, unread: notifications.filter(n => !n.readAt).length,
       pushEndpoints: Object.values(company.pushSubscriptions || {}).filter(s => s.user === fresh.user && s.employee === employee).map(s => s.subscription.endpoint),
+      pushDevices: Object.values(company.pushSubscriptions || {}).filter(s => s.user === fresh.user && s.employee === employee).map(s => ({endpoint: s.subscription.endpoint, preferences: s.subscription.preferences ?? {assignments: true, reminders: true}})),
       subscriptionCount: Object.values(company.pushSubscriptions || {}).filter(s => s.user === fresh.user && s.employee === employee).length,
+      nativePushAvailable: !!this.sendNativePush,
       pushAvailable: !!this.sendPush, publicKey: this.sendPush ? this.config.pushPublicKey : null};
   }
   async read(token, companyId, input, employee, context) {
@@ -47,9 +51,27 @@ export class NotificationService {
     return {saved: true};
   }
   async subscribe(token, companyId, input, employee, context) {
-    requireThat(this.sendPush, 503, 'PUSH_NOT_CONFIGURED', 'Push notifications are not enabled by the administrator yet.');
+    const native = input?.subscription?.transport === 'fcm';
+    requireThat(native ? this.sendNativePush : this.sendPush, 503, 'PUSH_NOT_CONFIGURED', 'Push notifications are not enabled by the administrator yet.');
     const {user} = await this.principal(token, companyId, employee, context);
     const subscription = input?.subscription;
+    const preferences = subscription?.preferences ?? {assignments: true, reminders: true};
+    requireThat(preferences && !Array.isArray(preferences) && Object.keys(preferences).every(k => ['assignments', 'reminders'].includes(k)) &&
+      typeof preferences.assignments === 'boolean' && typeof preferences.reminders === 'boolean', 400, 'INVALID_PUSH_PREFERENCES', 'Choose assignment and reminder alerts.');
+    if (native) {
+      requireThat(typeof subscription.token === 'string' && subscription.token.length >= 32 && subscription.token.length <= 2000 &&
+        /^[A-Za-z0-9_:.-]+$/.test(subscription.token) && ['android', 'ios'].includes(subscription.platform) &&
+        subscription.endpoint === 'fcm:' + subscription.token, 400, 'INVALID_PUSH_SUBSCRIPTION', 'Invalid native push registration.');
+      const id = digest(subscription.endpoint);
+      await this.registry.transact(state => {
+        for (const c of Object.values(state.companies)) if (c.pushSubscriptions?.[id]) delete c.pushSubscriptions[id];
+        const c = state.companies[companyId]; c.pushSubscriptions ??= {};
+        requireThat(Object.values(c.pushSubscriptions).filter(s => s.user === user).length < 5, 409, 'PUSH_DEVICE_LIMIT', 'Notification device limit reached.');
+        c.pushSubscriptions[id] = {user, employee, subscription: {transport: 'fcm', endpoint: subscription.endpoint,
+          token: subscription.token, platform: subscription.platform, preferences}, createdAt: this.now()};
+      });
+      return {subscribed: true};
+    }
     let endpoint; try {endpoint = new URL(subscription?.endpoint);} catch (_) {}
     // Prevent subscription endpoints from turning the backend into an SSRF relay.
     const host = endpoint?.hostname;
@@ -67,7 +89,7 @@ export class NotificationService {
       requireThat(Object.values(c.pushSubscriptions).filter(s => s.user === user).length < 5,
         409, 'PUSH_DEVICE_LIMIT', 'Notification device limit reached. Disable notifications on an older device.');
       c.pushSubscriptions[id] = {user, employee, subscription: {endpoint: endpoint.href,
-        keys: {p256dh: subscription.keys.p256dh, auth: subscription.keys.auth}}, createdAt: this.now()};
+        keys: {p256dh: subscription.keys.p256dh, auth: subscription.keys.auth}, preferences}, createdAt: this.now()};
     });
     return {subscribed: true};
   }
@@ -127,7 +149,7 @@ export class NotificationService {
       const ordered = Object.values(c.notifications).sort((a,b) => b.createdAt-a.createdAt);
       for (const n of ordered.slice(500)) delete c.notifications[n.id];
     });
-    if (!this.sendPush) return;
+    if (!this.sendPush && !this.sendNativePush) return;
     const latest = (await this.registry.read()).state.companies[companyId];
     for (const n of Object.values(latest.notifications || {}).filter(n => !n.readAt && now - n.createdAt < 86400000)) {
       const task = rows.Tasks.find(t => t.recordId === n.taskId);
@@ -136,6 +158,10 @@ export class NotificationService {
           n.deadlineKey !== `due:${companyId}:${task.recordId}:${Date.parse(`${task.dueDate}T${task.endTime || '23:59'}:00+04:00`)}:${task.reminder}`)) continue;
       for (const [device, subscription] of Object.entries(latest.pushSubscriptions || {})) {
         if (subscription.user !== n.user || !subscription.employee || n.deliveries[device]?.sent) continue;
+        const preferences = subscription.subscription.preferences;
+        if ((n.type === 'task-assigned' && preferences?.assignments === false) || (n.type === 'task-due' && preferences?.reminders === false)) continue;
+        const sender = subscription.subscription.transport === 'fcm' ? this.sendNativePush : this.sendPush;
+        if (!sender) continue;
         const lease = opaque();
         const claimed = await this.registry.transact(state => {
           const item = state.companies[companyId]?.notifications?.[n.id];
@@ -144,7 +170,7 @@ export class NotificationService {
         });
         if (!claimed) continue;
         try {
-          await this.sendPush(subscription.subscription, publicItem(n));
+          await sender(subscription.subscription, publicItem(n));
           await this.registry.transact(state => {
             const item = state.companies[companyId]?.notifications?.[n.id];
             if (item?.deliveries[device]?.lease === lease) item.deliveries[device] = {sent: true};

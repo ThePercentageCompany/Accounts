@@ -92,3 +92,20 @@ test('reassigned tasks hide previous recipient history and read alerts are not d
   f.rows.Tasks[0].employeeId = opaque();
   assert.equal((await f.notifications.list('employee',f.companyId,true,{})).unread, 0);
 });
+
+ test('in-app list generates assignments and reminders without push or scheduler', async () => {
+  const f = await setup();
+  f.notifications.sendPush = undefined;
+  const history = await f.notifications.list('employee', f.companyId, true, {});
+  assert.equal(history.unread, 2);
+  assert.equal(history.pushAvailable, false);
+  assert.equal(history.nativePushAvailable, false);
+  assert.equal(f.sent.length, 0);
+  await f.notifications.read('employee', f.companyId, {id: 'all', read: true}, true, {});
+  assert.equal((await f.notifications.list('employee', f.companyId, true, {})).unread, 0);
+  f.rows.Tasks[0].endTime = '13:00';
+  f.advance(3600000);
+  const refreshed = await f.notifications.list('employee', f.companyId, true, {});
+  assert.equal(refreshed.notifications.length, 3);
+  assert.equal(refreshed.unread, 1);
+});

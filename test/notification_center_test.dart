@@ -53,6 +53,13 @@ void main() {
     await tester.tap(find.byTooltip('Notifications'));
     await tester.pumpAndSettle();
     expect(find.text('Assigned task'), findsOneWidget);
+    expect(find.text('Enable notifications'), findsNothing);
+    expect(requests.any((path) => path.contains('/subscription')), false);
+    final loads = requests.where((path) => path.startsWith('GET ')).length;
+    await tester.pump(const Duration(seconds: 30));
+    await tester.pumpAndSettle();
+    expect(requests.where((path) => path.startsWith('GET ')).length,
+        greaterThan(loads));
     await tester.tap(find.text('Assigned task'));
     await tester.pumpAndSettle();
     expect(opened, task);
