@@ -81,6 +81,13 @@ void main() {
     expect(find.text('Synced'), findsNothing);
     expect(find.byTooltip(RegExp(r'^Synced\n')), findsOneWidget);
     expect(tester.widget<AppBar>(find.byType(AppBar)).bottom, isNull);
+    final report = find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == 'TrialBalanceView');
+    final sectionArea = tester.getRect(
+        find.ancestor(of: report, matching: find.byType(IndexedStack)).first);
+    final reportArea = tester.getRect(report);
+    expect(reportArea.bottom, sectionArea.bottom);
+    expect(reportArea.width, sectionArea.width);
     await api.outbox('owner', 'c' * 43).enqueue(
         'Customers', 'create', {'name': 'Local customer'},
         expectedVersion: 0);

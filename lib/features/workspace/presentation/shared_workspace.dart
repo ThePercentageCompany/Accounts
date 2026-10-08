@@ -582,6 +582,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                     ),
                   Expanded(
                     child: IndexedStack(
+                      sizing: StackFit.expand,
                       index: selected == null ? 0 : sections.indexOf(selected),
                       children: sections.isEmpty
                           ? [const Center(child: Text('No sections assigned.'))]
