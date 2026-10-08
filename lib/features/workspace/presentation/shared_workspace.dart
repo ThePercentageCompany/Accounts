@@ -317,10 +317,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     final moreSelected = !shortcuts.contains(selected);
     return Scaffold(
       appBar: AppBar(
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: _syncStatusBar(),
-        ),
         toolbarHeight: wide ? 64 : 56,
         title: wide
             ? SizedBox(
@@ -360,20 +356,56 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 overflow: TextOverflow.ellipsis,
               ),
         actions: [
+          _syncStatusIcon(),
+          if (widget.employee == null ||
+              (widget.employee!['allowedSections'] as List).contains('Tasks'))
+            NotificationCenter(
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: widget.employee != null,
+                onTask: _openTask),
           if (!wide)
             IconButton(
               tooltip: 'All workspace sections',
               icon: const Icon(Icons.grid_view_outlined),
               onPressed: () => _showSections(sections, selected),
             ),
-          IconButton(
-            tooltip: 'How to use / FAQ',
-            icon: const Icon(Icons.help_outline),
-            onPressed: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
+          if (wide)
+            IconButton(
+              tooltip: 'How to use / FAQ',
+              icon: const Icon(Icons.help_outline),
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
+              ),
             ),
-          ),
-          const AppearanceSelector(),
+          if (wide) const AppearanceSelector(),
+          if (wide) _pwaControls(),
+          if (!wide)
+            IconButton(
+              tooltip: 'Workspace options',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (context) => SafeArea(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    ListTile(
+                      leading: const Icon(Icons.help_outline),
+                      title: const Text('How to use / FAQ'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.of(this.context).push<void>(MaterialPageRoute(
+                            builder: (_) => const WorkspaceHelp()));
+                      },
+                    ),
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [const AppearanceSelector(), _pwaControls()]),
+                    const SizedBox(height: 16),
+                  ]),
+                ),
+              ),
+            ),
           if (wide)
             TextButton.icon(
               onPressed: widget.onBack,
@@ -570,7 +602,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     );
   }
 
-  Widget _syncStatusBar() {
+  Widget _syncStatusIcon() {
     final box = _writes?.outbox;
     final pending = (_writes?.pending.length ?? 0) +
         (_uploads?.pending == null ? 0 : 1) +
@@ -606,57 +638,37 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 : !_syncReady
                     ? Theme.of(context).colorScheme.onSurfaceVariant
                     : (dark ? Colors.green.shade200 : Colors.green.shade700);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          WorkspaceSyncIcon(
-            syncing: busy,
-            color: color,
-            icon: issue != null
-                ? Icons.cloud_off_outlined
-                : pending > 0
-                    ? Icons.cloud_upload_outlined
-                    : Icons.cloud_done_outlined,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Tooltip(
-              message: issue ??
-                  (pending > 0
-                      ? 'Changes saved on this device await server confirmation.'
-                      : 'All saved changes have been synced.'),
-              child: Semantics(
-                liveRegion: true,
-                child: Text(label,
-                    maxLines: 2,
-                    style: Theme.of(context).textTheme.labelMedium),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Force sync',
-            onPressed: busy ? null : _forceSync,
-            icon: Icon(Icons.sync, color: busy ? null : color),
-          ),
-          if (widget.employee == null ||
-              (widget.employee!['allowedSections'] as List).contains('Tasks'))
-            NotificationCenter(
-                api: widget.api,
-                companyId: widget.companyId,
-                employee: widget.employee != null,
-                onTask: _openTask),
-          PwaControls(hasPendingWork: () async {
-            await _initializeSync();
-            return !_syncReady ||
-                (_writes?.pending.isNotEmpty ?? false) ||
-                _uploads?.pending != null ||
-                _employees?.hasPending == true;
-          }),
-        ],
+    final details =
+        '$label\n${issue ?? (pending > 0 ? 'Changes saved on this device await server confirmation.' : 'All saved changes have been synced.')}\nTap to force sync.';
+    return Semantics(
+      label: label,
+      liveRegion: true,
+      child: IconButton(
+        key: const Key('workspace-sync'),
+        tooltip: details,
+        onPressed: busy ? null : _forceSync,
+        icon: WorkspaceSyncIcon(
+          syncing: busy,
+          color: color,
+          icon: issue != null
+              ? Icons.error_outline
+              : _pwa.status['online'] == false
+                  ? Icons.cloud_off_outlined
+                  : pending > 0
+                      ? Icons.cloud_upload_outlined
+                      : Icons.cloud_done_outlined,
+        ),
       ),
     );
   }
+
+  Widget _pwaControls() => PwaControls(hasPendingWork: () async {
+        await _initializeSync();
+        return !_syncReady ||
+            (_writes?.pending.isNotEmpty ?? false) ||
+            _uploads?.pending != null ||
+            _employees?.hasPending == true;
+      });
 
   Widget _sectionView(String? selected, bool active) => selected == null
       ? const Center(

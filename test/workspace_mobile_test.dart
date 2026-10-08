@@ -78,13 +78,24 @@ void main() {
       onBack: () => exited = true,
     )));
     await tester.pumpAndSettle();
-    expect(find.text('Synced'), findsOneWidget);
+    expect(find.text('Synced'), findsNothing);
+    expect(find.byTooltip(RegExp(r'^Synced\n')), findsOneWidget);
+    expect(tester.widget<AppBar>(find.byType(AppBar)).bottom, isNull);
     await api.outbox('owner', 'c' * 43).enqueue(
         'Customers', 'create', {'name': 'Local customer'},
         expectedVersion: 0);
     await tester.pumpAndSettle();
-    expect(find.text('1 unsynced'), findsOneWidget);
-    await tester.tap(find.byTooltip('Force sync'));
+    expect(find.text('1 unsynced'), findsNothing);
+    expect(find.byTooltip(RegExp(r'^1 unsynced\n')), findsOneWidget);
+    await tester.longPress(find.byKey(const Key('workspace-sync')));
+    await tester.pump();
+    expect(
+        find.textContaining(
+            'Changes saved on this device await server confirmation.'),
+        findsOneWidget);
+    Tooltip.dismissAllToolTips();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(const Key('workspace-sync')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(
@@ -92,11 +103,11 @@ void main() {
             .widget<WorkspaceSyncIcon>(find.byType(WorkspaceSyncIcon))
             .syncing,
         isTrue);
-    expect(find.text('Syncing · 1 unsynced'), findsOneWidget);
+    expect(find.byTooltip(RegExp(r'^Syncing · 1 unsynced\n')), findsOneWidget);
     syncGate.complete();
     await tester.pumpAndSettle();
     expect(submissions, 1);
-    expect(find.text('Synced'), findsOneWidget);
+    expect(find.byTooltip(RegExp(r'^Synced\n')), findsOneWidget);
     expect(
         tester
             .widget<WorkspaceSyncIcon>(find.byType(WorkspaceSyncIcon))
