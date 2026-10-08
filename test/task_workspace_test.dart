@@ -368,7 +368,9 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
     await tester.pumpAndSettle();
     expect(find.byType(TaskCard), findsOneWidget);
-    expect(calls, 2);
+    expect(calls, 3);
+    expect(paths.where((p) => p.contains('/tasks')).length, 2);
+    expect(paths.where((p) => p.contains('/references/Projects')).length, 1);
     expect(paths.any((p) => p.contains('/logout')), isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

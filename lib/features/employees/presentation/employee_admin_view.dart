@@ -506,6 +506,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
   bool canGrantEdit(String section) =>
       const [
         'Customers',
+        'Projects',
         'Invoices',
         'Quotations',
         'Income & Expenses',

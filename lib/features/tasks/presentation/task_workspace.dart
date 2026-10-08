@@ -1,5 +1,6 @@
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'dart:async';
+import 'package:tpc_invoice/features/projects/presentation/project_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:intl/intl.dart';
@@ -736,15 +737,17 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                             })),
                         SizedBox(
                             width: 180,
-                            child: ValidatedTextField(
-                                initialValue: _filters['project'],
-                                decoration:
-                                    const InputDecoration(labelText: 'Project'),
-                                onFieldSubmitted: (v) => _change(() {
-                                      if (v.trim().isEmpty) {
+                            child: ProjectDropdown(
+                                api: widget.api,
+                                companyId: widget.companyId,
+                                employee: widget.employee != null,
+                                value: _filters['project'] ?? '',
+                                filter: true,
+                                onChanged: (value) => _change(() {
+                                      if (value.isEmpty) {
                                         _filters.remove('project');
                                       } else {
-                                        _filters['project'] = v.trim();
+                                        _filters['project'] = value;
                                       }
                                     }))),
                         _sortMenu(),

@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/tpc_logo.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -182,7 +183,23 @@ class _SaasAppState extends State<SaasApp> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TPC Accounts'),
+        backgroundColor: session.owner == null && session.employee == null
+            ? const Color(0xff0a0a0c)
+            : null,
+        foregroundColor: session.owner == null && session.employee == null
+            ? Colors.white
+            : null,
+        surfaceTintColor: session.owner == null && session.employee == null
+            ? Colors.transparent
+            : null,
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          TpcLogo(
+              brightness: session.owner == null && session.employee == null
+                  ? Brightness.dark
+                  : null),
+          const SizedBox(width: 10),
+          const Flexible(child: Text('TPC Accounts'))
+        ]),
         actions: [
           IconButton(
             tooltip: 'FAQ & getting started',

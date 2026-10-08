@@ -180,7 +180,7 @@ export function createApi(service, config, { log = console.error, workspace, que
           const input = await body(request);
           const result = await business.sync(token, sync[1], input);
           if (notifications && input.operations.some(op => op.table === 'Tasks') && result.results.some(r => r.status === 'APPLIED')) {
-            try {await queue?.enqueueNotifications(sync[1]);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
+            try {if (queue) await queue.enqueueNotifications(sync[1]); else await notifications.scanCompany(sync[1]);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
           }
           json(200, result); return;
         }
@@ -198,6 +198,10 @@ export function createApi(service, config, { log = console.error, workspace, que
           requireThat(action === 'create' ? !records[3] : Boolean(records[3]), 404, 'NOT_FOUND', 'Endpoint not found.');
           const result = await business.mutate(token, records[1], records[2], records[3] || null,
             action, await body(request), request.headers['idempotency-key']);
+          if (notifications && records[2] === 'Tasks') {
+            try {if (queue) await queue.enqueueNotifications(records[1]); else await notifications.scanCompany(records[1]);}
+            catch (_) {log(JSON.stringify({event: 'notification_queue_retry'}));}
+          }
           json(action === 'create' ? 201 : 200, result); return;
         }
       }
@@ -245,7 +249,7 @@ export function createApi(service, config, { log = console.error, workspace, que
           const input = await body(request);
           const result = await employees.sync(jar[EMPLOYEE], input, business);
           if (notifications && input.operations.some(op => op.table === 'Tasks') && result.results.some(r => r.status === 'APPLIED')) {
-            try {await queue?.enqueueNotifications(input.companyId);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
+            try {if (queue) await queue.enqueueNotifications(input.companyId); else await notifications.scanCompany(input.companyId);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
           }
           json(200, result); return;
         }

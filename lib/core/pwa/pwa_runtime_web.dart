@@ -15,6 +15,8 @@ external JSPromise<JSAny?> _checkUpdate();
 external JSPromise<JSBoolean> _pendingWork();
 @JS('tpcPwa.subscribe')
 external JSPromise<JSString> _subscribe(JSString key);
+@JS('tpcPwa.subscription')
+external JSPromise<JSString> _subscription();
 @JS('tpcPwa.unsubscribe')
 external JSPromise<JSAny?> _unsubscribe();
 @JS('tpcPwa.clearTask')
@@ -52,6 +54,11 @@ class PwaRuntime extends ChangeNotifier {
   Future<Map<String, dynamic>> subscribe(String key) async =>
       Map<String, dynamic>.from(
           jsonDecode((await _subscribe(key.toJS).toDart).toDart) as Map);
+  Future<Map<String, dynamic>?> subscription() async {
+    final value = jsonDecode((await _subscription().toDart).toDart);
+    return value == null ? null : Map<String, dynamic>.from(value as Map);
+  }
+
   Future<void> unsubscribe() async {
     await _unsubscribe().toDart;
   }

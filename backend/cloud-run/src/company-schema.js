@@ -45,6 +45,7 @@ const FIELDS = {
   Tasks: ['title', 'description', 'employeeId', 'assigneeName', 'priority', 'status', 'startDate', 'dueDate', 'startTime', 'endTime', 'project', 'tags', 'reminder'],
   TaskComments: ['taskId', 'body'],
   TaskActivity: ['taskId', 'action', 'summary'],
+  Projects: ['name', 'description', 'status'],
 };
 export const TABLES = Object.freeze(Object.entries(FIELDS).map(([title, fields], index) =>
   Object.freeze({ title, sheetId: 1000 + index, headers: [...SYSTEM, ...fields] })));

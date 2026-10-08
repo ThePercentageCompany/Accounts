@@ -319,6 +319,7 @@ class SaasApi implements SessionRepository {
     final financial = tables.any(
       (t) => ![
         'Customers',
+        'Projects',
         'Employees',
         'CompanyProfile',
         'Tasks',
@@ -1150,9 +1151,10 @@ class SaasApi implements SessionRepository {
           '${notificationsPath(companyId, employee: employee)}/subscription',
           data: {'subscription': subscription});
   Future<Map<String, dynamic>> unsubscribePush(String companyId,
-          {bool employee = false}) =>
+          {bool employee = false, String? endpoint}) =>
       _json('DELETE',
-          '${notificationsPath(companyId, employee: employee)}/subscription');
+          '${notificationsPath(companyId, employee: employee)}/subscription',
+          data: {if (endpoint != null) 'endpoint': endpoint});
 
   Future<Map<String, dynamic>> upload(
     String companyId, {

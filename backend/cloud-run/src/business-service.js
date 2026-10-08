@@ -1,3 +1,4 @@
+import { validateProject } from './project-policy.js';
 import { validateTask, taskActivityChanges } from './task-policy.js';
 import { opaque, digest } from './crypto.js';
 import { ApiError, requireThat } from './errors.js';
@@ -225,6 +226,7 @@ export class BusinessService {
         }
         await this.authorizeWrite(token, companyId, tableName, { action, recordId: op.recordId, old, values });
         validateTask(tableName, action, old, values);
+        await validateProject(this.sheets, companyId, tableName, action, old, values);
         await validateRelations(this.sheets, companyId, tableName, op.recordId, action, { ...old, ...values });
         if (values.items?.some(item => item.productId)) {
           const products = (await this.sheets.read(companyId, ['ProductsServices'])).ProductsServices;

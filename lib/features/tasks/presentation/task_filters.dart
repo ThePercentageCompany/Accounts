@@ -95,14 +95,14 @@ class _TaskFiltersState extends State<TaskFilters> {
                       dropdown('priority', 'Priority',
                           {for (final s in taskPriorities) s: taskLabel(s)}),
                       const SizedBox(height: 12),
-                      TextField(
-                          inputFormatters: [
-                            AppInputFormatters.text,
-                            AppInputFormatters.search
-                          ],
-                          controller: _project,
-                          decoration:
-                              const InputDecoration(labelText: 'Project')),
+                      ProjectDropdown(
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee,
+                          value: _project.text,
+                          filter: true,
+                          onChanged: (value) =>
+                              setState(() => _project.text = value)),
                       const SizedBox(height: 12),
                       CalendarFormField(
                           controller: _from,

@@ -21,15 +21,17 @@ export class NotificationService {
     return {user: owner.id};
   }
   async list(token, companyId, employee, context) {
-    const p = await this.principal(token, companyId, employee, context);
+    await this.principal(token, companyId, employee, context);
     const tasks = (await this.business.sheets.read(companyId, ['Tasks'])).Tasks;
     const fresh = await this.principal(token, companyId, employee, context);
     const company = (await this.registry.read()).state.companies[companyId];
     const notifications = Object.values(company.notifications || {})
-      .filter(n => n.user === p.user && tasks.some(t => t.recordId === n.taskId && active(t) &&
+      .filter(n => n.user === fresh.user && tasks.some(t => t.recordId === n.taskId && active(t) && (!employee || t.employeeId === fresh.user) &&
         (!fresh.principal || visible(fresh.principal, 'Tasks', t))))
       .sort((a, b) => b.createdAt - a.createdAt).slice(0, 100).map(publicItem);
     return {notifications, unread: notifications.filter(n => !n.readAt).length,
+      pushEndpoints: Object.values(company.pushSubscriptions || {}).filter(s => s.user === fresh.user && s.employee === employee).map(s => s.subscription.endpoint),
+      subscriptionCount: Object.values(company.pushSubscriptions || {}).filter(s => s.user === fresh.user && s.employee === employee).length,
       pushAvailable: !!this.sendPush, publicKey: this.sendPush ? this.config.pushPublicKey : null};
   }
   async read(token, companyId, input, employee, context) {
@@ -71,10 +73,13 @@ export class NotificationService {
   }
   async unsubscribe(token, companyId, input, employee, context) {
     const {user} = await this.principal(token, companyId, employee, context);
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => k === 'endpoint') &&
+      (input.endpoint === undefined || (typeof input.endpoint === 'string' && input.endpoint.length <= 2048)),
+      400, 'INVALID_PUSH_SUBSCRIPTION', 'Supply an optional browser endpoint.');
     await this.registry.transact(state => {
       const c = state.companies[companyId];
       for (const [id, value] of Object.entries(c.pushSubscriptions || {})) {
-        if (value.user === user && (!input?.endpoint || value.subscription.endpoint === input.endpoint)) delete c.pushSubscriptions[id];
+        if (value.user === user && value.employee === employee && (!input?.endpoint || value.subscription.endpoint === input.endpoint)) delete c.pushSubscriptions[id];
       }
     });
     return {subscribed: false};
@@ -124,7 +129,7 @@ export class NotificationService {
     });
     if (!this.sendPush) return;
     const latest = (await this.registry.read()).state.companies[companyId];
-    for (const n of Object.values(latest.notifications || {}).filter(n => now - n.createdAt < 86400000)) {
+    for (const n of Object.values(latest.notifications || {}).filter(n => !n.readAt && now - n.createdAt < 86400000)) {
       const task = rows.Tasks.find(t => t.recordId === n.taskId);
       if (!task || task.employeeId !== n.user || !allowed(task) || latest.employeeAccess?.[n.user]?.status !== 'ACTIVE') continue;
       if (n.type === 'task-due' && (task.status === 'COMPLETED' ||

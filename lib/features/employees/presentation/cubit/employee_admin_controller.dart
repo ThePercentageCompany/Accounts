@@ -32,6 +32,7 @@ const employeeSections = [
   'Fixed Assets',
   'Balance Sheet',
   'Customers',
+  'Projects',
   'Employees',
   'Payroll',
   'Reports',

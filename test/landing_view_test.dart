@@ -1,44 +1,90 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tpc_invoice/core/network/saas_api.dart';
-import 'package:tpc_invoice/features/auth/presentation/saas_app.dart';
 import 'package:tpc_invoice/features/auth/presentation/landing_view.dart';
-import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart';
 
 void main() {
-  for (final width in [320.0, 1200.0]) {
-    testWidgets('landing and public FAQ fit $width', (tester) async {
-      tester.view.physicalSize = Size(width, 900);
+  setUpAll(() async {
+    final font = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/Inter.ttf'));
+    await font.load();
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+    await icons.load();
+  });
+  for (final width in [320.0, 390.0, 768.0, 1440.0]) {
+    testWidgets('landing adapts at $width and preserves actions',
+        (tester) async {
+      tester.view.physicalSize = Size(width, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      SharedPreferences.setMockInitialValues({});
-      final api = SaasApi(
-          origin: 'https://api.test',
-          client: MockClient((_) async => http.Response(
-              '{"error":{"code":"UNAUTHORIZED","message":"Sign in"}}', 401)));
-      await tester.pumpWidget(MaterialApp(home: SaasApp(api: api)));
+      var signIn = 0, help = 0, employee = 0;
+      final capture = GlobalKey();
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: RepaintBoundary(
+                  key: capture,
+                  child: LandingView(
+                      busy: false,
+                      onSignIn: () => signIn++,
+                      onFaq: () => help++,
+                      onEmployeeLogin: () => employee++)))));
       await tester.pumpAndSettle();
-      expect(find.byType(LandingView), findsOneWidget);
-      expect(find.text('Get started with Google'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('FAQ & getting started'));
+      await tester.tap(find.text('Get started with Google'));
+      expect(signIn, 1);
+      await tester.tap(find.text('Getting started'));
+      expect(help, 1);
+      await tester.tap(find.text('Employee login').first);
+      expect(employee, 1);
+      if (width == 1440 || width == 390) {
+        await tester.runAsync(() async {
+          final image = await (capture.currentContext!.findRenderObject()
+                  as RenderRepaintBoundary)
+              .toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          final file = File('.dart_tool/landing-$width.png');
+          await file.parent.create(recursive: true);
+          await file.writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      await tester.drag(
+          find.byType(SingleChildScrollView), const Offset(0, -2600));
       await tester.pumpAndSettle();
-      expect(find.byType(WorkspaceHelp), findsOneWidget);
-      await tester.ensureVisible(find.text('What is TPC Accounts?'));
-      await tester.tap(find.text('What is TPC Accounts?'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('TPC Accounts is a company workspace'),
-          findsOneWidget);
+      if (width == 1440 || width == 390) {
+        await tester.runAsync(() async {
+          final image = await (capture.currentContext!.findRenderObject()
+                  as RenderRepaintBoundary)
+              .toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          final file = File('.dart_tool/landing-lower-$width.png');
+          await file.parent.create(recursive: true);
+          await file.writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
       expect(tester.takeException(), isNull);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(find.byType(LandingView), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      api.close();
     });
   }
+  testWidgets('busy landing disables sign-in and shows errors', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: LandingView(
+                busy: true,
+                error: 'Connection failed',
+                onSignIn: () => fail('busy sign in'),
+                onFaq: () {},
+                onEmployeeLogin: () {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('Connection failed'), findsOneWidget);
+    expect(
+        tester.widget<FilledButton>(find.byType(FilledButton).first).onPressed,
+        isNull);
+    expect(tester.takeException(), isNull);
+  });
 }

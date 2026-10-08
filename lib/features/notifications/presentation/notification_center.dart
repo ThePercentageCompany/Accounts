@@ -28,11 +28,13 @@ class _NotificationCenterState extends State<NotificationCenter>
   Timer? _timer;
   bool _busy = false, _pushBusy = false;
   String? _error, _publicKey;
+  int _notificationVersion = 0, _generation = 0;
+  bool _deviceEnabled = false;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _runtime.addListener(_notify);
+    _runtime.addListener(_runtimeChanged);
     widget.api.cache.addListener(_cacheChanged);
     unawaited(_load());
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -41,6 +43,34 @@ class _NotificationCenterState extends State<NotificationCenter>
         unawaited(_load(force: true));
       }
     });
+  }
+
+  void _runtimeChanged() {
+    final version = _runtime.status['notificationVersion'] as int? ?? 0;
+    if (version != _notificationVersion) {
+      _notificationVersion = version;
+      unawaited(_load(force: true));
+    }
+    _notify();
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationCenter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.api != widget.api ||
+        oldWidget.companyId != widget.companyId ||
+        oldWidget.employee != widget.employee) {
+      oldWidget.api.cache.removeListener(_cacheChanged);
+      widget.api.cache.addListener(_cacheChanged);
+      _generation++;
+      _items = [];
+      _publicKey = null;
+      _error = null;
+      _busy = false;
+      _pushBusy = false;
+      _deviceEnabled = false;
+      unawaited(_load(force: true));
+    }
   }
 
   void _notify() {
@@ -76,21 +106,32 @@ class _NotificationCenterState extends State<NotificationCenter>
   Future<void> _load({bool force = false}) async {
     if (_busy) return;
     _busy = true;
+    final generation = _generation;
+    _notify();
     try {
       final data = await widget.api.notifications(widget.companyId,
           employee: widget.employee, force: force);
+      if (!mounted || generation != _generation) return;
+      final subscription = await _runtime.subscription();
+      if (!mounted || generation != _generation) return;
+      _deviceEnabled = subscription != null &&
+          (data['pushEndpoints'] as List? ?? [])
+              .contains(subscription['endpoint']);
       _items = (data['notifications'] as List? ?? [])
           .map((n) => Map<String, dynamic>.from(n as Map))
           .toList();
       _publicKey = data['publicKey'] as String?;
       _error = null;
     } catch (error) {
+      if (!mounted || generation != _generation) return;
       _error = error is SaasApiException
           ? error.message
           : 'Unable to load notifications. Reconnect and try again.';
     } finally {
-      _busy = false;
-      _notify();
+      if (mounted && generation == _generation) {
+        _busy = false;
+        _notify();
+      }
     }
   }
 
@@ -108,24 +149,63 @@ class _NotificationCenterState extends State<NotificationCenter>
   Future<void> _enable() async {
     if (_publicKey == null || _pushBusy) return;
     _pushBusy = true;
+    final generation = _generation;
+    final api = widget.api;
+    final companyId = widget.companyId;
+    final employee = widget.employee;
     _notify();
     try {
       final subscription = await _runtime.subscribe(_publicKey!);
-      await widget.api.subscribePush(widget.companyId, subscription,
-          employee: widget.employee);
+      if (!mounted || generation != _generation) return;
+      await api.subscribePush(companyId, subscription, employee: employee);
+      if (!mounted || generation != _generation) return;
+      _deviceEnabled = true;
       _error = null;
     } catch (_) {
+      if (!mounted || generation != _generation) return;
       _error = _runtime.status['permission'] == 'denied'
           ? 'Notifications are blocked. Enable them in browser settings if you want task alerts.'
           : 'Notifications could not be enabled. Reconnect and try again.';
     } finally {
-      _pushBusy = false;
-      _notify();
+      if (mounted && generation == _generation) {
+        _pushBusy = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<void> _disable() async {
+    if (_pushBusy) return;
+    final generation = _generation;
+    final api = widget.api;
+    final companyId = widget.companyId;
+    final employee = widget.employee;
+    _pushBusy = true;
+    _notify();
+    try {
+      final subscription = await _runtime.subscription();
+      if (subscription != null) {
+        if (!mounted || generation != _generation) return;
+        await api.unsubscribePush(companyId,
+            employee: employee, endpoint: subscription['endpoint'] as String);
+        await _runtime.unsubscribe();
+      }
+      if (!mounted || generation != _generation) return;
+      _deviceEnabled = false;
+      _error = null;
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      _error = 'Could not disable notifications. Please retry.';
+    } finally {
+      if (mounted && generation == _generation) {
+        _pushBusy = false;
+        _notify();
+      }
     }
   }
 
   Future<void> _open() async {
-    unawaited(_load());
+    unawaited(_load(force: true));
     await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -173,33 +253,21 @@ class _NotificationCenterState extends State<NotificationCenter>
                                         Wrap(spacing: 8, children: [
                                           FilledButton(
                                               onPressed:
-                                                  _pushBusy ? null : _enable,
+                                                  _pushBusy || _deviceEnabled
+                                                      ? null
+                                                      : _enable,
                                               child: Text(_pushBusy
                                                   ? 'Enabling…'
-                                                  : 'Enable notifications')),
+                                                  : _deviceEnabled
+                                                      ? 'Notifications enabled'
+                                                      : 'Enable notifications')),
                                           TextButton(
                                               onPressed: () =>
                                                   Navigator.pop(context),
                                               child: const Text('Not now')),
                                           TextButton(
-                                              onPressed: _pushBusy
-                                                  ? null
-                                                  : () async {
-                                                      try {
-                                                        await widget.api
-                                                            .unsubscribePush(
-                                                                widget
-                                                                    .companyId,
-                                                                employee: widget
-                                                                    .employee);
-                                                        await _runtime
-                                                            .unsubscribe();
-                                                      } catch (_) {
-                                                        _error =
-                                                            'Could not disable notifications. Please retry.';
-                                                      }
-                                                      _notify();
-                                                    },
+                                              onPressed:
+                                                  _pushBusy ? null : _disable,
                                               child: const Text(
                                                   'Disable notifications')),
                                         ]),
@@ -259,7 +327,7 @@ class _NotificationCenterState extends State<NotificationCenter>
     widget.api.cache.removeListener(_cacheChanged);
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
-    _runtime.removeListener(_notify);
+    _runtime.removeListener(_runtimeChanged);
     _runtime.dispose();
     _changes.dispose();
     super.dispose();

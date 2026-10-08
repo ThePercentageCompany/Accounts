@@ -496,3 +496,14 @@ Internal batches now allow up to 250 row changes to accommodate the header,
 are required. Existing header-only and individual line operations remain valid.
 Employee grants are checked for both the header and its line table, and product
 references are checked within the current company.
+
+### Projects
+
+Projects use the existing company record endpoints: `GET /v1/companies/:companyId/records/Projects` and company sync operations with table `Projects` and actions `create`, `update`, or `delete`. Fields: required unique `name` (up to 200 characters), optional `description` (up to 1000), and `status` (`ACTIVE` or `ARCHIVED`). Employees use the employee records/sync routes with Projects grants; task editors can read public project fields through `GET /v1/employee/references/Projects?section=Tasks` with Tasks read access, revalidated after reading.
+
+The Projects sheet is appended after existing schema tables, preserving sheet IDs, and is created lazily for existing companies. Task `project` continues to store the project name to preserve historical data. New selections must match an active company project; unchanged legacy values remain editable. Referenced projects cannot be renamed or deleted; archive them or reassign tasks first.
+### Task notifications and browser push
+
+Owner and employee routes use `/v1/companies/:companyId/notifications` and `/v1/employee/companies/:companyId/notifications`. `GET` returns visible history, unread count, VAPID public key, `pushAvailable`, `subscriptionCount`, and the authenticated user's `pushEndpoints`. `POST /read` accepts `{id, read}` (`id` may be `all`). `POST /subscription` accepts `{subscription: {endpoint, keys: {p256dh, auth}}}`. `DELETE /subscription` accepts `{endpoint}` to disable one browser; an empty object retains all-device removal.
+
+Task sync and direct task record mutations enqueue notification scans, or scan inline when no queue is supplied. The authenticated `/internal/notifications` scheduler route processes assignments and Dubai-time deadline reminders. Closed-app delivery requires configured VAPID keys and the minute scheduler (see `enable-push-cloud-shell.sh`). UI state confirms that this browser endpoint is registered for the current workspace. Push events refresh open notification centers; clicks open the task. Read alerts are not pushed to newly registered devices; reassigned task history is hidden from the previous assignee. Browser web push uses the PWA; native Android/iOS push transport is not implemented.

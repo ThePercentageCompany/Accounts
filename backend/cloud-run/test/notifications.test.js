@@ -69,3 +69,26 @@ test('changed deadlines get a new reminder while completed tasks do not', async 
   await f.notifications.scanCompany(f.companyId);
   assert.equal((await f.notifications.list('employee',f.companyId,true,{})).notifications.length,3);
 });
+
+test('disable targets this browser without disabling other devices and reports subscription state', async () => {
+  const f = await setup();
+  const second = {...f.subscription, endpoint: f.subscription.endpoint + '-second'};
+  await f.notifications.subscribe('employee', f.companyId, {subscription:f.subscription}, true, {});
+  await f.notifications.subscribe('employee', f.companyId, {subscription:second}, true, {});
+  await f.notifications.subscribe('employee', f.companyId, {subscription:second}, true, {});
+  assert.equal((await f.notifications.list('employee',f.companyId,true,{})).subscriptionCount, 2);
+  await f.notifications.unsubscribe('employee', f.companyId, {endpoint:f.subscription.endpoint}, true, {});
+  const list = await f.notifications.list('employee',f.companyId,true,{});
+  assert.deepEqual(list.pushEndpoints, [second.endpoint]);
+  await assert.rejects(f.notifications.unsubscribe('employee',f.companyId,{endpoint:42},true,{}), {code:'INVALID_PUSH_SUBSCRIPTION'});
+});
+test('reassigned tasks hide previous recipient history and read alerts are not delivered to newly enabled devices', async () => {
+  const f = await setup();
+  await f.notifications.scanCompany(f.companyId);
+  await f.notifications.read('employee',f.companyId,{id:'all',read:true},true,{});
+  await f.notifications.subscribe('employee',f.companyId,{subscription:f.subscription},true,{});
+  await f.notifications.scanCompany(f.companyId);
+  assert.equal(f.sent.length, 0);
+  f.rows.Tasks[0].employeeId = opaque();
+  assert.equal((await f.notifications.list('employee',f.companyId,true,{})).unread, 0);
+});

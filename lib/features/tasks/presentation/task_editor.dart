@@ -247,7 +247,13 @@ class _TaskEditorState extends State<TaskEditor> {
                     const SizedBox(height: 8),
                     const Text('Schedule times use UAE time (UTC+4).'),
                     const SizedBox(height: 16),
-                    field('project', 'Project', maxLength: 300),
+                    ProjectDropdown(
+                        api: widget.api,
+                        companyId: widget.companyId,
+                        employee: widget.employee,
+                        value: _fields['project']!.text,
+                        onChanged: (value) =>
+                            setState(() => _fields['project']!.text = value)),
                     const SizedBox(height: 16),
                     field('tags', 'Tags (comma separated)', maxLength: 300),
                     const SizedBox(height: 16),

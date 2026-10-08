@@ -18,6 +18,7 @@ import 'package:tpc_invoice/features/employees/presentation/employee_admin_view.
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/accounting/data/record_write_queue.dart';
 import 'package:tpc_invoice/features/customers/presentation/customer_editor.dart';
+import 'package:tpc_invoice/features/projects/presentation/project_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/cash_entry_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/cash_payment_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/cash_reversal_editor.dart';
@@ -43,6 +44,7 @@ const workspaceTables = <String, List<String>>{
   'Invoices': ['Invoices', 'CreditNotes', 'Receipts', 'ReceiptAllocations'],
   'Quotations': ['Quotations'],
   'Customers': ['Customers'],
+  'Projects': ['Projects'],
   'Income & Expenses': ['Income', 'Expenses'],
   'Payroll': ['Payroll', 'PayrollItems', 'Payslips'],
   'Office & Attendance': ['Attendance', 'Overtime'],
@@ -80,6 +82,7 @@ const workspaceNavigationGroups = <String, List<String>>{
     'Invoices',
     'Quotations',
     'Customers',
+    'Projects',
     'Employees',
     'Payroll',
     'Office & Attendance',
@@ -774,6 +777,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         'Reports' => Icons.space_dashboard_outlined,
         'Invoices' => Icons.receipt_long_outlined,
         'Customers' => Icons.people_outline,
+        'Projects' => Icons.work_outline,
         'Employees' => Icons.badge_outlined,
         'Settings' => Icons.settings_outlined,
         _ => Icons.folder_outlined,
@@ -867,6 +871,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       'Invoices': Icons.receipt_long_outlined,
       'Quotations': Icons.request_quote_outlined,
       'Customers': Icons.people_outline,
+      'Projects': Icons.work_outline,
       'Income & Expenses': Icons.swap_horiz,
       'Payroll': Icons.payments_outlined,
       'Office & Attendance': Icons.event_available_outlined,
@@ -1177,6 +1182,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           );
       if (op['action'] == 'delete') {
         await correct({});
+      } else if (entity == 'Projects') {
+        final values = await showDialog<Map<String, Object?>>(
+            context: context, builder: (_) => ProjectEditor(record: saved));
+        if (values != null) await correct(values);
       } else if (entity == 'Customers') {
         final values = await showDialog<Map<String, Object?>>(
           context: context,
@@ -1281,6 +1290,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       const [
         'CompanyProfile',
         'Customers',
+        'Projects',
         'Income',
         'Expenses',
         'FinancialPeriods',
@@ -1297,27 +1307,29 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       ? 'company profile'
       : table == 'FinancialPeriods'
           ? 'financial period'
-          : table == 'Customers'
-              ? 'customer'
-              : table == 'Invoices'
-                  ? 'draft invoice'
-                  : table == 'Receipts'
-                      ? 'receipt'
-                      : table == 'Quotations'
-                          ? 'draft quotation'
-                          : table == 'Payroll'
-                              ? 'payroll draft'
-                              : table == 'Assets'
-                                  ? 'asset draft'
-                                  : table == 'Shareholders'
-                                      ? 'shareholder'
-                                      : table == 'CapitalTransactions'
-                                          ? 'capital contribution draft'
-                                          : table == 'ShareholderLoans'
-                                              ? 'shareholder loan draft'
-                                              : table == 'Expenses'
-                                                  ? 'expense'
-                                                  : 'income';
+          : table == 'Projects'
+              ? 'project'
+              : table == 'Customers'
+                  ? 'customer'
+                  : table == 'Invoices'
+                      ? 'draft invoice'
+                      : table == 'Receipts'
+                          ? 'receipt'
+                          : table == 'Quotations'
+                              ? 'draft quotation'
+                              : table == 'Payroll'
+                                  ? 'payroll draft'
+                                  : table == 'Assets'
+                                      ? 'asset draft'
+                                      : table == 'Shareholders'
+                                          ? 'shareholder'
+                                          : table == 'CapitalTransactions'
+                                              ? 'capital contribution draft'
+                                              : table == 'ShareholderLoans'
+                                                  ? 'shareholder loan draft'
+                                                  : table == 'Expenses'
+                                                      ? 'expense'
+                                                      : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
     if (busy) return;
     setState(() {
@@ -1544,15 +1556,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                           ? ShareholderLoanEditor(
                                               shareholders: choices,
                                               record: record)
-                                          : table == 'Customers'
-                                              ? CustomerEditor(record: record)
-                                              : table == 'FinancialPeriods'
-                                                  ? FinancialPeriodEditor(
+                                          : table == 'Projects'
+                                              ? ProjectEditor(record: record)
+                                              : table == 'Customers'
+                                                  ? CustomerEditor(
                                                       record: record)
-                                                  : CashEntryEditor(
-                                                      expense:
-                                                          table == 'Expenses',
-                                                      record: record),
+                                                  : table == 'FinancialPeriods'
+                                                      ? FinancialPeriodEditor(
+                                                          record: record)
+                                                      : CashEntryEditor(
+                                                          expense: table ==
+                                                              'Expenses',
+                                                          record: record),
     );
     if (values == null || !mounted) return;
     if (const ['Invoices', 'Quotations'].contains(table)) {

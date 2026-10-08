@@ -16,6 +16,7 @@ class PwaRuntime extends ChangeNotifier {
   Future<bool> pendingWork() async => false;
   Future<Map<String, dynamic>> subscribe(String key) async =>
       throw UnsupportedError('Web push is unavailable.');
+  Future<Map<String, dynamic>?> subscription() async => null;
   Future<void> unsubscribe() async {}
   void clearTask() {}
 }

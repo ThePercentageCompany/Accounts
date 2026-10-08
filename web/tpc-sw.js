@@ -36,6 +36,9 @@ self.addEventListener('push', event => event.waitUntil((async () => {
     badge: new URL('icons/Icon-192.png', scope).href,
     tag: data.id, data: {companyId: data.companyId, taskId: data.taskId},
   });
+  for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
+    if (new URL(client.url).origin === scope.origin && new URL(client.url).pathname.startsWith(scope.pathname)) client.postMessage({type: 'NOTIFICATION_RECEIVED', companyId: data.companyId});
+  }
 })()));
 self.addEventListener('notificationclick', event => {
   event.notification.close();

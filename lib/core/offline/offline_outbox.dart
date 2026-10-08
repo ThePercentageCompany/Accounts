@@ -72,7 +72,8 @@ class OfflineOutbox extends ChangeNotifier {
                           : 'Synced';
   static bool supports(String table, String action, [Map? record]) =>
       const ['create', 'update', 'delete'].contains(action) &&
-      (const ['Customers', 'ProductsServices', 'Tasks'].contains(table) ||
+      (const ['Customers', 'ProductsServices', 'Tasks', 'Projects']
+              .contains(table) ||
           (table == 'TaskComments' && action == 'create') ||
           (const ['Invoices', 'Quotations'].contains(table) &&
               (action == 'create' || record?['status'] == 'DRAFT')));
@@ -375,9 +376,12 @@ class OfflineOutbox extends ChangeNotifier {
               };
             });
             if (payload == null) continue;
-            final response = first['backgroundAck'] is Map && first['local'] == true
-                ? {'results': [first['backgroundAck']]}
-                : await send(payload!);
+            final response =
+                first['backgroundAck'] is Map && first['local'] == true
+                    ? {
+                        'results': [first['backgroundAck']]
+                      }
+                    : await send(payload!);
             final results = response['results'];
             if (results is! List ||
                 results.length != 1 ||

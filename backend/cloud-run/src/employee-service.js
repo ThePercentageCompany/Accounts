@@ -323,6 +323,7 @@ export class EmployeeService {
   }
   async references(token, table, section, context = {}) {
     const fields = {
+      Projects: { sections: ['Tasks'], fields: ['name', 'description', 'status'] },
       Customers: { sections: ['Invoices', 'Quotations'], fields: ['name', 'email', 'phone', 'taxNumber', 'address'] },
       CompanyProfile: { sections: ['Invoices', 'Quotations'], fields: ['name', 'address', 'email', 'phone', 'taxNumber', 'currency', 'invoicePrefix', 'quotationPrefix'] },
       Employees: { sections: ['Payroll'], fields: ['fullName', 'employeeCode', 'department', 'designation', 'employmentStatus', 'joinDate', 'lastEmploymentDate', 'basicSalary', 'allowances'] },
@@ -331,7 +332,7 @@ export class EmployeeService {
     const reference = fields[table];
     requireThat(reference && reference.sections.includes(section), 403, 'REFERENCE_FORBIDDEN', 'This editor reference is unavailable.');
     const p = await this.principal(token); this.verifyContext(p, context);
-    const authorize = principal => requireThat(principal.writableSections.includes(section),
+    const authorize = principal => requireThat(table === 'Projects' ? principal.allowedSections.includes('Tasks') : principal.writableSections.includes(section),
       403, 'WRITE_FORBIDDEN', 'Edit access is required to load these references.');
     authorize(p);
     const names = [...new Set([table, 'Employees', 'Roles', 'RolePermissions'])];
