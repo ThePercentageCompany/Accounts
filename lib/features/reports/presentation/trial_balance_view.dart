@@ -908,8 +908,19 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('About this report'),
-          content: const Text(
-            'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
+          content: SingleChildScrollView(
+            child: Text([
+              if (_displayed?['metadata']?['companyName'] != null ||
+                  widget.companyName != null)
+                '${_displayed?['metadata']?['companyName'] ?? widget.companyName}',
+              if (_displayed?['metadata']?['currency'] != null)
+                'Currency: ${_displayed!['metadata']['currency']}',
+              if (_displayed?['metadata']?['accountingBasis'] != null)
+                'Basis: ${_displayed!['metadata']['accountingBasis']}',
+              if (_displayed?['metadata']?['generatedAt'] != null)
+                'Generated: ${_displayed!['metadata']['generatedAt']}',
+              'Includes posted journals only; drafts are excluded. Amounts use the workspace accounting currency. Income and expenses cover the selected period; other dashboard balances are cumulative through the end date. Graphs compare current totals, not historical trends. General ledger balances are debit-positive.',
+            ].join('\n\n')),
           ),
           actions: [
             LoadingButton.text(
@@ -1068,28 +1079,52 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
             ),
             child: SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_extra != 'dashboard')
-                      Text(
-                        'Workspace / Reports / $_title',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                    if (_extra != 'dashboard')
-                      Text(_title,
-                          style: Theme.of(context).textTheme.headlineSmall),
-                    if (widget.companyName != null ||
-                        _displayed?['metadata'] != null)
-                      Text(
-                        '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'} · ${_displayed?['metadata']?['accountingBasis'] ?? 'Posted journals'}',
-                      ),
-                    if (_displayed?['metadata']?['generatedAt'] != null)
-                      Text(
-                        'Generated: ${_displayed!['metadata']['generatedAt']}',
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_extra != 'dashboard')
+                                Text(_title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w600)),
+                              if (widget.companyName != null ||
+                                  _displayed?['metadata'] != null)
+                                Tooltip(
+                                  message:
+                                      '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'}',
+                                  child: Text(
+                                    '${_displayed?['metadata']?['companyName'] ?? widget.companyName ?? 'Workspace'} · ${_displayed?['metadata']?['currency'] ?? 'Workspace currency'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Report details',
+                          onPressed: _reportInfo,
+                          icon: const Icon(Icons.info_outline, size: 20),
+                        ),
+                      ],
+                    ),
                     if (_comparison != 'none')
                       Wrap(
                         spacing: 8,
@@ -1102,7 +1137,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                           ),
                         ],
                       ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     if (_extra != 'dashboard')
                       Wrap(
                         spacing: 12,
