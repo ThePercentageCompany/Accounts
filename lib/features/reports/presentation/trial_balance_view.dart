@@ -1062,7 +1062,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
               ),
             ),
           ),
-          Flexible(
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .35,
+            ),
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16),

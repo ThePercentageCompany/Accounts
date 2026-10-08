@@ -88,6 +88,10 @@ void main() {
     final reportArea = tester.getRect(report);
     expect(reportArea.bottom, sectionArea.bottom);
     expect(reportArea.width, sectionArea.width);
+    final reportViewport = tester.getRect(find
+        .descendant(of: report, matching: find.byType(SingleChildScrollView))
+        .last);
+    expect(reportViewport.bottom, reportArea.bottom);
     await api.outbox('owner', 'c' * 43).enqueue(
         'Customers', 'create', {'name': 'Local customer'},
         expectedVersion: 0);

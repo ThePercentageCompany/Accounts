@@ -99,6 +99,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       if (notifications) {
         const match = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/notifications(?:\/(read|subscription))?$/.exec(url.pathname);
         if (match) {
+          requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Notification endpoints do not accept query parameters.');
           const employee = match[1] !== 'companies', auth = employee ? jar[EMPLOYEE] : token;
           if (request.method === 'GET' && !match[3]) {
             json(200, await notifications.list(auth, match[2], employee, employeeContext)); return;

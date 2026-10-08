@@ -347,11 +347,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 ),
               )
             : Text(
-                wide
-                    ? widget.title
-                    : selected == 'Reports'
-                        ? 'Home'
-                        : selected ?? 'Workspace',
+                selected == 'Reports' ? 'Home' : selected ?? 'Workspace',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -540,44 +536,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                         onChanged: (child) {
                           if (child != null) _navigate(selected, child);
                         },
-                      ),
-                    ),
-                  if (wide)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        wide ? 24 : 16,
-                        12,
-                        24,
-                        selected == 'Reports' ? 8 : (wide ? 20 : 12),
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              selected == 'Reports'
-                                  ? (_subsection('Reports') == 'dashboard'
-                                      ? 'Business overview'
-                                      : _destinationTitle('Reports'))
-                                  : selected ?? 'Workspace',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            if (wide) const SizedBox(height: 6),
-                            if (wide)
-                              Text(
-                                '${widget.title}  /  ${selected == null ? 'Workspace' : _destinationTitle(selected)}',
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                          ],
-                        ),
                       ),
                     ),
                   Expanded(

@@ -34,6 +34,31 @@ existing absolute `/v1/` paths.
 
 ## Push and server reminders
 
+### Notification API endpoints
+
+Use `/v1/companies/{companyId}/notifications` for owner sessions, or
+`/v1/employee/companies/{companyId}/notifications` for employee sessions. These
+routes use the existing HttpOnly session cookies and enforce tenant/task access.
+Employee calls include the existing `X-TPC-Company` and `X-TPC-Employee` context.
+Responses are private (`Cache-Control: no-store`); query parameters are rejected.
+
+| Method | Path suffix | Request / response |
+| --- | --- | --- |
+| GET | base path | `{notifications, unread, pushAvailable, publicKey}`; items include task/workspace IDs, assignment/deadline type, title/body and read state |
+| POST | `/read` | `{"id":"notification-id-or-all","read":true}`; use `false` to mark unread |
+| POST | `/subscription` | `{"subscription":{"endpoint":"https://supported-push-provider/...","keys":{"p256dh":"...","auth":"..."}}}` from the browser Push API |
+| DELETE | `/subscription` | `{}` removes this recipient's subscriptions in the workspace; optional `endpoint` limits removal to one device |
+
+Browser mutations require the configured app Origin and `X-TPC-CSRF: 1`.
+`POST /internal/notifications` is a worker-only endpoint requiring verified OIDC
+authorization: `{}` schedules all ready workspaces; `{"companyId":"..."}` scans
+one workspace. It must not be called directly by the browser.
+
+Successful task mutations through both owner and employee sync enqueue assignment
+processing. The minute scheduler creates deadline notifications with no browser
+open. The notification bell shows recipient history; explicit notification opt-in
+enables Web Push and tapping an alert opens the permitted task.
+
 The notification center/history works without push configuration. To enable actual
 closed-app Web Push, deploy the updated backend with `npm ci` and configure:
 

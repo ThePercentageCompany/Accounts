@@ -15,6 +15,53 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('notification endpoints use the correct account cookie and protect mutations', async t => {
+  const companyId = 'c'.repeat(43), calls = [];
+  const notifications = Object.fromEntries(['list','read','subscribe','unsubscribe'].map(name => [name,
+    async (...args) => {calls.push({name,args}); return name === 'list'
+      ? {notifications:[],unread:0,pushAvailable:false} : {saved:true};}]));
+  const f = await running(t, {notifications});
+  for (const employee of [false,true]) {
+    const path = `/v1/${employee ? 'employee/companies' : 'companies'}/${companyId}/notifications`;
+    const cookies = '__Host-tpc_session=owner-token; __Host-tpc_employee=employee-token';
+    for (const [method,suffix,input,name] of [
+      ['GET','',null,'list'], ['POST','/read',{id:'all',read:true},'read'],
+      ['POST','/subscription',{subscription:{}},'subscribe'],
+      ['DELETE','/subscription',{},'unsubscribe']]) {
+      const response = await f.request(path+suffix,{method,headers:{...headers,Cookie:cookies,
+        'X-TPC-Company':companyId,'X-TPC-Employee':'e'.repeat(43)},
+        ...(input ? {body:JSON.stringify(input)} : {})});
+      assert.equal(response.status,200);
+      assert.equal(response.headers.get('cache-control'),'no-store');
+      const call = calls.at(-1);
+      assert.equal(call.name,name);
+      assert.equal(call.args[0],employee ? 'employee-token' : 'owner-token');
+      assert.equal(call.args[1],companyId);
+      assert.equal(call.args[name === 'list' ? 2 : 3],employee);
+    }
+    assert.equal((await f.request(path+'?unexpected=1')).status,400);
+    const before = calls.length;
+    assert.equal((await f.request(path+'/read',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:'all',read:true})})).status,403);
+    assert.equal(calls.length,before);
+  }
+});
+
+test('notification worker requires service authorization and routes scheduled scans', async t => {
+  const calls = [], companyId = 'c'.repeat(43);
+  const f = await running(t,{queue:{authorize:async value => {
+    if (value !== 'Bearer worker') throw new ApiError(401,'UNAUTHORIZED','Worker required.');
+  }},notifications:{run:async()=>calls.push('all'),scanCompany:async id=>calls.push(id)}});
+  const request = (input,authorized=true) => f.request('/internal/notifications',{method:'POST',
+    headers:{'Content-Type':'application/json',...(authorized ? {Authorization:'Bearer worker'} : {})},
+    body:JSON.stringify(input)});
+  assert.equal((await request({},false)).status,401);
+  assert.equal((await request({})).status,204);
+  assert.equal((await request({companyId})).status,204);
+  assert.equal((await request({companyId:'invalid'})).status,400);
+  assert.deepEqual(calls,['all',companyId]);
+});
+
 test('owner and employee payroll previews route with their own cookies and workspace context', async t => {
   const company = 'c'.repeat(43), calls = [], business = {};
   const employees = {
