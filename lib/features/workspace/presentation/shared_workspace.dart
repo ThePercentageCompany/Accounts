@@ -164,9 +164,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         _selected = section;
         _subsections[section] = child;
       });
-  String _destinationTitle(String section) => _children(section).isEmpty
-      ? section
-      : _children(section)[_subsection(section)]!;
   final Set<String> _visited = {};
   StreamSubscription<EmployeeAdminState>? _employeeSyncSubscription;
   bool _forcingSync = false;

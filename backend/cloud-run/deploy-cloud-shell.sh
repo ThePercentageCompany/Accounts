@@ -118,6 +118,18 @@ SETUP_TASK_QUEUE: projects/$PROJECT/locations/$REGION/queues/$QUEUE
 SETUP_WORKER_EMAIL: $WORKER
 SETUP_WORKER_ORIGIN: $WORKER_ORIGIN
 YAML
+# Keep configured Web Push keys when redeploying with the complete environment file.
+gcloud run services list --project="$PROJECT" --region="$REGION" --filter="metadata.name=$SERVICE" --format='value(metadata.name)' >"$TASK_TEMP/services"
+if grep -Fxq "$SERVICE" "$TASK_TEMP/services"; then
+  gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >"$TASK_TEMP/current-service.json"
+  python3 - "$TASK_TEMP/current-service.json" >>"$TASK_TEMP/env.yaml" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f: service=json.load(f)
+for env in service['spec']['template']['spec']['containers'][0].get('env',[]):
+    if env['name'].startswith('PUSH_VAPID_') and 'value' in env:
+        print(env['name']+': '+json.dumps(env['value']))
+PY
+fi
 gcloud run deploy "$SERVICE" --image="${IMAGE%:*}@$DIGEST" --region="$REGION" --project="$PROJECT" \
   --service-account="$RUNTIME" --allow-unauthenticated --ingress=all --cpu=1 --memory=512Mi \
   --concurrency=20 --min-instances=0 --max-instances=2 --timeout=300 --env-vars-file="$TASK_TEMP/env.yaml"

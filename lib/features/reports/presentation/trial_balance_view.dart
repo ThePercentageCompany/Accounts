@@ -1072,12 +1072,14 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Workspace / Reports / $_title',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    Text(_title,
-                        style: Theme.of(context).textTheme.headlineSmall),
+                    if (_extra != 'dashboard')
+                      Text(
+                        'Workspace / Reports / $_title',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    if (_extra != 'dashboard')
+                      Text(_title,
+                          style: Theme.of(context).textTheme.headlineSmall),
                     if (widget.companyName != null ||
                         _displayed?['metadata'] != null)
                       Text(

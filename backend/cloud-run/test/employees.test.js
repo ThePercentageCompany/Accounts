@@ -324,6 +324,8 @@ test('document policy checks current record visibility and trusted folder scope'
 });
 test('real private codes use independent salts and memory-hard verification', async () => {
   const codes = new PrivateCode(), first = await codes.create(), second = await codes.create();
+  assert.match(first.code, /^[A-HJ-NP-Z2-9]{6}$/);
+  assert.match(second.code, /^[A-HJ-NP-Z2-9]{6}$/);
   assert.notEqual(first.credential.salt, second.credential.salt);
   assert.equal(first.credential.algorithm, 'scrypt-131072-8-1');
   assert.equal(await codes.verify(first.code, first.credential), true);

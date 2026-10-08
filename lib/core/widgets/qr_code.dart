@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:qr/qr.dart' as qr;
@@ -155,6 +157,62 @@ class _QrCanvasPainter extends CustomPainter {
 /// Encodes complete QR symbols, including version information and interleaved
 /// Reed-Solomon blocks for longer employee sign-in links.
 class QrCodeGenerator {
+  static Future<Uint8List> png(String text, {String? privateCode}) async {
+    final matrix = generate(text);
+    const module = 10;
+    final size = (matrix.length + 8) * module;
+    final caption = privateCode == null
+        ? null
+        : (TextPainter(
+            text: TextSpan(
+              style: const TextStyle(color: Colors.black, fontSize: 22),
+              children: [
+                const TextSpan(text: 'Private login code\n'),
+                TextSpan(
+                  text: privateCode,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.ltr,
+          )..layout(maxWidth: size - 40));
+    final height = size + (caption == null ? 0 : caption.height.ceil() + 40);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.toDouble(), height.toDouble()),
+        Paint()..color = Colors.white);
+    final ink = Paint()..color = Colors.black;
+    for (var row = 0; row < matrix.length; row++) {
+      for (var column = 0; column < matrix.length; column++) {
+        if (matrix[row][column]) {
+          canvas.drawRect(
+              Rect.fromLTWH(
+                  ((column + 4) * module).toDouble(),
+                  ((row + 4) * module).toDouble(),
+                  module.toDouble(),
+                  module.toDouble()),
+              ink);
+        }
+      }
+    }
+    caption?.paint(canvas, Offset((size - caption.width) / 2, size + 8));
+    caption?.dispose();
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size, height);
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (bytes == null) throw StateError('QR image could not be generated.');
+      return bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+    } finally {
+      image.dispose();
+      picture.dispose();
+    }
+  }
+
   static List<List<bool>> generate(
     String text, {
     int errorCorrectLevel = qr.QrErrorCorrectLevel.M,

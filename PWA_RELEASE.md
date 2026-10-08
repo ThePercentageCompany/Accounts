@@ -34,6 +34,14 @@ existing absolute `/v1/` paths.
 
 ## Push and server reminders
 
+For the existing Cloud Run project, deploy the updated backend, then run
+`PUSH_CONTACT=mailto:your-support-address bash enable-push-cloud-shell.sh` from
+`backend/cloud-run` in Cloud Shell. This creates/reuses a private VAPID key pair
+in Secret Manager, grants runtime secret access, configures the live service and
+creates/updates the authenticated minute scheduler. It does not print private
+keys. Redeployments preserve configured push environment values. Choose the
+operator contact before executing; do not use the example address literally.
+
 ### Notification API endpoints
 
 Use `/v1/companies/{companyId}/notifications` for owner sessions, or

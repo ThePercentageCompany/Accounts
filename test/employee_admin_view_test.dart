@@ -62,6 +62,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('one-time-test-code'), findsOneWidget);
     expect(tester.widget<QrImageView>(find.byType(QrImageView)).data, link);
+    expect(find.widgetWithText(FilledButton, 'Download QR & code'),
+        findsOneWidget);
     await tester.tap(find.text('I saved the code'));
     await tester.pumpAndSettle();
     expect(find.text('one-time-test-code'), findsNothing);

@@ -7,6 +7,43 @@ import 'package:qr/qr.dart' as qr;
 import 'package:tpc_invoice/core/widgets/qr_code.dart';
 
 void main() {
+  testWidgets('combined download paints the private code below the QR',
+      (tester) async {
+    const payload = 'https://app.test/employee?invite=public-invite';
+    final bytes = await tester.runAsync(
+      () => QrCodeGenerator.png(payload, privateCode: '12345678'),
+    );
+    final codec = await tester.runAsync(() => ui.instantiateImageCodec(bytes!));
+    final frame = await tester.runAsync(() => codec!.getNextFrame());
+    final image = frame!.image;
+    final qrSize = (QrCodeGenerator.generate(payload).length + 8) * 10;
+    expect(image.width, qrSize);
+    expect(image.height, greaterThan(qrSize));
+    final pixels = await tester.runAsync(() => image.toByteData());
+    var hasCaptionInk = false;
+    for (var i = qrSize * image.width * 4; i < pixels!.lengthInBytes; i += 4) {
+      if (pixels.getUint8(i) < 128) {
+        hasCaptionInk = true;
+        break;
+      }
+    }
+    expect(hasCaptionInk, isTrue);
+    image.dispose();
+    codec!.dispose();
+  });
+  testWidgets('download QR exports a PNG with a four-module quiet zone',
+      (tester) async {
+    const payload = 'https://app.test/employee?invite=public-invite';
+    final bytes = await tester.runAsync(() => QrCodeGenerator.png(payload));
+    expect(bytes!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    final codec = await tester.runAsync(() => ui.instantiateImageCodec(bytes));
+    final frame = await tester.runAsync(() => codec!.getNextFrame());
+    expect(frame!.image.width,
+        (QrCodeGenerator.generate(payload).length + 8) * 10);
+    expect(frame.image.height, frame.image.width);
+    frame.image.dispose();
+    codec!.dispose();
+  });
   test('encodes the complete known-good version 1 symbol', () {
     // Reference matrix for the byte-mode payload, ECC M, from qr 3.0.2's
     // published test vectors. This catches malformed format bits as well as

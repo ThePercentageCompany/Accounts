@@ -281,13 +281,18 @@ export class BusinessService {
         await this.authorizeWrite(token, companyId, tableName, { action, recordId: op.recordId, old, values });
         if (Object.hasOwn(values, 'items')) await this.authorizeWrite(token, companyId,
           tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
+        const writes = [{ table: tableName, row, values: { ...system, ...writeValues } },
+          ...(ledger || [...invoice.extra, ...receipt.extra, ...quotation.extra,
+            ...payroll.extra, ...asset.extra, ...capital.extra, ...taskExtra])];
+        if (writes.some(write => write.table === 'Journals')) {
+          assignJournalNumbers(writes, (await this.sheets.read(companyId, ['Journals'])).Journals);
+        }
         await this.registry.transact(state => { const { company } = this.owner(state, token, companyId, true);
           requireThat(company.businessWrite === opKey && company.businessOps[opKey]?.reservation === op.reservation && !company.businessOps[opKey].submitted, 409, 'BUSINESS_WRITE_PENDING', 'Business update changed.');
           company.businessOps[opKey].submitted = true; });
         try {
-          if (ledger) await this.sheets.writeBatch(companyId, [{ table: tableName, row, values: { ...system, ...writeValues } }, ...ledger]);
-          else if (invoice.extra.length || receipt.extra.length || quotation.extra.length || payroll.extra.length || asset.extra.length || capital.extra.length || taskExtra.length) await this.sheets.writeBatch(companyId, [{ table: tableName, row, values: { ...system, ...writeValues } }, ...invoice.extra, ...receipt.extra, ...quotation.extra, ...payroll.extra, ...asset.extra, ...capital.extra, ...taskExtra]);
-          else await this.sheets.write(companyId, tableName, row, { ...system, ...writeValues });
+          if (writes.length > 1) await this.sheets.writeBatch(companyId, writes);
+          else await this.sheets.write(companyId, tableName, row, writes[0].values);
         }
         catch (error) { if (error.definitelyNotSubmitted || error.definitelyRejected || (error.googleStatus >= 400 && error.googleStatus < 500))
           await this.registry.transact(state => { const company = state.companies[companyId]; if (company?.businessWrite === opKey) company.businessOps[opKey].submitted = false; });
@@ -303,3 +308,4 @@ export class BusinessService {
     }
   }
 }
+import { assignJournalNumbers } from './journal-number.js';

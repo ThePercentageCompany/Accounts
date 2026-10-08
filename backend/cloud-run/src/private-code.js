@@ -1,4 +1,4 @@
-import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
+import { scrypt, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { ApiError } from './errors.js';
 const derive = promisify(scrypt);
@@ -12,7 +12,9 @@ async function hash(value, salt) {
 }
 export class PrivateCode {
   async create() {
-    const code = randomBytes(18).toString('base64url'), salt = randomBytes(32).toString('base64url');
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({length:6}, () => alphabet[randomInt(alphabet.length)]).join('');
+    const salt = randomBytes(32).toString('base64url');
     return { code, credential: { algorithm: 'scrypt-131072-8-1', salt, hash: (await hash(code, salt)).toString('base64') } };
   }
   async verify(code, credential) {

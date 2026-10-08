@@ -33,9 +33,9 @@ class WorkspaceDashboard extends StatelessWidget {
           final columns = constraints.maxWidth >= 1000
               ? 4
               : constraints.maxWidth >= 300 &&
-                    MediaQuery.textScalerOf(context).scale(14) <= 18
-              ? 2
-              : 1;
+                      MediaQuery.textScalerOf(context).scale(14) <= 18
+                  ? 2
+                  : 1;
           final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
           Widget metric(
             String key,
@@ -45,7 +45,7 @@ class WorkspaceDashboard extends StatelessWidget {
             String note,
           ) {
             if (Theme.of(context).brightness == Brightness.dark) {
-              accent = colors.onSurface;
+              accent = Color.lerp(accent, Colors.white, .35)!;
             }
             return SizedBox(
               width: width,
@@ -220,13 +220,6 @@ class WorkspaceDashboard extends StatelessWidget {
                           ? 'Review revenue and COGS classifications'
                           : 'Net revenue less cost of goods sold',
                     ),
-                  metric(
-                    'receivables',
-                    'Receivables',
-                    Icons.receipt_long_outlined,
-                    const Color(0xFF8B6BD6),
-                    'As of ${data['asOf'] ?? 'selected end date'}',
-                  ),
                 ],
               ),
               const SizedBox(height: 28),
@@ -253,19 +246,27 @@ class WorkspaceDashboard extends StatelessWidget {
                     width: constraints.maxWidth >= 760
                         ? (constraints.maxWidth - 16) / 2
                         : constraints.maxWidth,
-                    child: _graph(context, 'Income & spending', const {
-                      'totalIncome': 'Income',
-                      'totalExpenses': 'Expenses',
-                    }, 'Period totals (not a historical trend)'),
+                    child: _graph(
+                        context,
+                        'Income & spending',
+                        const {
+                          'totalIncome': 'Income',
+                          'totalExpenses': 'Expenses',
+                        },
+                        'Period totals (not a historical trend)'),
                   ),
                   SizedBox(
                     width: constraints.maxWidth >= 760
                         ? (constraints.maxWidth - 16) / 2
                         : constraints.maxWidth,
-                    child: _graph(context, 'Cash & bank', const {
-                      'cash': 'Cash',
-                      'bank': 'Bank',
-                    }, 'Balances at end date'),
+                    child: _graph(
+                        context,
+                        'Cash & bank',
+                        const {
+                          'cash': 'Cash',
+                          'bank': 'Bank',
+                        },
+                        'Balances at end date'),
                   ),
                 ],
               ),
@@ -300,6 +301,13 @@ class WorkspaceDashboard extends StatelessWidget {
                     'Payables',
                     Icons.payments_outlined,
                     const Color(0xFFE09037),
+                    'As of ${data['asOf'] ?? 'selected end date'}',
+                  ),
+                  metric(
+                    'receivables',
+                    'Receivables',
+                    Icons.receipt_long_outlined,
+                    const Color(0xFF8B6BD6),
                     'As of ${data['asOf'] ?? 'selected end date'}',
                   ),
                   metric(
@@ -339,14 +347,13 @@ class WorkspaceDashboard extends StatelessWidget {
     String caption,
   ) {
     final colors = Theme.of(context).colorScheme;
-    final values = entries.keys
-        .map((key) => double.tryParse('${data[key]}'))
-        .toList();
+    final values =
+        entries.keys.map((key) => double.tryParse('${data[key]}')).toList();
     final valid = values.every((value) => value != null && value.isFinite);
     final maximum = valid
         ? values
-              .map((value) => value!.abs())
-              .fold<double>(0, (a, b) => a > b ? a : b)
+            .map((value) => value!.abs())
+            .fold<double>(0, (a, b) => a > b ? a : b)
         : 0.0;
     return Card(
       child: Padding(
@@ -372,7 +379,12 @@ class WorkspaceDashboard extends StatelessWidget {
               for (final entry in entries.entries) ...[
                 Semantics(
                   label: '${entry.value}: ${amount(entry.key)}',
-                  child: Text(entry.value),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.spaceBetween,
+                    children: [Text(entry.value), Text(amount(entry.key))],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TweenAnimationBuilder<double>(
@@ -381,7 +393,7 @@ class WorkspaceDashboard extends StatelessWidget {
                     end: maximum == 0
                         ? 0
                         : (double.parse('${data[entry.key]}').abs() / maximum)
-                              .clamp(0, 1),
+                            .clamp(0, 1),
                   ),
                   duration: MediaQuery.disableAnimationsOf(context)
                       ? Duration.zero

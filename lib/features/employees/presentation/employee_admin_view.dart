@@ -1,9 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/qr_code.dart';
+import 'package:tpc_invoice/core/utils/file_download.dart';
 import 'package:tpc_invoice/features/employees/presentation/cubit/employee_admin_controller.dart';
 
 class EmployeeAdminView extends StatefulWidget {
@@ -132,6 +136,27 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
             spacing: 12,
             children: [
               QrImageView(data: result['qrPayload'] as String, size: 220),
+              FilledButton.icon(
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Download QR & code'),
+                onPressed: () async {
+                  try {
+                    final bytes = await QrCodeGenerator.png(
+                      result['qrPayload'] as String,
+                      privateCode: result['privateCode'] as String,
+                    );
+                    await downloadFile(bytes,
+                        filename: 'employee-login-qr.png',
+                        mimeType: 'image/png');
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content:
+                              Text('QR download failed. Please try again.')));
+                    }
+                  }
+                },
+              ),
               const SizedBox(height: 12),
               SelectableText(result['inviteLink'] as String),
               const SizedBox(height: 20),
@@ -143,9 +168,34 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              FilledButton.icon(
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Download private code'),
+                onPressed: () async {
+                  try {
+                    await downloadFile(
+                      Uint8List.fromList(
+                        utf8.encode('${result['privateCode']}\n'),
+                      ),
+                      filename: 'employee-private-code.txt',
+                      mimeType: 'text/plain;charset=utf-8',
+                    );
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Private code download failed. Please try again.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
               const SizedBox(height: 12),
               const Text(
-                'Copy this code before closing. It cannot be displayed again. Reset access if it is lost.',
+                'Download or copy this code before closing. It cannot be displayed again. Reset access if it is lost.',
               ),
             ],
           ),
