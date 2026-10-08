@@ -2,6 +2,9 @@ import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/workspace_sync_icon.dart';
+import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
+import 'package:tpc_invoice/core/pwa/pwa_controls.dart';
+import 'package:tpc_invoice/features/notifications/presentation/notification_center.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -169,6 +172,30 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   bool _forcingSync = false;
   bool _syncReady = false;
   String? _syncError;
+  final _pwa = PwaRuntime();
+  String? _taskToOpen;
+  void _openTask(String id) {
+    if (widget.employee != null &&
+        !(widget.employee!['allowedSections'] as List).contains('Tasks')) {
+      return;
+    }
+    setState(() {
+      _selected = 'Tasks';
+      _taskToOpen = id;
+    });
+  }
+
+  void _pwaChanged() {
+    final parts = '${_pwa.status['taskLink'] ?? ''}'.split(':');
+    if (parts.length == 2 &&
+        parts[0] == widget.companyId &&
+        RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(parts[1])) {
+      _pwa.clearTask();
+      _openTask(parts[1]);
+    }
+    _syncChanged();
+  }
+
   void _syncChanged() {
     if (mounted) {
       setState(() {
@@ -244,10 +271,16 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     _employeeSyncSubscription =
         _employees?.stream.listen((_) => _syncChanged());
     unawaited(_initializeSync());
+    _pwa.addListener(_pwaChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pwaChanged();
+    });
   }
 
   @override
   void dispose() {
+    _pwa.removeListener(_pwaChanged);
+    _pwa.dispose();
     _employeeSyncSubscription?.cancel();
     _writes?.outbox?.removeListener(_syncChanged);
     _writes?.removeListener(_syncChanged);
@@ -560,7 +593,9 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                 ? 'Checking sync status'
                 : pending > 0
                     ? '$pending unsynced'
-                    : 'Synced';
+                    : _pwa.status['online'] == false
+                        ? 'Offline · Synced on this device'
+                        : 'Synced';
     final dark = Theme.of(context).brightness == Brightness.dark;
     final color = busy
         ? (dark ? Colors.lightBlue.shade200 : Colors.blue.shade700)
@@ -604,6 +639,20 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             onPressed: busy ? null : _forceSync,
             icon: Icon(Icons.sync, color: busy ? null : color),
           ),
+          if (widget.employee == null ||
+              (widget.employee!['allowedSections'] as List).contains('Tasks'))
+            NotificationCenter(
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: widget.employee != null,
+                onTask: _openTask),
+          PwaControls(hasPendingWork: () async {
+            await _initializeSync();
+            return !_syncReady ||
+                (_writes?.pending.isNotEmpty ?? false) ||
+                _uploads?.pending != null ||
+                _employees?.hasPending == true;
+          }),
         ],
       ),
     );
@@ -624,6 +673,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
               active: active,
               uploads: _uploads,
               writes: _writes,
+              taskToOpen: selected == 'Tasks' ? _taskToOpen : null,
             )
           : selected == 'Reports'
               ? [

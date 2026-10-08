@@ -41,6 +41,8 @@ class SaasSession extends Cubit<SessionState> {
   void _accessRevoked() {
     if (_disposed) return;
     _clearIdentity();
+    final client = api;
+    if (client is SaasApi) client.clearSessionProfile().ignore();
     error = "Your access changed or expired. Sign in again.";
     _notify();
   }
@@ -55,6 +57,74 @@ class SaasSession extends Cubit<SessionState> {
   String? pendingCompanyName;
   bool busy = false;
   bool _disposed = false;
+  bool offlineRestored = false;
+  Future<void> _saveOfflineProfile() async {
+    final client = api;
+    if (client is! SaasApi || offlineRestored) return;
+    if (owner == null && employee == null) {
+      await client.clearSessionProfile();
+      return;
+    }
+    Map<String, dynamic>? select(
+            Map<String, dynamic>? data, List<String> keys) =>
+        data == null
+            ? null
+            : {
+                for (final key in keys)
+                  if (data.containsKey(key)) key: data[key]
+              };
+    final expiry =
+        DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch;
+    await client.saveSessionProfile({
+      'expiresAt': expiry,
+      'owner': select(owner, ['ownerId', 'name', 'email', 'picture']),
+      'employee': select(employee, [
+        'employeeId',
+        'companyId',
+        'name',
+        'role',
+        'permissions',
+        'allowedSections',
+        'writableSections'
+      ]),
+      'company': select(company, ['companyId', 'name', 'stage']),
+      'companies': [
+        for (final c in companies) select(c, ['companyId', 'name', 'stage'])
+      ],
+    });
+  }
+
+  Future<bool> _restoreOfflineProfile() async {
+    final client = api;
+    if (client is! SaasApi) return false;
+    final profile = await client.offlineSessionProfile();
+    if (profile == null) return false;
+    owner = profile['owner'] == null
+        ? null
+        : Map<String, dynamic>.from(profile['owner'] as Map);
+    employee = profile['employee'] == null
+        ? null
+        : Map<String, dynamic>.from(profile['employee'] as Map);
+    company = profile['company'] == null
+        ? null
+        : Map<String, dynamic>.from(profile['company'] as Map);
+    companies = (profile['companies'] as List)
+        .map((c) => Map<String, dynamic>.from(c as Map))
+        .toList();
+    offlineRestored = true;
+    error = null;
+    return owner != null || employee != null;
+  }
+
+  Future<bool> restoreCachedSession() async {
+    try {
+      final restored = await _restoreOfflineProfile();
+      if (restored) _notify();
+      return restored;
+    } catch (_) {
+      return false;
+    }
+  }
 
   String get _registrationKey => 'tpc_saas_registration_${owner!['ownerId']}';
   DurableValue? _registration;
@@ -88,16 +158,31 @@ class SaasSession extends Cubit<SessionState> {
 
   bool get ready => company?['stage'] == 'READY';
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(Future<void> Function() action,
+      {bool allowOfflineRestore = false}) async {
     if (busy || _disposed) return;
     busy = true;
     error = null;
     _notify();
     try {
       await action();
+      try {
+        await _saveOfflineProfile();
+      } catch (_) {
+        /* Cache failure does not turn a confirmed API operation into a failure. */
+      }
     } on SaasApiException catch (failure) {
       error = failure.message;
-      if (failure.requiresSignIn) _clearIdentity();
+      if (allowOfflineRestore && failure.code == 'NETWORK') {
+        try {
+          await _restoreOfflineProfile();
+        } catch (_) {}
+      }
+      if (failure.requiresSignIn) {
+        _clearIdentity();
+        final client = api;
+        if (client is SaasApi) await client.clearSessionProfile();
+      }
     } catch (_) {
       error =
           'Unable to complete the request. Retry without discarding your changes.';
@@ -109,6 +194,7 @@ class SaasSession extends Cubit<SessionState> {
 
   void _clearIdentity() {
     _registration = null;
+    offlineRestored = false;
     api.detachWorkspace();
     owner = null;
     employee = null;
@@ -118,14 +204,19 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
-        _clearIdentity();
+        if (!offlineRestored) _clearIdentity();
         final employeeMode = employeeOnly ||
             preferences.getString('tpc_saas_session_mode') == 'employee';
+        if (employeeMode && owner != null) _clearIdentity();
         if (!employeeMode) {
           try {
             owner = Map<String, dynamic>.from((await api.me())['owner'] as Map);
+            offlineRestored = false;
           } on SaasApiException catch (failure) {
             if (!failure.requiresSignIn) rethrow;
+            _clearIdentity();
+            final client = api;
+            if (client is SaasApi) await client.clearSessionProfile();
           }
         }
         if (owner != null) {
@@ -140,10 +231,14 @@ class SaasSession extends Cubit<SessionState> {
           employee = Map<String, dynamic>.from(
             (await api.employeeMe())['employee'] as Map,
           );
+          offlineRestored = false;
         } on SaasApiException catch (failure) {
           if (!failure.requiresSignIn) rethrow;
+          _clearIdentity();
+          final client = api;
+          if (client is SaasApi) await client.clearSessionProfile();
         }
-      });
+      }, allowOfflineRestore: true);
 
   Future<void> _loadCompanies() async {
     final previousId =

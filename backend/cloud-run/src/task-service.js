@@ -30,7 +30,7 @@ export class TaskService {
     const summaryRows = employee ? all.filter(r => r.employeeId === context.employeeId) : all;
     const upcoming = {};
     for (const r of summaryRows) if (r.status !== 'COMPLETED' && r.dueDate > today) upcoming[r.dueDate] = (upcoming[r.dueDate] || 0) + 1;
-    const lead = { AT_DUE: 0, '15_MIN': 15, '1_HOUR': 60, '1_DAY': 1440 };
+    const lead = { AT_DUE: 0, '15_MIN': 15, '30_MIN': 30, '1_HOUR': 60, '2_HOURS': 120, '1_DAY': 1440 };
     const reminders = summaryRows.filter(r => r.status !== 'COMPLETED' && Object.hasOwn(lead, r.reminder) &&
       Date.parse(r.dueDate + 'T' + (r.endTime || '23:59') + ':00+04:00') - lead[r.reminder] * 60000 <= this.business.now() && r.dueDate >= today)
       .map(r => ({ recordId: r.recordId, title: r.title, dueDate: r.dueDate, endTime: r.endTime, reminder: r.reminder }));

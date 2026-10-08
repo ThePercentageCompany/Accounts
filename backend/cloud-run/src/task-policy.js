@@ -23,7 +23,7 @@ export function validateTask(table, action, old, input) {
     400, 'INVALID_TASK', 'End time cannot precede start time.');
   for (const key of ['project', 'tags', 'assigneeName']) requireThat(!value[key] || value[key].length <= 300,
     400, 'INVALID_TASK', 'Task metadata is too long.');
-  requireThat(!value.reminder || ['NONE', 'AT_DUE', '15_MIN', '1_HOUR', '1_DAY'].includes(value.reminder),
+  requireThat(!value.reminder || ['NONE', 'AT_DUE', '15_MIN', '30_MIN', '1_HOUR', '2_HOURS', '1_DAY'].includes(value.reminder),
     400, 'INVALID_TASK', 'Select a supported reminder.');
 }
 export async function taskActivityChanges(sheets, companyId, table, action, old, values, system, key) {

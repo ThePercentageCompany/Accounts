@@ -28,4 +28,13 @@ export class SetupQueue {
         !['https://accounts.google.com', 'accounts.google.com'].includes(claims.iss)) throw new Error();
     } catch { throw new ApiError(401, 'WORKER_UNAUTHORIZED', 'Worker authentication is required.'); }
   }
+  async enqueueNotifications(companyId) {
+    await this.tasks.createTask({parent: this.config.taskQueue, task: {
+      httpRequest: {httpMethod: 'POST',
+        url: `${this.config.workerOrigin}/internal/notifications`,
+        headers: {'Content-Type': 'application/json'},
+        body: Buffer.from(JSON.stringify({companyId})).toString('base64'),
+        oidcToken: {serviceAccountEmail: this.config.workerEmail, audience: this.config.workerOrigin}},
+    }});
+  }
 }

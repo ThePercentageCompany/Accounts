@@ -151,6 +151,7 @@ class RecordWriteQueue extends ChangeNotifier {
     Map<String, Object?> values, {
     String? recordId,
     required int expectedVersion,
+    Map<String, dynamic>? baseRecord,
   }) async {
     if (outbox != null) {
       await initialize();
@@ -166,10 +167,11 @@ class RecordWriteQueue extends ChangeNotifier {
               [])
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
-      final base = visibleRows(
-        table,
-        rows,
-      ).where((r) => r['recordId'] == recordId).firstOrNull;
+      final base = baseRecord ??
+          visibleRows(
+            table,
+            rows,
+          ).where((r) => r['recordId'] == recordId).firstOrNull;
       final local = supportsLocal(table, action, base);
       if (!local) {
         if (recordId?.startsWith('local_') == true ||

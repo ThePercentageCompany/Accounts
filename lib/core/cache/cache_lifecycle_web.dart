@@ -36,6 +36,7 @@ class CacheLifecycle {
   web.BroadcastChannel? _channel;
   bool get visible => web.document.visibilityState != 'hidden';
   void broadcast(String kind, String scope) {
+    if (kind == 'outbox') web.window.dispatchEvent(web.Event('tpc-outbox-pending'));
     try {
       _channel?.postMessage(jsonEncode({'kind': kind, 'scope': scope}).toJS);
     } catch (_) {}

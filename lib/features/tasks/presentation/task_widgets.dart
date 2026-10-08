@@ -64,6 +64,15 @@ class TaskCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall)),
                       const SizedBox(height: 10),
+                      if (task['syncStatus'] == 'PENDING' ||
+                          task['syncStatus'] == 'FAILED')
+                        Text(
+                            task['syncStatus'] == 'FAILED'
+                                ? 'Sync needs attention'
+                                : 'Saved on this device · Waiting to sync',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12)),
                       Text('${task['assigneeName'] ?? ''}',
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                       Text(

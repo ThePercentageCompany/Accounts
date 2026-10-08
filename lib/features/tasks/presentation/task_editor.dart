@@ -254,10 +254,19 @@ class _TaskEditorState extends State<TaskEditor> {
                     select(
                         'Reminder',
                         _reminder,
-                        ['NONE', 'AT_DUE', '15_MIN', '1_HOUR', '1_DAY'],
+                        [
+                          'NONE',
+                          'AT_DUE',
+                          '15_MIN',
+                          '30_MIN',
+                          '1_HOUR',
+                          '2_HOURS',
+                          '1_DAY'
+                        ],
                         (v) => _reminder = v),
                     const SizedBox(height: 8),
-                    const Text('Reminders appear while Tasks is open.'),
+                    const Text(
+                        'Enable notifications for deadline alerts where supported. Reminders also appear while Tasks is open.'),
                     const SizedBox(height: 16),
                   ]))),
           bottomNavigationBar: Padding(

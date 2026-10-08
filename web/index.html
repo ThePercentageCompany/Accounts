@@ -16,6 +16,9 @@
   -->
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#164e63">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="The Percentage Company - Accounts, Billing & Corporate Finance Suite">
 
@@ -34,6 +37,16 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <style>
+    body {margin:0;background:#f7f8fa}
+    #launch {position:fixed;inset:0;display:grid;place-content:center;text-align:center;font:16px system-ui;color:#164e63;padding:24px}
+    #launch img {width:80px;height:80px;margin:0 auto 20px;border-radius:20px}
+    #launch .pulse {width:40px;height:4px;margin:20px auto;background:#164e63;border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+    @keyframes pulse {50% {opacity:.35;transform:scaleX(.6)}}
+    @media(prefers-reduced-motion:reduce) {#launch .pulse {animation:none}}
+  </style>
+  <div id="launch" role="status" aria-live="polite"><img src="icons/Icon-192.png" alt=""><strong>TPC Accounts</strong><p>Opening your workspace…</p><div class="pulse"></div></div>
+  <script src="pwa.js" defer></script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

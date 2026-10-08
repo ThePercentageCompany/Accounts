@@ -35,7 +35,7 @@ async function body(request, limit = 16 * 1024) {
   catch { throw new ApiError(400, 'INVALID_JSON', 'Invalid JSON body.'); }
 }
 
-export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents } = {}) {
+export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents, notifications } = {}) {
   const tasks = business && employees ? new TaskService({ business, employees }) : null;
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
@@ -77,6 +77,17 @@ export function createApi(service, config, { log = console.error, workspace, que
         response.writeHead(204); response.end(); return;
       }
       // Every browser mutation requires an exact allowed Origin and a non-simple
+      if (request.method === 'POST' && url.pathname === '/internal/notifications' && notifications && queue) {
+        await queue.authorize(request.headers.authorization);
+        const input = await body(request);
+        requireThat(input && Object.keys(input).every(k => k === 'companyId') &&
+          (!input.companyId || /^[A-Za-z0-9_-]{43}$/.test(input.companyId)),
+          400, 'INVALID_TASK', 'Invalid notification job.');
+        if (input.companyId) await notifications.scanCompany(input.companyId);
+        else await notifications.run();
+        response.writeHead(204); response.end(); return;
+      }
+      // Every browser mutation requires an exact allowed Origin and a non-simple
       // header. Cookies alone cannot authorize cross-site form submissions.
       if (request.method !== 'GET') {
         requireThat(origin === config.appOrigin && request.headers['x-tpc-csrf'] === '1',
@@ -85,6 +96,25 @@ export function createApi(service, config, { log = console.error, workspace, que
       const jar = cookies(request), token = jar[SESSION];
       const employeeContext = { companyId: request.headers['x-tpc-company'], employeeId: request.headers['x-tpc-employee'] };
       const route = `${request.method} ${url.pathname}`;
+      if (notifications) {
+        const match = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/notifications(?:\/(read|subscription))?$/.exec(url.pathname);
+        if (match) {
+          const employee = match[1] !== 'companies', auth = employee ? jar[EMPLOYEE] : token;
+          if (request.method === 'GET' && !match[3]) {
+            json(200, await notifications.list(auth, match[2], employee, employeeContext)); return;
+          }
+          const input = await body(request);
+          if (request.method === 'POST' && match[3] === 'read') {
+            json(200, await notifications.read(auth, match[2], input, employee, employeeContext)); return;
+          }
+          if (request.method === 'POST' && match[3] === 'subscription') {
+            json(200, await notifications.subscribe(auth, match[2], input, employee, employeeContext)); return;
+          }
+          if (request.method === 'DELETE' && match[3] === 'subscription') {
+            json(200, await notifications.unsubscribe(auth, match[2], input, employee, employeeContext)); return;
+          }
+        }
+      }
       if (tasks && request.method === 'GET') {
         const taskRoute = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/tasks(?:\/(assignees|[A-Za-z0-9_-]{43}))?$/.exec(url.pathname);
         if (taskRoute) {
@@ -146,7 +176,12 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
         const sync = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/sync$/.exec(url.pathname);
         if (sync && request.method === 'POST') {
-          json(200, await business.sync(token, sync[1], await body(request))); return;
+          const input = await body(request);
+          const result = await business.sync(token, sync[1], input);
+          if (notifications && input.operations.some(op => op.table === 'Tasks') && result.results.some(r => r.status === 'APPLIED')) {
+            try {await queue?.enqueueNotifications(sync[1]);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
+          }
+          json(200, result); return;
         }
         const records = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(url.pathname);
         if (records && request.method === 'GET' && !records[3]) {
@@ -197,14 +232,21 @@ export function createApi(service, config, { log = console.error, workspace, que
           json(200, { employee: result.employee, expiresAt: result.expiresAt }); return;
         }
         if (route === 'POST /v1/employee/logout') {
-          await body(request); await employees.logout(jar[EMPLOYEE]);
+          await body(request);
+          await notifications?.revokeSubscriptions(jar[EMPLOYEE], true);
+          await employees.logout(jar[EMPLOYEE]);
           response.setHeader('Set-Cookie', cookie(EMPLOYEE, '', 0)); response.writeHead(204); response.end(); return;
         }
         if (route === 'GET /v1/employee/me') {
           json(200, { employee: employees.publicPrincipal(await employees.principal(jar[EMPLOYEE])) }); return;
         }
         if (route === 'POST /v1/employee/sync') {
-          json(200, await employees.sync(jar[EMPLOYEE], await body(request), business)); return;
+          const input = await body(request);
+          const result = await employees.sync(jar[EMPLOYEE], input, business);
+          if (notifications && input.operations.some(op => op.table === 'Tasks') && result.results.some(r => r.status === 'APPLIED')) {
+            try {await queue?.enqueueNotifications(input.companyId);} catch (_) {log(JSON.stringify({event:'notification_queue_retry'}));}
+          }
+          json(200, result); return;
         }
         const references = /^\/v1\/employee\/references\/([A-Za-z]+)$/.exec(url.pathname);
         if (request.method === 'GET' && references) {
@@ -266,6 +308,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       if (route === 'GET /v1/me') { json(200, { owner: await service.me(token) }); return; }
       if (route === 'POST /v1/auth/logout' || route === 'POST /v1/auth/revoke-sessions') {
         await body(request);
+        await notifications?.revokeSubscriptions(token, false);
         await service.logout(token, route.endsWith('revoke-sessions'));
         response.setHeader('Set-Cookie', cookie(SESSION, '', 0));
         response.writeHead(204); response.end(); return;

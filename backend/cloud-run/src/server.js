@@ -21,6 +21,9 @@ import { BusinessSheets } from './business-sheets.js';
 import { BusinessService } from './business-service.js';
 import { DocumentDrive } from './document-drive.js';
 import { DocumentService, DocumentSheets } from './document-service.js';
+import webPush from 'web-push';
+import { NotificationService } from './notification-service.js';
+import { bytesFromProto, verifyCrc } from './integrity.js';
 
 async function main() {
   const config = loadConfig();
@@ -38,7 +41,19 @@ async function main() {
   const business = new BusinessService({ accounts: service, sheets: new BusinessSheets(workspace, google) });
   const documents = new DocumentService({ accounts: service, business, employees, workspace, google,
     drive: new DocumentDrive(google), sheets: new DocumentSheets(workspace, google) });
-  const server = createApi(service, config, { workspace, queue, employees, business, documents });
+  let sendPush;
+  if (config.pushPublicKey || config.pushSecretVersion || config.pushSubject) {
+    if (!config.pushPublicKey || !config.pushSecretVersion || !config.pushSubject) throw new Error('Incomplete push configuration');
+    const [version] = await secrets.accessSecretVersion({name: config.pushSecretVersion});
+    const bytes = bytesFromProto(version.payload.data);
+    verifyCrc(bytes, version.payload.dataCrc32c);
+    const {privateKey} = JSON.parse(bytes.toString('utf8'));
+    webPush.setVapidDetails(config.pushSubject, config.pushPublicKey, privateKey);
+    sendPush = (subscription, payload) => webPush.sendNotification(subscription, JSON.stringify(payload),
+      {TTL: 3600, timeout: 15000, topic: payload.id.slice(0, 32)});
+  }
+  const notifications = new NotificationService({accounts: service, employees, business, config, sendPush, queue});
+  const server = createApi(service, config, { workspace, queue, employees, business, documents, notifications });
   server.listen(config.port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'listening', port: config.port, phase: 4 })));
   process.on('SIGTERM', () => { server.close(); setTimeout(() => process.exit(0), 9_000).unref(); });
 }

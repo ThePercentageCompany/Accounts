@@ -22,6 +22,9 @@ export function loadConfig(env = process.env) {
     taskQueue: required('SETUP_TASK_QUEUE'), workerEmail: required('SETUP_WORKER_EMAIL'),
     workerOrigin: origin('SETUP_WORKER_ORIGIN'),
     sessionMs: 8 * 60 * 60 * 1000, oauthMs: 10 * 60 * 1000,
+    pushPublicKey: env.PUSH_VAPID_PUBLIC_KEY?.trim(),
+    pushSecretVersion: env.PUSH_VAPID_SECRET_VERSION?.trim(),
+    pushSubject: env.PUSH_VAPID_SUBJECT?.trim(),
   };
   if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Invalid PORT');
   if (!/^projects\/[^/]+\/secrets\/[^/]+\/versions\/[^/]+$/.test(config.secretVersion)) throw new Error('Invalid Secret Manager version');

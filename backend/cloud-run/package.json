@@ -16,7 +16,8 @@
     "@google-cloud/secret-manager": "^6.0.0",
     "@google-cloud/storage": "^8.2.0",
     "@google-cloud/tasks": "^7.1.1",
-    "google-auth-library": "^10.0.0"
+    "google-auth-library": "^10.0.0",
+    "web-push": "^3.6.7"
   },
   "overrides": {
     "gaxios@6.7.1": {

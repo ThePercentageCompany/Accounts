@@ -12,12 +12,14 @@ class TaskDetails extends StatefulWidget {
       required this.onWrite,
       required this.onEdit,
       this.onDelete,
-      this.uploads});
+      this.uploads,
+      this.writes});
   final SaasApi api;
   final String companyId, employeeId;
   final bool employee, manage;
   final Map<String, dynamic> task;
   final DocumentUploadQueue? uploads;
+  final RecordWriteQueue? writes;
   final Future<void> Function(
       String table, Map<String, dynamic>? row, Map<String, Object?> values,
       {String? operationId}) onWrite;
@@ -50,6 +52,18 @@ class _TaskDetailsState extends State<TaskDetails> {
   }
 
   Future<void> _load() async {
+    if ('${_task['recordId']}'.startsWith('local_')) {
+      if (mounted) {
+        setState(() {
+          _comments = (widget.writes?.visibleRows('TaskComments', _comments) ??
+                  _comments)
+              .where((c) => c['taskId'] == _task['recordId'])
+              .toList();
+          _loading = false;
+        });
+      }
+      return;
+    }
     try {
       final data = await widget.api.taskDetail(
           widget.companyId, '${_task['recordId']}',
@@ -57,8 +71,17 @@ class _TaskDetailsState extends State<TaskDetails> {
       if (mounted) {
         setState(() {
           _unavailable = false;
-          _task = Map<String, dynamic>.from(data['task'] as Map);
-          _comments = List<Map<String, dynamic>>.from(data['comments'] as List);
+          final serverTask = Map<String, dynamic>.from(data['task'] as Map);
+          _task = (widget.writes?.visibleRows('Tasks', [serverTask]) ??
+                  [serverTask])
+              .firstWhere((t) => t['recordId'] == serverTask['recordId']);
+          _comments = (widget.writes?.visibleRows(
+                      'TaskComments',
+                      List<Map<String, dynamic>>.from(
+                          data['comments'] as List)) ??
+                  List<Map<String, dynamic>>.from(data['comments'] as List))
+              .where((c) => c['taskId'] == _task['recordId'])
+              .toList();
           _activity = List<Map<String, dynamic>>.from(data['activity'] as List);
           _loading = false;
           _error = null;
@@ -81,7 +104,9 @@ class _TaskDetailsState extends State<TaskDetails> {
     setState(() => _busy = true);
     try {
       await widget.onWrite('Tasks', _task, {'status': status});
-      await _load();
+      if (mounted) setState(() => _task = {..._task, 'status': status});
+      // The workspace overlay carries the pending version; a refresh must not
+      // replace it with an older server snapshot.
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {

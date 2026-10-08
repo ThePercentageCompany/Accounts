@@ -11,6 +11,10 @@ import 'package:tpc_invoice/features/auth/presentation/employee_access_view.dart
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
+import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart';
+import 'landing_view.dart';
+import 'package:tpc_invoice/core/pwa/pwa_controls.dart';
+import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
 
 class SaasApp extends StatefulWidget {
   const SaasApp({super.key, this.api});
@@ -28,10 +32,43 @@ class _SaasAppState extends State<SaasApp> {
   bool _employee = SaasApi.invitation(Uri.base, Uri.base) != null;
   bool _workspace = false;
   bool _initializing = true;
+  final _pwa = PwaRuntime();
+  bool _routingTask = false;
+  Future<void> _routeTask() async {
+    if (_routingTask || !mounted || _session == null || _initializing) return;
+    final parts = '${_pwa.status['taskLink'] ?? ''}'.split(':');
+    if (parts.length != 2 ||
+        !parts.every((p) => RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(p))) {
+      return;
+    }
+    final session = _session!;
+    if (session.owner == null) {
+      return; // Employee workspace validates its own company.
+    }
+    if (!session.companies.any((c) => c['companyId'] == parts[0])) {
+      _pwa.clearTask();
+      return;
+    }
+    _routingTask = true;
+    try {
+      if (session.company?['companyId'] != parts[0]) {
+        await session.selectCompany(parts[0]);
+      }
+      if (mounted &&
+          session.ready &&
+          session.company?['companyId'] == parts[0]) {
+        await session.rememberWorkspace(true);
+        if (mounted) setState(() => _workspace = true);
+      }
+    } finally {
+      _routingTask = false;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _pwa.addListener(_routeTask);
     _initialize();
   }
 
@@ -45,12 +82,22 @@ class _SaasAppState extends State<SaasApp> {
       _session = session;
       _sessionSubscription = session.stream.listen((_) => _sessionChanged());
       // Invitation links must not silently adopt a cached owner/employee.
-      if (!_employee) await session.restore();
+      if (!_employee) {
+        if (await session.restoreCachedSession()) {
+          if (!mounted) return;
+          _workspace = session.restoreWorkspace;
+          _employee = session.employee != null;
+          _initializing = false;
+          setState(() {});
+        }
+        await session.restore();
+      }
       if (!mounted) return;
       if (session.employee != null) _employee = true;
       _workspace = session.restoreWorkspace;
       _initializing = false;
       setState(() {});
+      unawaited(_routeTask());
     } catch (_) {
       if (mounted) {
         setState(
@@ -76,6 +123,8 @@ class _SaasAppState extends State<SaasApp> {
 
   @override
   void dispose() {
+    _pwa.removeListener(_routeTask);
+    _pwa.dispose();
     _sessionSubscription?.cancel();
     _session?.dispose();
     if (widget.api == null) _api?.close();
@@ -135,27 +184,53 @@ class _SaasAppState extends State<SaasApp> {
       appBar: AppBar(
         title: const Text('TPC Accounts'),
         actions: [
-          const AppearanceSelector(),
-          LoadingButton.textIcon(
-            onPressed: () => setState(() => _employee = true),
-            icon: const Icon(Icons.badge_outlined),
-            label: const Text('Employee login'),
+          IconButton(
+            tooltip: 'FAQ & getting started',
+            icon: const Icon(Icons.help_outline),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
+            ),
           ),
+          const AppearanceSelector(),
+          const PwaControls(),
+          if (MediaQuery.sizeOf(context).width < 600)
+            IconButton(
+              tooltip: 'Employee login',
+              onPressed:
+                  session.busy ? null : () => setState(() => _employee = true),
+              icon: const Icon(Icons.badge_outlined),
+            )
+          else
+            LoadingButton.textIcon(
+              onPressed: () => setState(() => _employee = true),
+              icon: const Icon(Icons.badge_outlined),
+              label: const Text('Employee login'),
+            ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: CompanySetupView(
-            session: session,
-            navigate: _navigate,
-            onOpen: () {
-              unawaited(session.rememberWorkspace(true));
-              setState(() => _workspace = true);
-            },
-          ),
-        ),
-      ),
+      body: session.owner == null && session.employee == null
+          ? LandingView(
+              busy: session.busy,
+              error: session.error,
+              onSignIn: () => session.signIn(_navigate),
+              onFaq: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
+              ),
+              onEmployeeLogin: () => setState(() => _employee = true),
+            )
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: CompanySetupView(
+                  session: session,
+                  navigate: _navigate,
+                  onOpen: () {
+                    unawaited(session.rememberWorkspace(true));
+                    setState(() => _workspace = true);
+                  },
+                ),
+              ),
+            ),
     );
   }
 }

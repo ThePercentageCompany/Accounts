@@ -6,9 +6,96 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
+import 'package:idb_shim/idb_client_memory.dart';
+import 'package:tpc_invoice/core/offline/offline_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('revoked employee session clears the restored offline identity',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final api = SaasApi(
+      origin: 'https://api.test',
+      offlineStore: IndexedOfflineStore(newIdbFactoryMemory()),
+      offlineAutomatic: false,
+      client: MockClient((_) async => http.Response(
+          jsonEncode({
+            'error': {'code': 'UNAUTHORIZED', 'message': 'Sign in.'}
+          }),
+          401)),
+    );
+    await api.saveSessionProfile({
+      'expiresAt': DateTime.now().millisecondsSinceEpoch + 60000,
+      'employee': {'employeeId': 'e' * 43, 'companyId': 'c' * 43},
+      'companies': <Object>[],
+    });
+    final session = SaasSession(api, await SharedPreferences.getInstance());
+    expect(await session.restoreCachedSession(), isTrue);
+    await session.restore(employeeOnly: true);
+    expect(session.employee, isNull);
+    expect(await api.offlineSessionProfile(), isNull);
+    await session.close();
+    api.close();
+  });
+  test(
+      'offline profile restores without secrets, expires and is removed at logout',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    var offline = false;
+    final api = SaasApi(
+        origin: 'https://api.test',
+        offlineStore: IndexedOfflineStore(newIdbFactoryMemory()),
+        offlineAutomatic: false,
+        client: MockClient((r) async {
+          if (offline) throw http.ClientException('offline');
+          if (r.url.path == '/v1/me') {
+            return http.Response(
+                jsonEncode({
+                  'owner': {
+                    'ownerId': 'o' * 43,
+                    'name': 'Owner',
+                    'accessToken': 'must-not-be-stored',
+                  }
+                }),
+                200);
+          }
+          if (r.url.path == '/v1/companies') {
+            return http.Response(
+                jsonEncode({
+                  'companies': [
+                    {
+                      'companyId': 'c' * 43,
+                      'name': 'Company',
+                      'stage': 'READY',
+                    }
+                  ]
+                }),
+                200);
+          }
+          return http.Response('{}', 200);
+        }));
+    final first = SaasSession(api, prefs);
+    await first.restore();
+    final profile = await api.offlineSessionProfile();
+    expect(jsonEncode(profile), isNot(contains('must-not-be-stored')));
+    final expiry = profile!['expiresAt'];
+    await first.close();
+    offline = true;
+    final restored = SaasSession(api, prefs);
+    expect(await restored.restoreCachedSession(), isTrue);
+    await restored.restore();
+    expect(restored.owner?['ownerId'], 'o' * 43);
+    expect(restored.ready, isTrue);
+    expect((await api.offlineSessionProfile())!['expiresAt'], expiry);
+    offline = false;
+    await restored.signOut();
+    expect(await api.offlineSessionProfile(), isNull);
+    await api.saveSessionProfile({...profile, 'expiresAt': 0});
+    expect(await api.offlineSessionProfile(), isNull);
+    await restored.close();
+    api.close();
+  });
   test(
     'session emits immutable busy and signed-in snapshots and closes safely',
     () async {

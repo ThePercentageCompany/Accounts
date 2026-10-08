@@ -57,6 +57,31 @@ class SaasApi implements SessionRepository {
   final OfflineStore? _offlineStore;
   final bool offlineAutomatic;
   bool get offlineEnabled => kIsWeb || _offlineStore != null;
+  String get _sessionSnapshotScope => 'session-profile:${origin.origin}';
+  Future<void> saveSessionProfile(Map<String, dynamic> profile) async {
+    if (!offlineEnabled) return;
+    await offlineStore.change(
+        _sessionSnapshotScope, (p) => p['profile'] = profile);
+  }
+
+  Future<Map<String, dynamic>?> offlineSessionProfile() async {
+    if (!offlineEnabled) return null;
+    final profile = (await offlineStore.read(_sessionSnapshotScope))['profile'];
+    if (profile is! Map ||
+        (profile['expiresAt'] as int? ?? 0) <=
+            DateTime.now().millisecondsSinceEpoch) {
+      return null;
+    }
+    return Map<String, dynamic>.from(profile);
+  }
+
+  Future<void> clearSessionProfile() async {
+    if (offlineEnabled) {
+      await offlineStore.change(
+          _sessionSnapshotScope, (p) => p.remove('profile'));
+    }
+  }
+
   late final OfflineStore offlineStore = _offlineStore ?? createOfflineStore();
   final _outboxes = <String, OfflineOutbox>{};
   OfflineOutbox outbox(String user, String company, {bool employee = false}) {
@@ -252,13 +277,15 @@ class SaasApi implements SessionRepository {
       return uri.path.startsWith('/v1/employee/records/') ||
           uri.path.startsWith('/v1/employee/references/') ||
           uri.path.startsWith('/v1/employee/reports/') ||
-          uri.path.startsWith('/v1/employee/companies/$_cacheCompany/tasks');
+          uri.path.startsWith('/v1/employee/companies/$_cacheCompany/tasks') ||
+          uri.path == '/v1/employee/companies/$_cacheCompany/notifications';
     }
     final prefix = '/v1/companies/$_cacheCompany/';
     return uri.path.startsWith('${prefix}records/') ||
         uri.path.startsWith('${prefix}reports/') ||
         uri.path == '${prefix}employees' ||
-        uri.path.startsWith('${prefix}tasks');
+        uri.path.startsWith('${prefix}tasks') ||
+        uri.path == '${prefix}notifications';
   }
 
   String recordsPath(String companyId, String table, {bool employee = false}) =>
@@ -1105,6 +1132,27 @@ class SaasApi implements SessionRepository {
       return _json('POST', path, data: {'operations': operations});
     }
   }
+
+  String notificationsPath(String companyId, {bool employee = false}) =>
+      '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/notifications';
+  Future<Map<String, dynamic>> notifications(String companyId,
+          {bool employee = false, bool force = false}) =>
+      _json('GET', notificationsPath(companyId, employee: employee),
+          force: force);
+  Future<Map<String, dynamic>> notificationRead(String companyId, String id,
+          {bool employee = false, bool read = true}) =>
+      _json('POST', '${notificationsPath(companyId, employee: employee)}/read',
+          data: {'id': id, 'read': read});
+  Future<Map<String, dynamic>> subscribePush(
+          String companyId, Map<String, dynamic> subscription,
+          {bool employee = false}) =>
+      _json('POST',
+          '${notificationsPath(companyId, employee: employee)}/subscription',
+          data: {'subscription': subscription});
+  Future<Map<String, dynamic>> unsubscribePush(String companyId,
+          {bool employee = false}) =>
+      _json('DELETE',
+          '${notificationsPath(companyId, employee: employee)}/subscription');
 
   Future<Map<String, dynamic>> upload(
     String companyId, {

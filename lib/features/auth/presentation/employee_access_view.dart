@@ -61,6 +61,10 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
       _session = SaasSession(_api!, preferences);
       _sessionSubscription = _session!.stream.listen((_) => _changed());
       if (widget.restoreSession && _link.text.isEmpty) {
+        if (await _session!.restoreCachedSession() && mounted) {
+          _workspace = _session!.employee != null;
+          setState(() {});
+        }
         await _session!.restore(employeeOnly: true);
         if (!mounted) return;
         _workspace = _session!.employee != null;

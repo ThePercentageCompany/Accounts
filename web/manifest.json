@@ -1,12 +1,14 @@
 {
     "name": "The Percentage Company - Accounts",
     "short_name": "TPC Accounts",
-    "start_url": ".",
+    "id": "./",
+    "start_url": "./",
+    "scope": "./",
     "display": "standalone",
-    "background_color": "#000000",
-    "theme_color": "#000000",
+    "background_color": "#f7f8fa",
+    "theme_color": "#164e63",
     "description": "Executive Invoicing, Quotations, HR, Payroll and Corporate Finance Suite.",
-    "orientation": "portrait-primary",
+    "categories": ["business", "productivity", "finance"],
     "prefer_related_applications": false,
     "icons": [
         {

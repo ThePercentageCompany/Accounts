@@ -71,6 +71,44 @@ void main() {
     sent = [];
   });
 
+  test('background acknowledgement reconciles without submitting a duplicate',
+      () async {
+    final box =
+        create(sender: (_) async => throw StateError('Must not send again'));
+    await box.enqueue('Customers', 'create', {'name': 'Local'},
+        expectedVersion: 0);
+    final id = box.pending.single['operationId'];
+    await store.change(partition, (p) {
+      (p['operations'] as List).first['backgroundAck'] = {
+        'operationId': id,
+        'status': 'APPLIED',
+        'recordId': 'server-id',
+        'version': 1,
+      };
+    });
+    await box.sync();
+    expect(box.pending, isEmpty);
+    expect(box.overlay('Customers', []).single['recordId'], 'server-id');
+  });
+  test('task edits keep full local details and queue versioned changes',
+      () async {
+    final box = create();
+    final base = <String, dynamic>{
+      'recordId': 'task-id',
+      'recordVersion': 1,
+      'title': 'Prepare report',
+      'status': 'TODO',
+      'employeeId': 'employee'
+    };
+    expect(OfflineOutbox.supports('Tasks', 'update', base), isTrue);
+    await box.enqueue('Tasks', 'update', {'status': 'COMPLETED'},
+        recordId: 'task-id', expectedVersion: 1, base: base);
+    final visible = box.overlay('Tasks', [base]).single;
+    expect(visible['title'], 'Prepare report');
+    expect(visible['status'], 'COMPLETED');
+    expect(visible['syncStatus'], 'PENDING');
+    expect(box.pending.single['expectedVersion'], 1);
+  });
   test('retry recovers saved changes rejected by the legacy sync envelope',
       () async {
     var attempts = 0;

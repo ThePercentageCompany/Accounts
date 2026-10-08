@@ -49,7 +49,9 @@ class TaskWorkspace extends StatefulWidget {
       this.calendar = false,
       this.active = true,
       this.uploads,
-      this.writes});
+      this.writes,
+      this.taskToOpen});
+  final String? taskToOpen;
   final SaasApi api;
   final String companyId;
   final Map<String, dynamic>? employee;
@@ -100,7 +102,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     widget.api.cache.addListener(_cacheChanged);
     _scope = _employee && !_manage ? 'My Tasks' : 'All';
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _recoverTasks();
+      if (mounted) {
+        _recoverTasks();
+        _openLinkedTask();
+      }
     });
     if (_manage) _loadAssignees();
     _poll = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -136,9 +141,29 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       widget.writes?.pending
           .any((op) => ['Tasks', 'TaskComments'].contains(op['table'])) ??
       false;
+  List<Map<String, dynamic>> _visibleTasks(List<Map<String, dynamic>> rows) {
+    final q = _query();
+    return (widget.writes?.visibleRows('Tasks', rows) ?? rows)
+        .where((r) =>
+            ['employeeId', 'status', 'priority', 'project']
+                .every((k) => !q.containsKey(k) || r[k] == q[k]) &&
+            (!q.containsKey('from') ||
+                '${r['dueDate']}'.compareTo(q['from']!) >= 0) &&
+            (!q.containsKey('to') ||
+                '${r['dueDate']}'.compareTo(q['to']!) <= 0) &&
+            (!q.containsKey('overdue') || r['status'] != 'COMPLETED') &&
+            (!q.containsKey('search') ||
+                '${r['title']} ${r['description']} ${r['project']} ${r['tags']}'
+                    .toLowerCase()
+                    .contains(q['search']!.toLowerCase())))
+        .toList();
+  }
+
   Future<void> _recoverTasks() async {
     if (!widget.active) return;
-    if (_pendingTask && widget.writes?.canDiscardRejected == false) {
+    if (_pendingTask &&
+        widget.writes?.hasBlockingPending == true &&
+        widget.writes?.canDiscardRejected == false) {
       try {
         await widget.writes!.flush();
       } catch (e) {
@@ -162,6 +187,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   @override
   void didUpdateWidget(covariant TaskWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.taskToOpen != oldWidget.taskToOpen) _openLinkedTask();
     if ((!oldWidget.active && widget.active) ||
         oldWidget.calendar != widget.calendar) {
       _load();
@@ -250,9 +276,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       final saved = widget.api.cache.state(_resource!)?.data;
       if (!_loaded && !more && saved != null && mounted) {
         setState(() {
-          _tasks = (saved['records'] as List)
+          _tasks = _visibleTasks((saved['records'] as List)
               .map((r) => Map<String, dynamic>.from(r as Map))
-              .toList();
+              .toList());
           _summary = Map<String, dynamic>.from(saved['summary'] as Map? ?? {});
           _dateCounts =
               Map<String, dynamic>.from(saved['dateCounts'] as Map? ?? {});
@@ -282,7 +308,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       if (!mounted || generation != _generation) return;
       setState(() {
         final rows = List<Map<String, dynamic>>.from(data['records'] as List);
-        _tasks = more ? [..._tasks, ...rows] : rows;
+        _tasks = _visibleTasks(more ? [..._tasks, ...rows] : rows);
         _dateCounts =
             Map<String, dynamic>.from(data['dateCounts'] as Map? ?? {});
         _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
@@ -329,6 +355,16 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         'values': values
       });
       final queue = widget.writes;
+      if (queue != null &&
+          queue.supportsLocal(table, row == null ? 'create' : 'update', row)) {
+        await queue.enqueue(table, row == null ? 'create' : 'update', values,
+            recordId: row?['recordId'] as String?,
+            expectedVersion:
+                row == null ? 0 : int.parse(row['recordVersion'].toString()),
+            baseRecord: row);
+        if (mounted) setState(() => _tasks = _visibleTasks(_tasks));
+        return;
+      }
       if (queue != null) {
         if (queue.pending.isNotEmpty) {
           final pending = queue.pending.single;
@@ -479,12 +515,31 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
             manage: _manage,
             task: task,
             uploads: widget.uploads,
+            writes: widget.writes,
             onWrite: _write,
             onDelete: _delete,
             onEdit: _edit),
         drawer: true);
     _surfaceDepth--;
     if (mounted) _load(quiet: true);
+  }
+
+  Future<void> _openLinkedTask() async {
+    final id = widget.taskToOpen;
+    if (id == null || !widget.active) return;
+    try {
+      final data = await widget.api
+          .taskDetail(widget.companyId, id, employee: _employee);
+      if (mounted && widget.active) {
+        await _detail(Map<String, dynamic>.from(data['task'] as Map));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'This task is unavailable or you no longer have access.')));
+      }
+    }
   }
 
   void _change(VoidCallback change) {

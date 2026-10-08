@@ -43,6 +43,24 @@ class _WorkspaceHelpState extends State<WorkspaceHelp> {
   static const _articles = <({String topic, String title, String body})>[
     (
       topic: 'Getting started',
+      title: 'What is TPC Accounts?',
+      body:
+          'TPC Accounts is a company workspace for customers, quotations, invoices, receipts, accounting reports and team tasks. Owners manage the workspace and employee access. Posted accounting activity feeds the financial reports.'
+    ),
+    (
+      topic: 'Getting started',
+      title: 'How do I create my first workspace?',
+      body:
+          'Sign in with Google, enter your company name and create a workspace. Connect Google when prompted to prepare the company storage. The setup screen shows progress and updates automatically while setup runs. When setup is complete, open the workspace and review your company settings.'
+    ),
+    (
+      topic: 'Getting started',
+      title: 'How do employees join?',
+      body:
+          'Your company administrator creates employee access and shares an invitation and a private login code. Use Employee login to join. The administrator controls which sections you can see and edit.'
+    ),
+    (
+      topic: 'Getting started',
       title: 'Where should I start?',
       body:
           'Open Settings and check the company profile, currency and document details. Add a customer, then create your first invoice draft. Review it before issuing. Some sections and actions depend on your access permissions.'
