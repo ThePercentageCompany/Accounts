@@ -534,29 +534,50 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       _children(selected).length > 1)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: DropdownButtonFormField<String>(
-                        key: ValueKey((selected, _subsection(selected))),
-                        initialValue: _subsection(selected),
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: selected,
-                          isDense: true,
-                        ),
-                        items: [
-                          for (final child in _children(selected).entries)
-                            DropdownMenuItem(
-                              value: child.key,
-                              child: Text(
-                                child.value,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                      child: selected == 'Reports'
+                          ? SingleChildScrollView(
+                              key: const Key('mobile-report-chips'),
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  for (final child
+                                      in _children(selected).entries)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ChoiceChip(
+                                        label: Text(child.value),
+                                        selected:
+                                            _subsection(selected) == child.key,
+                                        onSelected: (_) =>
+                                            _navigate(selected, child.key),
+                                      ),
+                                    ),
+                                ],
                               ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              key: ValueKey((selected, _subsection(selected))),
+                              initialValue: _subsection(selected),
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: selected,
+                                isDense: true,
+                              ),
+                              items: [
+                                for (final child in _children(selected).entries)
+                                  DropdownMenuItem(
+                                    value: child.key,
+                                    child: Text(
+                                      child.value,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (child) {
+                                if (child != null) _navigate(selected, child);
+                              },
                             ),
-                        ],
-                        onChanged: (child) {
-                          if (child != null) _navigate(selected, child);
-                        },
-                      ),
                     ),
                   Expanded(
                     child: IndexedStack(
