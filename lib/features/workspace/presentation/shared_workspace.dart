@@ -315,39 +315,62 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: wide ? 64 : 56,
-        title: wide
-            ? SizedBox(
-                width: 420,
-                child: Autocomplete<String>(
-                  optionsBuilder: (value) => value.text.trim().isEmpty
-                      ? const Iterable<String>.empty()
-                      : sections.where(
-                          (s) => s.toLowerCase().contains(
-                                value.text.toLowerCase(),
+        title: Row(
+          children: [
+            Flexible(
+              flex: 2,
+              child: wide
+                  ? SizedBox(
+                      width: 420,
+                      child: Autocomplete<String>(
+                        optionsBuilder: (value) => value.text.trim().isEmpty
+                            ? const Iterable<String>.empty()
+                            : sections.where(
+                                (s) => s.toLowerCase().contains(
+                                      value.text.toLowerCase(),
+                                    ),
                               ),
+                        onSelected: (value) =>
+                            setState(() => _selected = value),
+                        fieldViewBuilder:
+                            (context, controller, focus, submit) => TextField(
+                          inputFormatters: [
+                            AppInputFormatters.text,
+                            AppInputFormatters.search
+                          ],
+                          controller: controller,
+                          focusNode: focus,
+                          decoration: const InputDecoration(
+                            hintText: 'Search workspace sections...',
+                            prefixIcon: Icon(Icons.search),
+                            isDense: true,
+                          ),
                         ),
-                  onSelected: (value) => setState(() => _selected = value),
-                  fieldViewBuilder: (context, controller, focus, submit) =>
-                      TextField(
-                    inputFormatters: [
-                      AppInputFormatters.text,
-                      AppInputFormatters.search
-                    ],
-                    controller: controller,
-                    focusNode: focus,
-                    decoration: const InputDecoration(
-                      hintText: 'Search workspace sections...',
-                      prefixIcon: Icon(Icons.search),
-                      isDense: true,
+                      ),
+                    )
+                  : Text(
+                      selected == 'Reports' ? 'Home' : selected ?? 'Workspace',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Tooltip(
+                message: widget.title,
+                child: Text(
+                  widget.title,
+                  key: const Key('workspace-business-name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
-              )
-            : Text(
-                selected == 'Reports' ? 'Home' : selected ?? 'Workspace',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
+            ),
+          ],
+        ),
         actions: [
           _syncStatusIcon(),
           if (widget.employee == null ||
