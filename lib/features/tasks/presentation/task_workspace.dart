@@ -427,10 +427,31 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
 
   Future<void> _status(Map<String, dynamic> task, String status) async {
     if (_saving || task['status'] == status) return;
-    setState(() => _saving = true);
+    final previousStatus = task['status'];
+    setState(() {
+      _saving = true;
+      _tasks = [
+        for (final row in _tasks)
+          if (row['recordId'] == task['recordId'])
+            {...row, 'status': status}
+          else
+            row
+      ];
+    });
     try {
       await _write('Tasks', task, {'status': status});
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _tasks = [
+            for (final row in _tasks)
+              if (row['recordId'] == task['recordId'])
+                {...row, 'status': previousStatus}
+              else
+                row
+          ];
+        });
+      }
       _failure(e);
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -926,13 +947,41 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   }
 
   Widget _board(bool mobile, double width) {
+    bool canDrop(Map<String, dynamic> task, String status) =>
+        !_saving &&
+        task['status'] != status &&
+        (_manage || task['employeeId'] == _employeeId);
+    Widget draggable(Map<String, dynamic> task, double columnWidth) {
+      final feedback = Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(width: columnWidth - 16, child: _card(task)));
+      final placeholder = Opacity(opacity: .4, child: _card(task));
+      if (mobile) {
+        return LongPressDraggable<Map<String, dynamic>>(
+            data: task,
+            maxSimultaneousDrags: _saving ? 0 : 1,
+            feedback: feedback,
+            childWhenDragging: placeholder,
+            child: _card(task));
+      }
+      return Draggable<Map<String, dynamic>>(
+          data: task,
+          maxSimultaneousDrags: _saving ? 0 : 1,
+          feedback: feedback,
+          childWhenDragging: placeholder,
+          child:
+              MouseRegion(cursor: SystemMouseCursors.grab, child: _card(task)));
+    }
+
     Widget column(String status, double columnWidth) => SizedBox(
         width: columnWidth,
         child: DragTarget<Map<String, dynamic>>(
-          onWillAcceptWithDetails: (d) =>
-              !_saving && (_manage || d.data['employeeId'] == _employeeId),
+          key: ValueKey('task-column-$status'),
+          onWillAcceptWithDetails: (d) => canDrop(d.data, status),
           onAcceptWithDetails: (d) => _status(d.data, status),
           builder: (context, candidates, rejected) => Container(
+              constraints: const BoxConstraints(minHeight: 240),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                   color: candidates.isNotEmpty
@@ -950,17 +999,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                     for (final t
                         in _visible.where((t) => t['status'] == status))
                       _manage || t['employeeId'] == _employeeId
-                          ? LongPressDraggable<Map<String, dynamic>>(
-                              data: t,
-                              feedback: Material(
-                                  elevation: 8,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                      width: columnWidth - 16,
-                                      child: _card(t))),
-                              childWhenDragging:
-                                  Opacity(opacity: .4, child: _card(t)),
-                              child: _card(t))
+                          ? draggable(t, columnWidth)
                           : _card(t),
                     if (!_visible.any((t) => t['status'] == status))
                       const Padding(
@@ -969,15 +1008,23 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         ));
     if (mobile) {
       return Column(children: [
-        DropdownButtonFormField<String>(
-            initialValue: _boardStatus,
-            isExpanded: true,
-            items: [
-              for (final s in taskStatuses)
-                DropdownMenuItem(value: s, child: Text(taskLabel(s)))
-            ],
-            onChanged: (s) => setState(() => _boardStatus = s!),
-            decoration: const InputDecoration(labelText: 'Board column')),
+        const Text('Hold a task, then drag it onto a status to update it.'),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final status in taskStatuses)
+            DragTarget<Map<String, dynamic>>(
+              key: ValueKey('task-status-$status'),
+              onWillAcceptWithDetails: (d) => canDrop(d.data, status),
+              onAcceptWithDetails: (d) {
+                setState(() => _boardStatus = status);
+                _status(d.data, status);
+              },
+              builder: (context, candidates, rejected) => ChoiceChip(
+                label: Text(taskLabel(status)),
+                selected: _boardStatus == status || candidates.isNotEmpty,
+                onSelected: (_) => setState(() => _boardStatus = status),
+              ),
+            )
+        ]),
         const SizedBox(height: 12),
         column(_boardStatus, width)
       ]);

@@ -76,6 +76,90 @@ SaasApi api() => SaasApi(
           headers: {'content-type': 'application/json'});
     }));
 void main() {
+  for (final mobile in [false, true]) {
+    for (final rejected in [false, true]) {
+      testWidgets(
+          'board drag ${mobile ? 'mobile' : 'desktop'} '
+          '${rejected ? 'restores rejected status' : 'saves status'}',
+          (tester) async {
+        tester.view.physicalSize = Size(mobile ? 390 : 1440, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final row = task()..['title'] = 'Drag this task';
+        Map? operation;
+        final service = SaasApi(
+          origin: 'https://api.test',
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/sync')) {
+              operation = (jsonDecode(request.body)['operations'] as List)
+                  .single as Map;
+              if (!rejected) {
+                row['status'] = operation!['values']['status'];
+                row['recordVersion'] = 2;
+              }
+              return http.Response(
+                  jsonEncode({
+                    'results': [
+                      {
+                        'status': rejected ? 'REJECTED' : 'APPLIED',
+                        if (rejected)
+                          'error': {'code': 'CONFLICT', 'message': 'Try again'}
+                      }
+                    ]
+                  }),
+                  200);
+            }
+            return http.Response(
+                jsonEncode(request.url.path.endsWith('/assignees')
+                    ? {'employees': []}
+                    : {
+                        'records': [row],
+                        'total': 1,
+                        'summary': {}
+                      }),
+                200);
+          }),
+        );
+        await tester.pumpWidget(MaterialApp(
+            home: Scaffold(
+          body: TaskWorkspace(api: service, companyId: 'c' * 43),
+        )));
+        await tester.pumpAndSettle();
+        if (mobile) {
+          await tester.tap(find.text('Board'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(ChoiceChip, 'In Progress'));
+          await tester.pumpAndSettle();
+        }
+        final source = tester.getCenter(find.text('Drag this task'));
+        final target = tester.getCenter(find.byKey(ValueKey(
+          mobile ? 'task-status-COMPLETED' : 'task-column-COMPLETED',
+        )));
+        final gesture = await tester.startGesture(source);
+        if (mobile) await tester.pump(const Duration(milliseconds: 600));
+        await gesture.moveTo(target);
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(operation?['values'], {'status': 'COMPLETED'});
+        expect(operation?['expectedVersion'], 1);
+        if (mobile && rejected) {
+          await tester.tap(find.widgetWithText(ChoiceChip, 'In Progress'));
+          await tester.pumpAndSettle();
+        }
+        final column = find.byKey(ValueKey(
+          'task-column-${rejected ? 'IN_PROGRESS' : 'COMPLETED'}',
+        ));
+        expect(
+            find.descendant(of: column, matching: find.text('Drag this task')),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        service.close();
+      });
+    }
+  }
   for (final width in widths) {
     for (final calendar in [false, true]) {
       testWidgets(
