@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
@@ -299,9 +300,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
             ),
           );
           return SingleChildScrollView(
-            padding: EdgeInsets.all(
-              MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
-            ),
+            padding: AppSpacing.page(context),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

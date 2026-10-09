@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'dart:async';
 import 'package:tpc_invoice/features/projects/presentation/project_dropdown.dart';
@@ -579,8 +580,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
             onRefresh: () => _load(),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding:
-                  EdgeInsets.fromLTRB(mobile ? 0 : 8, 8, mobile ? 0 : 8, 32),
+              padding: AppSpacing.page(context),
               children: [
                 Row(children: [
                   Expanded(
@@ -703,15 +703,19 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                       ])),
                 const SizedBox(height: 8),
                 if (mobile)
-                  Row(children: [
-                    OutlinedButton.icon(
-                        onPressed: _filterSheet,
-                        icon: const Icon(Icons.tune),
-                        label: Text(
-                            'Filters${_filters.isEmpty ? '' : ' (${_filters.length})'}')),
-                    const Spacer(),
-                    _sortMenu()
-                  ])
+                  Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                            onPressed: _filterSheet,
+                            icon: const Icon(Icons.tune),
+                            label: Text(
+                                'Filters${_filters.isEmpty ? '' : ' (${_filters.length})'}')),
+                        _sortMenu()
+                      ])
                 else
                   Wrap(
                       spacing: 12,
@@ -796,7 +800,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                   for (final day
                       in (_summary['upcoming'] as List).whereType<Map>())
                     ListTile(
-                        contentPadding: EdgeInsets.zero,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         title: Text(day['date'].toString()),
                         subtitle: Text('${day['count']} tasks'),
                         trailing: const Icon(Icons.chevron_right),

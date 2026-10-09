@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -141,7 +142,7 @@ class _NotificationCenterState extends State<NotificationCenter>
               child: ValueListenableBuilder<int>(
                   valueListenable: _changes,
                   builder: (context, _, _) =>
-                      ListView(padding: const EdgeInsets.all(16), children: [
+                      ListView(padding: AppSpacing.page(context), children: [
                         Text('Notifications',
                             style: Theme.of(context).textTheme.titleLarge),
                         Wrap(spacing: 8, children: [

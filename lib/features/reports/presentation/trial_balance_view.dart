@@ -1294,7 +1294,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal:
-                              MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+                              MediaQuery.sizeOf(context).width < 600 ? 16 : 24,
                           vertical: 4,
                         ),
                         child: Align(

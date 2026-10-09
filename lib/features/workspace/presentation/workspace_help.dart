@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -52,12 +53,12 @@ class _WorkspaceHelpState extends State<WorkspaceHelp> {
               child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1100),
             child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: AppSpacing.page(context),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
-                          padding: const EdgeInsets.all(24),
+                          padding: AppSpacing.page(context),
                           decoration: BoxDecoration(
                               color: colors.primaryContainer,
                               borderRadius: BorderRadius.circular(24)),
@@ -272,7 +273,8 @@ class _GuidePage extends StatelessWidget {
                                   g.title != guide.title)
                               .take(3))
                             ListTile(
-                                contentPadding: EdgeInsets.zero,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 8),
                                 title: Text(related.title),
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () => Navigator.of(context)

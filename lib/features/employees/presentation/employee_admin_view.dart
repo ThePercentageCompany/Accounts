@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -223,7 +224,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
             return const CenteredLoading(label: 'Loading employees');
           }
           return ListView(
-            padding: const EdgeInsets.all(24),
+            padding: AppSpacing.page(context),
             children: [
               Wrap(
                 alignment: WrapAlignment.end,

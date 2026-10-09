@@ -318,24 +318,29 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 child: busy && !_hasLoaded
                     ? const CenteredLoading(label: 'Loading documents')
                     : ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         children: [
                           for (final doc in documents)
-                            ListTile(
-                              title: Text('${doc['name']}'),
-                              subtitle: Text(
-                                '${doc['mimeType']} · ${doc['byteLength']} bytes',
-                              ),
-                              onTap: busy ? null : () => _open(doc),
-                              trailing: logo && widget.writes != null
-                                  ? LoadingButton.text(
-                                      onPressed: busy ||
-                                              widget.writes!.pending.isNotEmpty
-                                          ? null
-                                          : () => _useLogo(doc['documentId']),
-                                      child: const Text('Use as logo'),
-                                    )
-                                  : const Icon(Icons.download),
-                            ),
+                            Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: ListTile(
+                                  title: Text('${doc['name']}'),
+                                  subtitle: Text(
+                                    '${doc['mimeType']} · ${doc['byteLength']} bytes',
+                                  ),
+                                  onTap: busy ? null : () => _open(doc),
+                                  trailing: logo && widget.writes != null
+                                      ? LoadingButton.text(
+                                          onPressed: busy ||
+                                                  widget.writes!.pending
+                                                      .isNotEmpty
+                                              ? null
+                                              : () =>
+                                                  _useLogo(doc['documentId']),
+                                          child: const Text('Use as logo'),
+                                        )
+                                      : const Icon(Icons.download),
+                                )),
                           if (image != null)
                             Image.memory(
                               image!,

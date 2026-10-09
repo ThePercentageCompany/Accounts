@@ -106,24 +106,26 @@ class _TaskAssigneePickerState extends State<TaskAssigneePicker> {
                 TextButton(onPressed: _load, child: const Text('Retry'))
               ])),
         Expanded(
-            child: ListView(children: [
-          for (final e in _rows)
-            ListTile(
-                minVerticalPadding: 16,
-                title: Text('${e['fullName']}'),
-                subtitle: '${e['department'] ?? ''}'.isEmpty
-                    ? null
-                    : Text('${e['department']}'),
-                onTap: () => Navigator.pop(context, e)),
-          if (!_busy && _rows.isEmpty)
-            const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No active employees found.')),
-          if (_next != null)
-            TextButton(
-                onPressed: _busy ? null : () => _load(more: true),
-                child: const Text('Load more employees'))
-        ])),
+            child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                children: [
+              for (final e in _rows)
+                ListTile(
+                    minVerticalPadding: 16,
+                    title: Text('${e['fullName']}'),
+                    subtitle: '${e['department'] ?? ''}'.isEmpty
+                        ? null
+                        : Text('${e['department']}'),
+                    onTap: () => Navigator.pop(context, e)),
+              if (!_busy && _rows.isEmpty)
+                const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No active employees found.')),
+              if (_next != null)
+                TextButton(
+                    onPressed: _busy ? null : () => _load(more: true),
+                    child: const Text('Load more employees'))
+            ])),
       ])));
 }
 

@@ -78,7 +78,7 @@ class AdaptiveFormDialog extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: Wrap(spacing: 12, runSpacing: 8, children: actions),
+                  child: Wrap(spacing: 12, runSpacing: 12, children: actions),
                 ),
               ),
             ],
@@ -198,7 +198,7 @@ class PopupFormFields extends StatelessWidget {
           return SingleChildScrollView(
             child: Wrap(
               spacing: 24,
-              runSpacing: 24,
+              runSpacing: constraints.maxWidth < 600 ? 16 : 24,
               children: [
                 for (final child in children)
                   SizedBox(

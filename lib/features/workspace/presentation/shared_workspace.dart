@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -2543,7 +2544,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            padding: EdgeInsets.fromLTRB(
+                AppSpacing.gutter(context), 8, AppSpacing.gutter(context), 8),
             child: TextField(
               inputFormatters: [
                 AppInputFormatters.text,
@@ -2626,10 +2628,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                     child: ListView.builder(
                       key: PageStorageKey((widget.companyId, table)),
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 8,
-                      ),
+                      padding: AppSpacing.list(context),
                       itemCount: _visibleRows.length,
                       itemBuilder: (context, index) {
                         final row = _visibleRows[index];

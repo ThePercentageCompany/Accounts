@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
@@ -304,7 +305,7 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
       return const CenteredLoading(label: 'Loading report settings');
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

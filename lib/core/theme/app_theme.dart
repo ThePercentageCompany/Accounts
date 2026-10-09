@@ -3,59 +3,59 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppTheme {
   static TextTheme _typography(Color color) => TextTheme(
-    headlineLarge: TextStyle(
-      fontSize: 30,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -.8,
-      color: color,
-    ),
-    headlineMedium: TextStyle(
-      fontSize: 26,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -.6,
-      color: color,
-    ),
-    headlineSmall: TextStyle(
-      fontSize: 22,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -.4,
-      color: color,
-    ),
-    titleLarge: TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -.3,
-      color: color,
-    ),
-    titleMedium: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-      color: color,
-    ),
-    titleSmall: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w500,
-      color: color,
-    ),
-    bodyLarge: TextStyle(fontSize: 15, height: 1.5, color: color),
-    bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: color),
-    bodySmall: TextStyle(fontSize: 12, height: 1.4, color: color),
-    labelLarge: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w500,
-      color: color,
-    ),
-    labelMedium: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-      color: color,
-    ),
-    labelSmall: TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w500,
-      color: color,
-    ),
-  ).apply(fontFamily: 'Inter');
+        headlineLarge: TextStyle(
+          fontSize: 30,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.8,
+          color: color,
+        ),
+        headlineMedium: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.6,
+          color: color,
+        ),
+        headlineSmall: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.4,
+          color: color,
+        ),
+        titleLarge: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.3,
+          color: color,
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+        titleSmall: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+        bodyLarge: TextStyle(fontSize: 15, height: 1.5, color: color),
+        bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: color),
+        bodySmall: TextStyle(fontSize: 12, height: 1.4, color: color),
+        labelLarge: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+        labelMedium: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+        labelSmall: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ).apply(fontFamily: 'Inter');
 
   // -------------------------------------------------------------
   // Zoho Books / Zoho Finance Color Palette
@@ -290,7 +290,6 @@ class AppTheme {
       tooltipTheme: const TooltipThemeData(
         waitDuration: Duration(milliseconds: 400),
       ),
-
       colorScheme: colorScheme,
       scaffoldBackgroundColor: zohoLightBg,
       fontFamily: 'Inter',
@@ -321,7 +320,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: zohoLightSurface,
         elevation: 0,
-        margin: EdgeInsets.zero,
+        margin: const EdgeInsets.symmetric(vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
           side: const BorderSide(color: zohoLightBorder, width: 0.8),
@@ -334,9 +333,9 @@ class AppTheme {
         ),
       ),
       listTileTheme: const ListTileThemeData(
-        dense: true,
-        minVerticalPadding: 8,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        dense: false,
+        minVerticalPadding: 12,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: zohoLightSurfaceElevated,
@@ -578,7 +577,6 @@ class AppTheme {
       tooltipTheme: const TooltipThemeData(
         waitDuration: Duration(milliseconds: 400),
       ),
-
       colorScheme: colorScheme,
       scaffoldBackgroundColor: zohoDarkBg,
       fontFamily: 'Inter',
@@ -609,7 +607,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: zohoDarkSurface,
         elevation: 0,
-        margin: EdgeInsets.zero,
+        margin: const EdgeInsets.symmetric(vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
           side: const BorderSide(color: zohoDarkBorder, width: 0.8),
@@ -622,9 +620,9 @@ class AppTheme {
         ),
       ),
       listTileTheme: const ListTileThemeData(
-        dense: true,
-        minVerticalPadding: 8,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        dense: false,
+        minVerticalPadding: 12,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: zohoDarkSurfaceElevated,

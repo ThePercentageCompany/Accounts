@@ -25,9 +25,9 @@ class WorkspaceDashboard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+        MediaQuery.sizeOf(context).width < 600 ? 16 : 24,
         8,
-        MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
+        MediaQuery.sizeOf(context).width < 600 ? 16 : 24,
         24,
       ),
       child: LayoutBuilder(

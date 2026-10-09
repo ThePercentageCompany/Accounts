@@ -163,7 +163,8 @@ class _DashboardTasksState extends State<DashboardTasks> {
                       child: Text('No open tasks.')),
                 for (final task in _tasks)
                   ListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     leading: Icon(
                         '${task['dueDate']}'.compareTo(today) < 0
                             ? Icons.warning_amber
