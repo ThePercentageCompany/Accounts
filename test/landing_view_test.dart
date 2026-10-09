@@ -37,10 +37,10 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('Get started with Google'));
       expect(signIn, 1);
-      await tester.tap(find.text('Getting started'));
+      await tester.tap(find.text('Explore the workspace'));
       expect(help, 1);
-      await tester.tap(find.text('Employee login').first);
-      expect(employee, 1);
+      expect(find.text('Employee login'), findsOneWidget);
+      expect(employee, 0);
       if (width == 1440 || width == 390) {
         await tester.runAsync(() async {
           final image = await (capture.currentContext!.findRenderObject()

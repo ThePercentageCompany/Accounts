@@ -1,4 +1,3 @@
-import 'package:tpc_invoice/core/widgets/tpc_logo.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -64,51 +63,6 @@ class LandingView extends StatelessWidget {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: gap, vertical: 20),
-                                child: Wrap(
-                                    alignment: WrapAlignment.spaceBetween,
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    spacing: 24,
-                                    runSpacing: 16,
-                                    children: [
-                                      const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            TpcLogo(
-                                                size: 32,
-                                                brightness: Brightness.dark),
-                                            SizedBox(width: 10),
-                                            Text('TPC / ACCOUNTS',
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: 1.2))
-                                          ]),
-                                      Wrap(
-                                          spacing: 16,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            TextButton(
-                                                onPressed: onFaq,
-                                                child: const Text(
-                                                    'Getting started',
-                                                    style: TextStyle(
-                                                        color: _muted))),
-                                            TextButton(
-                                                onPressed: busy
-                                                    ? null
-                                                    : onEmployeeLogin,
-                                                child: const Text(
-                                                    'Employee login',
-                                                    style: TextStyle(
-                                                        color: Colors.white))),
-                                          ]),
-                                    ])),
-                            const Divider(height: 1, color: _line),
                             Stack(children: [
                               Positioned.fill(
                                   child: RepaintBoundary(

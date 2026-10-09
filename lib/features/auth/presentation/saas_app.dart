@@ -208,21 +208,24 @@ class _SaasAppState extends State<SaasApp> {
               MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
             ),
           ),
-          const AppearanceSelector(),
-          const PwaControls(),
-          if (MediaQuery.sizeOf(context).width < 600)
-            IconButton(
-              tooltip: 'Employee login',
-              onPressed:
-                  session.busy ? null : () => setState(() => _employee = true),
-              icon: const Icon(Icons.badge_outlined),
-            )
-          else
-            LoadingButton.textIcon(
-              onPressed: () => setState(() => _employee = true),
-              icon: const Icon(Icons.badge_outlined),
-              label: const Text('Employee login'),
-            ),
+          if (session.owner != null || session.employee != null) ...[
+            const AppearanceSelector(),
+            const PwaControls(),
+            if (MediaQuery.sizeOf(context).width < 600)
+              IconButton(
+                tooltip: 'Employee login',
+                onPressed: session.busy
+                    ? null
+                    : () => setState(() => _employee = true),
+                icon: const Icon(Icons.badge_outlined),
+              )
+            else
+              LoadingButton.textIcon(
+                onPressed: () => setState(() => _employee = true),
+                icon: const Icon(Icons.badge_outlined),
+                label: const Text('Employee login'),
+              ),
+          ],
         ],
       ),
       body: session.owner == null && session.employee == null
