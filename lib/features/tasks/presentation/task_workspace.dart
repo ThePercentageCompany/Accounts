@@ -575,7 +575,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         _contentWidth = constraints.maxWidth;
         final mobile = constraints.maxWidth < 768;
         final view = _view.isEmpty ? (mobile ? 'List' : 'Board') : _view;
-        return RefreshIndicator(
+        return RefreshIndicator.noSpinner(
             onRefresh: () => _load(),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -612,7 +612,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                             label: const Text('New Task'))
                 ]),
                 const SizedBox(height: 16),
-                if (_pendingTask)
+                if (_pendingTask && widget.writes!.canDiscardRejected)
                   Card(
                       child: Padding(
                           padding: const EdgeInsets.all(12),
@@ -809,7 +809,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                 if (_busy && _loaded)
                   const Padding(
                       padding: EdgeInsets.all(12),
-                      child: LinearProgressIndicator()),
+                      child: AppActivityIndicator()),
                 if (_next != null)
                   Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),

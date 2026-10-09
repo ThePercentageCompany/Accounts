@@ -57,22 +57,22 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   DocumentStyle pdfStyle = DocumentStyle.modern;
   bool get logo => widget.section == 'CompanyProfile';
   HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
-    '${widget.api.origin}|${widget.companyId}|${widget.section}',
-  );
+        '${widget.api.origin}|${widget.companyId}|${widget.section}',
+      );
   Future<void> _exportHtml() => _run(() async {
-    final html = await savedRecordHtml(
-      widget.api,
-      widget.companyId,
-      widget.section,
-      widget.record['recordId'],
-      await htmlStore.load(),
-    );
-    await downloadFile(
-      Uint8List.fromList(utf8.encode(html)),
-      filename: '${widget.section}-${widget.record['recordId']}.html',
-      mimeType: 'text/html',
-    );
-  });
+        final html = await savedRecordHtml(
+          widget.api,
+          widget.companyId,
+          widget.section,
+          widget.record['recordId'],
+          await htmlStore.load(),
+        );
+        await downloadFile(
+          Uint8List.fromList(utf8.encode(html)),
+          filename: '${widget.section}-${widget.record['recordId']}.html',
+          mimeType: 'text/html',
+        );
+      });
   @override
   void initState() {
     super.initState();
@@ -118,256 +118,258 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   }
 
   Future<void> _load() => _run(() async {
-    await _read();
-  });
+        await _read();
+      });
   Future<void> _upload() => _run(() async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: logo
-          ? ['png', 'jpg', 'jpeg']
-          : ['pdf', 'png', 'jpg', 'jpeg'],
-      withData: true,
-    );
-    if (picked == null) return;
-    final file = picked.files.single;
-    final mime = switch (file.extension?.toLowerCase()) {
-      'png' => 'image/png',
-      'jpg' || 'jpeg' => 'image/jpeg',
-      'pdf' => 'application/pdf',
-      _ => '',
-    };
-    if (file.bytes == null || mime.isEmpty) {
-      throw const SaasApiException(
-        'DOCUMENT_TYPE',
-        'Choose a PNG, JPEG or PDF file.',
-      );
-    }
-    await widget.uploads!.enqueue(
-      name: file.name,
-      mimeType: mime,
-      section: widget.section,
-      recordId: widget.record['recordId'],
-      bytes: file.bytes!,
-    );
-    await widget.uploads!.flush();
-    await _read();
-  });
+        final picked = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions:
+              logo ? ['png', 'jpg', 'jpeg'] : ['pdf', 'png', 'jpg', 'jpeg'],
+          withData: true,
+        );
+        if (picked == null) return;
+        final file = picked.files.single;
+        final mime = switch (file.extension?.toLowerCase()) {
+          'png' => 'image/png',
+          'jpg' || 'jpeg' => 'image/jpeg',
+          'pdf' => 'application/pdf',
+          _ => '',
+        };
+        if (file.bytes == null || mime.isEmpty) {
+          throw const SaasApiException(
+            'DOCUMENT_TYPE',
+            'Choose a PNG, JPEG or PDF file.',
+          );
+        }
+        await widget.uploads!.enqueue(
+          name: file.name,
+          mimeType: mime,
+          section: widget.section,
+          recordId: widget.record['recordId'],
+          bytes: file.bytes!,
+        );
+        await widget.uploads!.flush();
+        await _read();
+      });
   Future<void> _generate() => _run(() async {
-    final bytes = await sharedRecordPdf(
-      widget.api,
-      widget.companyId,
-      widget.section,
-      widget.record['recordId'],
-      style: pdfStyle,
-    );
-    await widget.uploads!.enqueue(
-      name: '${widget.section}-${widget.record['recordId']}.pdf',
-      mimeType: 'application/pdf',
-      section: widget.section,
-      recordId: widget.record['recordId'],
-      bytes: bytes,
-    );
-    await widget.uploads!.flush();
-    await _read();
-  });
+        final bytes = await sharedRecordPdf(
+          widget.api,
+          widget.companyId,
+          widget.section,
+          widget.record['recordId'],
+          style: pdfStyle,
+        );
+        await widget.uploads!.enqueue(
+          name: '${widget.section}-${widget.record['recordId']}.pdf',
+          mimeType: 'application/pdf',
+          section: widget.section,
+          recordId: widget.record['recordId'],
+          bytes: bytes,
+        );
+        await widget.uploads!.flush();
+        await _read();
+      });
   Future<void> _open(Map<String, dynamic> doc) => _run(() async {
-    final bytes = await widget.api.document(
-      widget.companyId,
-      doc['documentId'],
-      employee: widget.employee,
-    );
-    if ('${doc['mimeType']}'.startsWith('image/')) {
-      if (mounted) {
-        setState(() {
-          image = bytes;
-          imageName = doc['name'];
-        });
-      }
-    } else {
-      await downloadFile(
-        bytes,
-        filename: doc['name'],
-        mimeType: doc['mimeType'],
-      );
-    }
-  });
+        final bytes = await widget.api.document(
+          widget.companyId,
+          doc['documentId'],
+          employee: widget.employee,
+        );
+        if ('${doc['mimeType']}'.startsWith('image/')) {
+          if (mounted) {
+            setState(() {
+              image = bytes;
+              imageName = doc['name'];
+            });
+          }
+        } else {
+          await downloadFile(
+            bytes,
+            filename: doc['name'],
+            mimeType: doc['mimeType'],
+          );
+        }
+      });
   Future<void> _useLogo(String id) => _run(() async {
-    // Read the current version; the durable update still detects concurrent edits.
-    final data = await widget.api.records(widget.companyId, 'CompanyProfile');
-    final profile = (data['records'] as List).single;
-    await widget.writes!.enqueue(
-      'CompanyProfile',
-      'update',
-      {'logoDocumentId': id},
-      recordId: 'company',
-      expectedVersion: int.parse('${profile['recordVersion']}'),
-    );
-    await widget.writes!.flush();
-    if (mounted) Navigator.pop(context);
-  });
+        // Read the current version; the durable update still detects concurrent edits.
+        final data =
+            await widget.api.records(widget.companyId, 'CompanyProfile');
+        final profile = (data['records'] as List).single;
+        await widget.writes!.enqueue(
+          'CompanyProfile',
+          'update',
+          {'logoDocumentId': id},
+          recordId: 'company',
+          expectedVersion: int.parse('${profile['recordVersion']}'),
+        );
+        await widget.writes!.flush();
+        if (mounted) Navigator.pop(context);
+      });
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-    title: Text(logo ? 'Company logo' : 'Record documents'),
-    content: SizedBox(
-      width: 560,
-      height: 440,
-      child: Column(
-        children: [
-          SizedBox(
-            height: 28,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: busy && _hasLoaded
-                  ? const AppActivityIndicator(radius: 8)
-                  : null,
-            ),
-          ),
-          if (error != null) Text(error!),
-          if (!widget.employee &&
-              const ['Invoices', 'Quotations'].contains(widget.section))
-            Align(
-              alignment: Alignment.centerRight,
-              child: PopupMenuButton<String>(
-                tooltip: 'Export custom HTML',
-                enabled: !busy,
-                icon: const Icon(Icons.code),
-                onSelected: (_) => _exportHtml(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'export',
-                    child: Text('Export custom HTML'),
-                  ),
-                ],
-              ),
-            ),
-          if (widget.uploads != null &&
-              const [
-                'Invoices',
-                'Quotations',
-                'CreditNotes',
-              ].contains(widget.section))
-            Align(
-              alignment: Alignment.centerRight,
-              child: PopupMenuButton<DocumentStyle>(
-                tooltip: 'PDF style',
-                enabled: !busy,
-                initialValue: pdfStyle,
-                icon: const Icon(Icons.tune),
-                onSelected: (value) => setState(() => pdfStyle = value),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: DocumentStyle.modern,
-                    child: Text('Modern'),
-                  ),
-                  const PopupMenuItem(
-                    value: DocumentStyle.classic,
-                    child: Text('Classic'),
-                  ),
-                ],
-              ),
-            ),
-          if (widget.uploads != null)
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              children: [
-                if (const [
-                  'Invoices',
-                  'CreditNotes',
-                  'Quotations',
-                  'Receipts',
-                  'Payroll',
-                  'Assets',
-                ].contains(widget.section))
-                  LoadingButton.textIcon(
-                    onPressed:
-                        busy ||
-                            widget.uploads!.pending != null ||
-                            widget.writes?.pending.isNotEmpty == true
-                        ? null
-                        : _generate,
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Create and attach PDF'),
-                  ),
-                LoadingButton.textIcon(
-                  onPressed:
-                      busy ||
-                          widget.uploads!.pending != null ||
-                          widget.writes?.pending.isNotEmpty == true
-                      ? null
-                      : _upload,
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Upload file (max 5 MiB)'),
+        title: Text(logo ? 'Company logo' : 'Record documents'),
+        content: SizedBox(
+          width: 560,
+          height: 440,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 28,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: busy && _hasLoaded
+                      ? const AppActivityIndicator(radius: 8)
+                      : null,
                 ),
-                if (widget.uploads!.pending != null)
-                  LoadingButton.text(
-                    onPressed: busy
-                        ? null
-                        : () => _run(() async {
-                            await widget.uploads!.flush();
-                            await _read();
-                          }),
-                    child: const Text('Retry pending upload'),
-                  ),
-              ],
-            ),
-          if (!busy && documents.isEmpty) const Text('No documents attached.'),
-          Expanded(
-            child: busy && !_hasLoaded
-                ? const CenteredLoading(label: 'Loading documents')
-                : ListView(
-                    children: [
-                      for (final doc in documents)
-                        ListTile(
-                          title: Text('${doc['name']}'),
-                          subtitle: Text(
-                            '${doc['mimeType']} · ${doc['byteLength']} bytes',
-                          ),
-                          onTap: busy ? null : () => _open(doc),
-                          trailing: logo && widget.writes != null
-                              ? LoadingButton.text(
-                                  onPressed:
-                                      busy || widget.writes!.pending.isNotEmpty
-                                      ? null
-                                      : () => _useLogo(doc['documentId']),
-                                  child: const Text('Use as logo'),
-                                )
-                              : const Icon(Icons.download),
-                        ),
-                      if (image != null)
-                        Image.memory(
-                          image!,
-                          semanticLabel: imageName,
-                          height: 200,
-                          errorBuilder: (_, _, _) =>
-                              const Text('Image could not be displayed.'),
-                        ),
+              ),
+              if (error != null) Text(error!),
+              if (!widget.employee &&
+                  const ['Invoices', 'Quotations'].contains(widget.section))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Export custom HTML',
+                    enabled: !busy,
+                    icon: const Icon(Icons.code),
+                    onSelected: (_) => _exportHtml(),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'export',
+                        child: Text('Export custom HTML'),
+                      ),
                     ],
                   ),
+                ),
+              if (widget.uploads != null &&
+                  const [
+                    'Invoices',
+                    'Quotations',
+                    'CreditNotes',
+                  ].contains(widget.section))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: PopupMenuButton<DocumentStyle>(
+                    tooltip: 'PDF style',
+                    enabled: !busy,
+                    initialValue: pdfStyle,
+                    icon: const Icon(Icons.tune),
+                    onSelected: (value) => setState(() => pdfStyle = value),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: DocumentStyle.modern,
+                        child: Text('Modern'),
+                      ),
+                      const PopupMenuItem(
+                        value: DocumentStyle.classic,
+                        child: Text('Classic'),
+                      ),
+                    ],
+                  ),
+                ),
+              if (widget.uploads != null)
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  children: [
+                    if (const [
+                      'Invoices',
+                      'CreditNotes',
+                      'Quotations',
+                      'Receipts',
+                      'Payroll',
+                      'Assets',
+                    ].contains(widget.section))
+                      LoadingButton.textIcon(
+                        onPressed: busy ||
+                                widget.uploads!.pending != null ||
+                                widget.writes?.pending.isNotEmpty == true
+                            ? null
+                            : _generate,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Create and attach PDF'),
+                      ),
+                    LoadingButton.textIcon(
+                      onPressed: busy ||
+                              widget.uploads!.pending != null ||
+                              widget.writes?.pending.isNotEmpty == true
+                          ? null
+                          : _upload,
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Upload file (max 5 MiB)'),
+                    ),
+                    if (widget.uploads!.pending != null &&
+                        !widget.uploads!.busy &&
+                        !busy &&
+                        error != null)
+                      LoadingButton.text(
+                        onPressed: busy
+                            ? null
+                            : () => _run(() async {
+                                  await widget.uploads!.flush();
+                                  await _read();
+                                }),
+                        child: const Text('Retry pending upload'),
+                      ),
+                  ],
+                ),
+              if (!busy && documents.isEmpty)
+                const Text('No documents attached.'),
+              Expanded(
+                child: busy && !_hasLoaded
+                    ? const CenteredLoading(label: 'Loading documents')
+                    : ListView(
+                        children: [
+                          for (final doc in documents)
+                            ListTile(
+                              title: Text('${doc['name']}'),
+                              subtitle: Text(
+                                '${doc['mimeType']} · ${doc['byteLength']} bytes',
+                              ),
+                              onTap: busy ? null : () => _open(doc),
+                              trailing: logo && widget.writes != null
+                                  ? LoadingButton.text(
+                                      onPressed: busy ||
+                                              widget.writes!.pending.isNotEmpty
+                                          ? null
+                                          : () => _useLogo(doc['documentId']),
+                                      child: const Text('Use as logo'),
+                                    )
+                                  : const Icon(Icons.download),
+                            ),
+                          if (image != null)
+                            Image.memory(
+                              image!,
+                              semanticLabel: imageName,
+                              height: 200,
+                              errorBuilder: (_, _, _) =>
+                                  const Text('Image could not be displayed.'),
+                            ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          if (logo &&
+              widget.writes != null &&
+              '${widget.record['logoDocumentId'] ?? ''}'.isNotEmpty)
+            LoadingButton.text(
+              onPressed: busy || widget.writes!.pending.isNotEmpty
+                  ? null
+                  : () => _useLogo(''),
+              child: const Text('Remove logo'),
+            ),
+          LoadingButton.text(
+            onPressed: busy ? null : _load,
+            child: const Text('Refresh'),
+          ),
+          LoadingButton.text(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
         ],
-      ),
-    ),
-    actions: [
-      if (logo &&
-          widget.writes != null &&
-          '${widget.record['logoDocumentId'] ?? ''}'.isNotEmpty)
-        LoadingButton.text(
-          onPressed: busy || widget.writes!.pending.isNotEmpty
-              ? null
-              : () => _useLogo(''),
-          child: const Text('Remove logo'),
-        ),
-      LoadingButton.text(
-        onPressed: busy ? null : _load,
-        child: const Text('Refresh'),
-      ),
-      LoadingButton.text(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Close'),
-      ),
-    ],
-  );
+      );
 }
 
 class PrivateCompanyLogo extends StatefulWidget {
@@ -393,20 +395,21 @@ class _PrivateCompanyLogoState extends State<PrivateCompanyLogo> {
   );
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List>(
-    future: content,
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return const Text('Logo unavailable. Refresh to retry.');
-      }
-      if (!snapshot.hasData) {
-        return const SizedBox(height: 40, child: CenteredLoading());
-      }
-      return Image.memory(
-        snapshot.data!,
-        height: 100,
-        semanticLabel: 'Company logo',
-        errorBuilder: (_, _, _) => const Text('Logo could not be displayed.'),
+        future: content,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('Logo unavailable. Refresh to retry.');
+          }
+          if (!snapshot.hasData) {
+            return const SizedBox(height: 40, child: CenteredLoading());
+          }
+          return Image.memory(
+            snapshot.data!,
+            height: 100,
+            semanticLabel: 'Company logo',
+            errorBuilder: (_, _, _) =>
+                const Text('Logo could not be displayed.'),
+          );
+        },
       );
-    },
-  );
 }

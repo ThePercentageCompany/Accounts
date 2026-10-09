@@ -9,12 +9,11 @@ class AppActivityIndicator extends StatelessWidget {
   final Color? color;
   @override
   Widget build(BuildContext context) => CupertinoActivityIndicator(
-    radius: radius,
-    color: color ?? IconTheme.of(context).color,
-    animating:
-        !MediaQuery.disableAnimationsOf(context) &&
-        (ModalRoute.of(context)?.isCurrent ?? true),
-  );
+        radius: radius,
+        color: color ?? IconTheme.of(context).color,
+        animating: !MediaQuery.disableAnimationsOf(context) &&
+            (ModalRoute.of(context)?.isCurrent ?? true),
+      );
 }
 
 /// Centers within the constraints supplied by the page, panel or dialog.
@@ -23,37 +22,22 @@ class CenteredLoading extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) => Center(
-    child: Semantics(
-      label: label,
-      liveRegion: true,
-      child: const ExcludeSemantics(child: AppActivityIndicator()),
-    ),
-  );
+        child: Semantics(
+          label: label,
+          liveRegion: true,
+          child: const ExcludeSemantics(child: AppActivityIndicator()),
+        ),
+      );
 }
 
 enum _ButtonKind { filled, outlined, text, icon }
 
-/// First-load placeholder only. Refreshes keep the current records visible.
+/// First-load indicator; refreshes keep existing records visible.
 class RecordSkeleton extends StatelessWidget {
   const RecordSkeleton({super.key});
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Loading records',
-    child: ListView.builder(
-      itemCount: 5,
-      padding: const EdgeInsets.all(24),
-      itemBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const SizedBox(height: 88),
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      const CenteredLoading(label: 'Loading records');
 }
 
 /// Tracks the returned future independently for each button. Existing handlers
@@ -65,10 +49,10 @@ class LoadingButton extends StatefulWidget {
     required this.child,
     this.style,
     this.busy = false,
-  }) : _icon = null,
-       _label = null,
-       tooltip = null,
-       _kind = _ButtonKind.filled;
+  })  : _icon = null,
+        _label = null,
+        tooltip = null,
+        _kind = _ButtonKind.filled;
   const LoadingButton.icon({
     super.key,
     required this.onPressed,
@@ -76,21 +60,21 @@ class LoadingButton extends StatefulWidget {
     required Widget label,
     this.style,
     this.busy = false,
-  }) : child = null,
-       _icon = icon,
-       _label = label,
-       tooltip = null,
-       _kind = _ButtonKind.filled;
+  })  : child = null,
+        _icon = icon,
+        _label = label,
+        tooltip = null,
+        _kind = _ButtonKind.filled;
   const LoadingButton.outlined({
     super.key,
     required this.onPressed,
     required this.child,
     this.style,
     this.busy = false,
-  }) : _icon = null,
-       _label = null,
-       tooltip = null,
-       _kind = _ButtonKind.outlined;
+  })  : _icon = null,
+        _label = null,
+        tooltip = null,
+        _kind = _ButtonKind.outlined;
   const LoadingButton.outlinedIcon({
     super.key,
     required this.onPressed,
@@ -98,21 +82,21 @@ class LoadingButton extends StatefulWidget {
     required Widget label,
     this.style,
     this.busy = false,
-  }) : child = null,
-       _icon = icon,
-       _label = label,
-       tooltip = null,
-       _kind = _ButtonKind.outlined;
+  })  : child = null,
+        _icon = icon,
+        _label = label,
+        tooltip = null,
+        _kind = _ButtonKind.outlined;
   const LoadingButton.text({
     super.key,
     required this.onPressed,
     required this.child,
     this.style,
     this.busy = false,
-  }) : _icon = null,
-       _label = null,
-       tooltip = null,
-       _kind = _ButtonKind.text;
+  })  : _icon = null,
+        _label = null,
+        tooltip = null,
+        _kind = _ButtonKind.text;
   const LoadingButton.textIcon({
     super.key,
     required this.onPressed,
@@ -120,11 +104,11 @@ class LoadingButton extends StatefulWidget {
     required Widget label,
     this.style,
     this.busy = false,
-  }) : child = null,
-       _icon = icon,
-       _label = label,
-       tooltip = null,
-       _kind = _ButtonKind.text;
+  })  : child = null,
+        _icon = icon,
+        _label = label,
+        tooltip = null,
+        _kind = _ButtonKind.text;
   const LoadingButton.iconOnly({
     super.key,
     required this.onPressed,
@@ -132,10 +116,10 @@ class LoadingButton extends StatefulWidget {
     this.tooltip,
     this.style,
     this.busy = false,
-  }) : child = icon,
-       _icon = null,
-       _label = null,
-       _kind = _ButtonKind.icon;
+  })  : child = icon,
+        _icon = null,
+        _label = null,
+        _kind = _ButtonKind.icon;
   final String? tooltip;
   final FutureOr<void> Function()? onPressed;
   final Widget? child;
@@ -182,27 +166,26 @@ class _LoadingButtonState extends State<LoadingButton> {
     // Resolve the enabled palette while busy so contrast and styling are stable.
     final _EnabledPalette prototype = switch (config._kind) {
       _ButtonKind.filled => _PaletteFilledButton(
-        onPressed: () {},
-        child: const SizedBox(),
-      ),
+          onPressed: () {},
+          child: const SizedBox(),
+        ),
       _ButtonKind.outlined => _PaletteOutlinedButton(
-        onPressed: () {},
-        child: const SizedBox(),
-      ),
+          onPressed: () {},
+          child: const SizedBox(),
+        ),
       _ButtonKind.text || _ButtonKind.icon => _PaletteTextButton(
-        onPressed: () {},
-        child: const SizedBox(),
-      ),
+          onPressed: () {},
+          child: const SizedBox(),
+        ),
     };
-    final palette =
-        (config._kind == _ButtonKind.icon
-                ? ButtonStyle(
-                    foregroundColor: WidgetStatePropertyAll(
-                      Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ).merge(IconButtonTheme.of(context).style)
-                : prototype.enabledPalette(context))
-            .merge(config.style);
+    final palette = (config._kind == _ButtonKind.icon
+            ? ButtonStyle(
+                foregroundColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ).merge(IconButtonTheme.of(context).style)
+            : prototype.enabledPalette(context))
+        .merge(config.style);
     final style = busy
         ? (config.style ?? const ButtonStyle()).copyWith(
             foregroundColor: WidgetStatePropertyAll(
@@ -215,46 +198,43 @@ class _LoadingButtonState extends State<LoadingButton> {
           )
         : config.style;
     Widget retained(Widget child) => Opacity(
-      opacity: busy ? 0 : 1,
-      alwaysIncludeSemantics: true,
-      child: child,
-    );
+          opacity: busy ? 0 : 1,
+          alwaysIncludeSemantics: true,
+          child: child,
+        );
     final child = retained(config.child ?? config._label!);
     final icon = config._icon == null ? null : retained(config._icon);
     final button = switch (config._kind) {
       _ButtonKind.icon => IconButton(
-        onPressed: callback,
-        tooltip: config.tooltip,
-        style: style,
-        icon: child,
-      ),
-      _ButtonKind.filled =>
-        icon == null
-            ? FilledButton(onPressed: callback, style: style, child: child)
-            : FilledButton.icon(
-                onPressed: callback,
-                style: style,
-                icon: icon,
-                label: child,
-              ),
-      _ButtonKind.outlined =>
-        icon == null
-            ? OutlinedButton(onPressed: callback, style: style, child: child)
-            : OutlinedButton.icon(
-                onPressed: callback,
-                style: style,
-                icon: icon,
-                label: child,
-              ),
-      _ButtonKind.text =>
-        icon == null
-            ? TextButton(onPressed: callback, style: style, child: child)
-            : TextButton.icon(
-                onPressed: callback,
-                style: style,
-                icon: icon,
-                label: child,
-              ),
+          onPressed: callback,
+          tooltip: config.tooltip,
+          style: style,
+          icon: child,
+        ),
+      _ButtonKind.filled => icon == null
+          ? FilledButton(onPressed: callback, style: style, child: child)
+          : FilledButton.icon(
+              onPressed: callback,
+              style: style,
+              icon: icon,
+              label: child,
+            ),
+      _ButtonKind.outlined => icon == null
+          ? OutlinedButton(onPressed: callback, style: style, child: child)
+          : OutlinedButton.icon(
+              onPressed: callback,
+              style: style,
+              icon: icon,
+              label: child,
+            ),
+      _ButtonKind.text => icon == null
+          ? TextButton(onPressed: callback, style: style, child: child)
+          : TextButton.icon(
+              onPressed: callback,
+              style: style,
+              icon: icon,
+              label: child,
+            ),
     };
     return MergeSemantics(
       child: Semantics(

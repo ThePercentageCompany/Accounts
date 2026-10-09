@@ -64,8 +64,7 @@ class TaskCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall)),
                       const SizedBox(height: 10),
-                      if (task['syncStatus'] == 'PENDING' ||
-                          task['syncStatus'] == 'FAILED')
+                      if (task['syncStatus'] == 'FAILED')
                         Text(
                             task['syncStatus'] == 'FAILED'
                                 ? 'Sync needs attention'

@@ -172,6 +172,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   bool _forcingSync = false;
   bool _syncReady = false;
   String? _syncError;
+  Timer? _backgroundSyncTimer;
   final _pwa = PwaRuntime();
   String? _taskToOpen;
   void _openTask(String id) {
@@ -222,7 +223,26 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     }
   }
 
-  Future<void> _forceSync() async {
+  Future<void> _syncInBackground() async {
+    if (!mounted ||
+        !_syncReady ||
+        _forcingSync ||
+        _writes?.busy == true ||
+        _uploads?.busy == true ||
+        _employees?.busy == true ||
+        _pwa.status['online'] == false ||
+        _writes?.canDiscardRejected == true ||
+        _employees?.canDiscardRejected == true) {
+      return;
+    }
+    if (_uploads?.pending != null ||
+        _employees?.hasPending == true ||
+        (_writes?.hasBlockingPending == true)) {
+      await _forceSync(background: true);
+    }
+  }
+
+  Future<void> _forceSync({bool background = false}) async {
     setState(() {
       _forcingSync = true;
       _syncError = null;
@@ -251,7 +271,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         if (_writes.pending.length >= before) break;
       }
     } catch (error) {
-      if (mounted) setState(() => _syncError = '$error');
+      if (mounted && !background) setState(() => _syncError = '$error');
     } finally {
       if (mounted) setState(() => _forcingSync = false);
     }
@@ -271,6 +291,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     _employeeSyncSubscription =
         _employees?.stream.listen((_) => _syncChanged());
     unawaited(_initializeSync());
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(_syncInBackground());
+      }
+    });
     _pwa.addListener(_pwaChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pwaChanged();
@@ -279,6 +305,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
 
   @override
   void dispose() {
+    _backgroundSyncTimer?.cancel();
     _pwa.removeListener(_pwaChanged);
     _pwa.dispose();
     _employeeSyncSubscription?.cancel();
@@ -498,7 +525,11 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                       listenable: _uploads,
                       builder: (context, _) {
                         final pending = _uploads.pending;
-                        if (pending == null) return const SizedBox.shrink();
+                        if (pending == null ||
+                            _uploads.busy ||
+                            _syncError == null) {
+                          return const SizedBox.shrink();
+                        }
                         return ListTile(
                           title: Text('Pending upload: ${pending['name']}'),
                           subtitle: Text(
@@ -607,9 +638,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
 
   Widget _syncStatusIcon() {
     final box = _writes?.outbox;
-    final pending = (_writes?.pending.length ?? 0) +
-        (_uploads?.pending == null ? 0 : 1) +
-        (_employees?.hasPending == true ? 1 : 0);
     final busy = _forcingSync ||
         _writes?.busy == true ||
         _uploads?.busy == true ||
@@ -619,33 +647,16 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         (box?.authenticationRequired == true ? 'Sign in to sync' : null) ??
         (box?.hasFailed == true ? "Couldn't sync" : null);
     final label = busy
-        ? 'Syncing · $pending unsynced'
+        ? 'Syncing'
         : issue != null
-            ? pending > 0
-                ? '$pending unsynced · Sync needs attention'
-                : 'Sync needs attention'
-            : !_syncReady
-                ? 'Checking sync status'
-                : pending > 0
-                    ? '$pending unsynced'
-                    : _pwa.status['online'] == false
-                        ? 'Offline · Synced on this device'
-                        : 'Synced';
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final color = busy
-        ? (dark ? Colors.lightBlue.shade200 : Colors.blue.shade700)
-        : issue != null
-            ? Theme.of(context).colorScheme.error
-            : pending > 0
-                ? (dark ? Colors.amber.shade200 : Colors.orange.shade800)
-                : !_syncReady
-                    ? Theme.of(context).colorScheme.onSurfaceVariant
-                    : (dark ? Colors.green.shade200 : Colors.green.shade700);
-    final details =
-        '$label\n${issue ?? (pending > 0 ? 'Changes saved on this device await server confirmation.' : 'All saved changes have been synced.')}\nTap to force sync.';
+            ? 'Sync needs attention'
+            : 'Sync';
+    final color = issue != null && !busy
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final details = issue != null && !busy ? '$label: $issue' : label;
     return Semantics(
       label: label,
-      liveRegion: true,
       child: IconButton(
         key: const Key('workspace-sync'),
         tooltip: details,
@@ -657,9 +668,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
               ? Icons.error_outline
               : _pwa.status['online'] == false
                   ? Icons.cloud_off_outlined
-                  : pending > 0
-                      ? Icons.cloud_upload_outlined
-                      : Icons.cloud_done_outlined,
+                  : Icons.cloud_done_outlined,
         ),
       ),
     );
@@ -726,6 +735,13 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           companyId: widget.companyId,
                           employee: widget.employee != null,
                           initialDashboard: true,
+                          onTask: widget.employee == null ||
+                                  (widget.employee!['allowedSections']
+                                              as List? ??
+                                          [])
+                                      .contains('Tasks')
+                              ? _openTask
+                              : null,
                           reportKind: _subsection('Reports'),
                           active: active,
                           companyName: widget.title,
@@ -2487,7 +2503,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       icon: const Icon(Icons.add, size: 18),
                       label: Text('Add $_recordLabel'),
                     ),
-                  if (widget.writes?.pending.isNotEmpty == true)
+                  if (widget.writes?.canDiscardRejected == true)
                     PopupMenuButton<String>(
                       tooltip: 'Pending change options',
                       enabled: !busy,
@@ -2580,7 +2596,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             ),
           ),
           if (_savedData) const Text('Offline - showing saved data.'),
-          if (widget.writes?.outbox != null)
+          if (widget.api.cache.storageError != null ||
+              widget.writes?.outbox?.storageError != null ||
+              widget.writes?.outbox?.authenticationRequired == true)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
               child: Semantics(
@@ -2644,7 +2662,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           ).colorScheme.surface,
                           subtitle: RecordSummary(record: row),
                           children: [
-                            if (row['_localOnly'] == true)
+                            if (row['_localOnly'] == true &&
+                                row['syncStatus'] == 'FAILED')
                               RecordNotice(
                                 title: row['syncStatus'] == 'SYNCED'
                                     ? 'Synced'

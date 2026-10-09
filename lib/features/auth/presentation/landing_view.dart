@@ -8,6 +8,14 @@ const _line = Color(0xff29292c);
 const _muted = Color(0xffa2a2ab);
 
 class LandingView extends StatelessWidget {
+  static final _theme = ThemeData(
+    brightness: Brightness.dark,
+    useMaterial3: true,
+    fontFamily: 'Inter',
+    scaffoldBackgroundColor: _ink,
+    colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xff69d5b2), brightness: Brightness.dark),
+  );
   const LandingView(
       {super.key,
       required this.busy,
@@ -39,14 +47,7 @@ class LandingView extends StatelessWidget {
     final mobile = MediaQuery.sizeOf(context).width < 700;
     final gap = mobile ? 24.0 : 56.0;
     return Theme(
-        data: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            fontFamily: 'Inter',
-            scaffoldBackgroundColor: _ink,
-            colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xff69d5b2),
-                brightness: Brightness.dark)),
+        data: _theme,
         child: DefaultTextStyle(
             style: const TextStyle(
                 fontFamily: 'Inter', color: Colors.white, fontSize: 14),
@@ -342,8 +343,10 @@ class LandingView extends StatelessWidget {
                             const _HatchedDivider(),
                             Stack(children: [
                               Positioned.fill(
-                                  child: CustomPaint(
-                                      painter: _AuroraPainter(subtle: true))),
+                                  child: RepaintBoundary(
+                                      child: CustomPaint(
+                                          painter:
+                                              _AuroraPainter(subtle: true)))),
                               Padding(
                                   padding: EdgeInsets.all(gap),
                                   child: Column(
@@ -441,7 +444,9 @@ class _FeatureCard extends StatelessWidget {
             child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: ExcludeSemantics(
-                    child: CustomPaint(painter: _ProductPainter(graphic))))),
+                    child: RepaintBoundary(
+                        child:
+                            CustomPaint(painter: _ProductPainter(graphic)))))),
         const Divider(height: 1, color: _line),
         Padding(
             padding: const EdgeInsets.all(24),
@@ -533,29 +538,34 @@ class _AuroraPainter extends CustomPainter {
                   Colors.transparent
                 ]).createShader(rect));
     }
-    for (var i = 0; i < 120; i++) {
+    // Static decoration uses one shader per background, rather than per line.
+    final wavePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = .7
+      ..shader = LinearGradient(colors: [
+        Colors.transparent,
+        const Color(0xff147069).withValues(alpha: .35),
+        const Color(0xffc47738).withValues(alpha: subtle ? .15 : .35),
+        Colors.transparent,
+      ]).createShader(rect);
+    final lines = size.width < 700 ? 48 : 80;
+    const segments = 48;
+    for (var i = 0; i < lines; i++) {
       final path = Path();
-      for (var step = 0; step <= 65; step++) {
-        final x = size.width * step / 65;
-        final y = size.height * (.25 + i / 120 * .8) +
-            math.sin(step / 65 * math.pi * 3.1 + i * .025) * size.height * .2;
+      final fraction = i / lines;
+      for (var step = 0; step <= segments; step++) {
+        final x = size.width * step / segments;
+        final y = size.height * (.25 + fraction * .8) +
+            math.sin(step / segments * math.pi * 3.1 + fraction * 3) *
+                size.height *
+                .2;
         if (step == 0) {
           path.moveTo(x, y);
         } else {
           path.lineTo(x, y);
         }
       }
-      canvas.drawPath(
-          path,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = .7
-            ..shader = LinearGradient(colors: [
-              Colors.transparent,
-              const Color(0xff147069).withValues(alpha: .35),
-              const Color(0xffc47738).withValues(alpha: subtle ? .15 : .35),
-              Colors.transparent
-            ]).createShader(rect));
+      canvas.drawPath(path, wavePaint);
     }
     canvas.drawRect(
         rect,

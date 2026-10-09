@@ -1,3 +1,4 @@
+import 'dashboard_tasks.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
@@ -31,6 +32,7 @@ class TrialBalanceView extends StatefulWidget {
     this.initialFrom,
     this.initialAsOf,
     this.onReportSelected,
+    this.onTask,
   });
   final SaasApi api;
   final String companyId;
@@ -40,6 +42,7 @@ class TrialBalanceView extends StatefulWidget {
   final String? reportKind, companyName, initialAccountId;
   final DateTime? initialFrom, initialAsOf;
   final ValueChanged<String>? onReportSelected;
+  final ValueChanged<String>? onTask;
   @override
   State<TrialBalanceView> createState() => _TrialBalanceViewState();
 }
@@ -1309,6 +1312,14 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                       ),
                       if (_extra == 'dashboard')
                         WorkspaceDashboard(
+                          taskOverview: widget.onTask == null
+                              ? null
+                              : DashboardTasks(
+                                  api: widget.api,
+                                  companyId: widget.companyId,
+                                  employee: widget.employee,
+                                  active: widget.active,
+                                  onTask: widget.onTask!),
                           data: data,
                           format: _format,
                           onReportSelected: (kind) {

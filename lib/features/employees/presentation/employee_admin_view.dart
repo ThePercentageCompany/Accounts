@@ -284,7 +284,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     child: Text(c.error!),
                   ),
                 ),
-              if (c.hasPending) ...[
+              if (c.hasPending && c.canDiscardRejected) ...[
                 Text(
                   c.canDiscardRejected
                       ? 'The last save was rejected. Retry the saved edit after the service is fixed, or discard it to correct the details.'

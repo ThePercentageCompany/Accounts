@@ -344,7 +344,7 @@ class _TaskDetailsState extends State<TaskDetails> {
           Text('${_task['title']}',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 20),
-          if (_loading) const LinearProgressIndicator(),
+          if (_loading) const Center(child: AppActivityIndicator()),
           if (_error != null)
             Column(children: [
               Text(_error!,

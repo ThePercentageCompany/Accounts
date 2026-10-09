@@ -49,7 +49,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('123,456.78'), findsOneWidget);
+        expect(find.text('123,456.78'), findsNWidgets(2));
         expect(find.text('-123.45'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });

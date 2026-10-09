@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -164,7 +165,7 @@ class _NotificationCenterState extends State<NotificationCenter>
                                       color: Theme.of(context)
                                           .colorScheme
                                           .error))),
-                        if (_busy) const LinearProgressIndicator(),
+                        if (_busy) const Center(child: AppActivityIndicator()),
                         if (_items.isEmpty && !_busy)
                           const Padding(
                               padding: EdgeInsets.all(24),

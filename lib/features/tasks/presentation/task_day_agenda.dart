@@ -116,6 +116,7 @@ class _TaskDayAgendaState extends State<_TaskDayAgenda> {
           OutlinedButton(
               onPressed: _busy ? null : () => _load(more: true),
               child: const Text('Load more for this date')),
-        if (_busy && _rows.isNotEmpty) const LinearProgressIndicator(),
+        if (_busy && _rows.isNotEmpty)
+          const Center(child: AppActivityIndicator()),
       ]);
 }

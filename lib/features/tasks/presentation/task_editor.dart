@@ -206,7 +206,7 @@ class _TaskEditorState extends State<TaskEditor> {
                     field('description', 'Description',
                         lines: 5, maxLength: 10000),
                     const SizedBox(height: 16),
-                    if (_loading) const LinearProgressIndicator(),
+                    if (_loading) const Center(child: AppActivityIndicator()),
                     TaskAssigneeField(
                         api: widget.api,
                         companyId: widget.companyId,
@@ -289,8 +289,7 @@ class _TaskEditorState extends State<TaskEditor> {
                                   ? const SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2))
+                                      child: AppActivityIndicator())
                                   : Text(widget.task == null
                                       ? 'Create Task'
                                       : 'Save Task')))))),

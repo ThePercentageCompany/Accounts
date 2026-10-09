@@ -9,7 +9,9 @@ class WorkspaceDashboard extends StatelessWidget {
     required this.data,
     this.format = const ReportFormat(),
     this.onReportSelected,
+    this.taskOverview,
   });
+  final Widget? taskOverview;
   final Map<String, dynamic> data;
   final ReportFormat format;
   final ValueChanged<String>? onReportSelected;
@@ -126,6 +128,10 @@ class WorkspaceDashboard extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (taskOverview != null) ...[
+                taskOverview!,
+                const SizedBox(height: 24)
+              ],
               Text(
                 'Performance overview',
                 style: Theme.of(

@@ -97,7 +97,7 @@ class _TaskAssigneePickerState extends State<TaskAssigneePicker> {
                   _debounce?.cancel();
                   _debounce = Timer(const Duration(milliseconds: 350), _load);
                 })),
-        if (_busy) const LinearProgressIndicator(),
+        if (_busy) const Center(child: AppActivityIndicator()),
         if (_error != null)
           Padding(
               padding: const EdgeInsets.all(16),
