@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
@@ -48,7 +49,6 @@ const workspaceTables = <String, List<String>>{
   'Projects': ['Projects'],
   'Income & Expenses': ['Income', 'Expenses'],
   'Payroll': ['Payroll', 'PayrollItems', 'Payslips'],
-  'Office & Attendance': ['Attendance', 'Overtime'],
   'Fixed Assets': ['Assets'],
   'Capital & Equity': [
     'Shareholders',
@@ -65,6 +65,7 @@ const tableTitles = {
   'CreditNotes': 'Credit notes / returns',
   'ReceiptAllocations': 'Payment allocations',
   'PayrollItems': 'Payroll details',
+  'Payslips': 'Payslips',
   'CompanyProfile': 'Company profile',
   'CapitalAccounts': 'Capital accounts',
   'CapitalTransactions': 'Capital transactions',
@@ -86,7 +87,6 @@ const workspaceNavigationGroups = <String, List<String>>{
     'Projects',
     'Employees',
     'Payroll',
-    'Office & Attendance',
   ],
   'Accounting': [
     'Income & Expenses',
@@ -749,44 +749,55 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           onReportSelected: (kind) =>
                               _navigate('Reports', kind),
                         )
-              : selected == 'Employees' && _employees != null
-                  ? EmployeeAdminView(
-                      controller: _employees,
-                      active: active,
-                      onDocuments: (row) {
-                        showDialog<void>(
-                          context: context,
-                          builder: (_) => RecordDocumentsView(
-                            api: widget.api,
-                            companyId: widget.companyId,
-                            section: 'Employees',
-                            record: row,
-                            uploads: _uploads,
-                            writes: _writes,
-                          ),
-                        );
-                      },
-                    )
-                  : _RecordsPanel(
-                      key: ValueKey((widget.companyId, selected)),
+              : selected == 'Payroll' &&
+                      ['PayrollItems', 'Payslips']
+                          .contains(_subsection('Payroll'))
+                  ? PayrollSupportView(
                       api: widget.api,
                       companyId: widget.companyId,
                       employee: widget.employee != null,
+                      slips: _subsection('Payroll') == 'Payslips',
                       active: active,
-                      writes: widget.employee == null ||
-                              (widget.employee!['writableSections'] as List? ??
-                                      [])
-                                  .contains(selected)
-                          ? _writes
-                          : null,
-                      uploads: _uploads,
-                      selectedTable: _children(selected).isEmpty
-                          ? 'Employees'
-                          : _subsection(selected),
-                      tables: selected == 'Employees'
-                          ? ['Employees']
-                          : workspaceTables[selected]!,
-                    );
+                      uploads: _uploads)
+                  : selected == 'Employees' && _employees != null
+                      ? EmployeeAdminView(
+                          controller: _employees,
+                          active: active,
+                          onDocuments: (row) {
+                            showDialog<void>(
+                              context: context,
+                              builder: (_) => RecordDocumentsView(
+                                api: widget.api,
+                                companyId: widget.companyId,
+                                section: 'Employees',
+                                record: row,
+                                uploads: _uploads,
+                                writes: _writes,
+                              ),
+                            );
+                          },
+                        )
+                      : _RecordsPanel(
+                          key: ValueKey((widget.companyId, selected)),
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee != null,
+                          active: active,
+                          writes: widget.employee == null ||
+                                  (widget.employee!['writableSections']
+                                              as List? ??
+                                          [])
+                                      .contains(selected)
+                              ? _writes
+                              : null,
+                          uploads: _uploads,
+                          selectedTable: _children(selected).isEmpty
+                              ? 'Employees'
+                              : _subsection(selected),
+                          tables: selected == 'Employees'
+                              ? ['Employees']
+                              : workspaceTables[selected]!,
+                        );
 
   IconData _sectionIcon(String section) => switch (section) {
         'Tasks' => Icons.task_alt,

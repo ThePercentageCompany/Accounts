@@ -27,7 +27,7 @@ export class TaskService {
     rows.sort((a, b) => (q.sort === 'priority' ? TASK_PRIORITIES.indexOf(b.priority) - TASK_PRIORITIES.indexOf(a.priority) :
       q.sort === 'updated' ? Number(b.updatedAt) - Number(a.updatedAt) : String(a.dueDate + a.endTime).localeCompare(String(b.dueDate + b.endTime))) || a.recordId.localeCompare(b.recordId));
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
-    const summaryRows = employee ? all.filter(r => r.employeeId === context.employeeId) : all;
+    const summaryRows = all; // records() already enforces assigned-only or task-manager access.
     const upcoming = {};
     for (const r of summaryRows) if (r.status !== 'COMPLETED' && r.dueDate > today) upcoming[r.dueDate] = (upcoming[r.dueDate] || 0) + 1;
     const lead = { AT_DUE: 0, '15_MIN': 15, '30_MIN': 30, '1_HOUR': 60, '2_HOURS': 120, '1_DAY': 1440 };

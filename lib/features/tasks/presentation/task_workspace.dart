@@ -189,6 +189,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   @override
   void didUpdateWidget(covariant TaskWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.employee != oldWidget.employee) {
+      _scope = _employee && !_manage ? 'My Tasks' : 'All';
+      _filters = {};
+      _load();
+    }
     if (widget.taskToOpen != oldWidget.taskToOpen) _openLinkedTask();
     if ((!oldWidget.active && widget.active) ||
         oldWidget.calendar != widget.calendar) {
@@ -215,25 +220,25 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   Map<String, String> _query() {
     final today = taskToday();
     final filters = <String, String>{
-      ..._filters,
+      if (!_employee) ..._filters,
       'sort': _sort,
       'limit': '40',
       if (_search.text.trim().isNotEmpty) 'search': _search.text.trim()
     };
-    if (_scope == 'My Tasks' && _employeeId.isNotEmpty) {
+    if (_employee && !_manage && _employeeId.isNotEmpty) {
       filters['employeeId'] = _employeeId;
     }
-    if (_scope == 'Due Today') {
+    if (!_employee && _scope == 'Due Today') {
       filters['from'] = taskDate(today);
       filters['to'] = taskDate(today);
     }
-    if (_scope == 'This Week') {
+    if (!_employee && _scope == 'This Week') {
       final monday = today.subtract(Duration(days: today.weekday - 1));
       filters['from'] = taskDate(monday);
       filters['to'] = taskDate(monday.add(const Duration(days: 6)));
     }
-    if (_scope == 'Overdue') filters['overdue'] = 'true';
-    if (_scope == 'Overdue') {
+    if (!_employee && _scope == 'Overdue') filters['overdue'] = 'true';
+    if (!_employee && _scope == 'Overdue') {
       filters['to'] = taskDate(today.subtract(const Duration(days: 1)));
     }
     if (_calendar) {
@@ -641,20 +646,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                       ('Due today', 'today'),
                       ('Overdue', 'overdue')
                     ])
-                      ActionChip(
-                          label: Text('${_summary[item.$2] ?? 0}  ${item.$1}'),
-                          onPressed: () => _change(() {
-                                _scope = item.$2 == 'today'
-                                    ? 'Due Today'
-                                    : item.$2 == 'overdue'
-                                        ? 'Overdue'
-                                        : 'My Tasks';
-                                _filters = item.$2 == 'todo'
-                                    ? {'status': 'TODO'}
-                                    : item.$2 == 'inProgress'
-                                        ? {'status': 'IN_PROGRESS'}
-                                        : {};
-                              })),
+                      Chip(
+                          label: Text('${_summary[item.$2] ?? 0}  ${item.$1}')),
                   ]),
                   const SizedBox(height: 12),
                 ],
@@ -682,7 +675,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                           const Duration(milliseconds: 350), () => _load());
                     }),
                 const SizedBox(height: 12),
-                if (!widget.calendar)
+                if (!_employee && !widget.calendar)
                   SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(children: [
@@ -702,7 +695,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                       _change(() => _scope = scope))),
                       ])),
                 const SizedBox(height: 8),
-                if (mobile)
+                if (!_employee && mobile)
                   Wrap(
                       spacing: 12,
                       runSpacing: 8,
@@ -716,7 +709,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                 'Filters${_filters.isEmpty ? '' : ' (${_filters.length})'}')),
                         _sortMenu()
                       ])
-                else
+                else if (!_employee)
                   Wrap(
                       spacing: 12,
                       runSpacing: 8,

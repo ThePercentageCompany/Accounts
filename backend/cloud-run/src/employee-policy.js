@@ -50,6 +50,8 @@ export function visible(principal, table, row, parentRows = {}) {
     const record = parentRows[parent]?.find(p => p.recordId === row[field]);
     if (!visible(principal, parent, record, parentRows)) return false;
   }
+  // Task visibility follows task edit access, independent of the employee role.
+  if (table === 'Tasks') return principal.writableSections?.includes('Tasks') || row.employeeId === principal.employeeId;
   if (scope !== 'SELF') return true;
   if (table === 'Employees') return row.recordId === principal.employeeId;
   if (table === 'Assets') return row.assignedEmployeeId === principal.employeeId;

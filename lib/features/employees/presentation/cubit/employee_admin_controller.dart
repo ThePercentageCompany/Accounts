@@ -37,7 +37,6 @@ const employeeSections = [
   'Payroll',
   'Reports',
   'Settings',
-  'Office & Attendance',
   'Tasks',
 ];
 

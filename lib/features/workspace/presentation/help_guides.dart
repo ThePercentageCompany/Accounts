@@ -75,16 +75,6 @@ const helpGuides = <HelpGuide>[
       ]),
   HelpGuide(
       category: "Work & team",
-      title: "Office & Attendance",
-      purpose: "Keep attendance and overtime records linked to employees.",
-      useCase: "Record daily presence and approved extra hours.",
-      steps: [
-        "Choose Attendance or Overtime in Office & Attendance.",
-        "Review the employee, date, status or hours, and overtime rate and approval details.",
-        "Use these records alongside payroll; only actions available to your role can be changed."
-      ]),
-  HelpGuide(
-      category: "Work & team",
       title: "Notifications",
       purpose: "Read in-app task assignments and deadline reminders.",
       useCase: "Check new work or a task that needs attention.",
@@ -329,5 +319,27 @@ const helpGuides = <HelpGuide>[
         "Check required fields, dates and numbers using the displayed validation message.",
         "Ask the company administrator to confirm your role and permissions if a section or action is missing.",
         "For persistent errors, contact support with the section, steps and error text. Never send passwords, private login codes or sensitive documents."
+      ]),
+  HelpGuide(
+      category: 'Accounting',
+      title: 'Payroll details',
+      purpose: 'Review the salary breakdown saved with each payroll record.',
+      useCase:
+          'Check earnings and deductions before approval or answer a salary query.',
+      steps: [
+        'Open Payroll > Payroll details and search by employee, month or status.',
+        'Expand a payroll record to see basic salary, allowances, overtime, bonus, gross salary, deductions and net salary.',
+        'Correct a draft through the main Payroll editor. These calculated details are read-only and are not separate manual entries.'
+      ]),
+  HelpGuide(
+      category: 'Accounting',
+      title: 'Payslips',
+      purpose:
+          'Create and view payslip documents linked to approved or paid payroll.',
+      useCase: 'Prepare a salary statement or download an existing payslip.',
+      steps: [
+        'Open Payroll > Payslips and find the employee and month. Draft or reversed payroll is excluded from this list.',
+        'Expand the payroll and select Open payslip documents. An owner can use Create and attach PDF to save a payslip.',
+        'Open an attached document to download it. Employees can view documents only for payroll their permissions allow.'
       ]),
 ];
