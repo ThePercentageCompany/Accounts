@@ -9,6 +9,30 @@ const response = (data, status = 200) => new Response(JSON.stringify(data), { st
 const company = { id: 'company-id', name: '=Dangerous formula', createdAt: 100, resources: { spreadsheetId: 'private-sheet' } };
 const owner = { id: 'owner', email: 'owner@example.com', name: 'Owner' };
 
+test('shareholder ownership migration appends only its header and preserves existing cells', async () => {
+  const table = TABLES.find(t => t.title === 'Shareholders');
+  let headers = table.headers.slice(0, -1);
+  const writes = [];
+  const google = new GoogleWorkspace({ fetcher: async (url, options) => {
+    if (url.includes('values:batchGet')) return response({ valueRanges: [{ values: [headers] }] });
+    if (options.method === 'GET') return response({ sheets: [{ properties: {
+      title: table.title, sheetId: table.sheetId, gridProperties: { columnCount: headers.length },
+    } }] });
+    writes.push(JSON.parse(options.body)); headers = table.headers;
+    return response({});
+  } });
+  await google.ensureShareholderFields('token', 'sheet');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].requests[0].appendDimension.length, 1);
+  assert.equal(writes[0].requests[1].updateCells.start.columnIndex, table.headers.length - 1);
+  assert.equal(writes[0].requests[1].updateCells.start.rowIndex, 0);
+  await google.ensureShareholderFields('token', 'sheet');
+  assert.equal(writes.length, 1);
+  headers = ['unexpected'];
+  await assert.rejects(google.ensureShareholderFields('token', 'sheet'), e => e.code === 'SCHEMA_MISMATCH');
+  assert.equal(writes.length, 1);
+});
+
 test('credit-note extension adds only missing tabs and headers in one atomic request', async () => {
   const writes = [];
   const existing = TABLES.filter(t => !['CreditNotes', 'CreditNoteItems'].includes(t.title));
@@ -54,7 +78,7 @@ test('existing matching schema/identity records are not rewritten during recover
     if (options.method !== 'GET') { writes++; return response({}); }
     if (url.includes('?fields=')) return response({ sheets: TABLES.map(t => ({ properties: t })) });
     const ranges = new URL(url).searchParams.getAll('ranges');
-    return response({ valueRanges: ranges[0].endsWith('1:1') ? TABLES.map(t => ({ values: [t.headers] })) :
+    return response({ valueRanges: ranges[0].endsWith('1:1') ? ranges.map(range => ({ values: [TABLES.find(t => range === `'${t.title}'!1:1`).headers] })) :
       seedRows(company, owner).map(seed => ({ values: [[...seed.values, 'preserved customer content']] })) });
   } });
   await google.ensureSchema('token', company, owner);
@@ -77,7 +101,7 @@ test('schema verifier checks company identity and schema version', async () => {
   const google = new GoogleWorkspace({ fetcher: async url => {
     const ranges = new URL(url).searchParams.getAll('ranges');
     if (!ranges.length) return response({ sheets: TABLES.map(t => ({ properties: { title: t.title, sheetId: t.sheetId } })) });
-    if (ranges[0].endsWith('1:1')) return response({ valueRanges: TABLES.map(t => ({ values: [t.headers] })) });
+    if (ranges[0].endsWith('1:1')) return response({ valueRanges: ranges.map(range => ({ values: [TABLES.find(t => range === `'${t.title}'!1:1`).headers] })) });
     return response({ valueRanges: seedRows(company, owner).map(s => {
       const values = s.values.slice(); if (wrongCompany) values[1] = 'other-company';
       return { values: [values] };

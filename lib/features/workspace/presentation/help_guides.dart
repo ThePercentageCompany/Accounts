@@ -186,11 +186,11 @@ const helpGuides = <HelpGuide>[
       category: "Accounting",
       title: "Capital & Equity",
       purpose:
-          "Track shareholders, contributions, ownership information and shareholder loans.",
+          "Track shareholders, paid capital contributions and shareholder loans. Posted contributions increase Cash or Bank and shareholder equity in the accounting reports.",
       useCase: "Record owner funding separately from trading income.",
       steps: [
-        "Add shareholders and review their capital and ownership details.",
-        "Create an appropriate capital contribution draft, choose the destination account and post when correct.",
+        "Add shareholders with their contact details, agreed capital and ownership percentage. Active ownership cannot exceed 100%; the list shows unallocated ownership. Ownership is separate from contributions and does not change ledger balances. Agreed capital is a commitment; it does not change the ledger until a paid contribution is posted.",
+        "Create a paid capital contribution draft, choose Cash or Bank as the destination and post when correct. Review the resulting equity balance in Reports and the journal in Balance Sheet.",
         "Use Shareholder Loans for loan funding and the available posting or repayment workflow. A loan is different from an equity contribution."
       ]),
   HelpGuide(

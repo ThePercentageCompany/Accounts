@@ -11,6 +11,31 @@ const shareholderId = 's'.repeat(43);
 const input = { date: '2026-09-29', capitalAccountId: '', shareholderId, kind: 'CAPITAL_CONTRIBUTION', amount: 25000,
   method: 'PAID', destinationAccount: 'Bank', assetId: '', reference: 'CAP-001' };
 
+test('ownership validates precision, allocation, edits and reactivation without journals', async () => {
+  const f = fixture();
+  f.data.Shareholders = [
+    { companyId: 'c', recordId: 'other', status: 'ACTIVE', ownershipPercentage: 60.25 },
+    { companyId: 'c', recordId: 'self', status: 'ACTIVE', ownershipPercentage: 39.75 },
+    { companyId: 'c', recordId: 'deleted', status: 'ACTIVE', ownershipPercentage: 100, isDeleted: true },
+    { companyId: 'foreign', recordId: 'foreign', status: 'ACTIVE', ownershipPercentage: 100 },
+    { companyId: 'c', recordId: 'inactive', status: 'INACTIVE', ownershipPercentage: 100 },
+  ];
+  const old = { name: 'Owner', status: 'ACTIVE', agreedCapital: 0, ownershipPercentage: 39.75 };
+  const run = (values, id = 'self') => capitalChanges(f.sheets, 'c', 'Shareholders', id, 'update', old, values, system, 'op');
+  const saved = await run({ ownershipPercentage: 39.75 });
+  assert.equal(saved.values.ownershipPercentage, 39.75);
+  assert.deepEqual(saved.extra, []);
+  await assert.rejects(run({ ownershipPercentage: 39.76 }), e => e.code === 'OWNERSHIP_TOTAL_EXCEEDED');
+  for (const value of [-1, 101, NaN, Infinity, '40', 0.001]) {
+    await assert.rejects(run({ ownershipPercentage: value }), e => e.code === 'INVALID_OWNERSHIP_PERCENTAGE');
+  }
+  assert.equal((await run({ ownershipPercentage: 100, status: 'INACTIVE' })).values.ownershipPercentage, 100);
+  await assert.rejects(run({ status: 'ACTIVE', ownershipPercentage: 100 }, 'inactive'), e => e.code === 'OWNERSHIP_TOTAL_EXCEEDED');
+  const legacy = await capitalChanges(f.sheets, 'c', 'Shareholders', 'legacy', 'create', null,
+    { name: 'Legacy', status: 'ACTIVE', agreedCapital: 0 }, system, 'legacy');
+  assert.equal(legacy.values.ownershipPercentage, 0);
+});
+
 test('shareholder input is normalized and validated', async () => {
   const f = fixture();
   const result = await capitalChanges(f.sheets, 'c', 'Shareholders', 's', 'create', null,

@@ -26,6 +26,7 @@ export class BusinessSheets {
         await this.google.ensureTaskTables(token, company.resources.spreadsheetId);
       }
       if (tables.some(t => t.title === 'Projects')) await this.google.ensureTables(token, company.resources.spreadsheetId, ['Projects']);
+      if (tables.some(t => t.title === 'Shareholders')) await this.google.ensureShareholderFields(token, company.resources.spreadsheetId);
       const values = await this.google.rows(token, company.resources.spreadsheetId,
         tables.map(t => `'${t.title}'!A1:AZ10002`));
       return Object.fromEntries(tables.map((table, i) => {

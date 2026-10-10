@@ -28,13 +28,17 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
   late final capital = TextEditingController(
     text: '${widget.record?['agreedCapital'] ?? 0}',
   );
+  late final ownership = TextEditingController(
+    text:
+        '${double.tryParse('${widget.record?['ownershipPercentage'] ?? ''}') ?? 0}',
+  );
   late final date = TextEditingController(
     text: '${widget.record?['investmentDate'] ?? ''}',
   );
   late String status = '${widget.record?['status'] ?? 'ACTIVE'}';
   @override
   void dispose() {
-    for (final c in [name, email, phone, role, capital, date]) {
+    for (final c in [name, email, phone, role, capital, ownership, date]) {
       c.dispose();
     }
     super.dispose();
@@ -93,6 +97,28 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
                         : null;
                   },
                 ),
+                ValidatedTextField(
+                  controller: ownership,
+                  kind: AppInputKind.money,
+                  required: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Ownership percentage',
+                    suffixText: '%',
+                    helperText:
+                        'Separate from capital contributions. Active ownership cannot exceed 100%.',
+                    helperMaxLines: 3,
+                  ),
+                  validator: (v) {
+                    final text = v?.trim() ?? '', value = double.tryParse(text);
+                    return value == null ||
+                            !value.isFinite ||
+                            value < 0 ||
+                            value > 100 ||
+                            !RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text)
+                        ? 'Enter 0 to 100 with up to two decimal places.'
+                        : null;
+                  },
+                ),
                 CalendarFormField(
                   controller: date,
                   decoration: const InputDecoration(
@@ -137,6 +163,7 @@ class _ShareholderEditorState extends State<ShareholderEditor> {
                 'role': role.text.trim(),
                 'status': status,
                 'agreedCapital': double.parse(capital.text.trim()),
+                'ownershipPercentage': double.parse(ownership.text.trim()),
                 'investmentDate': date.text.trim(),
               });
             },

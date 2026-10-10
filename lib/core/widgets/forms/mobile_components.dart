@@ -244,6 +244,9 @@ class RecordSummary extends StatelessWidget {
         if (date != null) Text('$date'),
         if (status != null) StatusChip(value: '$status'),
         if (record['email'] != null) Text('${record['email']}'),
+        if (record.containsKey('ownershipPercentage'))
+          Text(
+              'Ownership: ${record['ownershipPercentage'] == '' ? 0 : record['ownershipPercentage']}%'),
         if (record['quantity'] != null) Text('Qty ${record['quantity']}'),
       ],
     );

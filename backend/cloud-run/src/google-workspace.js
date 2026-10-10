@@ -113,6 +113,7 @@ export class GoogleWorkspace {
       requests: missing.map(t => ({ addSheet: { properties: { title: t.title, sheetId: t.sheetId,
         gridProperties: { rowCount: 1000, columnCount: t.headers.length, frozenRowCount: 1 } } } })),
     });
+    await this.ensureShareholderFields(token, id);
     const headerRows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));
     const data = [];
     TABLES.forEach((table, i) => {
@@ -131,6 +132,24 @@ export class GoogleWorkspace {
     });
     if (data.length) await this.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values:batchUpdate`,
       'POST', { valueInputOption: 'RAW', data });
+  }
+  async ensureShareholderFields(token, id) {
+    const table = TABLES.find(t => t.title === 'Shareholders');
+    const [rows] = await this.rows(token, id, ["'Shareholders'!1:1"]);
+    const headers = rows[0] || [];
+    if (!headers.length || JSON.stringify(headers) === JSON.stringify(table.headers)) return;
+    requireThat(JSON.stringify(headers) === JSON.stringify(table.headers.slice(0, -1)),
+      409, 'SCHEMA_MISMATCH', 'Shareholder headers differ. Ownership migration was not applied.');
+    const metadata = await this.metadata(token, id);
+    const sheet = metadata.sheets.find(s => s.properties.title === 'Shareholders').properties;
+    const columns = sheet.gridProperties.columnCount;
+    await this.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}:batchUpdate`, 'POST', {
+      requests: [
+        ...(columns < table.headers.length ? [{ appendDimension: { sheetId: sheet.sheetId, dimension: 'COLUMNS', length: table.headers.length - columns } }] : []),
+        { updateCells: { start: { sheetId: sheet.sheetId, rowIndex: 0, columnIndex: table.headers.length - 1 },
+          rows: [{ values: [{ userEnteredValue: { stringValue: 'ownershipPercentage' } }] }], fields: 'userEnteredValue' } },
+      ],
+    });
   }
   async ensureCreditTables(token, id) {
     return this.ensureTables(token, id, ['CreditNotes', 'CreditNoteItems']);
@@ -165,6 +184,7 @@ export class GoogleWorkspace {
   async verifySchema(token, company) {
     const id = company.resources.spreadsheetId;
     await this.ensureTaskTables(token, id);
+    await this.ensureShareholderFields(token, id);
     const rows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));
     TABLES.forEach((t, i) => requireThat(JSON.stringify(rows[i][0]) === JSON.stringify(t.headers),
       409, 'SCHEMA_MISMATCH', 'Spreadsheet schema verification failed.'));

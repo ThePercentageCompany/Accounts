@@ -1,8 +1,8 @@
 import { requireThat } from './errors.js';
 
-const NUMBERS = new Set(('unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital percentage principal interestRate repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
+const NUMBERS = new Set(('unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
 const DATES = new Set(('issueDate dueDate paymentDate reversalDate validUntil date paidDate purchaseDate lastDepreciationDate disposalDate lastRepaymentDate investmentDate effectiveDate startDate endDate').split(' '));
-const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hours rate basicSalary allowances overtimeAmount bonus deductions cost usefulLife residualValue accumulatedDepreciation disposalProceeds agreedCapital percentage principal interestRate repaidAmount debit credit').split(' '));
+const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hours rate basicSalary allowances overtimeAmount bonus deductions cost usefulLife residualValue accumulatedDepreciation disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount debit credit').split(' '));
 
 export function validateBusinessValues(values) {
   for (const [key, value] of Object.entries(values)) {
@@ -11,7 +11,7 @@ export function validateBusinessValues(values) {
         400, 'INVALID_NUMBER', `${key} must be a finite number within supported limits.`);
       requireThat(!NONNEGATIVE.has(key) || value >= 0, 400, 'INVALID_NUMBER', `${key} cannot be negative.`);
       if (key === 'lineNumber') requireThat(Number.isSafeInteger(value) && value > 0, 400, 'INVALID_NUMBER', 'lineNumber must be a positive integer.');
-      if (['taxRate', 'percentage'].includes(key)) requireThat(value >= 0 && value <= 100,
+      if (['taxRate', 'percentage', 'ownershipPercentage'].includes(key)) requireThat(value >= 0 && value <= 100,
         400, 'INVALID_NUMBER', `${key} must be between 0 and 100.`);
       continue;
     }

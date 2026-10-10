@@ -193,6 +193,28 @@ test('payroll approval and payment post each journal once', async () => {
   assert.equal(batches, 2);
 });
 
+test('shareholder ownership round-trips through record endpoints and preserves partial edits', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.data.Shareholders = [];
+  const first = await f.business.mutate(f.token, f.companyId, 'Shareholders', null, 'create', {
+    expectedVersion: 0, values: { name: 'First', status: 'ACTIVE', agreedCapital: 0, ownershipPercentage: 60 },
+  }, 'ownership_create_001');
+  await f.business.mutate(f.token, f.companyId, 'Shareholders', null, 'create', {
+    expectedVersion: 0, values: { name: 'Second', status: 'ACTIVE', agreedCapital: 0, ownershipPercentage: 40 },
+  }, 'ownership_create_002');
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'Shareholders', null, 'create', {
+    expectedVersion: 0, values: { name: 'Third', status: 'ACTIVE', agreedCapital: 0, ownershipPercentage: 1 },
+  }, 'ownership_create_003'), e => e.code === 'OWNERSHIP_TOTAL_EXCEEDED');
+  await f.business.mutate(f.token, f.companyId, 'Shareholders', first.recordId, 'update', {
+    expectedVersion: 1, values: { name: 'Renamed' },
+  }, 'ownership_update_001');
+  const rows = await f.business.list(f.token, f.companyId, 'Shareholders');
+  assert.equal(rows.find(r => r.recordId === first.recordId).ownershipPercentage, 60);
+  assert.equal(rows.find(r => r.recordId === first.recordId).name, 'Renamed');
+  assert.equal(rows.length, 2);
+});
+
 test('capital contribution posts once after a lost response', async () => {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);

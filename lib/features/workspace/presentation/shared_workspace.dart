@@ -52,9 +52,7 @@ const workspaceTables = <String, List<String>>{
   'Fixed Assets': ['Assets'],
   'Capital & Equity': [
     'Shareholders',
-    'CapitalAccounts',
     'CapitalTransactions',
-    'ShareholderEquity',
     'ShareholderLoans',
   ],
   'Balance Sheet': ['FinancialPeriods', 'Journals', 'JournalLines'],
@@ -67,9 +65,7 @@ const tableTitles = {
   'PayrollItems': 'Payroll details',
   'Payslips': 'Payslips',
   'CompanyProfile': 'Company profile',
-  'CapitalAccounts': 'Capital accounts',
   'CapitalTransactions': 'Capital transactions',
-  'ShareholderEquity': 'Shareholder equity',
   'ShareholderLoans': 'Shareholder loans',
   'FinancialPeriods': 'Financial periods',
   'JournalLines': 'Journal lines',
@@ -2582,6 +2578,13 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               onChanged: (value) => setState(() => _search = value),
             ),
           ),
+          if (table == 'Shareholders' && _hasData)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Text(
+                'Active ownership: ${rows.where((r) => r['status'] == 'ACTIVE').fold<double>(0, (sum, r) => sum + (double.tryParse('${r['ownershipPercentage']}') ?? 0)).toStringAsFixed(2)}% · Unallocated: ${(100 - rows.where((r) => r['status'] == 'ACTIVE').fold<double>(0, (sum, r) => sum + (double.tryParse('${r['ownershipPercentage']}') ?? 0))).toStringAsFixed(2)}%',
+              ),
+            ),
           if (_statusFilters[table]?.isNotEmpty == true)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),

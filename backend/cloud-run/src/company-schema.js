@@ -30,7 +30,7 @@ const FIELDS = {
   Assets: ['assetCode', 'name', 'category', 'purchaseDate', 'cost', 'usefulLife', 'residualValue', 'depreciationMethod', 'paymentAccount', 'accumulatedDepreciation', 'netBookValue', 'lastDepreciationDate', 'disposalDate', 'disposalProceeds', 'disposalAccount', 'disposalReason', 'status', 'location', 'assignedEmployeeId', 'serialNumber', 'acquisitionType', 'acquisitionJournalId'],
   CapitalAccounts: ['name', 'kind', 'shareholderId', 'currency', 'status'],
   CapitalTransactions: ['date', 'capitalAccountId', 'shareholderId', 'kind', 'amount', 'method', 'destinationAccount', 'assetId', 'status', 'reference'],
-  Shareholders: ['name', 'email', 'phone', 'role', 'status', 'agreedCapital', 'investmentDate'],
+  Shareholders: ['name', 'email', 'phone', 'role', 'status', 'agreedCapital', 'investmentDate', 'ownershipPercentage'],
   ShareholderEquity: ['shareholderId', 'effectiveDate', 'percentage', 'amount'],
   ShareholderLoans: ['shareholderId', 'date', 'kind', 'principal', 'interestRate', 'repaidAmount', 'outstandingBalance', 'dueDate', 'paymentAccount', 'lastRepaymentDate', 'paymentReference', 'status', 'reference'],
   FinancialPeriods: ['name', 'startDate', 'endDate', 'status', 'closedBy', 'closedAt'],

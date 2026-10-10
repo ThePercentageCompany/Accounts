@@ -16,7 +16,16 @@ export async function capitalChanges(sheets, companyId, table, id, action, old, 
       ['ACTIVE', 'INACTIVE'].includes(next.status) && minor(next.agreedCapital ?? 0) >= 0n &&
       (!next.investmentDate || validLedgerDate(next.investmentDate)), 400, 'INVALID_SHAREHOLDER',
     'Supply a shareholder name, status, agreed capital and valid investment date.');
-    return { values: { ...values, name: next.name.trim() }, extra: [] };
+    const percentage = next.ownershipPercentage === '' || next.ownershipPercentage == null ? 0 : next.ownershipPercentage;
+    requireThat(typeof percentage === 'number' && Number.isFinite(percentage) && percentage >= 0 && percentage <= 100 &&
+      Math.abs(percentage * 100 - Math.round(percentage * 100)) < 1e-8,
+    400, 'INVALID_OWNERSHIP_PERCENTAGE', 'Ownership percentage must be between 0 and 100 with up to two decimal places.');
+    const data = await sheets.read(companyId, ['Shareholders']);
+    const allocated = data.Shareholders.filter(row => row.companyId === companyId && row.recordId !== id && active(row) && row.status === 'ACTIVE')
+      .reduce((sum, row) => sum + Math.round(Number(row.ownershipPercentage || 0) * 100), 0);
+    requireThat(next.status !== 'ACTIVE' || allocated + Math.round(percentage * 100) <= 10000,
+      409, 'OWNERSHIP_TOTAL_EXCEEDED', 'Active shareholder ownership cannot exceed 100%. Reduce another active shareholder percentage first.');
+    return { values: { ...values, name: next.name.trim(), ownershipPercentage: percentage }, extra: [] };
   }
   if (table === 'ShareholderLoans') {
     requireThat(['create', 'update', 'delete', 'loanPost', 'loanRepay'].includes(action), 400, 'INVALID_SHAREHOLDER_LOAN', 'Unsupported shareholder loan action.');
