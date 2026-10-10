@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
@@ -6,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/forms/payment_method_dropdown.dart';
 
 class CashEntryEditor extends StatefulWidget {
-  const CashEntryEditor({super.key, required this.expense, this.record});
+  const CashEntryEditor(
+      {super.key, required this.expense, this.record, this.rateLoader});
+  final ExchangeRateLoader? rateLoader;
   final bool expense;
   final Map<String, dynamic>? record;
   @override
@@ -14,6 +17,8 @@ class CashEntryEditor extends StatefulWidget {
 }
 
 class _CashEntryEditorState extends State<CashEntryEditor> {
+  late final fx = CurrencyDraft(record: widget.record);
+  late final paymentFx = CurrencyDraft(currencyController: fx.currency);
   final _form = GlobalKey<FormState>();
   late final fields = {
     for (final key in [
@@ -86,6 +91,8 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
     for (final c in fields.values) {
       c.dispose();
     }
+    paymentFx.dispose();
+    fx.dispose();
     super.dispose();
   }
 
@@ -101,6 +108,10 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
               key: _form,
               child: PopupFormFields(
                 children: [
+                  CurrencyFields(
+                      draft: fx,
+                      transactionDate: fields['date']!,
+                      loadRate: widget.rateLoader),
                   const Text(
                     'Tax and total are calculated by your company service when saved.',
                   ),
@@ -125,7 +136,14 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
                     ],
                     onChanged: (v) => setState(() => status = v!),
                   ),
-                  if (status == 'PAID') _field('paidDate'),
+                  if (status == 'PAID') ...[
+                    _field('paidDate'),
+                    CurrencyFields(
+                        draft: paymentFx,
+                        transactionDate: fields['paidDate']!,
+                        fixedCurrency: true,
+                        loadRate: widget.rateLoader),
+                  ],
                   _field('dueDate'),
                   _field('account'),
                   _field('reference'),
@@ -143,6 +161,7 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
             onPressed: () {
               if (!AppFormValidation.validate(_form.currentState!)) return;
               Navigator.pop(context, <String, Object?>{
+                ...fx.values,
                 for (final key in [
                   'date',
                   'description',
@@ -155,6 +174,8 @@ class _CashEntryEditorState extends State<CashEntryEditor> {
                   key: fields[key]!.text.trim(),
                 'amount': double.parse(fields['amount']!.text.trim()),
                 'taxRate': double.parse(fields['taxRate']!.text.trim()),
+                if (status == 'PAID')
+                  'paymentExchangeRate': double.parse(paymentFx.rate.text),
                 'paymentStatus': status,
                 'paidDate':
                     status == 'PAID' ? fields['paidDate']!.text.trim() : '',

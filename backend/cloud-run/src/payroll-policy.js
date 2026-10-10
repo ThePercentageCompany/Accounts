@@ -37,6 +37,7 @@ export async function previewPayroll(sheets, companyId, values) {
     409, 'PAYROLL_EMPLOYEE_INVALID', 'Payroll month must overlap the employee employment dates.');
   const overtime = data.Overtime.filter(row => row.companyId === companyId && row.employeeId === values.employeeId && active(row) &&
     row.date?.startsWith(`${values.month}-`) && row.approvalStatus === 'APPROVED');
+  requireThat(!employee.currency || !values.currency || employee.currency === values.currency, 400, 'PAYROLL_CURRENCY_MISMATCH', 'Payroll currency must match the employee salary currency.');
   return calculated(employee, overtime, values);
 }
 
@@ -84,7 +85,7 @@ export async function payrollChanges(sheets, companyId, table, id, action, old, 
   }
   if (action === 'payrollPay') {
     requireThat(old?.status === 'APPROVED' && Object.keys(values).every(key =>
-      ['paidDate', 'paymentAccount', 'paymentReference'].includes(key)) && validLedgerDate(values.paidDate) &&
+      ['paidDate', 'paymentAccount', 'paymentReference', 'paymentExchangeRate'].includes(key)) && validLedgerDate(values.paidDate) &&
       ['Cash', 'Bank'].includes(values.paymentAccount) && typeof (values.paymentReference ?? '') === 'string',
     409, 'PAYROLL_NOT_PAYABLE', 'Approve payroll and provide a valid payment date and account.');
     await assertOpenLedgerDate(sheets, companyId, values.paidDate);
@@ -93,7 +94,7 @@ export async function payrollChanges(sheets, companyId, table, id, action, old, 
     const journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
     const accountId = values.paymentAccount === 'Cash' ? 'cash' : 'bank';
     return { values: { paidDate: values.paidDate, paymentAccount: values.paymentAccount,
-      paymentReference: values.paymentReference ?? '', status: 'PAID' }, extra: [
+      paymentReference: values.paymentReference ?? '', paymentExchangeRate: values.paymentExchangeRate ?? old.exchangeRate ?? 1, status: 'PAID' }, extra: [
       { table: 'Journals', row: nextRow(data.Journals), values: { ...journalSystem, recordId: journalId,
         number: `AUTO-${journalId}`, date: values.paidDate, description: `Payroll payment ${old.month}`,
         sourceType: 'PayrollPayment', sourceId: id, totalDebit: money(amount), totalCredit: money(amount), status: 'POSTED' } },

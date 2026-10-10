@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { TaskService } from './task-service.js';
+import { exchangeRate } from './foreign-currency.js';
 import { ApiError, requireThat } from './errors.js';
 
 const SESSION = '__Host-tpc_session';
@@ -66,7 +67,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       const url = new URL(request.url, config.apiOrigin);
       if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
         json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1,
-          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', ...(tasks ? ['task-management', 'task-calendar', 'task-attachments'] : [])] : [] }); return;
+          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', ...(tasks ? ['task-management', 'task-calendar', 'task-attachments'] : [])] : [] }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);
@@ -96,6 +97,28 @@ export function createApi(service, config, { log = console.error, workspace, que
       const jar = cookies(request), token = jar[SESSION];
       const employeeContext = { companyId: request.headers['x-tpc-company'], employeeId: request.headers['x-tpc-employee'] };
       const route = `${request.method} ${url.pathname}`;
+      const fxRoute = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/exchange-rate$/.exec(url.pathname);
+      if (business && fxRoute && request.method === 'GET') {
+        requireThat([...url.searchParams.keys()].every(k => ['currency', 'date'].includes(k)), 400, 'INVALID_FX_QUERY', 'Unsupported rate query.');
+        if (fxRoute[1] === 'companies') business.owner((await business.registry.read()).state, token, fxRoute[2]);
+        else {
+          const principal = await employees.principal(jar[EMPLOYEE]);
+          requireThat(principal.companyId === fxRoute[2] && employeeContext.companyId === principal.companyId &&
+            employeeContext.employeeId === principal.employeeId &&
+            principal.allowedSections.some(s => ['Invoices', 'Quotations', 'Payroll', 'Income & Expenses', 'Reports'].includes(s)),
+          403, 'SECTION_FORBIDDEN', 'Currency access is unavailable.');
+        }
+        const data = await business.sheets.read(fxRoute[2], ['CompanyProfile']);
+        const base = data.CompanyProfile.find(r => r.companyId === fxRoute[2] && r.isDeleted !== true && r.isDeleted !== 'TRUE')?.currency || 'AED';
+        const rate = await exchangeRate(url.searchParams.get('currency') || base, base, url.searchParams.get('date'));
+        if (fxRoute[1] === 'companies') business.owner((await business.registry.read()).state, token, fxRoute[2]);
+        else {
+          const latest = await employees.principal(jar[EMPLOYEE]);
+          employees.verifyContext(latest, employeeContext);
+          requireThat(latest.companyId === fxRoute[2] && latest.allowedSections.some(s => ['Invoices', 'Quotations', 'Payroll', 'Income & Expenses', 'Reports'].includes(s)), 403, 'SECTION_FORBIDDEN', 'Currency access is unavailable.');
+        }
+        json(200, rate); return;
+      }
       if (notifications) {
         const match = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/notifications(?:\/(read|subscription))?$/.exec(url.pathname);
         if (match) {

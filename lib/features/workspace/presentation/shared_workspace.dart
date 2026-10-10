@@ -1241,6 +1241,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           context: context,
           builder: (_) => entity == 'Invoices'
               ? InvoiceEditor(
+                  rateLoader: _rateLoader,
                   customers: customers,
                   company: Map<String, dynamic>.from(company ?? {}),
                   record: saved,
@@ -1250,6 +1251,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   onSave: correct,
                 )
               : QuotationEditor(
+                  rateLoader: _rateLoader,
                   customers: customers,
                   company: Map<String, dynamic>.from(company ?? {}),
                   record: saved,
@@ -1382,6 +1384,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (mounted) setState(() => busy = false);
     }
   }
+
+  Future<Map<String, dynamic>> _rateLoader(String currency, String date) =>
+      widget.api.exchangeRate(widget.companyId, currency, date,
+          employee: widget.employee);
 
   Future<void> _openRecordEditor(Map<String, dynamic>? record) async {
     Map<String, Object?>? submittedDraft;
@@ -1551,7 +1557,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   company: documentCompany,
                 )
               : table == 'Receipts'
-                  ? ReceiptEditor(invoices: choices)
+                  ? ReceiptEditor(invoices: choices, rateLoader: _rateLoader)
                   : table == 'Quotations'
                       ? QuotationEditor(
                           onSave: saveDocument,
@@ -1562,6 +1568,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         )
                       : table == 'Payroll'
                           ? PayrollEditor(
+                              rateLoader: _rateLoader,
                               employees: choices,
                               record: record,
                               preview: (values) => widget.api.payrollPreview(
@@ -1590,6 +1597,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                                       ? FinancialPeriodEditor(
                                                           record: record)
                                                       : CashEntryEditor(
+                                                          rateLoader:
+                                                              _rateLoader,
                                                           expense: table ==
                                                               'Expenses',
                                                           record: record),
@@ -1910,7 +1919,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     if (action == 'payrollPay') {
       final result = await showDialog<Map<String, Object?>>(
         context: context,
-        builder: (_) => PayrollPaymentEditor(amount: record['netSalary']),
+        builder: (_) => PayrollPaymentEditor(
+            amount: record['netSalary'],
+            record: record,
+            rateLoader: _rateLoader),
       );
       if (result == null || !mounted) return;
       values = result;
@@ -2212,7 +2224,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       context: context,
       builder: (_) => reverse
           ? const CashReversalEditor()
-          : CashPaymentEditor(total: record['total']),
+          : CashPaymentEditor(
+              total: record['total'], record: record, rateLoader: _rateLoader),
     );
     if (values == null || !mounted) return;
     setState(() {

@@ -1038,6 +1038,13 @@ class SaasApi implements SessionRepository {
     );
   }
 
+  Future<Map<String, dynamic>> exchangeRate(
+          String companyId, String currency, String date,
+          {bool employee = false}) =>
+      _json('GET',
+          '/v1/${employee ? 'employee/companies' : 'companies'}/${_id(companyId)}/exchange-rate?currency=${Uri.encodeComponent(currency)}&date=${Uri.encodeComponent(date)}',
+          force: true);
+
   Future<Map<String, dynamic>> records(
     String companyId,
     String table, {

@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/core/widgets/forms/payment_method_dropdown.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -5,19 +6,25 @@ import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
 
 class CashPaymentEditor extends StatefulWidget {
-  const CashPaymentEditor({super.key, required this.total});
+  const CashPaymentEditor(
+      {super.key, required this.total, this.record, this.rateLoader});
   final Object? total;
+  final Map<String, dynamic>? record;
+  final ExchangeRateLoader? rateLoader;
   @override
   State<CashPaymentEditor> createState() => _CashPaymentEditorState();
 }
 
 class _CashPaymentEditorState extends State<CashPaymentEditor> {
+  late final fx =
+      CurrencyDraft(record: {'currency': widget.record?['currency'] ?? ''});
   final _form = GlobalKey<FormState>();
   final _date = TextEditingController();
   final _reference = TextEditingController();
   String? _account;
   @override
   void dispose() {
+    fx.dispose();
     _date.dispose();
     _reference.dispose();
     super.dispose();
@@ -33,6 +40,11 @@ class _CashPaymentEditorState extends State<CashPaymentEditor> {
             child: SingleChildScrollView(
               child: PopupFormFields(
                 children: [
+                  CurrencyFields(
+                      draft: fx,
+                      transactionDate: _date,
+                      fixedCurrency: true,
+                      loadRate: widget.rateLoader),
                   Text(
                     'Pay the full outstanding amount: ${widget.total}. This posts the payment to the ledger. Partial payments and reversals are not available yet.',
                   ),
@@ -79,6 +91,7 @@ class _CashPaymentEditorState extends State<CashPaymentEditor> {
             onPressed: () {
               if (!AppFormValidation.validate(_form.currentState!)) return;
               Navigator.pop(context, <String, Object?>{
+                'paymentExchangeRate': double.parse(fx.rate.text),
                 'paidDate': _date.text.trim(),
                 'account': _account!,
                 'reference': _reference.text.trim(),

@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/features/documents/presentation/document_editor.dart';
 import 'package:flutter/material.dart';
 
@@ -9,7 +10,9 @@ class QuotationEditor extends StatelessWidget {
     this.items = const [],
     this.company = const {},
     this.onSave,
+    this.rateLoader,
   });
+  final ExchangeRateLoader? rateLoader;
   final List<Map<String, dynamic>> customers;
   final Map<String, dynamic>? record;
   final List<Map<String, dynamic>> items;
@@ -17,11 +20,12 @@ class QuotationEditor extends StatelessWidget {
   final Future<void> Function(Map<String, Object?>)? onSave;
   @override
   Widget build(BuildContext context) => DocumentEditor(
-    quotation: true,
-    customers: customers,
-    record: record,
-    items: items,
-    company: company,
-    onSave: onSave,
-  );
+        quotation: true,
+        customers: customers,
+        record: record,
+        items: items,
+        company: company,
+        onSave: onSave,
+        rateLoader: rateLoader,
+      );
 }

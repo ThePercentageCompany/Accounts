@@ -50,7 +50,7 @@ export async function quotationChanges(sheets, companyId, table, id, action, old
       const invoiceSystem = { ...system, recordId: invoiceId, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
       return { values: { status: 'CONVERTED', convertedInvoiceId: invoiceId }, extra: [
         { table: 'Invoices', row: nextRow(data.Invoices), values: { ...invoiceSystem, number: '', customerId: old.customerId,
-          issueDate: old.issueDate, dueDate: '', status: 'DRAFT', currency: old.currency, ...calculated,
+          issueDate: old.issueDate, dueDate: '', status: 'DRAFT', currency: old.currency, baseCurrency: old.baseCurrency || old.currency, exchangeRate: old.exchangeRate || 1, rateDate: old.rateDate || old.issueDate, rateSource: old.rateSource || 'LEGACY', ...calculated,
           paidAmount: 0, balance: calculated.total, notes: old.notes || '', paymentTerms: old.paymentTerms || '', documentId: '' } },
         ...lines.map((line, index) => ({ table: 'InvoiceItems', row: nextRow(data.InvoiceItems) + index, values: {
           ...invoiceSystem, recordId: challenge(`${invoiceId}:line:${index}`), invoiceId, lineNumber: line.lineNumber,

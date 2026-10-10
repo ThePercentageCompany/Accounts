@@ -15,6 +15,22 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('exchange-rate endpoint uses company currency and rejects unauthorized access', async t => {
+  const companyId = 'c'.repeat(43);
+  const business = {
+    registry: { read: async () => ({ state: {} }) },
+    owner: (_state, token, id) => { if (token !== 'owner-token' || id !== companyId) throw new ApiError(401, 'UNAUTHORIZED', 'Sign in.'); },
+    sheets: { read: async () => ({ CompanyProfile: [{ companyId, currency: 'AED' }] }) },
+  };
+  const f = await running(t, { business });
+  const path = `/v1/companies/${companyId}/exchange-rate?currency=AED&date=2026-10-10`;
+  assert.equal((await f.request(path, { headers })).status, 401);
+  const response = await f.request(path, { headers: { ...headers, Cookie: '__Host-tpc_session=owner-token' } });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).exchangeRate, 1);
+  assert.equal((await f.request(path + '&unexpected=1', { headers: { ...headers, Cookie: '__Host-tpc_session=owner-token' } })).status, 400);
+});
+
 test('notification endpoints use the correct account cookie and protect mutations', async t => {
   const companyId = 'c'.repeat(43), calls = [];
   const notifications = Object.fromEntries(['list','read','subscribe','unsubscribe'].map(name => [name,
@@ -142,7 +158,7 @@ test('public health uses /health and requires no session', async t => {
   const response = await f.request('/health');
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', phase: 4,
-    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration'] });
+    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency'] });
 });
 
 test('new reporting and document listing routes validate queries and preserve session routing', async t => {

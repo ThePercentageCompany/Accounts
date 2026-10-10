@@ -64,7 +64,11 @@ test('receipt reversal restores invoice balance and posts the opposite journal',
   const f = fixture(), receiptId = 'r'.repeat(43);
   Object.assign(f.data.Invoices[0], { paidAmount: 40.25, balance: 60.25, status: 'PARTIALLY_PAID', recordVersion: 4 });
   f.data.ReceiptAllocations.push({ companyId: 'tenant', recordId: 'a', receiptId, invoiceId, amount: 40.25 });
-  f.data.Journals.push({ companyId: 'tenant', recordId: 'j', sourceType: 'Receipt', sourceId: receiptId, status: 'POSTED' });
+  f.data.Journals.push({ companyId: 'tenant', recordId: 'j', sourceType: 'Receipt', sourceId: receiptId, status: 'POSTED', totalDebit: 40.25, totalCredit: 40.25 });
+  f.data.JournalLines.push(
+    { journalId: 'j', accountId: 'accounts_receivable', accountName: 'Accounts Receivable', accountGroup: 'Asset', debit: 0, credit: 40.25 },
+    { journalId: 'j', accountId: 'bank', accountName: 'Bank', accountGroup: 'Asset', debit: 40.25, credit: 0 },
+  );
   const old = { companyId: 'tenant', recordId: receiptId, number: 'REC-2026-000001', paymentDate: input.paymentDate,
     paymentAccount: 'Bank', amount: 40.25, status: 'POSTED' };
   const result = await receiptChanges(f.sheets, 'tenant', 'Receipts', receiptId, 'receiptReverse', old,

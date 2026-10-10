@@ -1,3 +1,4 @@
+import { currencyValues, convertJournals, validRate, convert, FX_TABLES } from './foreign-currency.js';
 import { validateProject } from './project-policy.js';
 import { validateTask, taskActivityChanges } from './task-policy.js';
 import { opaque, digest } from './crypto.js';
@@ -186,7 +187,7 @@ export class BusinessService {
       typeof values.date === 'string' && typeof values.description === 'string' &&
       values.description.trim().length > 0 && values.description.length <= 500,
     400, 'INVALID_REVERSAL', 'Supply a reversal date and reason of up to 500 characters.');
-    if (action === 'pay') requireThat(Object.keys(values).every(k => ['paidDate', 'account', 'reference'].includes(k)) &&
+    if (action === 'pay') requireThat(Object.keys(values).every(k => ['paidDate', 'account', 'reference', 'paymentExchangeRate'].includes(k)) &&
       typeof values.paidDate === 'string' && typeof values.account === 'string',
     400, 'INVALID_PAYMENT', 'Supply only the payment date, Cash/Bank account and optional reference.');
     requireThat(tableName !== 'CompanyProfile' || (action === 'update' && recordId === 'company'),
@@ -264,6 +265,11 @@ export class BusinessService {
           updatedAt: now, updatedBy: actor, recordVersion: op.resultVersion, syncStatus: 'SYNCED',
           isDeleted: action === 'delete', idempotencyKey: marker };
         const row = old?._row || Math.max(1, ...rows.map(item => item._row)) + 1;
+        writeValues = await currencyValues(this.sheets, companyId, tableName, action, old, writeValues);
+        if (values.paymentExchangeRate != null) {
+          validRate(values.paymentExchangeRate);
+          if (old?.baseCurrency && old.currency === old.baseCurrency) requireThat(values.paymentExchangeRate === 1, 400, 'INVALID_EXCHANGE_RATE', 'Same-currency payments use rate 1.');
+        }
         const invoice = await invoiceChanges(this.sheets, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
         writeValues = invoice.values;
         const receipt = await receiptChanges(this.sheets, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
@@ -276,6 +282,10 @@ export class BusinessService {
         writeValues = asset.values;
         const capital = await capitalChanges(this.sheets, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
         writeValues = capital.values;
+        if (FX_TABLES.includes(tableName) && action !== 'delete') {
+          const record = { ...old, ...writeValues };
+          writeValues.baseAmount = convert(record.total ?? record.netSalary ?? record.amount ?? 0, Number(record.exchangeRate || 1));
+        }
         const taskExtra = await taskActivityChanges(this.sheets, companyId, tableName, action, old, writeValues, system, opKey);
         const ledger = action === 'reverse' ? await reverseCashChanges(this.sheets, companyId, tableName,
           old, { ...system, createdAt: now, createdBy: actor }, opKey, values) : ['post', 'pay'].includes(action) ? await cashLedgerChanges(this.sheets, companyId, tableName,
@@ -286,6 +296,30 @@ export class BusinessService {
         const writes = [{ table: tableName, row, values: { ...system, ...writeValues } },
           ...(ledger || [...invoice.extra, ...receipt.extra, ...quotation.extra,
             ...payroll.extra, ...asset.extra, ...capital.extra, ...taskExtra])];
+        if (['issue', 'approve', 'receive', 'post', 'pay', 'payrollPay', 'invoiceReturn'].includes(action)) {
+          let controlRate;
+          const controlAmounts = {};
+          if (action === 'receive') {
+            const data = await this.sheets.read(companyId, ['Invoices', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+            controlRate = Number(data.Invoices.find(r => r.recordId === values.invoiceId)?.exchangeRate || 1);
+            const updated = writes.find(w => w.table === 'Invoices');
+            if (updated?.values.balance === 0) {
+              const sources = new Set([values.invoiceId, ...data.ReceiptAllocations.filter(r => r.invoiceId === values.invoiceId && active(r)).map(r => r.receiptId)]);
+              const ids = new Set(data.Journals.filter(j => sources.has(j.sourceId) && active(j) && j.status === 'POSTED').map(j => j.recordId));
+              const carry = data.JournalLines.filter(l => ids.has(l.journalId) && active(l) && l.accountId === 'accounts_receivable')
+                .reduce((s, l) => s + Math.round((Number(l.debit || 0) - Number(l.credit || 0)) * 100), 0);
+              if (carry > 0) controlAmounts.accounts_receivable = carry / 100;
+            }
+          }
+          if (['pay', 'payrollPay'].includes(action)) {
+            const data = await this.sheets.read(companyId, ['Journals', 'JournalLines']);
+            const source = data.Journals.find(j => j.sourceId === op.recordId && j.sourceType === (tableName === 'Payroll' ? 'Payroll' : tableName) && active(j));
+            for (const line of data.JournalLines.filter(l => l.journalId === source?.recordId && active(l))) {
+              if (['accounts_receivable', 'accounts_payable', 'salary_payable'].includes(line.accountId)) controlAmounts[line.accountId] = line.debit || line.credit;
+            }
+          }
+          convertJournals(writes, { ...old, ...writeValues }, values.paymentExchangeRate, controlRate, controlAmounts);
+        }
         if (writes.some(write => write.table === 'Journals')) {
           assignJournalNumbers(writes, (await this.sheets.read(companyId, ['Journals'])).Journals);
         }

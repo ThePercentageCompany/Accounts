@@ -9,6 +9,27 @@ const response = (data, status = 200) => new Response(JSON.stringify(data), { st
 const company = { id: 'company-id', name: '=Dangerous formula', createdAt: 100, resources: { spreadsheetId: 'private-sheet' } };
 const owner = { id: 'owner', email: 'owner@example.com', name: 'Owner' };
 
+test('currency migration appends headers without touching existing amounts', async () => {
+  const table = TABLES.find(t => t.title === 'Income');
+  let headers = table.headers.slice(0, -7);
+  const legacyLength = headers.length;
+  const writes = [];
+  const google = new GoogleWorkspace({ fetcher: async (url, options) => {
+    if (url.includes('values:batchGet')) return response({ valueRanges: [{ values: [headers] }] });
+    if (options.method === 'GET') return response({ sheets: [{ properties: { title: table.title, sheetId: table.sheetId,
+      gridProperties: { columnCount: legacyLength } } }] });
+    writes.push(JSON.parse(options.body)); headers = table.headers;
+    return response({});
+  } });
+  await google.ensureCurrencyFields('token', 'sheet', ['Income']);
+  assert.equal(writes[0].requests[1].updateCells.start.rowIndex, 0);
+  assert.equal(writes[0].requests[1].updateCells.start.columnIndex, legacyLength);
+  await google.ensureCurrencyFields('token', 'sheet', ['Income']);
+  assert.equal(writes.length, 1);
+  headers = ['recordId', 'foreignColumn'];
+  await assert.rejects(google.ensureCurrencyFields('token', 'sheet', ['Income']), e => e.code === 'SCHEMA_MISMATCH');
+});
+
 test('shareholder ownership migration appends only its header and preserves existing cells', async () => {
   const table = TABLES.find(t => t.title === 'Shareholders');
   let headers = table.headers.slice(0, -1);

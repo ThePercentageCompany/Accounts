@@ -1,3 +1,4 @@
+import { FX_SCHEMA_TABLES } from './foreign-currency.js';
 import { TABLES } from './company-schema.js';
 import { requireThat } from './errors.js';
 
@@ -27,6 +28,7 @@ export class BusinessSheets {
       }
       if (tables.some(t => t.title === 'Projects')) await this.google.ensureTables(token, company.resources.spreadsheetId, ['Projects']);
       if (tables.some(t => t.title === 'Shareholders')) await this.google.ensureShareholderFields(token, company.resources.spreadsheetId);
+      if (tables.some(t => FX_SCHEMA_TABLES.includes(t.title))) await this.google.ensureCurrencyFields(token, company.resources.spreadsheetId, tables.map(t => t.title));
       const values = await this.google.rows(token, company.resources.spreadsheetId,
         tables.map(t => `'${t.title}'!A1:AZ10002`));
       return Object.fromEntries(tables.map((table, i) => {

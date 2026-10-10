@@ -1,3 +1,4 @@
+import { FX_SCHEMA_TABLES, FX_FIELDS } from './foreign-currency.js';
 import { ApiError, requireThat } from './errors.js';
 import { ReconnectRequired } from './google-connection.js';
 import { TABLES, SCHEMA_VERSION, seedRows } from './company-schema.js';
@@ -114,6 +115,7 @@ export class GoogleWorkspace {
         gridProperties: { rowCount: 1000, columnCount: t.headers.length, frozenRowCount: 1 } } } })),
     });
     await this.ensureShareholderFields(token, id);
+    await this.ensureCurrencyFields(token, id);
     const headerRows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));
     const data = [];
     TABLES.forEach((table, i) => {
@@ -150,6 +152,32 @@ export class GoogleWorkspace {
           rows: [{ values: [{ userEnteredValue: { stringValue: 'ownershipPercentage' } }] }], fields: 'userEnteredValue' } },
       ],
     });
+  }
+  async ensureCurrencyFields(token, id, names = FX_SCHEMA_TABLES) {
+    const tables = TABLES.filter(t => FX_SCHEMA_TABLES.includes(t.title) && names.includes(t.title));
+    if (!tables.length) return;
+    const rows = await this.rows(token, id, tables.map(t => "'" + t.title + "'!1:1"));
+    const pending = [];
+    tables.forEach((table, i) => {
+      const headers = rows[i][0] || [];
+      if (!headers.length || JSON.stringify(headers) === JSON.stringify(table.headers)) return;
+      requireThat(headers.length < table.headers.length && headers.every((h, j) => h === table.headers[j]) &&
+        table.headers.slice(headers.length).every(h => FX_FIELDS.includes(h)),
+        409, 'SCHEMA_MISMATCH', 'Currency migration requires matching existing headers.');
+      pending.push({ table, headers });
+    });
+    if (!pending.length) return;
+    const metadata = await this.metadata(token, id);
+    const requests = pending.flatMap(({ table, headers }) => {
+      const sheet = metadata.sheets.find(s => s.properties.title === table.title).properties;
+      return [
+        ...(sheet.gridProperties.columnCount < table.headers.length ? [{ appendDimension: { sheetId: sheet.sheetId,
+          dimension: 'COLUMNS', length: table.headers.length - sheet.gridProperties.columnCount } }] : []),
+        { updateCells: { start: { sheetId: sheet.sheetId, rowIndex: 0, columnIndex: headers.length },
+          rows: [{ values: table.headers.slice(headers.length).map(h => ({ userEnteredValue: { stringValue: h } })) }], fields: 'userEnteredValue' } },
+      ];
+    });
+    await this.request(token, 'https://sheets.googleapis.com/v4/spreadsheets/' + encodeURIComponent(id) + ':batchUpdate', 'POST', { requests });
   }
   async ensureCreditTables(token, id) {
     return this.ensureTables(token, id, ['CreditNotes', 'CreditNoteItems']);

@@ -11,6 +11,18 @@ class HelpGuide {
 
 const helpGuides = <HelpGuide>[
   HelpGuide(
+      category: 'Accounting',
+      title: 'Currencies and exchange rates',
+      purpose:
+          'Record invoices, payments, payroll, income and expenses in their original currency while reporting in the company currency.',
+      useCase:
+          'Pay employees in INR or GBP and invoice overseas clients without mixing currency amounts in financial reports.',
+      steps: [
+        'Set company accounting currency in Settings, customer preferred currency in Customers, and employee salary currency in Employees.',
+        'Choose the transaction currency and date. A dated reference rate fills automatically. Edit it to match your bank. The rate means company-currency units for one transaction-currency unit.',
+        'Save and post or approve the transaction. When paying, use the payment-date rate. Reports use company currency and show exchange gains or losses; source documents keep their original amounts. Daily reference rates may differ from bank rates.'
+      ]),
+  HelpGuide(
       category: "Getting started",
       title: "Create a workspace",
       purpose: "Set up a separate company workspace and its Google storage.",

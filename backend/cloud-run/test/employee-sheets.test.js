@@ -8,7 +8,7 @@ const workspace = { withGoogle: async (_id, action) => action('private-token', c
 test('employee reads validate schema, tenant identity and duplicate record IDs', async () => {
   const table = TABLES.find(t => t.title === 'Employees');
   let records = [{ recordId: 'e', companyId: 'c', fullName: 'Employee', recordVersion: 1 }];
-  const google = { rows: async (_token, _id, ranges) => {
+  const google = { ensureCurrencyFields: async () => {}, rows: async (_token, _id, ranges) => {
     assert.deepEqual(ranges, ["'Employees'!A1:AZ10002"]);
     return [[table.headers, ...records.map(r => table.headers.map(h => r[h] ?? ''))]];
   } };

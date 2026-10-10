@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +17,9 @@ class DocumentEditor extends StatefulWidget {
     this.items = const [],
     this.company = const {},
     this.onSave,
+    this.rateLoader,
   });
+  final ExchangeRateLoader? rateLoader;
   final bool quotation;
   final List<Map<String, dynamic>> customers;
   final Map<String, dynamic>? record;
@@ -59,11 +62,13 @@ class _DraftLine {
 }
 
 class _DocumentEditorState extends State<DocumentEditor> {
+  late final fx =
+      CurrencyDraft(record: widget.record, currencyController: currency);
   bool _saving = false, _allowClose = false;
   String? _saveError;
   late final String _initialDraft;
   late final DraftNavigationGuard _navigationGuard;
-  String get _fingerprint => '$header|$values';
+  String get _fingerprint => '$header|$values|${fx.rate.text}|${fx.source}';
   @override
   void initState() {
     super.initState();
@@ -110,6 +115,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
     }
     if (!AppFormValidation.validate(form.currentState!)) return;
     final draft = <String, Object?>{
+      ...fx.values,
       'customerId': customerId!,
       'issueDate': issueDate.text,
       endKey: endDate.text,
@@ -210,6 +216,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
   @override
   void dispose() {
     _navigationGuard.dispose();
+    fx.dispose();
     for (final field in [issueDate, endDate, currency, notes, terms]) {
       field.dispose();
     }
@@ -410,7 +417,12 @@ class _DocumentEditorState extends State<DocumentEditor> {
                       child: Text('${customer['name']}'),
                     ),
                 ],
-                onChanged: (value) => setState(() => customerId = value),
+                onChanged: (value) => setState(() {
+                  customerId = value;
+                  if ('${customer['preferredCurrency'] ?? ''}'.isNotEmpty) {
+                    currency.text = '${customer['preferredCurrency']}';
+                  }
+                }),
                 validator: (value) =>
                     value == null ? 'Choose a customer.' : null,
               ),
@@ -493,10 +505,10 @@ class _DocumentEditorState extends State<DocumentEditor> {
                     ),
                 ],
               ),
-              CurrencyFormField(
-                controller: currency,
-                onChanged: () => setState(() {}),
-              ),
+              CurrencyFields(
+                  draft: fx,
+                  transactionDate: issueDate,
+                  loadRate: widget.rateLoader),
               section(
                 'Items',
                 action: LoadingButton.textIcon(

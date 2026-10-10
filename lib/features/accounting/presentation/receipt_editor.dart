@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/core/widgets/forms/payment_method_dropdown.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -12,13 +13,15 @@ bool _validDate(String value) {
 }
 
 class ReceiptEditor extends StatefulWidget {
-  const ReceiptEditor({super.key, required this.invoices});
+  const ReceiptEditor({super.key, required this.invoices, this.rateLoader});
+  final ExchangeRateLoader? rateLoader;
   final List<Map<String, dynamic>> invoices;
   @override
   State<ReceiptEditor> createState() => _ReceiptEditorState();
 }
 
 class _ReceiptEditorState extends State<ReceiptEditor> {
+  final fx = CurrencyDraft();
   final form = GlobalKey<FormState>();
   String? invoiceId;
   String account = 'Bank';
@@ -32,6 +35,7 @@ class _ReceiptEditorState extends State<ReceiptEditor> {
       widget.invoices.where((row) => row['recordId'] == invoiceId).firstOrNull;
   @override
   void dispose() {
+    fx.dispose();
     date.dispose();
     amount.dispose();
     reference.dispose();
@@ -63,11 +67,17 @@ class _ReceiptEditorState extends State<ReceiptEditor> {
                     ],
                     onChanged: (value) => setState(() {
                       invoiceId = value;
+                      fx.currency.text = '${invoice?['currency'] ?? ''}';
                       amount.text = '${invoice?['balance'] ?? ''}';
                     }),
                     validator: (value) =>
                         value == null ? 'Choose an open invoice.' : null,
                   ),
+                  CurrencyFields(
+                      draft: fx,
+                      transactionDate: date,
+                      loadRate: widget.rateLoader,
+                      fixedCurrency: true),
                   CalendarFormField(
                     controller: date,
                     decoration:
@@ -128,6 +138,7 @@ class _ReceiptEditorState extends State<ReceiptEditor> {
               if (!AppFormValidation.validate(form.currentState!)) return;
               final selected = invoice!;
               Navigator.pop(context, <String, Object?>{
+                ...fx.values,
                 'invoiceId': invoiceId!,
                 'customerId': selected['customerId'] as String,
                 'paymentDate': date.text.trim(),

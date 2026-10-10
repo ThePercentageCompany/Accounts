@@ -1,7 +1,7 @@
 import { requireThat } from './errors.js';
 
-const NUMBERS = new Set(('unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
-const DATES = new Set(('issueDate dueDate paymentDate reversalDate validUntil date paidDate purchaseDate lastDepreciationDate disposalDate lastRepaymentDate investmentDate effectiveDate startDate endDate').split(' '));
+const NUMBERS = new Set(('baseAmount exchangeRate paymentExchangeRate unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
+const DATES = new Set(('rateDate issueDate dueDate paymentDate reversalDate validUntil date paidDate purchaseDate lastDepreciationDate disposalDate lastRepaymentDate investmentDate effectiveDate startDate endDate').split(' '));
 const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hours rate basicSalary allowances overtimeAmount bonus deductions cost usefulLife residualValue accumulatedDepreciation disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount debit credit').split(' '));
 
 export function validateBusinessValues(values) {
@@ -26,7 +26,7 @@ export function validateBusinessValues(values) {
     }
     if (key === 'month' && value !== '') requireThat(/^\d{4}-(0[1-9]|1[0-2])$/.test(value),
       400, 'INVALID_DATE', 'month must use YYYY-MM.');
-    if (key === 'currency' && value !== '') requireThat(/^[A-Z]{3}$/.test(value),
+    if (['currency', 'preferredCurrency'].includes(key) && value !== '') requireThat(/^[A-Z]{3}$/.test(value),
       400, 'INVALID_CURRENCY', 'currency must be a three-letter uppercase code.');
   }
 }

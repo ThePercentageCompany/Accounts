@@ -1,3 +1,4 @@
+import { convert, recordRate } from './foreign-currency.js';
 import { challenge } from './crypto.js';
 import { requireThat } from './errors.js';
 import { assertOpenLedgerDate } from './financial-period-policy.js';
@@ -13,7 +14,7 @@ export async function cashLedgerChanges(sheets, companyId, table, record, system
       j.isDeleted !== true && j.isDeleted !== 'TRUE');
     const entries = related.filter(j => j.sourceType === table);
     requireThat(entries.length === 1 && entries[0].status === 'POSTED' && entries[0].date === record.date &&
-      entries[0].totalDebit === record.total && entries[0].totalCredit === record.total &&
+      entries[0].totalDebit === convert(record.total, recordRate(record)) && entries[0].totalCredit === convert(record.total, recordRate(record)) &&
       !related.some(j => [ `${table}Payment`, `${table}Reversal` ].includes(j.sourceType)),
     409, 'PAYMENT_NOT_AVAILABLE', 'Payment requires one matching posted entry and no existing payment.');
     const postedLines = data.JournalLines.filter(l => l.companyId === companyId &&
@@ -21,7 +22,7 @@ export async function cashLedgerChanges(sheets, companyId, table, record, system
     const account = income ? 'accounts_receivable' : 'accounts_payable';
     const controlLines = postedLines.filter(l => l.accountId === account);
     requireThat(controlLines.length === 1 &&
-      controlLines[0][income ? 'debit' : 'credit'] === record.total &&
+      controlLines[0][income ? 'debit' : 'credit'] === convert(record.total, recordRate(record)) &&
       controlLines[0][income ? 'credit' : 'debit'] === 0,
     409, 'PAYMENT_NOT_AVAILABLE', 'The posted control account does not match this entry.');
   }

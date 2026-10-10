@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 import 'package:tpc_invoice/core/widgets/forms/payment_method_dropdown.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -10,7 +11,9 @@ class PayrollEditor extends StatefulWidget {
     required this.employees,
     this.record,
     this.preview,
+    this.rateLoader,
   });
+  final ExchangeRateLoader? rateLoader;
   final List<Map<String, dynamic>> employees;
   final Map<String, dynamic>? record;
   final Future<Map<String, dynamic>> Function(Map<String, Object?>)? preview;
@@ -20,6 +23,7 @@ class PayrollEditor extends StatefulWidget {
 
 class _PayrollEditorState extends State<PayrollEditor> {
   final form = GlobalKey<FormState>();
+  late final fx = CurrencyDraft(record: widget.record);
   Map<String, dynamic>? totals;
   String? previewError;
   bool calculating = false;
@@ -42,6 +46,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
   }
 
   Map<String, Object?> values() => {
+        ...fx.values,
         'month': month.text.trim(),
         'employeeId': employeeId!,
         'bonus': double.parse(bonus.text.trim()),
@@ -91,6 +96,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
     month.dispose();
     bonus.dispose();
     deductions.dispose();
+    fx.dispose();
     super.dispose();
   }
 
@@ -116,6 +122,11 @@ class _PayrollEditorState extends State<PayrollEditor> {
             key: form,
             child: PopupFormFields(
               children: [
+                CurrencyFields(
+                    draft: fx,
+                    transactionDate: month,
+                    month: true,
+                    loadRate: widget.rateLoader),
                 SearchableRecordField(
                   initialValue: employeeId,
                   decoration: const InputDecoration(labelText: 'Employee'),
@@ -129,6 +140,12 @@ class _PayrollEditorState extends State<PayrollEditor> {
                   onChanged: widget.record == null
                       ? (value) {
                           employeeId = value;
+                          final selected = widget.employees
+                              .where((e) => e['recordId'] == value)
+                              .firstOrNull;
+                          if ('${selected?['currency'] ?? ''}'.isNotEmpty) {
+                            fx.currency.text = '${selected!['currency']}';
+                          }
                           invalidate();
                         }
                       : null,
@@ -252,13 +269,18 @@ class _PayrollEditorState extends State<PayrollEditor> {
 }
 
 class PayrollPaymentEditor extends StatefulWidget {
-  const PayrollPaymentEditor({super.key, required this.amount});
+  const PayrollPaymentEditor(
+      {super.key, required this.amount, this.record, this.rateLoader});
   final Object? amount;
+  final Map<String, dynamic>? record;
+  final ExchangeRateLoader? rateLoader;
   @override
   State<PayrollPaymentEditor> createState() => _PayrollPaymentEditorState();
 }
 
 class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
+  late final fx =
+      CurrencyDraft(record: {'currency': widget.record?['currency'] ?? ''});
   final form = GlobalKey<FormState>();
   String account = 'Bank';
   final date = TextEditingController(
@@ -268,6 +290,7 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
   @override
   void dispose() {
     date.dispose();
+    fx.dispose();
     reference.dispose();
     super.dispose();
   }
@@ -279,6 +302,11 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
           key: form,
           child: PopupFormFields(
             children: [
+              CurrencyFields(
+                  draft: fx,
+                  transactionDate: date,
+                  fixedCurrency: true,
+                  loadRate: widget.rateLoader),
               Text('Net salary: ${widget.amount}'),
               CalendarFormField(
                 controller: date,
@@ -318,6 +346,7 @@ class _PayrollPaymentEditorState extends State<PayrollPaymentEditor> {
             onPressed: () {
               if (!AppFormValidation.validate(form.currentState!)) return;
               Navigator.pop(context, <String, Object?>{
+                'paymentExchangeRate': double.parse(fx.rate.text),
                 'paidDate': date.text.trim(),
                 'paymentAccount': account,
                 'paymentReference': reference.text.trim(),

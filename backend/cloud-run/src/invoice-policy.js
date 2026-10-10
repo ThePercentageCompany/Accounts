@@ -1,3 +1,4 @@
+import { convert, recordRate } from './foreign-currency.js';
 import { requireThat } from './errors.js';
 import { minor } from './journal-policy.js';
 import { validLedgerDate } from './financial-period-policy.js';
@@ -95,7 +96,7 @@ export async function invoiceChanges(sheets, companyId, table, id, action, old, 
         409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
       const debit = original.reduce((sum, row) => sum + minor(row.credit), 0n);
       const credit = original.reduce((sum, row) => sum + minor(row.debit), 0n);
-      requireThat(debit === credit && debit === minor(old.total), 409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
+      requireThat(debit === credit && debit === minor(convert(old.total, recordRate(old))), 409, 'INVOICE_LEDGER_MISMATCH', 'The invoice ledger history cannot be reversed safely.');
       const journalId = challenge(`${companyId}:${operation}:invoice-void`);
       const journalRow = Math.max(1, ...data.Journals.map(row => row._row)) + 1;
       const lineRow = Math.max(1, ...data.JournalLines.map(row => row._row)) + 1;
@@ -146,7 +147,7 @@ export async function invoiceChanges(sheets, companyId, table, id, action, old, 
   const lines = data.InvoiceItems.filter(l => l.companyId === companyId && l.invoiceId === parent.recordId && l.recordId !== id && active(l));
   if (action !== 'delete') lines.push({ ...next, ...write });
   return { values: write, extra: [{ table: 'Invoices', row: parent._row, values: {
-    ...totals(lines), updatedAt: system.updatedAt, updatedBy: system.updatedBy,
+    ...totals(lines), baseAmount: convert(totals(lines).total, recordRate(parent)), updatedAt: system.updatedAt, updatedBy: system.updatedBy,
     recordVersion: Number(parent.recordVersion) + 1, syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey,
   } }] };
 }

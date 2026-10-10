@@ -18,6 +18,7 @@ class _CustomerEditorState extends State<CustomerEditor> {
     'phone': 'Phone',
     'taxNumber': 'Tax number',
     'address': 'Address',
+    'preferredCurrency': 'Preferred currency (AED, INR, GBP; optional)',
   };
   late final controllers = {
     for (final key in _fields.keys)
@@ -65,6 +66,12 @@ class _CustomerEditorState extends State<CustomerEditor> {
                             !AppValidators.emailPattern.hasMatch(v.trim())) {
                           return 'Enter a valid email.';
                         }
+                        if (field.key == 'preferredCurrency' &&
+                            (v?.trim().isNotEmpty ?? false) &&
+                            !RegExp(r'^[A-Z]{3}$')
+                                .hasMatch(v!.trim().toUpperCase())) {
+                          return 'Enter a three-letter currency code.';
+                        }
                         return null;
                       },
                     ),
@@ -83,7 +90,9 @@ class _CustomerEditorState extends State<CustomerEditor> {
               if (AppFormValidation.validate(_form.currentState!)) {
                 Navigator.pop(context, <String, Object?>{
                   for (final field in controllers.entries)
-                    field.key: field.value.text.trim(),
+                    field.key: field.key == 'preferredCurrency'
+                        ? field.value.text.trim().toUpperCase()
+                        : field.value.text.trim(),
                 });
               }
             },

@@ -9,9 +9,9 @@ const FIELDS = {
   OwnersUsers: ['userId', 'email', 'displayName', 'status'],
   Roles: ['roleName', 'description'],
   RolePermissions: ['roleId', 'section', 'action', 'recordScope', 'fieldName'],
-  Employees: ['employeeCode', 'fullName', 'email', 'phone', 'department', 'designation', 'joinDate', 'lastEmploymentDate', 'employmentStatus', 'roleId', 'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry'],
+  Employees: ['employeeCode', 'fullName', 'email', 'phone', 'department', 'designation', 'joinDate', 'lastEmploymentDate', 'employmentStatus', 'roleId', 'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry', 'currency'],
   EmployeeAccess: ['employeeId', 'accessStatus', 'issuedAt', 'revokedAt'],
-  Customers: ['name', 'email', 'phone', 'taxNumber', 'address'],
+  Customers: ['name', 'email', 'phone', 'taxNumber', 'address', 'preferredCurrency'],
   ProductsServices: ['name', 'description', 'unit', 'unitPrice', 'taxRate', 'status'],
   Invoices: ['number', 'customerId', 'issueDate', 'dueDate', 'status', 'currency', 'subtotal', 'discount', 'taxAmount', 'total', 'paidAmount', 'balance', 'voidDate', 'voidReason', 'notes', 'paymentTerms', 'documentId'],
   InvoiceItems: ['invoiceId', 'lineNumber', 'productId', 'description', 'quantity', 'unitPrice', 'discount', 'taxRate', 'taxAmount', 'lineTotal'],
@@ -47,6 +47,11 @@ const FIELDS = {
   TaskActivity: ['taskId', 'action', 'summary'],
   Projects: ['name', 'description', 'status'],
 };
+for (const name of ['Invoices', 'Quotations', 'Receipts', 'Income', 'Expenses', 'Payroll']) {
+  for (const field of ['currency', 'baseCurrency', 'exchangeRate', 'rateDate', 'rateSource', 'paymentExchangeRate', 'baseAmount']) {
+    if (!FIELDS[name].includes(field)) FIELDS[name].push(field);
+  }
+}
 export const TABLES = Object.freeze(Object.entries(FIELDS).map(([title, fields], index) =>
   Object.freeze({ title, sheetId: 1000 + index, headers: [...SYSTEM, ...fields] })));
 

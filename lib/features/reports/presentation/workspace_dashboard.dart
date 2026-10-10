@@ -167,7 +167,7 @@ class WorkspaceDashboard extends StatelessWidget {
                   ),
                 ),
               Text(
-                'A clear snapshot of performance, liquidity and outstanding balances.',
+                'Performance, liquidity and outstanding balances in ${data['metadata']?['currency'] ?? 'company currency'}.',
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
               const SizedBox(height: 20),

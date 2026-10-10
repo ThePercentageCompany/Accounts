@@ -35,3 +35,11 @@ The active app uses the shared API. Existing editors, queues and reporting logic
 ```bash
 flutter pub run build_runner build
 ```
+
+## Multi-currency transactions
+
+Invoices, quotations, customer receipts, payroll, income and expenses retain their original currency and amounts. Posted journals and financial reports use the company accounting currency. Set employee salary currency and customer preferred currency in their respective editors.
+
+The authenticated `GET /v1/companies/{companyId}/exchange-rate?currency=INR&date=2026-10-10` endpoint (also under `/v1/employee/companies/`) returns a dated Frankfurter reference rate, its date and accounting currency. Forms fill this rate automatically and allow manual changes, including payment-date rates. The convention is **1 transaction-currency unit = exchangeRate accounting-currency units**. Saved rates do not change when reference rates update; settlements post exchange gains/losses. If the provider is unavailable, enter a manual rate.
+
+Existing spreadsheet columns are extended without changing historical money or journal values. Existing posted records retain their original ledger scale. This release does not add automatic period-end revaluation, currency-specific bank account registers, or bank-fee reconciliation; bank fees can be recorded separately as expenses. Supported transaction amounts retain the application's two-decimal precision.

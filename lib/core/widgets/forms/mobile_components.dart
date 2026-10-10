@@ -243,6 +243,12 @@ class RecordSummary extends StatelessWidget {
           ),
         if (date != null) Text('$date'),
         if (status != null) StatusChip(value: '$status'),
+        if (record['baseAmount'] != null && record['baseAmount'] != '')
+          Text(
+              '${record['baseCurrency'] ?? ''} ${record['baseAmount']} in company currency'),
+        if (record['exchangeRate'] != null && record['exchangeRate'] != '')
+          Text(
+              'Rate: ${record['exchangeRate']} ${record['baseCurrency'] ?? ''}'),
         if (record['email'] != null) Text('${record['email']}'),
         if (record.containsKey('ownershipPercentage'))
           Text(

@@ -156,7 +156,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                   key: PageStorageKey((widget.slips, row['recordId'])),
                   title: Text('${_name(row)} · ${row['month']}'),
                   subtitle: Text(
-                      '${row['status']} · Net salary ${amount(row['netSalary'])}'),
+                      '${row['status']} · Net salary ${row['currency'] ?? ''} ${amount(row['netSalary'])}'),
                   childrenPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -174,7 +174,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                           child: Row(children: [
                             Expanded(child: Text(field.value)),
                             const SizedBox(width: 16),
-                            Text(amount(row[field.key])),
+                            Text(
+                                '${row['currency'] ?? ''} ${amount(row[field.key])}'),
                           ])),
                     if (row['status'] == 'PAID')
                       Text(

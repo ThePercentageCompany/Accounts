@@ -13,7 +13,7 @@ const keyRequired = key => requireThat(typeof key === 'string' && /^[A-Za-z0-9_-
   400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
 const accessDenied = () => new ApiError(401, 'EMPLOYEE_ACCESS_DENIED', 'The invite or private code is invalid, expired or disabled.');
 const profileFields = ['employeeCode', 'email', 'phone', 'department', 'designation', 'joinDate', 'lastEmploymentDate',
-  'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry'];
+  'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry', 'currency'];
 const cleanEmployee = row => Object.fromEntries(['recordId', 'fullName', ...profileFields, 'employmentStatus', 'recordVersion'].map(k => [k, row[k] ?? '']));
 
 export class EmployeeService {
@@ -59,6 +59,8 @@ export class EmployeeService {
       value[key] = text.trim();
     }
     requireThat(!value.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email), 400, 'INVALID_EMPLOYEE', 'Invalid employee email.');
+    if (value.currency) value.currency = value.currency.toUpperCase();
+    requireThat(!value.currency || /^[A-Z]{3}$/.test(value.currency), 400, 'INVALID_EMPLOYEE', 'Salary currency must use a three-letter code.');
     for (const key of ['basicSalary', 'allowances']) {
       if (!Object.hasOwn(input, key)) continue;
       requireThat(typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0 && input[key] <= 1e12 &&
@@ -324,9 +326,9 @@ export class EmployeeService {
   async references(token, table, section, context = {}) {
     const fields = {
       Projects: { sections: ['Tasks'], fields: ['name', 'description', 'status'] },
-      Customers: { sections: ['Invoices', 'Quotations'], fields: ['name', 'email', 'phone', 'taxNumber', 'address'] },
+      Customers: { sections: ['Invoices', 'Quotations'], fields: ['name', 'email', 'phone', 'taxNumber', 'address', 'preferredCurrency'] },
       CompanyProfile: { sections: ['Invoices', 'Quotations'], fields: ['name', 'address', 'email', 'phone', 'taxNumber', 'currency', 'invoicePrefix', 'quotationPrefix'] },
-      Employees: { sections: ['Payroll'], fields: ['fullName', 'employeeCode', 'department', 'designation', 'employmentStatus', 'joinDate', 'lastEmploymentDate', 'basicSalary', 'allowances'] },
+      Employees: { sections: ['Payroll'], fields: ['fullName', 'employeeCode', 'department', 'designation', 'employmentStatus', 'joinDate', 'lastEmploymentDate', 'basicSalary', 'allowances', 'currency'] },
       Shareholders: { sections: ['Capital & Equity'], fields: ['name', 'status'] },
     };
     const reference = fields[table];

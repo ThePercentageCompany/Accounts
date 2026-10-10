@@ -425,6 +425,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
       'designation',
       'joinDate',
       'lastEmploymentDate',
+      'currency',
       'basicSalary',
       'allowances',
       'bankName',
@@ -589,8 +590,10 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const Text(
-                    'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the company currency.',
+                    'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the employee salary currency; leave it blank to use company currency.',
                   ),
+                  detail(
+                      'currency', 'Salary currency (AED, INR, GBP; optional)'),
                   detail('basicSalary', 'Basic salary', money: true),
                   detail('allowances', 'Monthly allowances', money: true),
                   const Text(

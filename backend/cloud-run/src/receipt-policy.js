@@ -10,7 +10,7 @@ const nextRow = rows => Math.max(1, ...rows.map(row => Number(row._row) || 1)) +
 export function receiptInput(input) {
   requireThat(input && typeof input === 'object' && !Array.isArray(input) &&
     Object.keys(input).length > 0 && Object.keys(input).every(key =>
-      ['invoiceId', 'customerId', 'paymentDate', 'amount', 'currency', 'paymentAccount', 'reference'].includes(key)),
+      ['invoiceId', 'customerId', 'paymentDate', 'amount', 'currency', 'paymentAccount', 'reference', 'baseCurrency', 'exchangeRate', 'rateDate', 'rateSource', 'paymentExchangeRate'].includes(key)),
   400, 'INVALID_RECEIPT', 'Supply one invoice and its payment details.');
   const values = { ...input, reference: input.reference ?? '' };
   requireThat(typeof values.invoiceId === 'string' && /^[A-Za-z0-9_-]{43}$/.test(values.invoiceId) &&
@@ -48,6 +48,10 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
     const previous = data.Journals.some(row => row.companyId === companyId && row.sourceType === 'ReceiptReversal' && row.sourceId === id && active(row));
     requireThat(original.length === 1 && original[0].status === 'POSTED' && !previous,
       409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt journal is missing, duplicated or already reversed.');
+    const originalLines = data.JournalLines.filter(l => l.journalId === original[0].recordId && active(l));
+    requireThat(originalLines.length >= 2 && originalLines.reduce((s, l) => s + minor(l.debit || 0), 0n) === minor(original[0].totalDebit) &&
+      originalLines.reduce((s, l) => s + minor(l.credit || 0), 0n) === minor(original[0].totalCredit),
+    409, 'RECEIPT_NOT_REVERSIBLE', 'Receipt ledger lines cannot be reversed safely.');
     const newPaid = paid - amount, newBalance = balance + amount, journalId = challenge(`${companyId}:${operation}:receipt-reversal`);
     const meta = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
     const accountId = old.paymentAccount === 'Cash' ? 'cash' : 'bank';
@@ -57,11 +61,12 @@ export async function receiptChanges(sheets, companyId, table, id, action, old, 
         recordVersion: Number(invoice.recordVersion) + 1, syncStatus: 'SYNCED', idempotencyKey: system.idempotencyKey } },
       { table: 'Journals', row: nextRow(data.Journals), values: { ...meta, recordId: journalId, number: `AUTO-${journalId}`,
         date: values.reversalDate, description: `Reverse ${old.number}: ${values.reversalReason.trim()}`,
-        sourceType: 'ReceiptReversal', sourceId: id, totalDebit: money(amount), totalCredit: money(amount), status: 'POSTED' } },
-      { table: 'JournalLines', row: nextRow(data.JournalLines), values: { ...meta, recordId: challenge(`${journalId}:0`),
-        journalId, lineNumber: 1, accountId: 'accounts_receivable', accountName: 'Accounts Receivable', accountGroup: 'Asset', debit: money(amount), credit: 0 } },
-      { table: 'JournalLines', row: nextRow(data.JournalLines) + 1, values: { ...meta, recordId: challenge(`${journalId}:1`),
-        journalId, lineNumber: 2, accountId, accountName: old.paymentAccount, accountGroup: 'Asset', debit: 0, credit: money(amount) } },
+        sourceType: 'ReceiptReversal', sourceId: id, totalDebit: original[0].totalCredit, totalCredit: original[0].totalDebit, status: 'POSTED' } },
+      ...data.JournalLines.filter(l => l.journalId === original[0].recordId && active(l)).map((l, i) => ({
+        table: 'JournalLines', row: nextRow(data.JournalLines) + i, values: { ...meta,
+          recordId: challenge(journalId + ':' + i), journalId, lineNumber: i + 1,
+          accountId: l.accountId, accountName: l.accountName, accountGroup: l.accountGroup,
+          debit: l.credit || 0, credit: l.debit || 0 } })),
     ] };
   }
   const { invoiceId, ...receipt } = values;

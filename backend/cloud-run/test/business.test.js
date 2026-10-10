@@ -60,6 +60,31 @@ test('dashboard and general ledger reject foreign owners and pending writes', as
   await assert.rejects(() => f.business.report(f.token, f.companyId, 'dashboard', '2026-09-01', '2026-09-30'), e => e.code === 'BUSINESS_WRITE_PENDING');
 });
 
+test('foreign invoice, settlement and receipt reversal keep local totals and balanced base journals', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  for (const name of ['Invoices', 'InvoiceItems', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines', 'CreditNotes', 'FinancialPeriods']) f.data[name] = [];
+  f.data.CompanyProfile = [{ companyId: f.companyId, currency: 'AED' }];
+  f.sheets.writeBatch = async (id, changes) => { for (const c of changes) await f.sheets.write(id, c.table, c.row, c.values); };
+  const customer = await f.business.mutate(f.token, f.companyId, 'Customers', null, 'create', { expectedVersion: 0, values: { name: 'UK Client' } }, 'fx_customer_001_operation');
+  const invoice = await f.business.mutate(f.token, f.companyId, 'Invoices', null, 'create', { expectedVersion: 0,
+    values: { customerId: customer.recordId, issueDate: '2026-10-01', currency: 'GBP', exchangeRate: 4.7,
+      items: [{ description: 'Service', quantity: 1, unitPrice: 1000, discount: 0, taxRate: 0 }] } }, 'fx_invoice_001_operation');
+  await f.business.mutate(f.token, f.companyId, 'Invoices', invoice.recordId, 'issue', { expectedVersion: 1 }, 'fx_issue_001_operation');
+  assert.equal(f.data.Invoices[0].total, 1000);
+  assert.equal(f.data.Journals[0].totalDebit, 4700);
+  const receipt = await f.business.mutate(f.token, f.companyId, 'Receipts', null, 'receive', { expectedVersion: 0,
+    values: { invoiceId: invoice.recordId, customerId: customer.recordId, paymentDate: '2026-10-02', currency: 'GBP',
+      amount: 1000, exchangeRate: 4.65, paymentAccount: 'Bank' } }, 'fx_receipt_001_operation');
+  assert.equal(f.data.Invoices[0].balance, 0);
+  assert.equal(f.data.JournalLines.find(l => l.accountId === 'fx_loss').debit, 50);
+  await f.business.mutate(f.token, f.companyId, 'Receipts', receipt.recordId, 'receiptReverse', { expectedVersion: 1,
+    values: { reversalDate: '2026-10-03', reversalReason: 'Returned payment' } }, 'fx_reverse_001_operation');
+  assert.equal(f.data.Invoices[0].balance, 1000);
+  assert.equal(f.data.JournalLines.find(l => l.accountId === 'fx_loss' && l.credit > 0).credit, 50);
+  for (const j of f.data.Journals) assert.equal(j.totalDebit, j.totalCredit);
+});
+
 test('invoice line retry reconciles atomic header totals without a duplicate parent update', async () => {
   const f = await setup();
   f.sheets.table = name => TABLES.find(t => t.title === name);
@@ -163,6 +188,40 @@ test('quotation finalization and conversion create one retry-safe draft invoice'
   assert.equal(f.data.Invoices[0].status, 'DRAFT'); assert.equal(f.data.Invoices[0].total, 99.75);
   assert.equal(f.data.Quotations[0].convertedInvoiceId, f.data.Invoices[0].recordId);
   assert.equal((await f.business.list(f.token, f.companyId, 'QuotationItems'))[0].parentStatus, 'CONVERTED');
+});
+
+test('foreign payroll accrual and settlement retain salary currency and report exchange loss', async () => {
+  const f = await setup(), employeeId = 'e'.repeat(43);
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  f.sheets.readReferences = f.sheets.read;
+  Object.assign(f.data, { CompanyProfile: [{ companyId: f.companyId, currency: 'AED' }],
+    Employees: [{ companyId: f.companyId, recordId: employeeId, employmentStatus: 'ACTIVE', currency: 'INR', basicSalary: 50000, allowances: 0 }],
+    Overtime: [], Payroll: [], Journals: [], JournalLines: [], FinancialPeriods: [] });
+  f.sheets.writeBatch = async (id, changes) => { for (const c of changes) await f.sheets.write(id, c.table, c.row, c.values); };
+  const payroll = await f.business.mutate(f.token, f.companyId, 'Payroll', null, 'create', { expectedVersion: 0,
+    values: { month: '2026-09', employeeId, currency: 'INR', exchangeRate: 0.04, bonus: 0, deductions: 0 } }, 'fx_payroll_create_operation');
+  await f.business.mutate(f.token, f.companyId, 'Payroll', payroll.recordId, 'approve', { expectedVersion: 1 }, 'fx_payroll_approve_operation');
+  await f.business.mutate(f.token, f.companyId, 'Payroll', payroll.recordId, 'payrollPay', { expectedVersion: 2,
+    values: { paidDate: '2026-10-01', paymentAccount: 'Bank', paymentExchangeRate: 0.041 } }, 'fx_payroll_payment_operation');
+  assert.equal(f.data.Payroll[0].netSalary, 50000);
+  assert.equal(f.data.Payroll[0].baseAmount, 2000);
+  assert.equal(f.data.JournalLines.find(l => l.accountId === 'fx_loss').debit, 50);
+  const report = await f.business.profitAndLoss(f.token, f.companyId, '2026-09-01', '2026-10-02');
+  assert.equal(report.totalExpenses, '2050.00');
+});
+
+test('foreign income and expenses settle control balances at the stored rate', async () => {
+  for (const table of ['Income', 'Expenses']) {
+    const f = await cashFixture(table, false);
+    const row = f.data[table][0];
+    Object.assign(row, { currency: 'GBP', baseCurrency: 'AED', exchangeRate: 4.7 });
+    assert.equal((await f.post()).results[0].status, 'APPLIED');
+    const paid = await pay(f, table, { paidDate: '2026-10-01', account: 'Bank', paymentExchangeRate: 4.65 });
+    assert.equal(paid.results[0].status, 'APPLIED');
+    assert.equal(f.data.Journals[0].totalDebit, 49.87);
+    assert.ok(f.data.JournalLines.some(l => l.accountId === (table === 'Income' ? 'fx_loss' : 'fx_gain')));
+    for (const j of f.data.Journals) assert.equal(j.totalDebit, j.totalCredit);
+  }
 });
 
 test('payroll approval and payment post each journal once', async () => {
