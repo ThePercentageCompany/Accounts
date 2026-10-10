@@ -2,6 +2,7 @@ import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:flutter/material.dart';
+import 'package:tpc_invoice/core/widgets/forms/currency_selector.dart';
 
 class CompanyProfileEditor extends StatefulWidget {
   const CompanyProfileEditor({super.key, required this.record});
@@ -51,7 +52,7 @@ class _CompanyProfileEditorState extends State<CompanyProfileEditor> {
                 children: [
                   for (final field in fields.entries)
                     if (field.key == 'currency')
-                      CurrencyFormField(
+                      CurrencySelector(
                         controller: controllers[field.key]!,
                         label: field.value,
                       )

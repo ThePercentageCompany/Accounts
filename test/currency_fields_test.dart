@@ -4,6 +4,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tpc_invoice/core/widgets/forms/currency_fields.dart';
 
 void main() {
+  testWidgets('currency dropdown selection fetches the selected rate',
+      (tester) async {
+    final draft = CurrencyDraft(record: {'currency': 'AED', 'exchangeRate': 1});
+    final date = TextEditingController(text: '2026-10-01');
+    final calls = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: CurrencyFields(
+      draft: draft,
+      transactionDate: date,
+      loadRate: (currency, day) async {
+        calls.add(currency);
+        return {
+          'currency': currency,
+          'baseCurrency': 'AED',
+          'exchangeRate': 0.04,
+          'rateDate': day,
+          'rateSource': 'FRANKFURTER'
+        };
+      },
+    ))));
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('INR — Indian Rupee').last);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(calls, ['INR']);
+    expect(draft.currency.text, 'INR');
+    expect(draft.values['exchangeRate'], 0.04);
+    await tester.pumpWidget(const SizedBox());
+    draft.dispose();
+    date.dispose();
+  });
+
   testWidgets('saved rate remains unchanged when reopening a transaction',
       (tester) async {
     final draft = CurrencyDraft(record: {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
+import 'currency_selector.dart';
 
 typedef ExchangeRateLoader = Future<Map<String, dynamic>> Function(
     String currency, String date);
@@ -70,6 +71,10 @@ class _CurrencyFieldsState extends State<CurrencyFields> {
     _debounce?.cancel();
     draft.rate.clear();
     draft.date = date;
+    setState(() {
+      _loading = false;
+      _error = null;
+    });
     _debounce = Timer(const Duration(milliseconds: 450), _fetch);
   }
 
@@ -119,17 +124,8 @@ class _CurrencyFieldsState extends State<CurrencyFields> {
   @override
   Widget build(BuildContext context) =>
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextFormField(
-            controller: draft.currency,
-            readOnly: widget.fixedCurrency,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-                labelText: 'Transaction currency',
-                hintText: 'AED, INR, GBP, USD'),
-            validator: (v) =>
-                RegExp(r'^[A-Z]{3}$').hasMatch((v ?? '').trim().toUpperCase())
-                    ? null
-                    : 'Enter a three-letter currency code.'),
+        CurrencySelector(
+            controller: draft.currency, enabled: !widget.fixedCurrency),
         const SizedBox(height: 12),
         TextFormField(
             controller: draft.rate,

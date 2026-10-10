@@ -5,7 +5,7 @@ Validated on 2026-10-11.
 ## Automated checks
 
 - Backend: `npm --prefix backend/cloud-run test` — 274 tests passed.
-- Flutter: `flutter test test/currency_fields_test.dart` — 4 tests passed, covering automatic rate loading, manual overrides, stale responses, saved-rate preservation and provider-outage fallback.
+- Flutter: `flutter test test/currency_fields_test.dart` — 5 tests passed, covering dropdown selection and rate loading, manual overrides, stale responses, saved-rate preservation and provider-outage fallback.
 - Targeted Flutter analysis passed for the changed currency forms and connected editors.
 - Local Flutter web release and production Vercel builds passed.
 - `git diff --check` passed.
@@ -14,11 +14,12 @@ Backend coverage includes foreign invoices and receipts, payroll, income and exp
 
 ## Production deployment
 
-- Frontend deployment: `dpl_8jwXxzBRHeWGSPuxvbmiVVo3fnST`.
+- Frontend deployment: `dpl_A7meuAz3REw8wrcbWxHEG6vErDU4` (includes currency dropdowns).
 - Backend revision: `tpc-accounts-api-00024-mom`, serving 100% of traffic.
 - Backend image digest: `sha256:e5df6c3200ada0d3cce010afce499d6e01e4b03ab7eaa44bfa88c446a172ee42`.
 - Production homepage and `/health` returned HTTP 200.
 - Health advertises the `multi-currency` capability.
+- Frankfurter currency catalog returned HTTP 200 and permits the production origin through CORS; the dated INR/AED rate endpoint returned a valid rate.
 - The exchange-rate endpoint rejects an unauthenticated request with HTTP 401.
 
 ## Signed-in verification still required

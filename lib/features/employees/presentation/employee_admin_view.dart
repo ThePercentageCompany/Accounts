@@ -1,4 +1,5 @@
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
+import 'package:tpc_invoice/core/widgets/forms/currency_selector.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -592,8 +593,10 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                   const Text(
                     'Payroll uses these amounts plus approved overtime and adjustments. Amounts use the employee salary currency; leave it blank to use company currency.',
                   ),
-                  detail(
-                      'currency', 'Salary currency (AED, INR, GBP; optional)'),
+                  CurrencySelector(
+                      controller: details['currency']!,
+                      label: 'Salary currency',
+                      optional: true),
                   detail('basicSalary', 'Basic salary', money: true),
                   detail('allowances', 'Monthly allowances', money: true),
                   const Text(
