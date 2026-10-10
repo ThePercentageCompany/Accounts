@@ -9,11 +9,14 @@ class DashboardTasks extends StatefulWidget {
       required this.api,
       required this.companyId,
       required this.employee,
+      this.employeeProfile,
       required this.onTask,
       this.active = true});
   final SaasApi api;
   final String companyId;
   final bool employee, active;
+  final Map<String, dynamic>? employeeProfile;
+
   final ValueChanged<String> onTask;
   @override
   State<DashboardTasks> createState() => _DashboardTasksState();
@@ -52,7 +55,10 @@ class _DashboardTasksState extends State<DashboardTasks> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api ||
         oldWidget.companyId != widget.companyId ||
-        oldWidget.employee != widget.employee) {
+        oldWidget.employee != widget.employee ||
+        oldWidget.employeeProfile?['employeeId'] !=
+            widget.employeeProfile?['employeeId'] ||
+        _canEdit(oldWidget) != _canEdit(widget)) {
       _generation++;
       _busy = false;
       _counts = {};
@@ -63,6 +69,11 @@ class _DashboardTasksState extends State<DashboardTasks> {
       _load(force: true);
     }
   }
+
+  bool _canEdit(DashboardTasks value) =>
+      !value.employee ||
+      (value.employeeProfile?['writableSections'] as List? ?? [])
+          .contains('Tasks');
 
   Future<void> _load({bool force = false}) async {
     if (_busy || !widget.active) return;
@@ -76,7 +87,14 @@ class _DashboardTasksState extends State<DashboardTasks> {
           widget.api.tasks(widget.companyId,
               employee: widget.employee,
               force: force,
-              filters: {'status': status, 'sort': 'due', 'limit': '5'})));
+              filters: {
+                'status': status,
+                'sort': 'due',
+                'limit': '5',
+                if (widget.employee && !_canEdit(widget))
+                  'employeeId':
+                      '${widget.employeeProfile?['employeeId'] ?? ''}',
+              })));
       if (!mounted || generation != _generation) return;
       final tasks = <Map<String, dynamic>>[];
       final counts = <String, int>{};

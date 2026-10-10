@@ -24,6 +24,7 @@ class TrialBalanceView extends StatefulWidget {
     required this.api,
     required this.companyId,
     this.employee = false,
+    this.employeeProfile,
     this.initialDashboard = false,
     this.active = true,
     this.reportKind,
@@ -37,6 +38,7 @@ class TrialBalanceView extends StatefulWidget {
   final SaasApi api;
   final String companyId;
   final bool employee;
+  final Map<String, dynamic>? employeeProfile;
   final bool initialDashboard;
   final bool active;
   final String? reportKind, companyName, initialAccountId;
@@ -1318,6 +1320,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                                   api: widget.api,
                                   companyId: widget.companyId,
                                   employee: widget.employee,
+                                  employeeProfile: widget.employeeProfile,
                                   active: widget.active,
                                   onTask: widget.onTask!),
                           data: data,

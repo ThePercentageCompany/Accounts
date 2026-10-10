@@ -735,6 +735,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           api: widget.api,
                           companyId: widget.companyId,
                           employee: widget.employee != null,
+                          employeeProfile: widget.employee,
                           initialDashboard: true,
                           onTask: widget.employee == null ||
                                   (widget.employee!['allowedSections']
