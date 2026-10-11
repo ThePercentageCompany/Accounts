@@ -230,7 +230,10 @@ class RecordSummary extends StatelessWidget {
     final date = record['issueDate'] ?? record['date'] ?? record['dueDate'];
     final status = record['status'] ??
         record['paymentStatus'] ??
-        record['employmentStatus'];
+        record['employmentStatus'] ??
+        record['approvalStatus'] ??
+        record['accessStatus'] ??
+        record['parentStatus'];
     return Wrap(
       spacing: 8,
       runSpacing: 4,
@@ -245,6 +248,10 @@ class RecordSummary extends StatelessWidget {
         if (status != null) StatusChip(value: '$status'),
         if (record['ledgerStatus'] != null)
           LedgerStatusChip(value: '${record['ledgerStatus']}'),
+        if (record['bankStatus'] != null)
+          StatusChip(
+              value: '${record['bankStatus']}',
+              label: 'Bank: ${record['bankStatus'].toString().toLowerCase()}'),
         if (record['baseAmount'] != null && record['baseAmount'] != '')
           Text(
               '${record['baseCurrency'] ?? ''} ${record['baseAmount']} in company currency'),
@@ -278,6 +285,12 @@ class StatusChip extends StatelessWidget {
       'ISSUED',
       'ACCEPTED',
       'LINKED',
+      'POSTED',
+      'APPROVED',
+      'CONVERTED',
+      'COMPLETED',
+      'REPAID',
+      'CLEARED',
     ].contains(status);
     final warning = [
       'DRAFT',
@@ -318,12 +331,14 @@ class LedgerStatusChip extends StatelessWidget {
         'LINKED' => 'Posted to ledger',
         'UNPOSTED' => 'Not posted to ledger',
         'REVERSED' => 'Ledger posting reversed',
+        'NOT_APPLICABLE' => 'No ledger posting required',
         _ => 'Ledger status unavailable',
       },
       icon: switch (status) {
         'LINKED' => Icons.check_circle_outline,
         'UNPOSTED' => Icons.pending_outlined,
         'REVERSED' => Icons.undo,
+        'NOT_APPLICABLE' => Icons.info_outline,
         _ => Icons.help_outline,
       },
     );
@@ -639,6 +654,10 @@ class RecordDetails extends StatelessWidget {
                                     'paymentStatus',
                                     'ledgerStatus',
                                     'employmentStatus',
+                                    'approvalStatus',
+                                    'accessStatus',
+                                    'parentStatus',
+                                    'bankStatus',
                                   }.contains(entry.key))
                                     StatusChip(value: '${entry.value}')
                                   else

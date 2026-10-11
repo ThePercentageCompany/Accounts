@@ -1,5 +1,6 @@
 import { currencyValues, convertJournals, validRate, convert, FX_TABLES } from './foreign-currency.js';
 import { validateProject } from './project-policy.js';
+import { hasLedgerSources, ledgerStatus } from './ledger-status.js';
 import { validateTask, taskActivityChanges } from './task-policy.js';
 import { opaque, digest } from './crypto.js';
 import { ApiError, requireThat } from './errors.js';
@@ -100,23 +101,20 @@ export class BusinessService {
     this.sheets.table(tableName);
     this.owner((await this.registry.read()).state, token, companyId);
     const rows = (await this.sheets.read(companyId, [tableName]))[tableName];
-    const journals = ['Income', 'Expenses'].includes(tableName) ?
+    const journals = hasLedgerSources(tableName) ?
       (await this.sheets.read(companyId, ['Journals'])).Journals : [];
     const invoiceParents = tableName === 'InvoiceItems' ?
       (await this.sheets.read(companyId, ['Invoices'])).Invoices : [];
     const quotationParents = tableName === 'QuotationItems' ?
       (await this.sheets.read(companyId, ['Quotations'])).Quotations : [];
-    const types = tableName === 'Income' ? ['Income', 'finance_income'] : ['Expenses', 'expense', 'supplier_bill'];
     this.owner((await this.registry.read()).state, token, companyId);
     return rows.filter(row => includeDeleted || active(row)).map(row =>
       active(row) ? { ...publicRecord(row), ...(tableName === 'InvoiceItems' ? {
         parentStatus: invoiceParents.find(invoice => invoice.recordId === row.invoiceId && active(invoice))?.status ?? 'UNAVAILABLE',
       } : tableName === 'QuotationItems' ? {
         parentStatus: quotationParents.find(quotation => quotation.recordId === row.quotationId && active(quotation))?.status ?? 'UNAVAILABLE',
-      } : {}), ...(['Income', 'Expenses'].includes(tableName) ? {
-        ledgerStatus: journals.some(j => j.companyId === companyId && active(j) &&
-          j.sourceId === row.recordId && j.sourceType === `${tableName}Reversal`) ? 'REVERSED' : journals.some(j => j.companyId === companyId && active(j) &&
-          j.sourceId === row.recordId && types.includes(j.sourceType)) ? 'LINKED' : 'UNPOSTED',
+      } : {}), ...(ledgerStatus(tableName, row, journals, companyId) !== undefined ? {
+        ledgerStatus: ledgerStatus(tableName, row, journals, companyId),
       } : {}) } : { recordId: row.recordId, companyId,
         recordVersion: row.recordVersion, updatedAt: row.updatedAt, isDeleted: true });
   }
