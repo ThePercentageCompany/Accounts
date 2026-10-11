@@ -12,16 +12,19 @@ class DocumentUploadQueue extends ChangeNotifier {
     this.api,
     this.preferences,
     String ownerId,
-    this.companyId,
-  )   : storageKey = 'saas_document_${ownerId}_$companyId',
+    this.companyId, {
+    this.employee = false,
+  })  : storageKey = 'saas_document_${ownerId}_$companyId',
         ownerId = ownerId;
   final String ownerId;
-  OfflineOutbox? get box =>
-      api.offlineEnabled ? api.outbox(ownerId, companyId) : null;
+  final bool employee;
+  OfflineOutbox? get box => api.offlineEnabled
+      ? api.outbox(ownerId, companyId, employee: employee)
+      : null;
   late final DurableValue? _durable = api.offlineEnabled
       ? DurableValue(
           api.offlineStore,
-          api.outbox(ownerId, companyId).scope,
+          api.outbox(ownerId, companyId, employee: employee).scope,
           storageKey,
           preferences,
         )
@@ -147,9 +150,16 @@ class DocumentUploadQueue extends ChangeNotifier {
       await _reload();
       final item = pending;
       if (item == null) return;
-      if (api.offlineEnabled) await api.verifySyncIdentity(ownerId, companyId);
+      if (api.offlineEnabled) {
+        await api.verifySyncIdentity(
+          employee ? ownerId.replaceFirst('employee_', '') : ownerId,
+          companyId,
+          employee: employee,
+        );
+      }
       final result = await api.upload(
         companyId,
+        employee: employee,
         operationId: item['operationId'],
         name: item['name'],
         mimeType: item['mimeType'],

@@ -1,4 +1,5 @@
 import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
+import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
@@ -74,7 +75,7 @@ const tableTitles = {
 
 // Both navigation layouts must expose the same authorized destinations.
 const workspaceNavigationGroups = <String, List<String>>{
-  'Overview': ['Reports'],
+  'Overview': ['Dashboard', 'Reports'],
   'Daily operations': [
     'Tasks',
     'Calendar',
@@ -117,12 +118,13 @@ class SharedWorkspace extends StatefulWidget {
 }
 
 class _SharedWorkspaceState extends State<SharedWorkspace> {
-  late final DocumentUploadQueue? _uploads = widget.employee == null
+  late final DocumentUploadQueue? _uploads = widget.preferences != null
       ? DocumentUploadQueue(
           widget.api,
           widget.preferences!,
-          widget.ownerId!,
+          widget.ownerId ?? 'employee_${widget.employee!['employeeId']}',
           widget.companyId,
+          employee: widget.employee != null,
         )
       : null;
   late final RecordWriteQueue? _writes = widget.preferences != null
@@ -325,6 +327,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   Widget build(BuildContext context) {
     final allowed = widget.employee?['allowedSections'] as List?;
     final sections = <String>[
+      if (widget.employee != null) 'Dashboard',
       if (widget.employee == null || allowed!.contains('Reports')) 'Reports',
       if (_employees != null || allowed!.contains('Employees')) 'Employees',
       for (final section in workspaceTables.keys)
@@ -340,10 +343,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     if (selected != null) _visited.add(selected);
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final shortcuts = <String>[
-      for (final section in ['Reports', 'Invoices', 'Customers'])
+      for (final section in ['Dashboard', 'Reports', 'Invoices', 'Customers'])
         if (sections.contains(section)) section,
       for (final section in sections)
-        if (!['Reports', 'Invoices', 'Customers'].contains(section)) section,
+        if (!['Dashboard', 'Reports', 'Invoices', 'Customers']
+            .contains(section))
+          section,
     ].take(3).toList();
     final moreSelected = !shortcuts.contains(selected);
     return Scaffold(
@@ -678,146 +683,163 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             'No record sections are assigned. Contact your company owner.',
           ),
         )
-      : selected == 'Settings' && _writes?.outbox != null
-          ? Column(children: [
-              ConstrainedBox(
-                  constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(context).height * .5),
-                  child: SingleChildScrollView(
-                      child: SyncSettingsPanel(
-                          api: widget.api,
-                          companyId: widget.companyId,
-                          employee: widget.employee != null,
-                          outbox: _writes!.outbox!,
-                          storageIssue: _syncError ??
-                              widget.api.cache.storageError?.toString()))),
-              if (widget.employee == null)
-                Expanded(
-                    child: _RecordsPanel(
-                        key: ValueKey((widget.companyId, 'Settings')),
-                        api: widget.api,
-                        companyId: widget.companyId,
-                        employee: false,
-                        active: active,
-                        writes: _writes,
-                        uploads: _uploads,
-                        tables: const ['CompanyProfile'],
-                        selectedTable: 'CompanyProfile')),
-            ])
-          : ['Tasks', 'Calendar'].contains(selected)
-              ? TaskWorkspace(
-                  api: widget.api,
-                  companyId: widget.companyId,
-                  employee: widget.employee,
-                  calendar: selected == 'Calendar',
-                  active: active,
-                  uploads: _uploads,
-                  writes: _writes,
-                  taskToOpen: selected == 'Tasks' ? _taskToOpen : null,
-                )
-              : selected == 'Reports'
-                  ? [
-                      'chart-of-accounts',
-                      'report-settings',
-                    ].contains(_subsection('Reports'))
-                      ? ReportConfigurationView(
-                          key: ValueKey(
-                              (widget.companyId, _subsection('Reports'))),
-                          api: widget.api,
-                          companyId: widget.companyId,
-                          employee: widget.employee != null,
-                          chart: _subsection('Reports') == 'chart-of-accounts',
-                        )
-                      : _subsection('Reports') == 'journal-entries'
-                          ? _RecordsPanel(
+      : selected == 'Dashboard' && widget.employee != null
+          ? EmployeeDashboard(
+              api: widget.api,
+              companyId: widget.companyId,
+              employee: widget.employee!,
+              active: active,
+              onTask: _openTask,
+              onSection: _navigate)
+          : selected == 'Settings' && _writes?.outbox != null
+              ? Column(children: [
+                  ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * .5),
+                      child: SingleChildScrollView(
+                          child: SyncSettingsPanel(
+                              api: widget.api,
+                              companyId: widget.companyId,
+                              employee: widget.employee != null,
+                              outbox: _writes!.outbox!,
+                              storageIssue: _syncError ??
+                                  widget.api.cache.storageError?.toString()))),
+                  if (widget.employee == null)
+                    Expanded(
+                        child: _RecordsPanel(
+                            key: ValueKey((widget.companyId, 'Settings')),
+                            api: widget.api,
+                            companyId: widget.companyId,
+                            employee: false,
+                            active: active,
+                            writes: _writes,
+                            uploads: _uploads,
+                            tables: const ['CompanyProfile'],
+                            selectedTable: 'CompanyProfile')),
+                ])
+              : ['Tasks', 'Calendar'].contains(selected)
+                  ? TaskWorkspace(
+                      api: widget.api,
+                      companyId: widget.companyId,
+                      employee: widget.employee,
+                      calendar: selected == 'Calendar',
+                      active: active,
+                      uploads: _uploads,
+                      writes: _writes,
+                      taskToOpen: selected == 'Tasks' ? _taskToOpen : null,
+                    )
+                  : selected == 'Reports'
+                      ? [
+                          'chart-of-accounts',
+                          'report-settings',
+                        ].contains(_subsection('Reports'))
+                          ? ReportConfigurationView(
                               key: ValueKey(
-                                  (widget.companyId, 'report-journals')),
+                                  (widget.companyId, _subsection('Reports'))),
                               api: widget.api,
                               companyId: widget.companyId,
                               employee: widget.employee != null,
-                              active: active,
-                              tables: const ['Journals', 'JournalLines'],
-                              selectedTable: 'Journals',
-                              writes: widget.employee == null ||
-                                      (widget.employee!['writableSections']
-                                                  as List? ??
-                                              [])
-                                          .contains('Balance Sheet')
-                                  ? _writes
-                                  : null,
-                              uploads: _uploads,
+                              chart:
+                                  _subsection('Reports') == 'chart-of-accounts',
                             )
-                          : TrialBalanceView(
-                              key: ValueKey(widget.companyId),
+                          : _subsection('Reports') == 'journal-entries'
+                              ? _RecordsPanel(
+                                  key: ValueKey(
+                                      (widget.companyId, 'report-journals')),
+                                  api: widget.api,
+                                  companyId: widget.companyId,
+                                  employee: widget.employee != null,
+                                  active: active,
+                                  tables: const ['Journals', 'JournalLines'],
+                                  selectedTable: 'Journals',
+                                  writes: widget.employee == null ||
+                                          (widget.employee!['writableSections']
+                                                      as List? ??
+                                                  [])
+                                              .contains('Balance Sheet')
+                                      ? _writes
+                                      : null,
+                                  uploads: _uploads,
+                                )
+                              : TrialBalanceView(
+                                  key: ValueKey(widget.companyId),
+                                  api: widget.api,
+                                  companyId: widget.companyId,
+                                  employee: widget.employee != null,
+                                  employeeProfile: widget.employee,
+                                  initialDashboard: true,
+                                  onTask: widget.employee == null ||
+                                          (widget.employee!['allowedSections']
+                                                      as List? ??
+                                                  [])
+                                              .contains('Tasks')
+                                      ? _openTask
+                                      : null,
+                                  reportKind: _subsection('Reports'),
+                                  active: active,
+                                  companyName: widget.title,
+                                  onReportSelected: (kind) =>
+                                      _navigate('Reports', kind),
+                                )
+                      : selected == 'Payroll' &&
+                              ['PayrollItems', 'Payslips']
+                                  .contains(_subsection('Payroll'))
+                          ? PayrollSupportView(
                               api: widget.api,
                               companyId: widget.companyId,
                               employee: widget.employee != null,
-                              employeeProfile: widget.employee,
-                              initialDashboard: true,
-                              onTask: widget.employee == null ||
-                                      (widget.employee!['allowedSections']
-                                                  as List? ??
-                                              [])
-                                          .contains('Tasks')
-                                  ? _openTask
-                                  : null,
-                              reportKind: _subsection('Reports'),
+                              slips: _subsection('Payroll') == 'Payslips',
                               active: active,
-                              companyName: widget.title,
-                              onReportSelected: (kind) =>
-                                  _navigate('Reports', kind),
-                            )
-                  : selected == 'Payroll' &&
-                          ['PayrollItems', 'Payslips']
-                              .contains(_subsection('Payroll'))
-                      ? PayrollSupportView(
-                          api: widget.api,
-                          companyId: widget.companyId,
-                          employee: widget.employee != null,
-                          slips: _subsection('Payroll') == 'Payslips',
-                          active: active,
-                          uploads: _uploads)
-                      : selected == 'Employees' && _employees != null
-                          ? EmployeeAdminView(
-                              controller: _employees,
-                              active: active,
-                              onDocuments: (row) {
-                                showDialog<void>(
-                                  context: context,
-                                  builder: (_) => RecordDocumentsView(
-                                    api: widget.api,
-                                    companyId: widget.companyId,
-                                    section: 'Employees',
-                                    record: row,
-                                    uploads: _uploads,
-                                    writes: _writes,
-                                  ),
+                              uploads: _uploads)
+                          : selected == 'Employees' && _employees != null
+                              ? EmployeeAdminView(
+                                  controller: _employees,
+                                  active: active,
+                                  onDocuments: (row) {
+                                    showDialog<void>(
+                                      context: context,
+                                      builder: (_) => RecordDocumentsView(
+                                        api: widget.api,
+                                        companyId: widget.companyId,
+                                        section: 'Employees',
+                                        record: row,
+                                        uploads: _uploads,
+                                        writes: _writes,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : _RecordsPanel(
+                                  key: ValueKey((widget.companyId, selected)),
+                                  api: widget.api,
+                                  companyId: widget.companyId,
+                                  employee: widget.employee != null,
+                                  active: active,
+                                  writes: widget.employee == null ||
+                                          (widget.employee!['writableSections']
+                                                      as List? ??
+                                                  [])
+                                              .contains(selected)
+                                      ? _writes
+                                      : null,
+                                  uploads: widget.employee == null ||
+                                          selected == 'Employees' ||
+                                          (widget.employee!['writableSections']
+                                                      as List? ??
+                                                  [])
+                                              .contains(selected)
+                                      ? _uploads
+                                      : null,
+                                  selectedTable: _children(selected).isEmpty
+                                      ? 'Employees'
+                                      : _subsection(selected),
+                                  tables: selected == 'Employees'
+                                      ? ['Employees']
+                                      : workspaceTables[selected]!,
                                 );
-                              },
-                            )
-                          : _RecordsPanel(
-                              key: ValueKey((widget.companyId, selected)),
-                              api: widget.api,
-                              companyId: widget.companyId,
-                              employee: widget.employee != null,
-                              active: active,
-                              writes: widget.employee == null ||
-                                      (widget.employee!['writableSections']
-                                                  as List? ??
-                                              [])
-                                          .contains(selected)
-                                  ? _writes
-                                  : null,
-                              uploads: _uploads,
-                              selectedTable: _children(selected).isEmpty
-                                  ? 'Employees'
-                                  : _subsection(selected),
-                              tables: selected == 'Employees'
-                                  ? ['Employees']
-                                  : workspaceTables[selected]!,
-                            );
 
   IconData _sectionIcon(String section) => switch (section) {
+        'Dashboard' => Icons.dashboard_outlined,
         'Tasks' => Icons.task_alt,
         'Calendar' => Icons.calendar_month_outlined,
         'Reports' => Icons.space_dashboard_outlined,

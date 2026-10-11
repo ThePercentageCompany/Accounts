@@ -3,9 +3,10 @@ import { requireThat } from './errors.js';
 import { TABLES } from './company-schema.js';
 import { BusinessSheets } from './business-sheets.js';
 import { decodeContent, validateContent, contentHash } from './document-content.js';
+import { visible, SECTION_TABLES } from './employee-policy.js';
 
 const FOLDERS = { Tasks: 'Task Attachments', CompanyProfile: 'Company Logo', Invoices: 'Invoices', CreditNotes: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
-  Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
+  Income: 'Receipts', Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 export class DocumentSheets extends BusinessSheets {
   table(name) {
@@ -17,8 +18,10 @@ export class DocumentService {
   constructor({ accounts, business, employees, workspace, google, drive, sheets, now = Date.now }) {
     Object.assign(this, { accounts, business, employees, workspace, google, drive, sheets, now }); this.registry = accounts.registry;
   }
-  owner(state, token, companyId, operation) {
-    this.accounts.companyOwner(state, token, companyId);
+  owner(state, token, companyId, operation, employee = false) {
+    if (employee) {
+      requireThat(this.employees.session(state, token, false, false, operation).companyId === companyId, 403, 'DOCUMENT_FORBIDDEN', 'Document unavailable.');
+    } else this.accounts.companyOwner(state, token, companyId);
     const c = state.companies[companyId];
     requireThat(c.stage === 'READY', 409, 'WORKSPACE_NOT_READY', 'The company workspace is not ready.');
     requireThat(!c.businessWrite && !c.employeeWrite && (!c.documentWrite || c.documentWrite === operation),
@@ -55,26 +58,39 @@ export class DocumentService {
         doc.relatedSection === section && doc.relatedRecordId === recordId;
     }).map(row => ({ documentId: row.recordId, name: row.name, mimeType: row.mimeType, byteLength: row.byteLength }));
   }
-  async upload(token, companyId, input, key) {
-    this.owner((await this.registry.read()).state, token, companyId, digest(`document:${key}`));
+  async upload(token, companyId, input, key, employee = false) {
+    this.owner((await this.registry.read()).state, token, companyId, digest(`document:${key}`), employee);
     requireThat(typeof key === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(key), 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use a stable upload key.');
     requireThat(input && Object.keys(input).length === 5 && ['name', 'mimeType', 'relatedSection', 'relatedRecordId', 'data'].every(k => Object.hasOwn(input, k)) &&
       Object.hasOwn(FOLDERS, input.relatedSection) && typeof input.name === 'string' && input.name.length > 0 && input.name.length <= 160 &&
       !/[\x00-\x1f\x7f/\\]/.test(input.name) && typeof input.relatedRecordId === 'string' &&
       (/^[A-Za-z0-9_-]{43}$/.test(input.relatedRecordId) || (input.relatedSection === 'CompanyProfile' && input.relatedRecordId === 'company')),
     400, 'INVALID_DOCUMENT', 'Supply a name, MIME type, related record and data.');
-    if (input.relatedSection === 'Tasks') await this.workspace.ensureTaskFolder(companyId);
     const bytes = decodeContent(input.data); validateContent(bytes, input.mimeType);
     requireThat(input.relatedSection !== 'CompanyProfile' || input.mimeType.startsWith('image/'), 415, 'DOCUMENT_TYPE', 'Company logos must be PNG or JPEG.');
     const operation = digest(`document:${key}`), hash = contentHash(bytes), id = opaque();
+    const authorize = async () => {
+      if (!employee) return;
+      const p = await this.employees.principal(token, false, operation);
+      const ownProfile = input.relatedSection === 'Employees' && input.relatedRecordId === p.employeeId && p.allowedSections.includes('Employees');
+      requireThat(p.companyId === companyId && (ownProfile || p.writableSections.includes(SECTION_TABLES[input.relatedSection])) && input.relatedSection !== 'CompanyProfile',
+        403, 'DOCUMENT_FORBIDDEN', 'Uploading documents requires edit access to this section.');
+      const rows = await this.employees.sheets.read(companyId);
+      requireThat((rows[input.relatedSection] || []).some(row => row.recordId === input.relatedRecordId && row.companyId === companyId && active(row) && visible(p, input.relatedSection, row, rows)),
+        403, 'DOCUMENT_FORBIDDEN', 'Document record unavailable.');
+      return p.employeeId;
+    };
+    const actor = employee ? await authorize() : this.accounts.companyOwner((await this.registry.read()).state, token, companyId).id;
+    if (input.relatedSection === 'Tasks') await this.workspace.ensureTaskFolder(companyId);
     const metadata = { name: input.name, mimeType: input.mimeType, relatedSection: input.relatedSection,
       relatedRecordId: input.relatedRecordId, byteLength: bytes.length, hash };
     const fingerprint = digest(JSON.stringify(metadata));
     await this.target(companyId, input.relatedSection, input.relatedRecordId);
     let doc = await this.registry.transact(state => {
-      const c = this.owner(state, token, companyId, operation); c.documentOps ??= {}; c.documents ??= {};
+      const c = this.owner(state, token, companyId, operation, employee); c.documentOps ??= {}; c.documents ??= {};
       const previous = c.documentOps[operation];
       if (previous) {
+        requireThat(!employee || c.documents[previous.id]?.createdBy === actor, 403, 'DOCUMENT_FORBIDDEN', 'This upload belongs to another account.');
         requireThat(previous.fingerprint === fingerprint, 409, 'IDEMPOTENCY_CONFLICT', 'This key belongs to a different upload.');
         return structuredClone(c.documents[previous.id]);
       }
@@ -82,12 +98,12 @@ export class DocumentService {
       requireThat(folderId, 409, 'WORKSPACE_NOT_READY', 'The document folder is unavailable.');
       c.documentWrite = operation; c.documentOps[operation] = { id, fingerprint };
       return structuredClone(c.documents[id] = { ...metadata, id, folderId, createdAt: this.now(),
-        createdBy: this.accounts.companyOwner(state, token, companyId).id, status: 'PENDING' });
+        createdBy: actor, status: 'PENDING' });
     });
     if (doc.status === 'READY') return { documentId: doc.id, replayed: true };
     // The target could have changed between the first read and acquiring the
     // company write reservation. Re-read while competing mutations are blocked.
-    try { await this.target(companyId, doc.relatedSection, doc.relatedRecordId); }
+    try { await authorize(); await this.target(companyId, doc.relatedSection, doc.relatedRecordId); }
     catch (error) {
       await this.registry.transact(state => {
         const c = state.companies[companyId], current = c?.documents?.[doc.id];
@@ -100,27 +116,29 @@ export class DocumentService {
     if (!doc.fileId) {
       const [fileId] = await this.workspace.withGoogle(companyId, access => this.google.generateFolderIds(access, 1));
       doc = await this.registry.transact(state => {
-        const c = this.owner(state, token, companyId, operation), current = c.documents[doc.id];
+        const c = this.owner(state, token, companyId, operation, employee), current = c.documents[doc.id];
         current.fileId ??= fileId; return structuredClone(current);
       });
     }
+    await authorize();
     await this.workspace.withGoogle(companyId, access => this.drive.ensure(access, companyId, doc, bytes));
     if (!doc.row) {
       const rows = (await this.sheets.read(companyId, ['DocumentRegistry'])).DocumentRegistry;
       const row = Math.max(1, ...rows.map(r => r._row)) + 1;
       doc = await this.registry.transact(state => {
-        const c = this.owner(state, token, companyId, operation), current = c.documents[doc.id];
+        const c = this.owner(state, token, companyId, operation, employee), current = c.documents[doc.id];
         current.row ??= row; return structuredClone(current);
       });
     }
     // Identical retries target one durable row and one pre-generated Drive ID.
+    await authorize();
     await this.sheets.write(companyId, 'DocumentRegistry', doc.row, { recordId: doc.id, companyId,
       createdAt: doc.createdAt, createdBy: doc.createdBy, updatedAt: doc.createdAt, updatedBy: doc.createdBy,
       recordVersion: 1, syncStatus: 'SYNCED', isDeleted: false, idempotencyKey: `document:${operation}`,
       kind: FOLDERS[doc.relatedSection], name: doc.name, mimeType: doc.mimeType, byteLength: doc.byteLength,
       relatedSection: doc.relatedSection, relatedRecordId: doc.relatedRecordId, status: 'READY' });
     await this.registry.transact(state => {
-      const c = this.owner(state, token, companyId, operation); c.documents[doc.id].status = 'READY';
+      const c = this.owner(state, token, companyId, operation, employee); c.documents[doc.id].status = 'READY';
       if (c.documentWrite === operation) delete c.documentWrite;
     });
     return { documentId: doc.id, replayed: false };

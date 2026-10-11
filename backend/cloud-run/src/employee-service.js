@@ -20,12 +20,12 @@ export class EmployeeService {
   constructor({ accounts, sheets, codes = new PrivateCode(), now = Date.now }) {
     Object.assign(this, { accounts, sheets, codes, now }); this.registry = accounts.registry;
   }
-  ready(state, companyId, allowWrite = false, allowBusiness = false) {
+  ready(state, companyId, allowWrite = false, allowBusiness = false, documentOperation = null) {
     const c = state.companies[companyId];
     requireThat(c && !c.deleted && c.stage === 'READY', 409, c?.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_REQUIRED' : 'WORKSPACE_NOT_READY', 'Company workspace is not ready.');
     requireThat(allowWrite || !c.employeeWrite, 409, 'EMPLOYEE_UPDATE_PENDING', 'An employee update is being confirmed. Retry shortly.');
     requireThat(allowBusiness || !c.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'A business update is being confirmed. Retry shortly.');
-    requireThat(!c.documentWrite, 409, 'DOCUMENT_WRITE_PENDING', 'A document upload is being confirmed. Retry shortly.');
+    requireThat(!c.documentWrite || c.documentWrite === documentOperation, 409, 'DOCUMENT_WRITE_PENDING', 'A document upload is being confirmed. Retry shortly.');
     return c;
   }
   owner(state, token, companyId, allowWrite = false) {
@@ -248,12 +248,15 @@ export class EmployeeService {
     });
     return { token, expiresAt, absoluteExpiresAt: this.now() + 24 * 3600000, employee: this.publicPrincipal(principal) };
   }
-  session(state, token, allowBusiness = false, allowExpired = false) {
+  session(state, token, allowBusiness = false, allowExpired = false, documentOperation = null) {
     const session = validId(token) && state.employeeSessions?.[digest(token)];
     requireThat(session && session.absoluteExpiresAt > this.now() && (!session.rotatedUntil || session.rotatedUntil > this.now()),
       401, 'EMPLOYEE_SESSION_INVALID', 'Your employee session ended or was revoked. Sign in again.');
     requireThat(allowExpired || session.expiresAt > this.now(), 401, 'EMPLOYEE_SESSION_EXPIRED', 'Your employee session needs renewal.');
-    const c = this.ready(state, session.companyId, false, allowBusiness), access = c.employeeAccess?.[session.employeeId];
+    // Renewal checks identity and grants, rather than mutating business data.
+    // A durable upload waiting for retry must not prevent session renewal.
+    const c = this.ready(state, session.companyId, false, allowBusiness,
+      allowExpired ? state.companies[session.companyId]?.documentWrite : documentOperation), access = c.employeeAccess?.[session.employeeId];
     requireThat(access && access.status === 'ACTIVE' && access.version === session.version,
       401, 'EMPLOYEE_SESSION_INVALID', 'Your employee access was revoked. Contact your administrator.');
     return session;
@@ -264,10 +267,15 @@ export class EmployeeService {
       (context.employeeId === undefined || context.employeeId === principal.employeeId),
       403, 'WORKSPACE_CHANGED', 'This request belongs to a different employee or workspace. Sign in with the original account before retrying.');
   }
-  async principal(token, allowBusiness = false) {
-    const session = this.session((await this.registry.read()).state, token, allowBusiness);
+  async principal(token, allowBusiness = false, documentOperation = null, identityOnly = false) {
+    if (identityOnly) {
+      const state = (await this.registry.read()).state;
+      const companyId = state.employeeSessions?.[digest(token || '')]?.companyId;
+      documentOperation = state.companies[companyId]?.documentWrite;
+    }
+    const session = this.session((await this.registry.read()).state, token, allowBusiness, false, documentOperation);
     const principal = principalFromRows(session.companyId, session.employeeId, await this.sheets.read(session.companyId), this.now());
-    this.session((await this.registry.read()).state, token, allowBusiness);
+    this.session((await this.registry.read()).state, token, allowBusiness, false, documentOperation);
     return principal;
   }
   async refresh(token) {

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { digest } from './crypto.js';
 import { TaskService } from './task-service.js';
 import { exchangeRate } from './foreign-currency.js';
 import { ApiError, requireThat } from './errors.js';
@@ -159,10 +160,16 @@ export function createApi(service, config, { log = console.error, workspace, que
           json(200, { documents: await documents.list(employee ? jar[EMPLOYEE] : token, document[2],
             url.searchParams.get('section'), url.searchParams.get('recordId'), employee) }); return;
         }
-        if (document && request.method === 'POST' && document[1] === 'companies' && !document[3]) {
+        if (document && request.method === 'POST' && !document[3]) {
           // Authenticate before reading a potentially large document body.
-          await service.companyStatus(token, document[2]);
-          json(201, await documents.upload(token, document[2], await body(request, 7 * 1024 * 1024), request.headers['idempotency-key'])); return;
+          const employee = document[1] !== 'companies';
+          if (employee) {
+            const principal = await employees.principal(jar[EMPLOYEE], false, digest(`document:${request.headers['idempotency-key']}`));
+            employees.verifyContext(principal, employeeContext);
+            requireThat(principal.companyId === document[2], 403, 'WORKSPACE_CHANGED', 'Select the original workspace before uploading.');
+          }
+          else await service.companyStatus(token, document[2]);
+          json(201, await documents.upload(employee ? jar[EMPLOYEE] : token, document[2], await body(request, 7 * 1024 * 1024), request.headers['idempotency-key'], employee)); return;
         }
         if (document && request.method === 'GET' && document[3]) {
           const employee = document[1] !== 'companies';
@@ -266,7 +273,7 @@ export function createApi(service, config, { log = console.error, workspace, que
           response.setHeader('Set-Cookie', cookie(EMPLOYEE, '', 0)); response.writeHead(204); response.end(); return;
         }
         if (route === 'GET /v1/employee/me') {
-          json(200, { employee: employees.publicPrincipal(await employees.principal(jar[EMPLOYEE])) }); return;
+          json(200, { employee: employees.publicPrincipal(await employees.principal(jar[EMPLOYEE], false, null, true)) }); return;
         }
         if (route === 'POST /v1/employee/sync') {
           const input = await body(request);

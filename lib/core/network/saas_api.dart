@@ -151,11 +151,10 @@ class SaasApi implements SessionRepository {
               ]
             };
           }
-          if (!employee &&
-              op['table'] == 'Documents' &&
-              op['action'] == 'upload') {
+          if (op['table'] == 'Documents' && op['action'] == 'upload') {
             final values = op['values'] as Map;
             final result = await upload(company,
+                employee: employee,
                 operationId: op['operationId'] as String,
                 name: values['name'],
                 mimeType: values['mimeType'],
@@ -1328,10 +1327,11 @@ class SaasApi implements SessionRepository {
     required String relatedSection,
     required String relatedRecordId,
     required Uint8List bytes,
+    bool employee = false,
   }) =>
       _json(
         'POST',
-        '/v1/companies/${_id(companyId)}/documents',
+        '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents',
         operationId: operationId,
         data: {
           'name': name,

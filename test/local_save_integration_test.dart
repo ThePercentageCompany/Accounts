@@ -31,23 +31,27 @@ void main() {
               ? {
                   'owner': {'ownerId': owner}
                 }
-              : path.endsWith('/employees')
-                  ? request.method == 'GET'
-                      ? {'employees': []}
-                      : {
-                          'employeeId': List.filled(43, 'e').join(),
-                          'employeeCode': 'TP-01',
-                          'version': 1
-                        }
-                  : path.endsWith('/documents')
-                      ? {'documentId': List.filled(43, 'd').join()}
-                      : path.endsWith('/reports/settings')
-                          ? {
-                              'version': request.method == 'GET' ? 2 : 3,
-                              'accounts': [],
-                              'views': []
+              : path == '/v1/employee/me'
+                  ? {
+                      'employee': {'employeeId': owner, 'companyId': company}
+                    }
+                  : path.endsWith('/employees')
+                      ? request.method == 'GET'
+                          ? {'employees': []}
+                          : {
+                              'employeeId': List.filled(43, 'e').join(),
+                              'employeeCode': 'TP-01',
+                              'version': 1
                             }
-                          : {};
+                      : path.endsWith('/documents')
+                          ? {'documentId': List.filled(43, 'd').join()}
+                          : path.endsWith('/reports/settings')
+                              ? {
+                                  'version': request.method == 'GET' ? 2 : 3,
+                                  'accounts': [],
+                                  'views': []
+                                }
+                              : {};
           return http.Response(jsonEncode(data), 200,
               headers: {'content-type': 'application/json'});
         }));
@@ -106,6 +110,31 @@ void main() {
     expect(mutations, hasLength(2));
     expect(uploads.box!.pending, isEmpty);
     uploads.dispose();
+  });
+
+  test('employee document upload saves locally and uses the employee endpoint',
+      () async {
+    api.useVerifiedWorkspace(company, employee: {
+      'employeeId': owner,
+      'companyId': company,
+      'allowedSections': ['Employees'],
+      'writableSections': []
+    });
+    final uploads = DocumentUploadQueue(
+        api, preferences, 'employee_$owner', company,
+        employee: true);
+    await uploads.enqueue(
+        name: 'employee.pdf',
+        mimeType: 'application/pdf',
+        section: 'Employees',
+        recordId: owner,
+        bytes: Uint8List.fromList([1, 2, 3]));
+    expect(mutations, isEmpty);
+    expect(uploads.box!.pending.single['table'], 'Documents');
+    await uploads.box!.sync();
+    expect(
+        mutations.single.url.path, '/v1/employee/companies/$company/documents');
+    expect(uploads.box!.pending, isEmpty);
   });
 
   test('report settings commit locally and sync using the saved version',

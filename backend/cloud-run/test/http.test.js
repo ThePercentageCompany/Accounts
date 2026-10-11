@@ -199,6 +199,24 @@ test('document HTTP routes authenticate uploads and deliver private bytes with n
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.match(response.headers.get('content-disposition'), /inline; filename\*=UTF-8''company%27s%20logo.png/);
 });
+
+test('employee document upload routes employee cookie and verifies context before accepting a body', async t => {
+  const companyId = 'c'.repeat(43), employeeId = 'e'.repeat(43), calls = [];
+  const employees = {
+    principal: async token => {assert.equal(token,'employee-cookie'); return {companyId,employeeId};},
+    verifyContext: (p, context) => {if (p.companyId !== context.companyId || p.employeeId !== context.employeeId) throw new ApiError(409,'WORKSPACE_CHANGED','Changed context.');},
+  };
+  const documents = {upload:async (...args) => {calls.push(args); return {documentId:'d'.repeat(43)};}};
+  const f = await running(t,{employees,documents});
+  const path = `/v1/employee/companies/${companyId}/documents`;
+  const options = {method:'POST',headers:{...headers,Cookie:'__Host-tpc_session=owner-cookie; __Host-tpc_employee=employee-cookie',
+    'X-TPC-Company':companyId,'X-TPC-Employee':employeeId,'Idempotency-Key':'employee_upload_route'}, body:JSON.stringify({name:'expense.pdf'})};
+  assert.equal((await f.request(path,options)).status,201);
+  assert.equal(calls[0][0],'employee-cookie');
+  assert.equal(calls[0][4],true);
+  assert.equal((await f.request(path,{...options,headers:{...options.headers,'X-TPC-Employee':'x'.repeat(43)}})).status,409);
+  assert.equal(calls.length,1);
+});
 test('HTTP Google callback creates secure cookie and no tokens in redirect/JSON', async t => {
   const f = await running(t);
   const start = await f.request('/v1/auth/google/start', { method: 'POST', headers, body: '{}' });

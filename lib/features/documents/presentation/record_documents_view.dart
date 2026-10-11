@@ -20,6 +20,7 @@ const documentSections = [
   'CreditNotes',
   'Receipts',
   'Quotations',
+  'Income',
   'Expenses',
   'Employees',
   'Payroll',
@@ -330,6 +331,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 Wrap(
                   alignment: WrapAlignment.end,
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     if (const [
                       'Invoices',
@@ -344,10 +346,10 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                         icon: const Icon(Icons.picture_as_pdf),
                         label: const Text('Create and attach PDF'),
                       ),
-                    LoadingButton.textIcon(
+                    LoadingButton.icon(
                       onPressed: busy ? null : _upload,
                       icon: const Icon(Icons.upload_file),
-                      label: const Text('Upload file (max 5 MiB)'),
+                      label: const Text('Upload document'),
                     ),
                   ],
                 ),

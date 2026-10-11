@@ -41,6 +41,18 @@ async function setup() {
 }
 const denied = e => ['EMPLOYEE_ACCESS_DENIED', 'EMPLOYEE_SESSION_INVALID', 'EMPLOYEE_SESSION_EXPIRED'].includes(e.code);
 
+test('pending document upload permits employee identity verification and renewal but blocks unrelated business reads', async () => {
+  const f=await setup(), id=await f.create();
+  const session=await f.loginEmployee(await f.issue(id));
+  f.company().documentWrite='durable-document-operation';
+  await assert.rejects(f.employees.principal(session.token),e=>e.code==='DOCUMENT_WRITE_PENDING');
+  assert.equal((await f.employees.principal(session.token,false,null,true)).employeeId,id);
+  const renewed=await f.employees.refresh(session.token);
+  assert.equal(renewed.employee.employeeId,id);
+  f.company().employeeAccess[id].status='REVOKED';
+  await assert.rejects(f.employees.principal(renewed.token,false,null,true),e=>e.code==='EMPLOYEE_SESSION_INVALID');
+});
+
 test('automatic workspace employee codes are sequential, stable on replay/edit and never recycle deleted codes', async () => {
   const f = await setup();
   const first = await f.create();

@@ -39,6 +39,37 @@ test('document upload returns opaque identity, persists metadata and replays wit
   await assert.rejects(() => f.documents.upload(f.token, f.companyId, { ...input, name: 'other.pdf' }, key), e => e.code === 'IDEMPOTENCY_CONFLICT');
 });
 
+test('employee upload enforces current edit scope, audits employee and safely replays', async () => {
+  const f = await setup();
+  const principal = {companyId:f.companyId, employeeId:'e'.repeat(43), allowedSections:['Invoices'], writableSections:['Invoices'], permissions:{Invoices:'COMPANY'}};
+  f.employees.session = () => ({companyId:f.companyId});
+  f.employees.principal = async () => principal;
+  f.employees.sheets = {read:async () => ({Invoices:[{recordId:input.relatedRecordId,companyId:f.companyId}]})};
+  const result = await f.documents.upload('employee',f.companyId,input,'employee_document_01',true);
+  assert.equal(f.rows[0].createdBy, principal.employeeId);
+  assert.deepEqual(await f.documents.upload('employee',f.companyId,input,'employee_document_01',true), {...result,replayed:true});
+  principal.writableSections=[];
+  await assert.rejects(f.documents.upload('employee',f.companyId,input,'employee_document_02',true), e=>e.code==='DOCUMENT_FORBIDDEN');
+  assert.deepEqual(f.stats(), {ids:1,writes:1});
+});
+
+for (const section of ['Income', 'Expenses']) {
+  test(`employee ${section} documents use Income & Expenses edit permission`, async () => {
+    const f = await setup();
+    await f.registry.transact(state => Object.assign(state.companies[f.companyId].resources.folders, {Receipts:'income-folder', Expenses:'expense-folder'}));
+    const p = {companyId:f.companyId, employeeId:'e'.repeat(43), allowedSections:['Income & Expenses'], writableSections:['Income & Expenses'], permissions:{'Income & Expenses':'COMPANY'}};
+    f.employees.session = () => ({companyId:f.companyId});
+    f.employees.principal = async () => p;
+    f.employees.sheets = {read: async () => ({[section]:[{recordId:input.relatedRecordId,companyId:f.companyId}]})};
+    const result = await f.documents.upload('employee',f.companyId,{...input,relatedSection:section},`employee_${section}_document`,true);
+    assert.equal(f.rows[0].relatedSection,section);
+    assert.equal(f.rows[0].createdBy,p.employeeId);
+    assert.equal((await f.documents.list('employee',f.companyId,section,input.relatedRecordId,true))[0].documentId,result.documentId);
+    p.writableSections=[];
+    await assert.rejects(f.documents.upload('employee',f.companyId,{...input,relatedSection:section},`employee_${section}_denied`,true),e=>e.code==='DOCUMENT_FORBIDDEN');
+  });
+}
+
 test('document listing exposes only ready metadata for the authorized parent', async () => {
   const f = await setup();
   const doc = await f.documents.upload(f.token, f.companyId, input, 'document_list_0001');
