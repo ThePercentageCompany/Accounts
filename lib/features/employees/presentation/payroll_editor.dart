@@ -252,16 +252,10 @@ class _PayrollEditorState extends State<PayrollEditor> {
             child: const Text('Cancel'),
           ),
           LoadingButton(
-            onPressed: calculating
-                ? null
-                : () async {
-                    if (!AppFormValidation.validate(form.currentState!)) return;
-                    if (widget.preview != null && totals == null) {
-                      await calculate();
-                      return;
-                    }
-                    Navigator.pop(context, values());
-                  },
+            onPressed: () {
+              if (!AppFormValidation.validate(form.currentState!)) return;
+              Navigator.pop(context, values());
+            },
             child: const Text('Save draft'),
           ),
         ],

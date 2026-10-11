@@ -617,27 +617,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                             label: const Text('New Task'))
                 ]),
                 const SizedBox(height: 16),
-                if (_pendingTask && widget.writes!.canDiscardRejected)
-                  Card(
-                      child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Text(
-                                    'A task change is awaiting confirmation.'),
-                                TextButton(
-                                    onPressed: _recoverTasks,
-                                    child: const Text('Retry pending change')),
-                                if (widget.writes!.canDiscardRejected)
-                                  TextButton(
-                                      onPressed: () async {
-                                        await widget.writes!.discardRejected();
-                                        if (mounted) _load();
-                                      },
-                                      child: const Text(
-                                          'Discard rejected change')),
-                              ]))),
                 if (_employee && !_manage && !_calendar) ...[
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     for (final item in [

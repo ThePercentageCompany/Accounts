@@ -1,6 +1,7 @@
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:async';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -51,6 +52,36 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   List<Map<String, dynamic>> documents = [];
   bool busy = false;
   bool _hasLoaded = false;
+  bool _reading = false;
+  int _lastLocalCount = 0;
+  String get _recordId =>
+      '${widget.uploads?.box?.data['ids'][widget.record['recordId']] ?? widget.record['recordId']}';
+  List<Map<String, dynamic>> get _localDocuments =>
+      widget.uploads?.box?.pending
+          .where((op) =>
+              op['table'] == 'Documents' &&
+              (op['values'] as Map)['section'] == widget.section &&
+              (op['values'] as Map)['relatedRecordId'] ==
+                  (widget.uploads?.box?.data['ids']
+                          [widget.record['recordId']] ??
+                      widget.record['recordId']))
+          .map((op) => <String, dynamic>{
+                ...Map<String, dynamic>.from(op['values'] as Map),
+                'documentId': op['localId'],
+                '_localData': (op['values'] as Map)['data']
+              })
+          .toList() ??
+      [];
+  void _localChanged() {
+    if (mounted) {
+      final count = _localDocuments.length;
+      final acknowledged = count < _lastLocalCount;
+      _lastLocalCount = count;
+      setState(() {});
+      if (acknowledged) _load().ignore();
+    }
+  }
+
   String? error;
   Uint8List? image;
   String? imageName;
@@ -64,7 +95,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           widget.api,
           widget.companyId,
           widget.section,
-          widget.record['recordId'],
+          _recordId,
           await htmlStore.load(),
         );
         await downloadFile(
@@ -76,7 +107,14 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   @override
   void initState() {
     super.initState();
+    widget.uploads?.box?.addListener(_localChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    widget.uploads?.box?.removeListener(_localChanged);
+    super.dispose();
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -104,7 +142,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     final result = await widget.api.documents(
       widget.companyId,
       widget.section,
-      widget.record['recordId'],
+      _recordId,
       employee: widget.employee,
     );
     if (mounted) {
@@ -117,9 +155,21 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     }
   }
 
-  Future<void> _load() => _run(() async {
-        await _read();
-      });
+  Future<void> _load() async {
+    if (_reading) return;
+    setState(() => _reading = true);
+    try {
+      if (!_recordId.startsWith('local_')) await _read();
+    } catch (e) {
+      if (mounted && documents.isEmpty && _localDocuments.isEmpty) {
+        setState(() => error =
+            'Previously opened documents remain available when connected.');
+      }
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
+
   Future<void> _upload() => _run(() async {
         final picked = await FilePicker.platform.pickFiles(
           type: FileType.custom,
@@ -145,36 +195,46 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           name: file.name,
           mimeType: mime,
           section: widget.section,
-          recordId: widget.record['recordId'],
+          recordId: _recordId,
           bytes: file.bytes!,
         );
-        await widget.uploads!.flush();
-        await _read();
+        await widget.uploads!.syncInBackground();
+        if (widget.api.offlineEnabled) {
+          unawaited(_read().catchError((Object _) {}));
+        } else {
+          await _read();
+        }
       });
   Future<void> _generate() => _run(() async {
         final bytes = await sharedRecordPdf(
           widget.api,
           widget.companyId,
           widget.section,
-          widget.record['recordId'],
+          _recordId,
           style: pdfStyle,
         );
         await widget.uploads!.enqueue(
           name: '${widget.section}-${widget.record['recordId']}.pdf',
           mimeType: 'application/pdf',
           section: widget.section,
-          recordId: widget.record['recordId'],
+          recordId: _recordId,
           bytes: bytes,
         );
-        await widget.uploads!.flush();
-        await _read();
+        await widget.uploads!.syncInBackground();
+        if (widget.api.offlineEnabled) {
+          unawaited(_read().catchError((Object _) {}));
+        } else {
+          await _read();
+        }
       });
   Future<void> _open(Map<String, dynamic> doc) => _run(() async {
-        final bytes = await widget.api.document(
-          widget.companyId,
-          doc['documentId'],
-          employee: widget.employee,
-        );
+        final bytes = doc['_localData'] != null
+            ? base64Decode(doc['_localData'])
+            : await widget.api.document(
+                widget.companyId,
+                doc['documentId'],
+                employee: widget.employee,
+              );
         if ('${doc['mimeType']}'.startsWith('image/')) {
           if (mounted) {
             setState(() {
@@ -202,7 +262,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           recordId: 'company',
           expectedVersion: int.parse('${profile['recordVersion']}'),
         );
-        await widget.writes!.flush();
+        await widget.writes!.syncInBackground();
         if (mounted) Navigator.pop(context);
       });
   @override
@@ -280,47 +340,26 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                       'Assets',
                     ].contains(widget.section))
                       LoadingButton.textIcon(
-                        onPressed: busy ||
-                                widget.uploads!.pending != null ||
-                                widget.writes?.pending.isNotEmpty == true
-                            ? null
-                            : _generate,
+                        onPressed: busy ? null : _generate,
                         icon: const Icon(Icons.picture_as_pdf),
                         label: const Text('Create and attach PDF'),
                       ),
                     LoadingButton.textIcon(
-                      onPressed: busy ||
-                              widget.uploads!.pending != null ||
-                              widget.writes?.pending.isNotEmpty == true
-                          ? null
-                          : _upload,
+                      onPressed: busy ? null : _upload,
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Upload file (max 5 MiB)'),
                     ),
-                    if (widget.uploads!.pending != null &&
-                        !widget.uploads!.busy &&
-                        !busy &&
-                        error != null)
-                      LoadingButton.text(
-                        onPressed: busy
-                            ? null
-                            : () => _run(() async {
-                                  await widget.uploads!.flush();
-                                  await _read();
-                                }),
-                        child: const Text('Retry pending upload'),
-                      ),
                   ],
                 ),
-              if (!busy && documents.isEmpty)
+              if (!busy && documents.isEmpty && _localDocuments.isEmpty)
                 const Text('No documents attached.'),
               Expanded(
-                child: busy && !_hasLoaded
+                child: _reading && !_hasLoaded && _localDocuments.isEmpty
                     ? const CenteredLoading(label: 'Loading documents')
                     : ListView(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         children: [
-                          for (final doc in documents)
+                          for (final doc in [...documents, ..._localDocuments])
                             Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 child: ListTile(
@@ -331,9 +370,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                                   onTap: busy ? null : () => _open(doc),
                                   trailing: logo && widget.writes != null
                                       ? LoadingButton.text(
-                                          onPressed: busy ||
-                                                  widget.writes!.pending
-                                                      .isNotEmpty
+                                          onPressed: busy
                                               ? null
                                               : () =>
                                                   _useLogo(doc['documentId']),
@@ -360,9 +397,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
               widget.writes != null &&
               '${widget.record['logoDocumentId'] ?? ''}'.isNotEmpty)
             LoadingButton.text(
-              onPressed: busy || widget.writes!.pending.isNotEmpty
-                  ? null
-                  : () => _useLogo(''),
+              onPressed: busy ? null : () => _useLogo(''),
               child: const Text('Remove logo'),
             ),
           LoadingButton.text(

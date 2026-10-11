@@ -36,6 +36,14 @@ The active app uses the shared API. Existing editors, queues and reporting logic
 flutter pub run build_runner build
 ```
 
+## Local saves and background sync (PWA)
+
+After opening a workspace online, cached records remain available offline. Business edits, employee details, report settings and attachments are committed to IndexedDB before returning from Save. Local changes appear in lists and supported reference pickers immediately. Reconnecting retries the durable queue without locking unrelated screens. Financial posting, official document numbers and reports remain authoritative server results; access-code issuance and initial workspace setup still require a connection.
+
+Settings → Sync and device storage lists sync errors with retry, edit and discard controls. Rejected edits can be corrected against the latest server version; discarding also removes dependent changes that were never submitted. A request whose result is unknown keeps its original operation ID and payload until confirmation. One rejection holds its dependent changes while unrelated changes continue. Queues are isolated by account, role and company, with serialized device writes, Web Locks across browser tabs, retry backoff and authentication checks before delivery.
+
+The app must be opened online initially to install the offline shell and cache the required data. Missing cached reference data and server-generated files require a connection. Background delivery after the app closes is best effort and browser dependent; open the PWA to complete all queued actions. Browser storage limits are reported as failed local saves rather than silently losing changes. Clearing browser storage removes unsynced data.
+
 ## Multi-currency transactions
 
 Invoices, quotations, customer receipts, payroll, income and expenses retain their original currency and amounts. Posted journals and financial reports use the company accounting currency. Set employee salary currency and customer preferred currency in their respective editors.

@@ -82,9 +82,19 @@ async function backgroundSync() {
       await self.navigator.locks.request(`tpc-outbox:${key}`, {ifAvailable:true}, async lock => {
         if (!lock) return;
         const partition = (await read()).find(([name]) => name === key)?.[1];
-        const op = partition?.operations?.[0];
+        const operations = partition?.operations || [];
+        const unresolved = value => typeof value === 'string' ? value.startsWith('local_') :
+          Array.isArray(value) ? value.some(unresolved) : value && typeof value === 'object' ?
+            Object.entries(value).some(([name, entry]) =>
+              (name.endsWith('Id') || (entry && typeof entry === 'object')) && unresolved(entry)) : false;
+        const op = operations.find(candidate => candidate.local && candidate.state !== 'failed' &&
+          !candidate.backgroundAck && candidate.retryAt <= Date.now() &&
+          !operations.some(prior => prior.operationId === candidate.dependsOn) &&
+          !unresolved(candidate.values) && !unresolved(candidate.recordId) &&
+          ['Customers','ProductsServices','Tasks','TaskComments','Projects','Invoices','Quotations'].includes(candidate.table) &&
+          ['create','update','delete'].includes(candidate.action));
         if (!op || !op.local || op.state === 'failed' || op.dependsOn || op.backgroundAck ||
-            op.retryAt > Date.now() || !['Customers','ProductsServices','Tasks','TaskComments','Invoices','Quotations'].includes(op.table)) return;
+            op.retryAt > Date.now() || !['Customers','ProductsServices','Tasks','TaskComments','Projects','Invoices','Quotations'].includes(op.table)) return;
         if (!['create','update','delete'].includes(op.action) ||
             (op.table === 'TaskComments' && op.action !== 'create')) return;
         const employee = parts[1] === 'employee';
@@ -107,7 +117,7 @@ async function backgroundSync() {
           const tx = db.transaction('partitions','readwrite'); const store = tx.objectStore('partitions');
           const request = store.get(key);
           request.onsuccess = () => {
-            const value = request.result; const first = value?.operations?.[0];
+            const value = request.result; const first = value?.operations?.find(item => item.operationId === op.operationId);
             if (first?.operationId === op.operationId) {first.backgroundAck = result; store.put(value,key);}
           };
           tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);

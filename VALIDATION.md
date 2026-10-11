@@ -1,5 +1,17 @@
 # Multi-currency validation
 
+## Local saves and background sync — 2026-10-11
+
+- 17 Flutter tests passed across `offline_outbox_test.dart`, `local_save_integration_test.dart` and `currency_fields_test.dart`.
+- Coverage: editing during an in-flight request; durable restart recovery; stable retries; temporary-ID and version dependencies; unrelated progress after a rejection; dependent discard; account/company isolation; expired authentication; failed device writes; retrying financial action envelopes; local employee references; multiple queued attachments; local report settings; currency behavior.
+- Targeted analysis passed for the changed queues, API, workspace, employee/payroll, document and task screens.
+- Service-worker JavaScript syntax and `git diff --check` passed.
+- Local release build and production release build passed. Production deployment: `dpl_7NTQdFSwtSiw6n33y1cdxgnUMrdz`; registered PWA shell: `67d114fe221f02dd6a1a`, containing 41 public resources.
+- The release build now generates the worker actually registered by `pwa.js`. The previous build generated only a separate worker, leaving the registered worker with an incomplete development shell.
+- Isolated Chrome verification passed: installable manifest, offline reload, compiled app included in shell cache, API exclusion, controlled updates and retained pending changes; no uncaught browser errors. Screenshots are under `build/pwa-verification`.
+- Private production account transactions were not created during validation. Recheck in a test company with browser networking disabled, restore networking, and verify that saved changes sync while another form remains usable. Repeat after closing/reopening the PWA and from two tabs.
+- Server confirmation remains required for official numbering, financial reports and access-code issuance. Missing cached data requires a connection. Closed-app background delivery depends on browser support.
+
 Validated on 2026-10-11.
 
 ## Automated checks

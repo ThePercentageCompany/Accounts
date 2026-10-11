@@ -81,7 +81,8 @@ class RecordWriteQueue extends ChangeNotifier {
   final String companyId;
   final String storageKey;
   bool _busy = false;
-  bool get busy => _busy || outbox?.syncing == true;
+  bool get busy => _busy;
+  bool get syncing => outbox?.syncing == true || _busy;
   String get _rejectedKey => '$storageKey-rejected';
   bool get canDiscardRejected =>
       outbox?.hasFailed ??
@@ -173,19 +174,6 @@ class RecordWriteQueue extends ChangeNotifier {
             rows,
           ).where((r) => r['recordId'] == recordId).firstOrNull;
       final local = supportsLocal(table, action, base);
-      if (!local) {
-        if (recordId?.startsWith('local_') == true ||
-            hasBlockingPending ||
-            pending.isNotEmpty) {
-          throw const SaasApiException(
-            'PENDING',
-            'Sync existing changes before this online action.',
-          );
-        }
-        final user =
-            employee ? employeeId! : jsonDecode(outbox!.scope)[2] as String;
-        await api.verifySyncIdentity(user, companyId, employee: employee);
-      }
       try {
         await outbox!.enqueue(
           table,
@@ -443,6 +431,15 @@ class RecordWriteQueue extends ChangeNotifier {
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  /// UI saves finish at the durable local commit, never at network completion.
+  Future<void> syncInBackground() async {
+    if (outbox == null) {
+      await flush();
+    } else if (outbox!.automatic) {
+      outbox!.sync().ignore();
     }
   }
 

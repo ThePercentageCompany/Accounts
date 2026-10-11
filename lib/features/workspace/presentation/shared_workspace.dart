@@ -8,11 +8,11 @@ import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
 import 'package:tpc_invoice/core/pwa/pwa_controls.dart';
 import 'package:tpc_invoice/features/notifications/presentation/notification_center.dart';
 import 'dart:async';
-import 'dart:convert';
+
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/features/employees/presentation/cubit/employee_admin_controller.dart';
@@ -39,6 +39,7 @@ import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/documents/presentation/record_documents_view.dart';
 import 'package:tpc_invoice/features/workspace/presentation/system_settings_panel.dart';
 import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart';
+import 'package:tpc_invoice/features/workspace/presentation/sync_settings_panel.dart';
 
 const workspaceTables = <String, List<String>>{
   'Tasks': <String>[],
@@ -169,6 +170,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   bool _forcingSync = false;
   bool _syncReady = false;
   String? _syncError;
+  String? _lastSyncState;
   Timer? _backgroundSyncTimer;
   final _pwa = PwaRuntime();
   String? _taskToOpen;
@@ -196,6 +198,10 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
 
   void _syncChanged() {
     if (mounted) {
+      final state =
+          '${_writes?.outbox?.status}|${_writes?.pending.length}|${_uploads?.pending != null}|${_employees?.hasPending}|${_pwa.status}|$_syncError';
+      if (_lastSyncState == state) return;
+      _lastSyncState = state;
       setState(() {
         if (_syncReady &&
             (_writes?.pending.isEmpty ?? true) &&
@@ -224,7 +230,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     if (!mounted ||
         !_syncReady ||
         _forcingSync ||
-        _writes?.busy == true ||
+        _writes?.syncing == true ||
         _uploads?.busy == true ||
         _employees?.busy == true ||
         _pwa.status['online'] == false ||
@@ -268,7 +274,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         if (_writes.pending.length >= before) break;
       }
     } catch (error) {
-      if (mounted && !background) setState(() => _syncError = '$error');
+      if (mounted) setState(() => _syncError = '$error');
     } finally {
       if (mounted) setState(() => _forcingSync = false);
     }
@@ -323,6 +329,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       if (_employees != null || allowed!.contains('Employees')) 'Employees',
       for (final section in workspaceTables.keys)
         if (allowed == null ||
+            section == 'Settings' ||
             (section == 'Calendar'
                 ? allowed.contains('Tasks')
                 : allowed.contains(section)))
@@ -517,49 +524,6 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             Expanded(
               child: Column(
                 children: [
-                  if (_uploads != null)
-                    ListenableBuilder(
-                      listenable: _uploads,
-                      builder: (context, _) {
-                        final pending = _uploads.pending;
-                        if (pending == null ||
-                            _uploads.busy ||
-                            _syncError == null) {
-                          return const SizedBox.shrink();
-                        }
-                        return ListTile(
-                          title: Text('Pending upload: ${pending['name']}'),
-                          subtitle: Text(
-                            '${pending['section']} — retry before other company changes.',
-                          ),
-                          trailing: LoadingButton.text(
-                            onPressed: _uploads.busy
-                                ? null
-                                : () async {
-                                    try {
-                                      await _uploads.flush();
-                                      if (mounted) setState(() {});
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              e is SaasApiException
-                                                  ? e.message
-                                                  : 'Upload not confirmed. Retry.',
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                            child: const Text('Retry upload'),
-                          ),
-                        );
-                      },
-                    ),
                   if (!wide &&
                       selected != null &&
                       _children(selected).length > 1)
@@ -636,7 +600,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   Widget _syncStatusIcon() {
     final box = _writes?.outbox;
     final busy = _forcingSync ||
-        _writes?.busy == true ||
+        _writes?.syncing == true ||
         _uploads?.busy == true ||
         (_employees?.busy == true && _employees?.hasPending == true);
     final issue = _syncError ??
@@ -685,116 +649,144 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             'No record sections are assigned. Contact your company owner.',
           ),
         )
-      : ['Tasks', 'Calendar'].contains(selected)
-          ? TaskWorkspace(
-              api: widget.api,
-              companyId: widget.companyId,
-              employee: widget.employee,
-              calendar: selected == 'Calendar',
-              active: active,
-              uploads: _uploads,
-              writes: _writes,
-              taskToOpen: selected == 'Tasks' ? _taskToOpen : null,
-            )
-          : selected == 'Reports'
-              ? [
-                  'chart-of-accounts',
-                  'report-settings',
-                ].contains(_subsection('Reports'))
-                  ? ReportConfigurationView(
-                      key: ValueKey((widget.companyId, _subsection('Reports'))),
-                      api: widget.api,
-                      companyId: widget.companyId,
-                      employee: widget.employee != null,
-                      chart: _subsection('Reports') == 'chart-of-accounts',
-                    )
-                  : _subsection('Reports') == 'journal-entries'
-                      ? _RecordsPanel(
-                          key: ValueKey((widget.companyId, 'report-journals')),
+      : selected == 'Settings' && _writes?.outbox != null
+          ? Column(children: [
+              ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * .5),
+                  child: SingleChildScrollView(
+                      child: SyncSettingsPanel(
                           api: widget.api,
                           companyId: widget.companyId,
                           employee: widget.employee != null,
-                          active: active,
-                          tables: const ['Journals', 'JournalLines'],
-                          selectedTable: 'Journals',
-                          writes: widget.employee == null ||
-                                  (widget.employee!['writableSections']
-                                              as List? ??
-                                          [])
-                                      .contains('Balance Sheet')
-                              ? _writes
-                              : null,
-                          uploads: _uploads,
-                        )
-                      : TrialBalanceView(
-                          key: ValueKey(widget.companyId),
+                          outbox: _writes!.outbox!,
+                          storageIssue: _syncError ??
+                              widget.api.cache.storageError?.toString()))),
+              if (widget.employee == null)
+                Expanded(
+                    child: _RecordsPanel(
+                        key: ValueKey((widget.companyId, 'Settings')),
+                        api: widget.api,
+                        companyId: widget.companyId,
+                        employee: false,
+                        active: active,
+                        writes: _writes,
+                        uploads: _uploads,
+                        tables: const ['CompanyProfile'],
+                        selectedTable: 'CompanyProfile')),
+            ])
+          : ['Tasks', 'Calendar'].contains(selected)
+              ? TaskWorkspace(
+                  api: widget.api,
+                  companyId: widget.companyId,
+                  employee: widget.employee,
+                  calendar: selected == 'Calendar',
+                  active: active,
+                  uploads: _uploads,
+                  writes: _writes,
+                  taskToOpen: selected == 'Tasks' ? _taskToOpen : null,
+                )
+              : selected == 'Reports'
+                  ? [
+                      'chart-of-accounts',
+                      'report-settings',
+                    ].contains(_subsection('Reports'))
+                      ? ReportConfigurationView(
+                          key: ValueKey(
+                              (widget.companyId, _subsection('Reports'))),
                           api: widget.api,
                           companyId: widget.companyId,
                           employee: widget.employee != null,
-                          employeeProfile: widget.employee,
-                          initialDashboard: true,
-                          onTask: widget.employee == null ||
-                                  (widget.employee!['allowedSections']
-                                              as List? ??
-                                          [])
-                                      .contains('Tasks')
-                              ? _openTask
-                              : null,
-                          reportKind: _subsection('Reports'),
-                          active: active,
-                          companyName: widget.title,
-                          onReportSelected: (kind) =>
-                              _navigate('Reports', kind),
+                          chart: _subsection('Reports') == 'chart-of-accounts',
                         )
-              : selected == 'Payroll' &&
-                      ['PayrollItems', 'Payslips']
-                          .contains(_subsection('Payroll'))
-                  ? PayrollSupportView(
-                      api: widget.api,
-                      companyId: widget.companyId,
-                      employee: widget.employee != null,
-                      slips: _subsection('Payroll') == 'Payslips',
-                      active: active,
-                      uploads: _uploads)
-                  : selected == 'Employees' && _employees != null
-                      ? EmployeeAdminView(
-                          controller: _employees,
+                      : _subsection('Reports') == 'journal-entries'
+                          ? _RecordsPanel(
+                              key: ValueKey(
+                                  (widget.companyId, 'report-journals')),
+                              api: widget.api,
+                              companyId: widget.companyId,
+                              employee: widget.employee != null,
+                              active: active,
+                              tables: const ['Journals', 'JournalLines'],
+                              selectedTable: 'Journals',
+                              writes: widget.employee == null ||
+                                      (widget.employee!['writableSections']
+                                                  as List? ??
+                                              [])
+                                          .contains('Balance Sheet')
+                                  ? _writes
+                                  : null,
+                              uploads: _uploads,
+                            )
+                          : TrialBalanceView(
+                              key: ValueKey(widget.companyId),
+                              api: widget.api,
+                              companyId: widget.companyId,
+                              employee: widget.employee != null,
+                              employeeProfile: widget.employee,
+                              initialDashboard: true,
+                              onTask: widget.employee == null ||
+                                      (widget.employee!['allowedSections']
+                                                  as List? ??
+                                              [])
+                                          .contains('Tasks')
+                                  ? _openTask
+                                  : null,
+                              reportKind: _subsection('Reports'),
+                              active: active,
+                              companyName: widget.title,
+                              onReportSelected: (kind) =>
+                                  _navigate('Reports', kind),
+                            )
+                  : selected == 'Payroll' &&
+                          ['PayrollItems', 'Payslips']
+                              .contains(_subsection('Payroll'))
+                      ? PayrollSupportView(
+                          api: widget.api,
+                          companyId: widget.companyId,
+                          employee: widget.employee != null,
+                          slips: _subsection('Payroll') == 'Payslips',
                           active: active,
-                          onDocuments: (row) {
-                            showDialog<void>(
-                              context: context,
-                              builder: (_) => RecordDocumentsView(
-                                api: widget.api,
-                                companyId: widget.companyId,
-                                section: 'Employees',
-                                record: row,
-                                uploads: _uploads,
-                                writes: _writes,
-                              ),
+                          uploads: _uploads)
+                      : selected == 'Employees' && _employees != null
+                          ? EmployeeAdminView(
+                              controller: _employees,
+                              active: active,
+                              onDocuments: (row) {
+                                showDialog<void>(
+                                  context: context,
+                                  builder: (_) => RecordDocumentsView(
+                                    api: widget.api,
+                                    companyId: widget.companyId,
+                                    section: 'Employees',
+                                    record: row,
+                                    uploads: _uploads,
+                                    writes: _writes,
+                                  ),
+                                );
+                              },
+                            )
+                          : _RecordsPanel(
+                              key: ValueKey((widget.companyId, selected)),
+                              api: widget.api,
+                              companyId: widget.companyId,
+                              employee: widget.employee != null,
+                              active: active,
+                              writes: widget.employee == null ||
+                                      (widget.employee!['writableSections']
+                                                  as List? ??
+                                              [])
+                                          .contains(selected)
+                                  ? _writes
+                                  : null,
+                              uploads: _uploads,
+                              selectedTable: _children(selected).isEmpty
+                                  ? 'Employees'
+                                  : _subsection(selected),
+                              tables: selected == 'Employees'
+                                  ? ['Employees']
+                                  : workspaceTables[selected]!,
                             );
-                          },
-                        )
-                      : _RecordsPanel(
-                          key: ValueKey((widget.companyId, selected)),
-                          api: widget.api,
-                          companyId: widget.companyId,
-                          employee: widget.employee != null,
-                          active: active,
-                          writes: widget.employee == null ||
-                                  (widget.employee!['writableSections']
-                                              as List? ??
-                                          [])
-                                      .contains(selected)
-                              ? _writes
-                              : null,
-                          uploads: _uploads,
-                          selectedTable: _children(selected).isEmpty
-                              ? 'Employees'
-                              : _subsection(selected),
-                          tables: selected == 'Employees'
-                              ? ['Employees']
-                              : workspaceTables[selected]!,
-                        );
 
   IconData _sectionIcon(String section) => switch (section) {
         'Tasks' => Icons.task_alt,
@@ -1077,200 +1069,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   final _searchController = TextEditingController();
   final Map<String, String> _tableSearch = {};
   String? _watchedPath;
-  bool _savedData = false;
-  Future<void> _discardRejected() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Discard rejected edit?'),
-        content: const Text(
-          'This edit was rejected without being saved. Discard it and refresh the current record before editing again.',
-        ),
-        actions: [
-          LoadingButton.text(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep edit'),
-          ),
-          LoadingButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard edit'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      await widget.writes!.discardRejected();
-      if (mounted) await _load();
-    } on SaasApiException catch (e) {
-      if (mounted) setState(() => error = e.message);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> _exportPending() async {
-    final text =
-        const JsonEncoder.withIndent('  ').convert(widget.writes!.pending);
-    await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-              title: const Text('Pending changes on this device'),
-              content: SizedBox(
-                  width: 560,
-                  child: SingleChildScrollView(child: SelectableText(text))),
-              actions: [
-                TextButton(
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: text));
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: const Text('Copy JSON')),
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'))
-              ],
-            ));
-  }
-
-  Future<void> _reviewRejected() async {
-    final box = widget.writes?.outbox;
-    final op = box?.pending
-        .where((op) => op['state'] == 'failed' && op['local'] == true)
-        .firstOrNull;
-    if (box == null || op == null) return;
-    final entity = op['table'] as String;
-    try {
-      final user = jsonDecode(box.scope)[2] as String;
-      await widget.api.verifySyncIdentity(
-        user,
-        widget.companyId,
-        employee: widget.employee,
-      );
-      await widget.api.records(
-        widget.companyId,
-        entity,
-        employee: widget.employee,
-        force: true,
-      );
-      final path = widget.api.recordsPath(
-        widget.companyId,
-        entity,
-        employee: widget.employee,
-      );
-      final state = widget.api.cache.state(path);
-      if (state?.error != null) throw state!.error!;
-      final server = (state?.data?['records'] as List? ?? [])
-          .where((r) => r['recordId'] == op['recordId'])
-          .firstOrNull;
-      if (server == null && op['action'] != 'create') {
-        throw const SaasApiException(
-          'VERSION_CONFLICT',
-          'The server record was deleted. Export or discard this rejected edit.',
-        );
-      }
-      if (!mounted) return;
-      final accepted = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Review rejected change'),
-          content: SingleChildScrollView(
-            child: Text(
-              '${op['error']}\n\nYour saved values:\n${const JsonEncoder.withIndent('  ').convert(op['values'])}\n\nLatest server values:\n${const JsonEncoder.withIndent('  ').convert(server)}',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Keep saved change'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Edit and resubmit'),
-            ),
-          ],
-        ),
-      );
-      if (accepted != true || !mounted) return;
-      final saved = Map<String, dynamic>.from(
-        box.data['records']['$entity:${op['localId']}'] as Map,
-      );
-      final version = server?['recordVersion'] as int? ?? 0;
-      Future<void> correct(Map<String, Object?> values) => box.correctRejected(
-            op['operationId'] as String,
-            values,
-            expectedVersion: version,
-          );
-      if (op['action'] == 'delete') {
-        await correct({});
-      } else if (entity == 'Projects') {
-        final values = await showDialog<Map<String, Object?>>(
-            context: context, builder: (_) => ProjectEditor(record: saved));
-        if (values != null) await correct(values);
-      } else if (entity == 'Customers') {
-        final values = await showDialog<Map<String, Object?>>(
-          context: context,
-          builder: (_) => CustomerEditor(record: saved),
-        );
-        if (values != null) await correct(values);
-      } else if (const ['Invoices', 'Quotations'].contains(entity)) {
-        final references = await Future.wait([
-          widget.api.editorReferences(
-            widget.companyId,
-            'Customers',
-            entity,
-            employee: widget.employee,
-          ),
-          widget.api.editorReferences(
-            widget.companyId,
-            'CompanyProfile',
-            entity,
-            employee: widget.employee,
-          ),
-        ]);
-        final customers = (references[0]['records'] as List)
-            .map((r) => Map<String, dynamic>.from(r as Map))
-            .toList();
-        final company = (references[1]['records'] as List).firstOrNull as Map?;
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (_) => entity == 'Invoices'
-              ? InvoiceEditor(
-                  rateLoader: _rateLoader,
-                  customers: customers,
-                  company: Map<String, dynamic>.from(company ?? {}),
-                  record: saved,
-                  items: (saved['items'] as List? ?? [])
-                      .map((r) => Map<String, dynamic>.from(r as Map))
-                      .toList(),
-                  onSave: correct,
-                )
-              : QuotationEditor(
-                  rateLoader: _rateLoader,
-                  customers: customers,
-                  company: Map<String, dynamic>.from(company ?? {}),
-                  record: saved,
-                  items: (saved['items'] as List? ?? [])
-                      .map((r) => Map<String, dynamic>.from(r as Map))
-                      .toList(),
-                  onSave: correct,
-                ),
-        );
-      }
-    } catch (failure) {
-      if (mounted) {
-        setState(
-          () => error =
-              failure is SaasApiException ? failure.message : '$failure',
-        );
-      }
-    }
-  }
+  bool _cacheScheduled = false;
 
   Future<void> _deleteLocalRecord(Map<String, dynamic> record) async {
     final confirmed = await showDialog<bool>(
@@ -1430,7 +1229,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               record == null ? 0 : int.parse('${record['recordVersion']}'),
         );
       }
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
     }
 
     List<Map<String, dynamic>> choices = const [];
@@ -1630,7 +1429,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         record == null ? 'create' : 'update',
         record,
       )) {
-        await widget.writes!.flush();
+        await widget.writes!.syncInBackground();
       }
       if (mounted) await _load(force: widget.writes!.outbox == null);
     } on SaasApiException catch (e) {
@@ -1690,7 +1489,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -1738,7 +1537,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -1776,7 +1575,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -1835,8 +1634,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
-      if (mounted) await _load(force: true);
+      await widget.writes!.syncInBackground();
+      if (mounted) await _load(force: widget.writes!.outbox == null);
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
     } catch (_) {
@@ -1895,7 +1694,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -1975,7 +1774,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2041,7 +1840,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2090,7 +1889,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2151,7 +1950,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2185,7 +1984,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2196,21 +1995,6 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               'Unable to confirm receipt reversal. Retry the pending request.',
         );
       }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> _retryWrite() async {
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      await widget.writes!.flush();
-      if (mounted) await _load();
-    } on SaasApiException catch (e) {
-      if (mounted) setState(() => error = e.message);
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -2240,7 +2024,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         recordId: record['recordId'] as String,
         expectedVersion: int.parse('${record['recordVersion']}'),
       );
-      await widget.writes!.flush();
+      await widget.writes!.syncInBackground();
       if (mounted) await _load();
     } on SaasApiException catch (e) {
       if (mounted) setState(() => error = e.message);
@@ -2292,7 +2076,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   }
 
   void _cacheChanged() {
+    if (_cacheScheduled) return;
+    _cacheScheduled = true;
     scheduleMicrotask(() {
+      _cacheScheduled = false;
       if (!mounted) return;
       final state = widget.api.cache.state(_path);
       final data = state?.data;
@@ -2304,15 +2091,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             widget.writes?.visibleRows(table, serverRows) ?? serverRows;
         final changed = dataFingerprint({'records': fresh}) !=
             dataFingerprint({'records': rows});
+        if (!changed && _hasData && error == null) return;
         setState(() {
           if (changed) rows = fresh;
           _hasData = true;
-          _savedData = state!.offline;
-          error = state.error is SaasApiException
-              ? (state.error as SaasApiException).message
-              : state.error == null
-                  ? null
-                  : 'Refresh failed. Showing saved data.';
+
+          error = null;
         });
       } else if ((widget.api.cache.scope == null ||
               (state?.error is SaasApiException &&
@@ -2373,7 +2157,6 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             .map((r) => Map<String, dynamic>.from(r as Map))
             .toList();
         _hasData = true;
-        _savedData = widget.api.cache.state(_path)?.offline ?? false;
       });
     } on SaasApiException catch (e) {
       if (mounted && request == _request) {
@@ -2382,13 +2165,14 @@ class _RecordsPanelState extends State<_RecordsPanel> {
             rows = [];
             _hasData = false;
           }
-          error = e.message;
+          error = _hasData ? null : e.message;
         });
       }
     } catch (_) {
       if (mounted && request == _request) {
         setState(() {
-          error = 'Unable to load records. Retry when connected.';
+          error =
+              _hasData ? null : 'Unable to load records. Retry when connected.';
         });
       }
     } finally {
@@ -2519,46 +2303,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   ),
                   if (_editable && table != 'CompanyProfile')
                     LoadingButton.icon(
-                      onPressed: busy || widget.writes!.hasBlockingPending
-                          ? null
-                          : () => _editCustomer(),
+                      onPressed: busy ? null : () => _editCustomer(),
                       icon: const Icon(Icons.add, size: 18),
                       label: Text('Add $_recordLabel'),
-                    ),
-                  if (widget.writes?.canDiscardRejected == true)
-                    PopupMenuButton<String>(
-                      tooltip: 'Pending change options',
-                      enabled: !busy,
-                      onSelected: (value) {
-                        if (value == 'retry') {
-                          _retryWrite();
-                        } else if (value == 'export') {
-                          _exportPending();
-                        } else if (value == 'review') {
-                          _reviewRejected();
-                        } else {
-                          _discardRejected();
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'retry',
-                          child: Text('Retry pending change'),
-                        ),
-                        const PopupMenuItem(
-                            value: 'export',
-                            child: Text('Export pending changes')),
-                        if (widget.writes?.canDiscardRejected == true)
-                          const PopupMenuItem(
-                            value: 'review',
-                            child: Text('Review rejected change'),
-                          ),
-                        if (widget.writes?.canDiscardRejected == true)
-                          const PopupMenuItem(
-                            value: 'discard',
-                            child: Text('Discard rejected edit'),
-                          ),
-                      ],
                     ),
                 ],
               ),
@@ -2625,19 +2372,6 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                   : null,
             ),
           ),
-          if (_savedData) const Text('Offline - showing saved data.'),
-          if (widget.api.cache.storageError != null ||
-              widget.writes?.outbox?.storageError != null ||
-              widget.writes?.outbox?.authenticationRequired == true)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-              child: Semantics(
-                liveRegion: true,
-                child: Text(widget.api.cache.storageError != null
-                    ? 'Read cache unavailable on this device'
-                    : widget.writes!.outbox!.status),
-              ),
-            ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.all(24),
@@ -2689,15 +2423,6 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           ).colorScheme.surface,
                           subtitle: RecordSummary(record: row),
                           children: [
-                            if (row['_localOnly'] == true &&
-                                row['syncStatus'] == 'FAILED')
-                              RecordNotice(
-                                title: row['syncStatus'] == 'SYNCED'
-                                    ? 'Synced'
-                                    : 'Saved on this device',
-                                message: row['_syncError'] as String? ??
-                                    'Changes pending. Financial totals and final numbering are confirmed by the server.',
-                              ),
                             if (table == 'Invoices' && row['status'] != 'DRAFT')
                               const RecordNotice(
                                 title: 'Invoice history is protected',
@@ -2727,7 +2452,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                       ? 'Manage logo'
                                       : 'Documents',
                                 ),
-                                onPressed: busy
+                                onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () async {
                                         await showDialog<void>(
@@ -2750,9 +2475,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 row['status'] == 'DRAFT')
                               LoadingButton(
                                 onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _issueInvoice(row),
+                                    busy ? null : () => _issueInvoice(row),
                                 child: const Text('Issue invoice'),
                               ),
                             if (_editable &&
@@ -2762,9 +2485,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               LoadingButton.outlined(
                                 style: _destructiveActionStyle,
                                 onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _voidInvoice(row),
+                                    busy ? null : () => _voidInvoice(row),
                                 child: const Text('Void invoice'),
                               ),
                             if (_editable &&
@@ -2777,9 +2498,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 ].contains(row['status']))
                               LoadingButton.icon(
                                 onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _returnInvoice(row),
+                                    busy ? null : () => _returnInvoice(row),
                                 icon: const Icon(
                                     Icons.assignment_return_outlined),
                                 label: const Text('Return items / credit note'),
@@ -2788,18 +2507,16 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 table == 'Quotations' &&
                                 row['status'] == 'DRAFT')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _quotationAction(row, 'send'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _quotationAction(row, 'send'),
                                 child: const Text('Finalize quotation'),
                               ),
                             if (_editable &&
                                 table == 'Quotations' &&
                                 row['status'] == 'SENT')
                               LoadingButton(
-                                onPressed: busy ||
-                                        widget.writes!.pending.isNotEmpty
+                                onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () => _quotationAction(row, 'convert'),
                                 child: const Text('Create draft invoice'),
@@ -2808,18 +2525,16 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 table == 'Payroll' &&
                                 row['status'] == 'DRAFT')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _payrollAction(row, 'approve'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _payrollAction(row, 'approve'),
                                 child: const Text('Approve payroll'),
                               ),
                             if (_editable &&
                                 table == 'Payroll' &&
                                 row['status'] == 'APPROVED')
                               LoadingButton(
-                                onPressed: busy ||
-                                        widget.writes!.pending.isNotEmpty
+                                onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () => _payrollAction(row, 'payrollPay'),
                                 child: const Text('Pay payroll'),
@@ -2830,8 +2545,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                     .contains(row['status']))
                               LoadingButton.outlined(
                                 style: _destructiveActionStyle,
-                                onPressed: busy ||
-                                        widget.writes!.pending.isNotEmpty
+                                onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () =>
                                         _payrollAction(row, 'payrollReverse'),
@@ -2845,20 +2559,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 table == 'Assets' &&
                                 row['status'] == 'DRAFT')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _assetAction(row, 'capitalize'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _assetAction(row, 'capitalize'),
                                 child: const Text('Capitalize asset'),
                               ),
                             if (_editable &&
                                 table == 'Assets' &&
                                 row['status'] == 'ACTIVE')
                               LoadingButton.outlined(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _assetAction(row, 'depreciate'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _assetAction(row, 'depreciate'),
                                 child: const Text('Post monthly depreciation'),
                               ),
                             if (_editable &&
@@ -2866,8 +2578,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 row['status'] == 'ACTIVE')
                               LoadingButton.outlined(
                                 style: _destructiveActionStyle,
-                                onPressed: busy ||
-                                        widget.writes!.pending.isNotEmpty
+                                onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () => _assetAction(row, 'assetDispose'),
                                 child: const Text('Dispose asset'),
@@ -2877,29 +2588,25 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 row['status'] == 'DRAFT')
                               LoadingButton(
                                 onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _postCapital(row),
+                                    busy ? null : () => _postCapital(row),
                                 child: const Text('Post contribution'),
                               ),
                             if (_editable &&
                                 table == 'ShareholderLoans' &&
                                 row['status'] == 'DRAFT')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _loanAction(row, 'loanPost'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _loanAction(row, 'loanPost'),
                                 child: const Text('Post loan'),
                               ),
                             if (_editable &&
                                 table == 'ShareholderLoans' &&
                                 row['status'] == 'ACTIVE')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _loanAction(row, 'loanRepay'),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _loanAction(row, 'loanRepay'),
                                 child: const Text('Repay loan in full'),
                               ),
                             if (_editable &&
@@ -2908,9 +2615,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               LoadingButton.outlined(
                                 style: _destructiveActionStyle,
                                 onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _reverseReceipt(row),
+                                    busy ? null : () => _reverseReceipt(row),
                                 child: const Text('Reverse receipt'),
                               ),
                             if (_editable &&
@@ -2922,10 +2627,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 ].contains(row['paymentStatus']))
                               LoadingButton.outlined(
                                 style: _destructiveActionStyle,
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _payCash(row, reverse: true),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _payCash(row, reverse: true),
                                 child: Text(
                                   row['paymentStatus'] == 'PAID'
                                       ? 'Refund and reverse entry'
@@ -2937,20 +2641,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 row['ledgerStatus'] == 'LINKED' &&
                                 row['paymentStatus'] == 'UNPAID')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _payCash(row),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _payCash(row),
                                 child: const Text('Record payment'),
                               ),
                             if (_editable &&
                                 const ['Income', 'Expenses'].contains(table) &&
                                 row['ledgerStatus'] == 'UNPOSTED')
                               LoadingButton(
-                                onPressed:
-                                    busy || widget.writes!.pending.isNotEmpty
-                                        ? null
-                                        : () => _postCash(row),
+                                onPressed: busy || row['_pendingAction'] != null
+                                    ? null
+                                    : () => _postCash(row),
                                 child: const Text('Post to ledger'),
                               ),
                             if (_editable &&
@@ -2975,9 +2677,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 table != 'Receipts')
                               LoadingButton.outlined(
                                 onPressed:
-                                    busy || widget.writes!.hasBlockingPending
-                                        ? null
-                                        : () => _editCustomer(row),
+                                    busy ? null : () => _editCustomer(row),
                                 child: Text('Edit $_recordLabel'),
                               ),
                             if (_editable &&
@@ -2985,9 +2685,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                     .supportsLocal(table, 'delete', row))
                               LoadingButton.outlined(
                                 onPressed:
-                                    busy || widget.writes!.hasBlockingPending
-                                        ? null
-                                        : () => _deleteLocalRecord(row),
+                                    busy ? null : () => _deleteLocalRecord(row),
                                 child: Text('Delete $_recordLabel'),
                               ),
                             RecordDetails(record: row),

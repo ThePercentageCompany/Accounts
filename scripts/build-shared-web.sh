@@ -10,3 +10,4 @@ fi
 flutter pub get
 flutter build web --release --dart-define="SAAS_API_ORIGIN=$SAAS_API_ORIGIN"
 node scripts/prepare_offline_web.mjs
+node tool/build_pwa.mjs

@@ -105,13 +105,80 @@ class SaasApi implements SessionRepository {
             _cacheEmployee == employee,
         verifyIdentity: () =>
             verifySyncIdentity(identity, company, employee: employee),
-        send: (op) => sync(
-          company,
-          [op],
-          employee: employee,
-          expectedEmployeeId: employee ? identity : null,
-          expectedOwnerId: employee ? null : identity,
-        ),
+        send: (op) async {
+          if (!employee && op['table'] == 'ReportSettings') {
+            final settings = Map<String, dynamic>.from(op['values'] as Map);
+            final current = await _json(
+                'GET', '/v1/companies/${_id(company)}/reports/settings',
+                force: true);
+            final comparable = {...current}..remove('version');
+            final result = current['version'] ==
+                        (op['expectedVersion'] as int) + 1 &&
+                    dataFingerprint(comparable) == dataFingerprint(settings)
+                ? current
+                : await _saveReportSettingsOnline(
+                    company, {...settings, 'version': op['expectedVersion']});
+            return {
+              'results': [
+                {
+                  'operationId': op['operationId'],
+                  'status': 'APPLIED',
+                  'recordId': 'report-settings',
+                  'version': result['version']
+                }
+              ]
+            };
+          }
+          if (!employee && op['table'] == 'Employees') {
+            final result = await saveEmployee(
+                company,
+                op['recordId'] as String?,
+                {
+                  ...Map<String, Object?>.from(op['values'] as Map),
+                  'expectedVersion': op['expectedVersion']
+                },
+                op['operationId'] as String);
+            return {
+              'results': [
+                {
+                  'operationId': op['operationId'],
+                  'status': 'APPLIED',
+                  'recordId': result['employeeId'],
+                  'version': result['version']
+                }
+              ]
+            };
+          }
+          if (!employee &&
+              op['table'] == 'Documents' &&
+              op['action'] == 'upload') {
+            final values = op['values'] as Map;
+            final result = await upload(company,
+                operationId: op['operationId'] as String,
+                name: values['name'],
+                mimeType: values['mimeType'],
+                relatedSection: values['section'],
+                relatedRecordId: values['relatedRecordId'],
+                bytes: base64Decode(values['data']));
+            return {
+              'results': [
+                {
+                  'operationId': op['operationId'],
+                  'status': 'APPLIED',
+                  'recordId': result['documentId'],
+                  'version': 1
+                }
+              ]
+            };
+          }
+          return sync(
+            company,
+            [op],
+            employee: employee,
+            expectedEmployeeId: employee ? identity : null,
+            expectedOwnerId: employee ? null : identity,
+          );
+        },
         changed: (table) =>
             cache.localChanged(recordsPath(company, table, employee: employee)),
       ),
@@ -277,6 +344,7 @@ class SaasApi implements SessionRepository {
       return uri.path.startsWith('/v1/employee/records/') ||
           uri.path.startsWith('/v1/employee/references/') ||
           uri.path.startsWith('/v1/employee/reports/') ||
+          uri.path == '/v1/employee/companies/$_cacheCompany/documents' ||
           uri.path.startsWith('/v1/employee/companies/$_cacheCompany/tasks') ||
           uri.path == '/v1/employee/companies/$_cacheCompany/notifications';
     }
@@ -284,6 +352,7 @@ class SaasApi implements SessionRepository {
     return uri.path.startsWith('${prefix}records/') ||
         uri.path.startsWith('${prefix}reports/') ||
         uri.path == '${prefix}employees' ||
+        uri.path == '${prefix}documents' ||
         uri.path.startsWith('${prefix}tasks') ||
         uri.path == '${prefix}notifications';
   }
@@ -299,6 +368,9 @@ class SaasApi implements SessionRepository {
     Map<String, dynamic> result,
   ) {
     if (cache.scope == null) return;
+    if (path.endsWith('/documents')) {
+      cache.invalidate((p) => Uri.parse(p).path == path);
+    }
     final tables = <String>{};
     if (path.endsWith('/sync')) {
       final applied = (result['results'] as List? ?? [])
@@ -800,19 +872,67 @@ class SaasApi implements SessionRepository {
     String companyId, {
     bool employee = false,
     bool force = false,
-  }) =>
-      _json(
-        'GET',
-        employee
-            ? '/v1/employee/reports/settings'
-            : '/v1/companies/${_id(companyId)}/reports/settings',
-        force: force,
-      );
+  }) async {
+    final box = _ownerOutbox(companyId);
+    if (box != null && !employee) await box.reload();
+    final future = _json(
+      'GET',
+      employee
+          ? '/v1/employee/reports/settings'
+          : '/v1/companies/${_id(companyId)}/reports/settings',
+      force: force,
+    );
+    final local =
+        box?.data['records']['ReportSettings:report-settings'] as Map?;
+    Map<String, dynamic> savedSettings(Map saved) => {
+          ...Map<String, dynamic>.from(saved)
+            ..removeWhere((k, _) =>
+                k.startsWith('_') ||
+                const ['recordId', 'recordVersion', 'syncStatus', 'isDeleted']
+                    .contains(k)),
+          'version': saved['recordVersion']
+        };
+    if (!employee && local != null && local['syncStatus'] != 'SYNCED') {
+      future.ignore();
+      return savedSettings(local);
+    }
+    final result = await future;
+    if (!employee &&
+        local != null &&
+        (local['recordVersion'] as num) > (result['version'] as num)) {
+      return savedSettings(local);
+    }
+    return result;
+  }
+
+  OfflineOutbox? _ownerOutbox(String company) => offlineEnabled &&
+          !_cacheEmployee &&
+          _cacheCompany == company &&
+          _cacheUser != null &&
+          cache.scope != null
+      ? outbox(_cacheUser!, company)
+      : null;
 
   Future<Map<String, dynamic>> saveReportSettings(
     String companyId,
     Map<String, dynamic> settings,
   ) async {
+    final box = _ownerOutbox(companyId);
+    if (box != null) {
+      await box.reload();
+      await box.enqueue(
+          'ReportSettings', 'update', {...settings}..remove('version'),
+          recordId: 'report-settings',
+          expectedVersion: settings['version'] as int,
+          base: settings,
+          local: true);
+      return settings;
+    }
+    return _saveReportSettingsOnline(companyId, settings);
+  }
+
+  Future<Map<String, dynamic>> _saveReportSettingsOnline(
+      String companyId, Map<String, dynamic> settings) async {
     final result = await _json(
       'PUT',
       '/v1/companies/${_id(companyId)}/reports/settings',
@@ -940,8 +1060,26 @@ class SaasApi implements SessionRepository {
   Future<Map<String, dynamic>> employees(
     String companyId, {
     bool force = false,
-  }) =>
-      _json('GET', '/v1/companies/${_id(companyId)}/employees', force: force);
+  }) async {
+    final box = _ownerOutbox(companyId);
+    if (box != null) await box.reload();
+    final future =
+        _json('GET', '/v1/companies/${_id(companyId)}/employees', force: force);
+    if (box != null &&
+        cache.state('/v1/companies/$companyId/employees')?.data == null &&
+        box.overlay('Employees', []).isNotEmpty) {
+      future.ignore();
+      return {'employees': box.overlay('Employees', [])};
+    }
+    final result = await future;
+    if (box == null) return result;
+    final rows = (result['employees'] as List)
+        .map((r) => Map<String, dynamic>.from(r as Map))
+        .toList();
+    box.reconcile('Employees', rows).ignore();
+    return {...result, 'employees': box.overlay('Employees', rows)};
+  }
+
   Future<Map<String, dynamic>> saveEmployee(
     String companyId,
     String? employeeId,
@@ -1027,15 +1165,32 @@ class SaasApi implements SessionRepository {
     String table,
     String section, {
     bool employee = false,
-  }) {
+  }) async {
     if (!employee) return records(companyId, table);
     if (!RegExp(r'^[A-Za-z]+$').hasMatch(table)) {
       throw const SaasApiException('INVALID_TABLE', 'Invalid reference table.');
     }
-    return _json(
+    final box = offlineEnabled &&
+            _cacheUser != null &&
+            _cacheEmployee &&
+            _cacheCompany == companyId
+        ? outbox('employee_$_cacheUser', companyId, employee: true)
+        : null;
+    if (box != null) await box.reload();
+    final result = await _json(
       'GET',
       '/v1/employee/references/$table?section=${Uri.encodeQueryComponent(section)}',
     );
+    return box == null
+        ? result
+        : {
+            ...result,
+            'records': box.overlay(
+                table,
+                (result['records'] as List)
+                    .map((r) => Map<String, dynamic>.from(r as Map))
+                    .toList())
+          };
   }
 
   Future<Map<String, dynamic>> exchangeRate(

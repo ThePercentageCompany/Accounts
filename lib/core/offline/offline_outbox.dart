@@ -51,6 +51,14 @@ class OfflineOutbox extends ChangeNotifier {
   Timer? timer;
   bool syncing = false, authenticationRequired = false, offline = false;
   bool _disposed = false;
+  Future<void> _storageTail = Future.value();
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final result = _storageTail.then((_) => action());
+    _storageTail =
+        result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
   Object? storageError;
   Map<String, dynamic> data = emptyPartition();
   List<Map<String, Object?>> get pending => (data['operations'] as List)
@@ -72,38 +80,56 @@ class OfflineOutbox extends ChangeNotifier {
                           : 'Synced';
   static bool supports(String table, String action, [Map? record]) =>
       const ['create', 'update', 'delete'].contains(action) &&
-      (const ['Customers', 'ProductsServices', 'Tasks', 'Projects']
-              .contains(table) ||
+      (const [
+            'CompanyProfile',
+            'Customers',
+            'ProductsServices',
+            'Tasks',
+            'Projects',
+            'Shareholders',
+            'Employees',
+            'FinancialPeriods'
+          ].contains(table) ||
           (table == 'TaskComments' && action == 'create') ||
-          (const ['Invoices', 'Quotations'].contains(table) &&
+          (const [
+                'Invoices',
+                'Quotations',
+                'Income',
+                'Expenses',
+                'Payroll',
+                'Assets',
+                'CapitalTransactions',
+                'ShareholderLoans'
+              ].contains(table) &&
               (action == 'create' || record?['status'] == 'DRAFT')));
 
-  Future<void> reload() async {
-    try {
-      data = await store.read(scope);
-      storageError = null;
-      _notify();
-    } catch (error) {
-      if (error is! SaasApiException) storageError = error;
-      _notify();
-      rethrow;
-    }
-  }
+  Future<void> reload() => _serialized(() async {
+        try {
+          data = await store.read(scope);
+          storageError = null;
+          _notify();
+        } catch (error) {
+          if (error is! SaasApiException) storageError = error;
+          _notify();
+          rethrow;
+        }
+      });
 
-  Future<void> _edit(void Function(Map<String, dynamic>) edit) async {
-    try {
-      data = await store.change(scope, edit);
-      storageError = null;
-      _notify();
-      lifecycle.broadcast('outbox', scope);
-    } catch (error) {
-      if (error is! SaasApiException) {
-        storageError = error;
-      }
-      _notify();
-      rethrow;
-    }
-  }
+  Future<void> _edit(void Function(Map<String, dynamic>) edit) =>
+      _serialized(() async {
+        try {
+          data = await store.change(scope, edit);
+          storageError = null;
+          _notify();
+          lifecycle.broadcast('outbox', scope);
+        } catch (error) {
+          if (error is! SaasApiException) {
+            storageError = error;
+          }
+          _notify();
+          rethrow;
+        }
+      });
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -183,24 +209,33 @@ class OfflineOutbox extends ChangeNotifier {
         'local': local,
         if (previous != null) 'dependsOn': previous['operationId'],
       });
-      if (local) {
+      if (local || action == 'receive' || base != null) {
         final old = copyJson(records[key] as Map? ?? base ?? {});
         records[key] = {
           ...old,
           ...resolvedValues,
           'recordId': localId,
           'recordVersion': version,
-          if (const ['Invoices', 'Quotations'].contains(table))
+          if (action == 'create' &&
+              const [
+                'Invoices',
+                'Quotations',
+                'Payroll',
+                'Assets',
+                'CapitalTransactions',
+                'ShareholderLoans'
+              ].contains(table))
             'status': 'DRAFT',
           'isDeleted': action == 'delete',
           'syncStatus': 'PENDING',
           '_operationId': id,
           '_localOnly': true,
+          if (!local && action != 'receive') '_pendingAction': action,
         };
       }
     });
     changed(table);
-    if (automatic && local) unawaited(sync());
+    if (automatic) sync().ignore();
   }
 
   List<Map<String, dynamic>> overlay(
@@ -276,7 +311,7 @@ class OfflineOutbox extends ChangeNotifier {
     await _edit((p) {
       final ops = p['operations'] as List;
       final op = ops.where((r) => r['operationId'] == id).firstOrNull;
-      if (op == null || op['state'] != 'failed' || op['local'] != true) {
+      if (op == null || op['state'] != 'failed') {
         throw const SaasApiException(
           'PENDING',
           'Only a definitely rejected local edit can be corrected.',
@@ -296,19 +331,32 @@ class OfflineOutbox extends ChangeNotifier {
       });
       op.remove('error');
       op.remove('errorCode');
-      if (op['action'] == 'delete') op.remove('values');
+      op.remove('backgroundAck');
+      if (const [
+        'delete',
+        'post',
+        'issue',
+        'send',
+        'convert',
+        'approve',
+        'capitalize',
+        'capitalPost',
+        'loanPost'
+      ].contains(op['action'])) {
+        op.remove('values');
+      }
       for (final next in ops) {
         if (next['dependsOn'] == id) next['dependsOn'] = replacementId;
       }
       final key = '${op['table']}:${op['localId']}';
-      final record = p['records'][key] as Map<String, dynamic>;
-      record.addAll(<String, dynamic>{
+      final record = p['records'][key] as Map<String, dynamic>?;
+      record?.addAll(<String, dynamic>{
         ...copyJson(values),
         'recordVersion': expectedVersion,
         'syncStatus': 'PENDING',
         '_operationId': replacementId,
       });
-      record.remove('_syncError');
+      record?.remove('_syncError');
     });
     changed('');
     if (automatic) sync().ignore();
@@ -316,23 +364,39 @@ class OfflineOutbox extends ChangeNotifier {
 
   /// Only definitely rejected operations can be discarded. An uncertain write
   /// retains its immutable operation ID and payload until the server acknowledges.
-  Future<void> discardRejected() async {
+  Future<void> discardRejected({String? operationId}) async {
     await _edit((p) {
       final ops = p['operations'] as List;
-      final rejected = ops.where((op) => op['state'] == 'failed').toList();
+      final rejected = ops
+          .where((op) =>
+              op['state'] == 'failed' &&
+              (operationId == null || op['operationId'] == operationId))
+          .toList();
       for (final op in rejected) {
-        if (ops.any(
-          (next) =>
-              next['dependsOn'] == op['operationId'] ||
-              (next != op && next.toString().contains(op['localId'] as String)),
-        )) {
-          throw const SaasApiException(
-            'DEPENDENT_CHANGES',
-            'Dependent changes exist. Export and resolve them before discarding this edit.',
-          );
+        final removed = <dynamic>[op];
+        var grew = true;
+        while (grew) {
+          grew = false;
+          for (final next in ops) {
+            if (removed.contains(next)) continue;
+            if (removed.any((prior) =>
+                next['dependsOn'] == prior['operationId'] ||
+                (prior['action'] == 'create' &&
+                    _references(next['values'], prior['localId'] as String)))) {
+              removed.add(next);
+              grew = true;
+            }
+          }
         }
-        ops.remove(op);
-        (p['records'] as Map).remove('${op['table']}:${op['localId']}');
+        if (removed.any(
+            (next) => next['submitted'] == true && next['state'] != 'failed')) {
+          throw const SaasApiException('DEPENDENT_CHANGES',
+              'A dependent change is awaiting confirmation. Retry before discarding.');
+        }
+        for (final item in removed) {
+          ops.remove(item);
+          (p['records'] as Map).remove('${item['table']}:${item['localId']}');
+        }
       }
     });
     changed('');
@@ -346,20 +410,28 @@ class OfflineOutbox extends ChangeNotifier {
       await withSyncLock(scope, () async {
         await reload();
         while (!_disposed && isCurrent() && pending.isNotEmpty) {
-          final first = pending.first;
-          if (first['state'] == 'failed' ||
-              clock().millisecondsSinceEpoch < (first['retryAt'] as int)) {
-            break;
-          }
+          final operations = pending;
+          final first = operations
+              .where((op) =>
+                  op['state'] != 'failed' &&
+                  clock().millisecondsSinceEpoch >= (op['retryAt'] as int) &&
+                  !operations.any(
+                      (prior) => prior['operationId'] == op['dependsOn']) &&
+                  !_unresolved(op['values']) &&
+                  !(op['recordId'] is String &&
+                      (op['recordId'] as String).startsWith('local_')))
+              .firstOrNull;
+          if (first == null) break;
           try {
             // Recheck via a real request, not navigator.onLine or cached claims.
             await verifyIdentity();
             if (!isCurrent()) return;
             Map<String, Object?>? payload;
             await _edit((p) {
-              final op = (p['operations'] as List).first;
-              if (op['operationId'] != first['operationId'] ||
-                  op['state'] == 'failed') {
+              final op = (p['operations'] as List)
+                  .where((r) => r['operationId'] == first['operationId'])
+                  .firstOrNull;
+              if (op == null || op['state'] == 'failed') {
                 return;
               }
               op['submitted'] = true;
@@ -411,7 +483,13 @@ class OfflineOutbox extends ChangeNotifier {
           } catch (error) {
             if (storageError != null) rethrow;
             await _failure(first, error);
-            break;
+            if (authenticationRequired ||
+                offline ||
+                pending.any((op) =>
+                    op['operationId'] == first['operationId'] &&
+                    op['state'] != 'failed')) {
+              break;
+            }
           }
         }
       });
@@ -421,6 +499,26 @@ class OfflineOutbox extends ChangeNotifier {
       syncing = false;
       _notify();
     }
+  }
+
+  bool _unresolved(Object? value) {
+    if (value is String) return value.startsWith('local_');
+    if (value is List) return value.any(_unresolved);
+    if (value is Map) {
+      return value.entries.any((e) =>
+          (e.key.toString().endsWith('Id') ||
+              e.value is Map ||
+              e.value is List) &&
+          _unresolved(e.value));
+    }
+    return false;
+  }
+
+  bool _references(Object? value, String id) {
+    if (value is String) return value == id;
+    if (value is List) return value.any((v) => _references(v, id));
+    if (value is Map) return value.values.any((v) => _references(v, id));
+    return false;
   }
 
   Object? _replace(Object? value, String from, String to) {
@@ -465,6 +563,9 @@ class OfflineOutbox extends ChangeNotifier {
             'recordVersion': result['version'],
             'syncStatus': pendingForRow ? 'PENDING' : 'SYNCED',
           };
+          if (!pendingForRow) {
+            (records['${op['table']}:$to'] as Map).remove('_pendingAction');
+          }
         }
         for (final key in records.keys.toList()) {
           records[key] = _replace(records[key], from, to);

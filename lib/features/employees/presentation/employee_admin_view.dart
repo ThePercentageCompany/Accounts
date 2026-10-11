@@ -68,29 +68,6 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
     if (values != null) await c.save(employee?['recordId'] as String?, values);
   }
 
-  Future<void> _discardRejected() async {
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (context) => AdaptiveFormDialog(
-        title: const Text('Discard rejected change?'),
-        content: const Text(
-          'The server rejected this edit without saving it. Discard it and reload the current employee details before editing again.',
-        ),
-        actions: [
-          LoadingButton.text(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep edit'),
-          ),
-          LoadingButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard edit'),
-          ),
-        ],
-      ),
-    );
-    if (yes == true) await widget.controller.discardRejected();
-  }
-
   Future<void> _access(Map<String, dynamic> employee, String action) async {
     final c = widget.controller;
     if (action != 'issue') {
@@ -220,7 +197,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
         bloc: widget.controller,
         builder: (context, _) {
           final c = widget.controller;
-          if (c.employees.isEmpty &&
+          if (c.state.employees.isEmpty &&
               c.api.cache.state(c.resourcePath)?.initialLoading == true) {
             return const CenteredLoading(label: 'Loading employees');
           }
@@ -237,7 +214,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   LoadingButton.icon(
-                    onPressed: c.busy || c.hasPending ? null : () => _edit(),
+                    onPressed: c.busy ? null : () => _edit(),
                     icon: const Icon(Icons.person_add_outlined),
                     label: const Text('Add employee'),
                   ),
@@ -276,7 +253,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
               if (c.api.cache.state(c.resourcePath)?.offline == true)
                 const Text('Offline - showing saved data.'),
               if (c.api.cache.state(c.resourcePath)?.error != null &&
-                  c.employees.isNotEmpty)
+                  c.state.employees.isNotEmpty)
                 const Text('Refresh failed. Showing saved employees.'),
               if (c.error != null)
                 Semantics(
@@ -286,35 +263,14 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                     child: Text(c.error!),
                   ),
                 ),
-              if (c.hasPending && c.canDiscardRejected) ...[
-                Text(
-                  c.canDiscardRejected
-                      ? 'The last save was rejected. Retry the saved edit after the service is fixed, or discard it to correct the details.'
-                      : 'The employee save has not been confirmed. Retry to confirm the saved edit and unlock editing.',
-                ),
-                LoadingButton.text(
-                  onPressed: c.busy ? null : c.retry,
-                  child: const Text('Retry saved edit'),
-                ),
-                if (c.canDiscardRejected)
-                  LoadingButton.text(
-                    onPressed: c.busy ? null : _discardRejected,
-                    child: const Text('Discard rejected change'),
-                  ),
-              ],
-              if (!c.busy && c.employees.isEmpty)
+              if (!c.busy && c.state.employees.isEmpty)
                 const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'No employees to display. Add your first employee when the company workspace is ready.',
-                  ),
-                ),
-              for (final row in c.employees.where(
-                (row) =>
-                    '${row['fullName']} ${row['email']} ${row['role']} ${row['employeeCode']} ${row['department']} ${row['designation']}'
-                        .toLowerCase()
-                        .contains(_search),
-              ))
+                    padding: EdgeInsets.all(24),
+                    child: Text('No employees to display.')),
+              for (final row in c.state.employees.where((row) =>
+                  '${row['fullName']} ${row['email']} ${row['role']} ${row['employeeCode']} ${row['department']} ${row['designation']}'
+                      .toLowerCase()
+                      .contains(_search)))
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -323,15 +279,8 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              child: Icon(
-                                Icons.person_outline,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
+                            const CircleAvatar(
+                                child: Icon(Icons.person_outline)),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -369,15 +318,14 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                           spacing: 8,
                           children: [
                             LoadingButton.text(
-                              onPressed: c.busy || c.hasPending
-                                  ? null
-                                  : () => _edit(row),
+                              onPressed: c.busy ? null : () => _edit(row),
                               child: const Text('Edit employee'),
                             ),
                             for (final action in ['issue', 'reset', 'revoke'])
                               LoadingButton.text(
                                 onPressed: c.busy ||
-                                        c.hasPending ||
+                                        ('${row['recordId']}'
+                                            .startsWith('local_')) ||
                                         (action != 'revoke' &&
                                             row['employmentStatus'] != 'ACTIVE')
                                     ? null
@@ -392,7 +340,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
                               ),
                             if (widget.onDocuments != null)
                               LoadingButton.text(
-                                onPressed: c.busy || c.hasPending
+                                onPressed: c.busy
                                     ? null
                                     : () => widget.onDocuments!(row),
                                 child: const Text('Documents'),

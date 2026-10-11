@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/core/offline/durable_value.dart';
+import 'package:tpc_invoice/core/offline/offline_outbox.dart';
 part 'employee_admin_controller.freezed.dart';
 
 @freezed
@@ -58,6 +59,8 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   bool _disposed = false;
   String? error;
   String get _key => 'saas_employee_write_${ownerId}_$companyId';
+  OfflineOutbox? get _box =>
+      api.offlineEnabled ? api.outbox(ownerId, companyId) : null;
   late final DurableValue? _durable = api.offlineEnabled
       ? DurableValue(
           api.offlineStore,
@@ -72,13 +75,34 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
       _durable?.put(value) ?? preferences.setString(_key, value);
   Future<bool> _removePending() =>
       _durable?.remove() ?? preferences.remove(_key);
-  bool get hasPending => _pendingValue != null;
+  bool get hasPending =>
+      _pendingValue != null ||
+      (_box?.pending.any((op) => op['table'] == 'Employees') ?? false);
   Future<void> initializePending() async {
     await _durable?.load();
+    if (_box != null) {
+      await _box!.reload();
+      final raw = _pendingValue;
+      if (raw != null) {
+        final op = jsonDecode(raw) as Map;
+        final values = Map<String, Object?>.from(op['values'] as Map);
+        await _box!.enqueue(
+            'Employees', op['employeeId'] == null ? 'create' : 'update', values,
+            recordId: op['employeeId'] as String?,
+            expectedVersion: values['expectedVersion'] as int? ?? 0,
+            operationId: op['operationId'] as String,
+            rejected: op['rejected'] == true);
+        await _removePending();
+      }
+    }
     if (!_disposed) _notify();
   }
 
   bool get canDiscardRejected {
+    if (_box != null) {
+      return _box!.pending
+          .any((op) => op['table'] == 'Employees' && op['state'] == 'failed');
+    }
     final raw = _pendingValue;
     return raw != null && (jsonDecode(raw) as Map)['rejected'] == true;
   }
@@ -131,6 +155,17 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   }
 
   Future<void> refresh({bool force = true}) async {
+    if (_box != null) {
+      try {
+        await initializePending();
+        await _load(force: force);
+      } catch (e) {
+        // Cached and locally saved employees remain usable during reconnects.
+        if (employees.isEmpty) error = '$e';
+      }
+      if (!_disposed) _notify();
+      return;
+    }
     await _run(() async {
       // Recover the exact persisted write before reading: the server can block
       // list requests until an uncertain employee write has been confirmed.
@@ -183,6 +218,16 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
 
   Future<bool> save(String? id, Map<String, Object?> values) async =>
       await _run(() async {
+        if (_box != null) {
+          await initializePending();
+          await _box!.enqueue(
+              'Employees', id == null ? 'create' : 'update', values,
+              recordId: id,
+              expectedVersion: values['expectedVersion'] as int? ?? 0,
+              base: employees.where((r) => r['recordId'] == id).firstOrNull);
+          _notify();
+          return true;
+        }
         if (hasPending) {
           throw const SaasApiException(
             'PENDING',
@@ -208,6 +253,10 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
       }) ??
       false;
   Future<void> retry() async {
+    if (_box != null) {
+      await _box!.retry();
+      return;
+    }
     await _run(_submitPending);
   }
 
@@ -231,7 +280,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
 
   Future<Map<String, dynamic>?> access(String id, String action) => _run(
         () async {
-          if (hasPending) {
+          if (_pendingValue != null) {
             throw const SaasApiException(
               'PENDING',
               'Confirm the pending employee change first.',
@@ -253,7 +302,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
     final cached = api.cache.state(resourcePath);
     emit(
       EmployeeAdminState(
-        employees: employees
+        employees: (_box?.overlay('Employees', employees) ?? employees)
             .map((employee) => Map<String, dynamic>.of(employee))
             .toList(),
         busy: busy,
