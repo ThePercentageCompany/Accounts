@@ -31,7 +31,7 @@ const results = await Promise.all([
     requireCheck(response.status === 200, `HTTP ${response.status}`);
     const value = await json(response);
     requireCheck(value.status === 'ok' && value.phase === 4, 'Unexpected backend health contract.');
-    for (const capability of ['report-configuration', 'task-management', 'task-calendar', 'task-attachments']) {
+    for (const capability of ['report-configuration', 'task-management', 'task-calendar', 'task-attachments', 'cash-bank-transfers']) {
       requireCheck(value.capabilities?.includes(capability), `Deployed backend is missing ${capability} support.`);
     }
   }),

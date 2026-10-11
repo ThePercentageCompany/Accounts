@@ -158,7 +158,7 @@ test('public health uses /health and requires no session', async t => {
   const response = await f.request('/health');
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', phase: 4,
-    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency'] });
+    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', 'cash-bank-transfers'] });
 });
 
 test('new reporting and document listing routes validate queries and preserve session routing', async t => {
