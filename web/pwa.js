@@ -3,6 +3,24 @@
   let registration, installPrompt, updateRequested = false, pushSubscribed = false, notificationVersion = 0;
   const base = new URL('./', document.baseURI);
   const emit = () => window.dispatchEvent(new Event('tpc-pwa-change'));
+  let updateState = 'idle';
+  try {
+    if (sessionStorage.getItem('tpc-update-applied')) {
+      updateState = 'updated';
+      sessionStorage.removeItem('tpc-update-applied');
+    }
+  } catch (_) {}
+  const setUpdateState = state => {updateState = state; emit();};
+  const watchWorker = worker => {
+    if (!worker) return;
+    const changed = () => {
+      if (worker.state === 'installing') setUpdateState('downloading');
+      else if (worker.state === 'installed') setUpdateState(registration?.waiting ? 'ready' : 'updated');
+      else if (worker.state === 'redundant') setUpdateState('error');
+    };
+    worker.addEventListener('statechange', changed);
+    changed();
+  };
   const task = data => {
     if (!/^[A-Za-z0-9_-]{43}$/.test(data.companyId) || !/^[A-Za-z0-9_-]{43}$/.test(data.taskId)) return;
     location.hash = `task=${data.companyId}:${data.taskId}`;
@@ -22,6 +40,7 @@
     status: () => JSON.stringify({online: navigator.onLine,
       installed: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
       installable: !!installPrompt, updateAvailable: !!registration?.waiting,
+      updateState: updateRequested ? 'applying' : registration?.waiting ? 'ready' : updateState,
       pushSupported: 'PushManager' in window && 'Notification' in window && !!registration,
       pushSubscribed, notificationVersion,
       permission: 'Notification' in window ? Notification.permission : 'unsupported',
@@ -77,19 +96,34 @@
       if (!registration?.waiting) return;
       if (await window.tpcPwa.pendingWork()) throw Error('Sync saved changes first.');
       updateRequested = true;
+      setUpdateState('applying');
       registration.waiting.postMessage({type:'ACTIVATE_UPDATE'});
     },
-    checkUpdate: async () => {await registration?.update(); emit();},
+    checkUpdate: async () => {
+      if (!navigator.onLine) {setUpdateState('offline'); return;}
+      if (!registration) {setUpdateState('unavailable'); return;}
+      setUpdateState('checking');
+      try {
+        await registration.update();
+        if (registration.waiting) setUpdateState('ready');
+        else if (registration.installing) watchWorker(registration.installing);
+        else setUpdateState('current');
+      } catch (error) {setUpdateState('error'); throw error;}
+    },
     clearTask: () => {if (location.hash.startsWith('#task=')) history.replaceState(null, '', location.pathname + location.search);},
   };
   if ('serviceWorker' in navigator && window.isSecureContext) {
     navigator.serviceWorker.register(new URL('tpc-sw.js', base), {scope: base.pathname, updateViaCache:'none'})
       .then(reg => {
         registration = reg; navigator.serviceWorker.ready.then(async () => {pushSubscribed = !!await reg.pushManager?.getSubscription(); emit();}); emit(); scheduleSync();
-        reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', emit));
-      }).catch(() => emit());
+        reg.addEventListener('updatefound', () => watchWorker(reg.installing));
+        watchWorker(reg.installing);
+      }).catch(() => setUpdateState('error'));
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (updateRequested) location.reload(); // Other tabs retain their open forms.
+      if (updateRequested) {
+        try {sessionStorage.setItem('tpc-update-applied', 'true');} catch (_) {}
+        location.reload(); // Other tabs retain their open forms.
+      }
       emit();
     });
     navigator.serviceWorker.addEventListener('message', event => {

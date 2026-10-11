@@ -63,6 +63,8 @@ try {
   await page.waitForSelector('flt-glass-pane',{state:'attached',timeout:90000});
   await page.waitForFunction(() => !document.getElementById('launch'),{timeout:90000});
   assert.equal(await page.evaluate(()=>window.tpcPwa.status()).then(JSON.parse).then(s=>s.online),false);
+  await page.evaluate(() => window.tpcPwa.checkUpdate());
+  assert.equal(await page.evaluate(() => JSON.parse(window.tpcPwa.status()).updateState), 'offline');
   await page.waitForTimeout(10000);
   // Headless CanvasKit can defer repaint after a same-size offline navigation.
   await page.setViewportSize({width:391,height:844});
@@ -74,8 +76,16 @@ try {
   await page.waitForTimeout(1000);
   await page.screenshot({path:'build/pwa-verification/desktop.png',fullPage:true});
   version = 'verification-update';
+  await page.evaluate(() => {
+    window.updateStates = [];
+    window.addEventListener('tpc-pwa-change', () => window.updateStates.push(JSON.parse(window.tpcPwa.status()).updateState));
+  });
   await page.evaluate(async ()=>{await window.tpcPwa.checkUpdate();});
   await page.waitForFunction(()=>JSON.parse(window.tpcPwa.status()).updateAvailable,{timeout:90000});
+  const states = await page.evaluate(() => window.updateStates);
+  assert(states.includes('checking'));
+  assert(states.includes('downloading'));
+  assert.equal(await page.evaluate(() => JSON.parse(window.tpcPwa.status()).updateState), 'ready');
   await page.evaluate(async ()=> {
     const db = await new Promise((resolve,reject)=>{const r=indexedDB.open('tpc_offline_v1');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
     await new Promise((resolve,reject)=>{
@@ -87,6 +97,15 @@ try {
   assert.equal(await page.evaluate(()=>window.tpcPwa.pendingWork()),true);
   const blocked = await page.evaluate(async()=>{try {await window.tpcPwa.update();return false;} catch {return true;}});
   assert.equal(blocked,true,'Update must not reload while persisted changes exist');
+  await page.evaluate(async () => {
+    const db = await new Promise(resolve => {const r=indexedDB.open('tpc_offline_v1');r.onsuccess=()=>resolve(r.result);});
+    await new Promise(resolve => {const tx=db.transaction('partitions','readwrite');tx.objectStore('partitions').delete('verification');tx.oncomplete=resolve;});
+    db.close();
+    await window.tpcPwa.update();
+  });
+  await page.waitForFunction(() => JSON.parse(window.tpcPwa.status()).updateState === 'updated', {timeout:90000});
+  await page.evaluate(() => window.tpcPwa.checkUpdate());
+  assert.equal(await page.evaluate(() => JSON.parse(window.tpcPwa.status()).updateState), 'current');
   assert.deepEqual(errors,[],'Release application has no uncaught browser errors');
   console.log(JSON.stringify({installable:true,offlineShell:true,apiNotCached:true,
     controlledUpdate:true,pendingUpdateBlocked:true,screenshots:'build/pwa-verification',browserErrors:errors}));
