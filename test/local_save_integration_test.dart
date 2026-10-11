@@ -36,6 +36,7 @@ void main() {
                       ? {'employees': []}
                       : {
                           'employeeId': List.filled(43, 'e').join(),
+                          'employeeCode': 'TP-01',
                           'version': 1
                         }
                   : path.endsWith('/documents')
@@ -77,6 +78,9 @@ void main() {
     await api.outbox(owner, company).sync();
     expect(mutations, hasLength(1));
     expect(api.outbox(owner, company).pending, isEmpty);
+    expect(controller.state.employees.single['employeeCode'], 'TP-01');
+    expect(mutations.single.url.path, '/v1/companies/$company/employees');
+    expect(mutations.single.headers['Idempotency-Key'], isNotEmpty);
     await controller.close();
   });
 

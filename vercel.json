@@ -18,6 +18,10 @@
   ],
   "headers": [
     {
+      "source": "/update:rest*",
+      "headers": [{"key":"Cache-Control","value":"no-store"}]
+    },
+    {
       "source": "/v1/:path*",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" },

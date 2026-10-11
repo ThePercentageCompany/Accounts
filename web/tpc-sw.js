@@ -22,6 +22,12 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return;
   const path = url.pathname.slice(scope.pathname.length);
   if (path.startsWith('v1/') || path.startsWith('internal/')) return;
+  // Recovery must reach newer code even when the installed app is stale.
+  if (path === 'update.html' || path === 'update_recovery.js') {
+    event.respondWith(fetch(new Request(event.request, {cache:'no-store'}))
+      .catch(() => caches.open(CACHE).then(cache => cache.match(new URL(path, scope)))));
+    return;
+  }
   if (event.request.mode === 'navigate') {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(new URL('index.html', scope))).then(result => result || fetch(event.request)));
   } else if (RESOURCES.includes(path)) {

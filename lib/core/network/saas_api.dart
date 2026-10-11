@@ -144,6 +144,8 @@ class SaasApi implements SessionRepository {
                   'operationId': op['operationId'],
                   'status': 'APPLIED',
                   'recordId': result['employeeId'],
+                  if (result['employeeCode'] is String)
+                    'employeeCode': result['employeeCode'],
                   'version': result['version']
                 }
               ]

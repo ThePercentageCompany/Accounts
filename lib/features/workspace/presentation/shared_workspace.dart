@@ -635,7 +635,36 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     );
   }
 
-  Widget _pwaControls() => PwaControls(hasActiveSave: () async {
+  Widget _pwaControls() => PwaControls(
+      syncChanges: _writes?.outbox,
+      syncStatus: () {
+        final box = _writes?.outbox;
+        if (!_syncReady || box == null) {
+          return 'Sync status: preparing local storage.';
+        }
+        final count = box.pending.length;
+        if (box.storageError != null) {
+          return 'Sync status: device storage error. Review Settings > Sync and device storage.';
+        }
+        if (count == 0) {
+          return 'Sync status: all saved changes synced. Nothing is waiting to upload.';
+        }
+        if (box.authenticationRequired) {
+          return 'Sync status: paused. Sign in to send $count saved changes. You can still update the app.';
+        }
+        if (box.syncing) {
+          return box.hasFailed
+              ? 'Sync status: syncing in the background. Some saved changes need attention in Settings > Sync and device storage. You can still update the app.'
+              : 'Sync status: syncing $count saved changes in the background. You can still update the app.';
+        }
+        if (box.hasFailed) {
+          return 'Sync status: stopped with an error. Review $count saved changes in Settings > Sync and device storage. You can still update the app.';
+        }
+        return box.offline
+            ? 'Sync status: offline. $count changes saved on this device will sync when connected. You can still update the app.'
+            : 'Sync status: waiting to retry $count changes saved on this device. Review Settings > Sync and device storage for details. You can still update the app.';
+      },
+      hasActiveSave: () async {
         await _initializeSync();
         return !_syncReady ||
             (_writes?.busy ?? false) ||

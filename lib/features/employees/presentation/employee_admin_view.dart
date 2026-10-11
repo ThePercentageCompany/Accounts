@@ -404,7 +404,13 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
             : key == 'phone'
                 ? TextInputType.phone
                 : TextInputType.text,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: key == 'employeeCode'
+              ? 'Leave blank to generate a unique workspace code when synced, e.g. TP-01. You can also enter your own code.'
+              : null,
+          helperMaxLines: 3,
+        ),
         validator: money
             ? (value) {
                 final text = value?.trim() ?? '';
@@ -529,7 +535,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
                     'Employment details',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  detail('employeeCode', 'Employee code (optional)'),
+                  detail('employeeCode', 'Employee code (automatic)'),
                   detail('department', 'Department (optional)'),
                   detail('designation', 'Job title (optional)'),
                   date('joinDate', 'Joining date (optional)'),

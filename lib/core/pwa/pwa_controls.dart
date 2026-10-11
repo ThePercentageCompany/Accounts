@@ -3,8 +3,11 @@ import 'pwa_runtime.dart';
 import '../widgets/loading.dart';
 
 class PwaControls extends StatefulWidget {
-  const PwaControls({super.key, this.hasActiveSave});
+  const PwaControls(
+      {super.key, this.hasActiveSave, this.syncChanges, this.syncStatus});
   final Future<bool> Function()? hasActiveSave;
+  final Listenable? syncChanges;
+  final String Function()? syncStatus;
   @override
   State<PwaControls> createState() => _PwaControlsState();
 }
@@ -21,12 +24,17 @@ class _PwaControlsState extends State<PwaControls> {
   }
 
   Future<void> _open() async {
+    _error = null;
+    if ((_runtime.status['updateState'] ?? 'idle') == 'idle') {
+      _runtime.checkUpdate().ignore();
+    }
     await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
         builder: (context) => ListenableBuilder(
-              listenable: Listenable.merge([_runtime, _panelChanges]),
+              listenable: Listenable.merge(
+                  [_runtime, _panelChanges, widget.syncChanges]),
               builder: (context, _) {
                 final status = _runtime.status;
                 final state = status['updateState'] as String? ?? 'idle';
@@ -48,7 +56,8 @@ class _PwaControlsState extends State<PwaControls> {
                     'App updates are unavailable in this browser.',
                   'error' =>
                     'Update could not finish. Reconnect and try again.',
-                  _ => 'Your app checks for updates automatically.',
+                  _ =>
+                    'Update status has not been checked. Select Check for updates.',
                 };
                 return SafeArea(
                     child: SingleChildScrollView(
@@ -90,6 +99,10 @@ class _PwaControlsState extends State<PwaControls> {
                                             .titleMedium)),
                               ]),
                               const SizedBox(height: 8),
+                              if (widget.syncStatus != null) ...[
+                                Text(widget.syncStatus!()),
+                                const SizedBox(height: 12),
+                              ],
                               const Text(
                                   'Finish any open forms before updating. Changes already saved on this device stay safe and resume syncing after restart. Other open tabs will stay on their current screen.'),
                               if (_error != null)

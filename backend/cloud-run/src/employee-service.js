@@ -106,9 +106,23 @@ export class EmployeeService {
       return c.employeeOps[opKey] = { employeeId: proposedId, fingerprint, reservation, submitted: false, completed: false,
         version: values.expectedVersion + 1, at: this.now() };
     });
-    if (op.completed) return { employeeId: op.employeeId, version: op.version, replayed: true };
+    if (op.completed) return { employeeId: op.employeeId, version: op.version, employeeCode: op.employeeCode, replayed: true };
     const rows = await this.sheets.read(companyId);
     const old = rows.Employees.find(e => e.recordId === op.employeeId);
+    if (!values.employeeCode) {
+      // Existing codes remain stable. Reserve creation under the company write
+      // lock and include deleted rows so an identifier is never recycled.
+      const company = (await this.registry.read()).state.companies[companyId];
+      const prefix = String(company.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2) || 'TP';
+      const used = new Set(rows.Employees.map(e => String(e.employeeCode || '').trim().toUpperCase()));
+      let number = 1;
+      for (const code of used) {
+        if (code.startsWith(`${prefix}-`) && /^\d+$/.test(code.slice(prefix.length + 1))) {
+          number = Math.max(number, Number(code.slice(prefix.length + 1)) + 1);
+        }
+      }
+      values.employeeCode = old?.employeeCode || `${prefix}-${String(number).padStart(2, '0')}`;
+    }
     const profile = { ...old, ...values };
     requireThat(!profile.joinDate || !profile.lastEmploymentDate || profile.lastEmploymentDate >= profile.joinDate,
       400, 'INVALID_EMPLOYEE', 'Last employment date cannot precede joining date.');
@@ -161,12 +175,12 @@ export class EmployeeService {
       const c = this.owner(state, token, companyId, true), pending = c.employeeOps[opKey];
       if (pending.completed) return;
       requireThat(c.employeeWrite === opKey, 409, 'EMPLOYEE_UPDATE_PENDING', 'Employee update changed.');
-      pending.completed = true; delete c.employeeWrite;
+      pending.completed = true; pending.employeeCode = values.employeeCode; delete c.employeeWrite;
       c.employeeAccess ??= {};
       const access = c.employeeAccess[op.employeeId] ??= { version: 0, status: 'UNISSUED' };
       if (values.employmentStatus !== 'ACTIVE') { access.version++; access.status = 'REVOKED'; }
     });
-    return { employeeId: op.employeeId, version: op.version, replayed: confirmed };
+    return { employeeId: op.employeeId, version: op.version, employeeCode: values.employeeCode, replayed: confirmed };
   }
   async issue(token, companyId, employeeId, kind, key) {
     keyRequired(key);

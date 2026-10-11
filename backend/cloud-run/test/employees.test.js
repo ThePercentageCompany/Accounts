@@ -41,6 +41,22 @@ async function setup() {
 }
 const denied = e => ['EMPLOYEE_ACCESS_DENIED', 'EMPLOYEE_SESSION_INVALID', 'EMPLOYEE_SESSION_EXPIRED'].includes(e.code);
 
+test('automatic workspace employee codes are sequential, stable on replay/edit and never recycle deleted codes', async () => {
+  const f = await setup();
+  const first = await f.create();
+  assert.equal(f.rows.Employees[0].employeeCode, 'CO-01');
+  assert.equal(await f.create(), first);
+  const replay = await f.employees.save(f.owner, f.companyId, null, f.input, 'employee_create_key');
+  assert.equal(replay.employeeCode, 'CO-01');
+  assert.equal(replay.replayed, true);
+  assert.equal(f.writes(), 1);
+  await f.employees.save(f.owner, f.companyId, first, {...f.input, employeeCode:'', expectedVersion:1}, 'employee_auto_edit');
+  assert.equal(f.rows.Employees[0].employeeCode, 'CO-01');
+  f.rows.Employees[0].isDeleted = true;
+  await f.create('employee_auto_second');
+  assert.equal(f.rows.Employees[1].employeeCode, 'CO-02');
+});
+
 test('employee profile and compensation round-trip, partial edits preserve salary, payroll uses saved amounts', async () => {
   const f = await setup();
   Object.assign(f.input, { employeeCode: 'EMP-001', phone: '+971500000000', department: 'Accounts', designation: 'Accountant',

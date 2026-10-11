@@ -114,9 +114,23 @@ try {
   await context.setOffline(false);
   await page.evaluate(() => window.tpcPwa.checkUpdate());
   assert.equal(await page.evaluate(() => JSON.parse(window.tpcPwa.status()).updateState), 'current');
+  version = 'verification-recovery';
+  await page.evaluate(() => {window.recoverySentinel = 'open-form';});
+  const recovery = await context.newPage();
+  recovery.on('pageerror', error => errors.push(error.message));
+  await recovery.goto(origin + '/update.html', {waitUntil:'domcontentloaded'});
+  await recovery.waitForFunction(() => document.getElementById('action').textContent === 'Install latest version', {timeout:90000});
+  offline = true; await context.setOffline(true);
+  await recovery.getByRole('button', {name:'Install latest version'}).click();
+  await recovery.waitForFunction(() => document.getElementById('status').textContent.startsWith('Update installed successfully'), {timeout:90000});
+  assert.equal(await page.evaluate(() => window.recoverySentinel), 'open-form', 'Recovery must not reload other tabs');
+  assert.equal(await page.evaluate(() => window.tpcPwa.pendingWork()), true, 'Recovery preserves queued changes');
+  await recovery.getByRole('button', {name:'Open updated app'}).click();
+  await recovery.waitForFunction(() => window.tpcPwa && JSON.parse(window.tpcPwa.status()).updateState === 'updated', {timeout:90000});
+  assert.equal(await recovery.evaluate(() => localStorage.getItem('flutter.saas_records_verification')), 'saved-change');
   assert.deepEqual(errors,[],'Release application has no uncaught browser errors');
   console.log(JSON.stringify({installable:true,offlineShell:true,apiNotCached:true,
-    controlledUpdate:true,pendingChangesPreserved:true,screenshots:'build/pwa-verification',browserErrors:errors}));
+    controlledUpdate:true,recoveryUpdate:true,pendingChangesPreserved:true,screenshots:'build/pwa-verification',browserErrors:errors}));
 } finally {
   await context.close(); await new Promise(resolve=>server.close(resolve));
 }

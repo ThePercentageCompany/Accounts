@@ -49,6 +49,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
     this.companyId,
   ) : super(const EmployeeAdminState()) {
     api.cache.addListener(_cacheChanged);
+    _box?.addListener(_notify);
   }
   final SaasApi api;
   final SharedPreferences preferences;
@@ -320,6 +321,7 @@ class EmployeeAdminController extends Cubit<EmployeeAdminState> {
   Future<void> close() {
     _disposed = true;
     api.cache.removeListener(_cacheChanged);
+    _box?.removeListener(_notify);
     return super.close();
   }
 

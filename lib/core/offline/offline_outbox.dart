@@ -559,6 +559,10 @@ class OfflineOutbox extends ChangeNotifier {
           );
           records['${op['table']}:$to'] = {
             ...copyJson(old as Map),
+            if (op['table'] == 'Employees' &&
+                result['employeeCode'] is String &&
+                !pendingForRow)
+              'employeeCode': result['employeeCode'],
             'recordId': to,
             'recordVersion': result['version'],
             'syncStatus': pendingForRow ? 'PENDING' : 'SYNCED',
