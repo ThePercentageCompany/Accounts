@@ -351,6 +351,20 @@ test('sync HTTP boundary enforces CSRF, bounded bodies and tombstone queries', a
   assert.ok(preflight.headers.get('access-control-allow-methods').includes('DELETE'));
 });
 
+test('transfer action endpoints route keys, versions and values and enforce CSRF', async t => {
+  const companyId = 'c'.repeat(43), recordId = 'r'.repeat(43), token = 't'.repeat(43), calls = [];
+  const f = await running(t, { business: { mutate: async (...args) => { calls.push(args); return { recordId, version: 2 }; } } });
+  for (const [suffix, action, values] of [['post', 'transferPost', undefined], ['reverse', 'transferReverse', { reversalDate: '2026-10-11', reversalReason: 'Correction' }], ['match', 'transferMatch', { bankStatus: 'PENDING' }]]) {
+    const input = { expectedVersion: 1, ...(values ? { values } : {}) };
+    const path = `/v1/companies/${companyId}/records/MoneyTransfers/${recordId}/${suffix}`;
+    assert.equal((await f.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })).status, 403);
+    const result = await f.request(path, { method: 'POST', headers: { ...headers, Cookie: `__Host-tpc_session=${token}`, 'Idempotency-Key': 'transfer_action_001' }, body: JSON.stringify(input) });
+    assert.equal(result.status, 200);
+    assert.deepEqual(calls.at(-1), [token, companyId, 'MoneyTransfers', recordId, action, input, 'transfer_action_001']);
+  }
+  assert.equal(calls.length, 3);
+});
+
 test('owner business record routes preserve authority and idempotency keys', async t => {
   const companyId = 'c'.repeat(43), recordId = 'r'.repeat(43), token = 't'.repeat(43), calls = [];
   const business = {

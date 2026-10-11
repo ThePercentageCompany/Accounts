@@ -28,6 +28,7 @@ const employeeSections = [
   'Dashboard',
   'Invoices',
   'Quotations',
+  'Cash & Bank',
   'Income & Expenses',
   'Capital & Equity',
   'Fixed Assets',

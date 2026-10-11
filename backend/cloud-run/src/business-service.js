@@ -16,6 +16,7 @@ import { receiptChanges, receiptInput } from './receipt-policy.js';
 import { quotationChanges } from './quotation-policy.js';
 import { payrollChanges } from './payroll-policy.js';
 import { assetChanges } from './asset-policy.js';
+import { transferChanges } from './transfer-policy.js';
 import { capitalChanges } from './capital-policy.js';
 import { draftItems } from './document-draft.js';
 import { returnInput } from './invoice-return.js';
@@ -66,12 +67,12 @@ export class BusinessService {
     for (const op of input.operations) {
       requireThat(op && !Array.isArray(op) && Object.keys(op).every(k =>
         ['operationId', 'table', 'recordId', 'action', 'expectedVersion', 'values'].includes(k)) &&
-        validKey(op.operationId) && !seen.has(op.operationId) && ['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(op.action) &&
+        validKey(op.operationId) && !seen.has(op.operationId) && ['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay', 'transferPost', 'transferReverse', 'transferMatch'].includes(op.action) &&
         Number.isSafeInteger(op.expectedVersion) && (['create', 'receive'].includes(op.action) ?
           op.expectedVersion === 0 && op.recordId === undefined : op.expectedVersion > 0 && validRecordId(op.table, op.recordId)),
       400, 'INVALID_BATCH', 'Invalid or duplicate operation.');
       this.sheets.table(op.table);
-      if (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(op.action)) requireThat(!Object.hasOwn(op, 'values') &&
+      if (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(op.action)) requireThat(!Object.hasOwn(op, 'values') &&
         (op.action !== 'post' || ['Income', 'Expenses'].includes(op.table)), 400, 'INVALID_BATCH', 'Invalid posting or deletion.');
       else if (op.action === 'receive') receiptInput(op.values);
       else if (op.action === 'invoiceReturn') returnInput(op.values);
@@ -84,7 +85,7 @@ export class BusinessService {
       if (stopped) { results.push({ operationId: op.operationId, status: 'NOT_ATTEMPTED' }); continue; }
       try {
         const value = await this.mutate(token, companyId, op.table, op.recordId ?? null, op.action,
-          { expectedVersion: op.expectedVersion, ...(['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(op.action) ? {} : { values: op.values }) }, op.operationId);
+          { expectedVersion: op.expectedVersion, ...(['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(op.action) ? {} : { values: op.values }) }, op.operationId);
         results.push({ operationId: op.operationId, status: 'APPLIED', ...value });
       } catch (error) {
         results.push({ operationId: op.operationId, status: 'FAILED',
@@ -163,7 +164,7 @@ export class BusinessService {
     this.sheets.table(tableName);
     await this.authorizeWrite(token, companyId, tableName);
     requireThat(validKey(key), 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
-    requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay'].includes(action) &&
+    requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay', 'transferPost', 'transferReverse', 'transferMatch'].includes(action) &&
       (!['post', 'pay', 'reverse'].includes(action) || ['Income', 'Expenses'].includes(tableName)), 400, 'INVALID_RECORD', 'Invalid record action.');
     const expectedVersion = input?.expectedVersion;
     requireThat(Number.isSafeInteger(expectedVersion) && expectedVersion >= 0 &&
@@ -178,7 +179,8 @@ export class BusinessService {
     requireThat(!['capitalize', 'depreciate', 'assetDispose'].includes(action) || tableName === 'Assets', 400, 'INVALID_RECORD', 'Only assets support this action.');
     requireThat(action !== 'capitalPost' || tableName === 'CapitalTransactions', 400, 'INVALID_RECORD', 'Only capital contributions support this action.');
     requireThat(!['loanPost', 'loanRepay'].includes(action) || tableName === 'ShareholderLoans', 400, 'INVALID_RECORD', 'Only shareholder loans support this action.');
-    const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : action === 'invoiceReturn' ? returnInput(input.values) : this.values(tableName, input.values);
+    requireThat(!['transferPost', 'transferReverse', 'transferMatch'].includes(action) || tableName === 'MoneyTransfers', 400, 'INVALID_TRANSFER', 'Only money transfers support this action.');
+    const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : action === 'invoiceReturn' ? returnInput(input.values) : this.values(tableName, input.values);
     if (Object.hasOwn(values, 'items')) {
       requireThat(['create', 'update'].includes(action), 400, 'INVALID_DOCUMENT_ITEMS', 'Only draft creation or editing accepts lines.');
       await this.authorizeWrite(token, companyId, tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
@@ -193,7 +195,7 @@ export class BusinessService {
     requireThat(tableName !== 'CompanyProfile' || (action === 'update' && recordId === 'company'),
       409, 'COMPANY_PROFILE_SINGLETON', 'Update the existing company profile. It cannot be created or deleted here.');
     requireThat(input && Object.keys(input).every(k => ['expectedVersion', 'values'].includes(k)) &&
-      (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost'].includes(action) ? !Object.hasOwn(input, 'values') : true), 400, 'INVALID_RECORD', 'Unsupported mutation fields.');
+      (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(action) ? !Object.hasOwn(input, 'values') : true), 400, 'INVALID_RECORD', 'Unsupported mutation fields.');
     const proposedId = recordId || opaque(), fingerprint = digest(JSON.stringify({ tableName, recordId, action, expectedVersion, values }));
     const opKey = digest(`business:${companyId}:${key}`), marker = `business:${opKey}`, now = this.now(), reservation = opaque();
     try {
@@ -282,6 +284,8 @@ export class BusinessService {
         writeValues = asset.values;
         const capital = await capitalChanges(this.sheets, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
         writeValues = capital.values;
+        const transfer = await transferChanges(this.sheets, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = transfer.values;
         if (FX_TABLES.includes(tableName) && action !== 'delete') {
           const record = { ...old, ...writeValues };
           writeValues.baseAmount = convert(record.total ?? record.netSalary ?? record.amount ?? 0, Number(record.exchangeRate || 1));
@@ -295,7 +299,7 @@ export class BusinessService {
           tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
         const writes = [{ table: tableName, row, values: { ...system, ...writeValues } },
           ...(ledger || [...invoice.extra, ...receipt.extra, ...quotation.extra,
-            ...payroll.extra, ...asset.extra, ...capital.extra, ...taskExtra])];
+            ...payroll.extra, ...asset.extra, ...capital.extra, ...transfer.extra, ...taskExtra])];
         if (['issue', 'approve', 'receive', 'post', 'pay', 'payrollPay', 'invoiceReturn'].includes(action)) {
           let controlRate;
           const controlAmounts = {};

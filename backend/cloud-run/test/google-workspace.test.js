@@ -54,6 +54,41 @@ test('shareholder ownership migration appends only its header and preserves exis
   assert.equal(writes.length, 1);
 });
 
+test('version 7 reconnect upgrades only after full schema and identity verification', async () => {
+  const google = new GoogleWorkspace({});
+  google.ensureTaskTables = async () => {};
+  google.ensureTables = async () => {};
+  google.ensureShareholderFields = async () => {};
+  let version = 7, identity = company.id, corrupt = false;
+  google.rows = async (_, __, ranges) => ranges.length === TABLES.length ? TABLES.map(t => [corrupt && t.title === 'MoneyTransfers' ? ['wrong'] : t.headers]) : [
+    [['schema', identity, '', '', '', '', '', '', '', '', 'schemaVersion', version]], [['company', company.id]], [['owner', company.id]],
+  ];
+  const writes = [];
+  google.request = async (_, __, ___, body) => { writes.push(body); version = body.requests[0].updateCells.rows[0].values[0].userEnteredValue.numberValue; };
+  await google.verifySchema('token', company);
+  assert.equal(version, 8); assert.equal(writes.length, 1);
+  assert.equal(writes[0].requests[0].updateCells.start.columnIndex, 11);
+  await google.verifySchema('token', company); assert.equal(writes.length, 1);
+  version = 7; identity = 'foreign';
+  await assert.rejects(google.verifySchema('token', company), e => e.code === 'SCHEMA_MISMATCH');
+  identity = company.id; corrupt = true;
+  await assert.rejects(google.verifySchema('token', company), e => e.code === 'SCHEMA_MISMATCH');
+  assert.equal(writes.length, 1);
+});
+
+test('transfer extension preserves existing tabs and appends only the new tab and headers', async () => {
+  const writes = [];
+  const existing = TABLES.filter(t => t.title !== 'MoneyTransfers');
+  const google = new GoogleWorkspace({ fetcher: async (url, options) => {
+    if (options.method === 'GET') return response({ sheets: existing.map(t => ({ properties: t })) });
+    writes.push(JSON.parse(options.body)); return response({});
+  } });
+  await google.ensureTables('token', 'spreadsheet', ['MoneyTransfers']);
+  assert.equal(writes.length, 1); assert.equal(writes[0].requests.length, 2);
+  assert.equal(writes[0].requests[0].addSheet.properties.title, 'MoneyTransfers');
+  assert.equal(writes[0].requests[1].updateCells.start.rowIndex, 0);
+});
+
 test('credit-note extension adds only missing tabs and headers in one atomic request', async () => {
   const writes = [];
   const existing = TABLES.filter(t => !['CreditNotes', 'CreditNoteItems'].includes(t.title));

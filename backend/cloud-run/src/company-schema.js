@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 export const FOLDERS = Object.freeze(['Company Logo', 'Invoices', 'Receipts', 'Quotations', 'Expenses',
   'Employee Documents', 'Payslips', 'Financial Reports', 'Assets', 'Exports', 'Backups', 'Task Attachments']);
 const SYSTEM = ['recordId', 'companyId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
@@ -46,6 +46,7 @@ const FIELDS = {
   TaskComments: ['taskId', 'body'],
   TaskActivity: ['taskId', 'action', 'summary'],
   Projects: ['name', 'description', 'status'],
+  MoneyTransfers: ['date', 'fromAccount', 'toAccount', 'amount', 'description', 'reference', 'status', 'bankStatus', 'statementDate', 'statementReference', 'reversalDate', 'reversalReason'],
 };
 for (const name of ['Invoices', 'Quotations', 'Receipts', 'Income', 'Expenses', 'Payroll']) {
   for (const field of ['currency', 'baseCurrency', 'exchangeRate', 'rateDate', 'rateSource', 'paymentExchangeRate', 'baseAmount']) {

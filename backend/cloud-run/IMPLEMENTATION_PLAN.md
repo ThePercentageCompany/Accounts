@@ -124,3 +124,9 @@ Planned Flutter integration touches:
 Registration alone does not create company Google files. Phase 2 queues their
 creation after owner Google consent. This release provisions new empty workspaces
 and does not migrate legacy accounting data.
+## Cash & Bank module — implemented locally
+
+Flutter navigation/editor/actions, MoneyTransfers sheet provisioning, version 8
+upgrade verification, owner CRUD/action endpoints, owner/employee sync permissions,
+atomic journal posting, reversals and manual transfer statement matching are
+implemented. See [MONEY_TRANSFERS.md](MONEY_TRANSFERS.md) for API and scope.

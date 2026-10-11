@@ -22,6 +22,32 @@ async function setup() {
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
 
+test('transfer sync posts atomically, retries without duplication, matches without money movement and reverses once', async () => {
+  const f = await setup();
+  f.sheets.table = name => TABLES.find(t => t.title === name);
+  for (const name of ['MoneyTransfers', 'Journals', 'JournalLines', 'FinancialPeriods']) f.data[name] = [];
+  const batches = [];
+  f.sheets.writeBatch = async (id, changes) => { batches.push(changes); for (const c of changes) await f.sheets.write(id, c.table, c.row, c.values); };
+  const draft = await f.business.mutate(f.token, f.companyId, 'MoneyTransfers', null, 'create', { expectedVersion: 0,
+    values: { date: '2026-10-10', fromAccount: 'cash', toAccount: 'bank', amount: 1000, description: 'Deposit', reference: 'DEP-1' } }, 'transfer_create_0001');
+  const operations = [{ operationId: 'transfer_post_0001', table: 'MoneyTransfers', recordId: draft.recordId, action: 'transferPost', expectedVersion: 1 }];
+  assert.equal((await f.business.sync(f.token, f.companyId, { operations })).results[0].status, 'APPLIED');
+  assert.equal(batches[0].length, 4);
+  assert.equal((await f.business.sync(f.token, f.companyId, { operations })).results[0].status, 'APPLIED');
+  assert.equal(f.data.Journals.length, 1); assert.equal(f.data.JournalLines.length, 2);
+  await f.business.mutate(f.token, f.companyId, 'MoneyTransfers', draft.recordId, 'transferMatch', { expectedVersion: 2,
+    values: { bankStatus: 'CLEARED', statementDate: '2026-10-11', statementReference: 'BANK-1' } }, 'transfer_match_0001');
+  assert.equal(f.data.Journals.length, 1);
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'MoneyTransfers', draft.recordId, 'update', { expectedVersion: 3, values: { amount: 2 } }, 'transfer_edit_0001'), e => e.code === 'TRANSFER_LOCKED');
+  await f.business.mutate(f.token, f.companyId, 'MoneyTransfers', draft.recordId, 'transferReverse', { expectedVersion: 3,
+    values: { reversalDate: '2026-10-11', reversalReason: 'Wrong amount' } }, 'transfer_reverse_0001');
+  assert.equal(f.data.MoneyTransfers[0].status, 'REVERSED'); assert.equal(f.data.Journals.length, 2);
+  const balance = account => f.data.JournalLines.filter(l => l.accountId === account).reduce((s, l) => s + l.debit - l.credit, 0);
+  assert.equal(balance('cash_in_hand'), 0); assert.equal(balance('bank_account'), 0);
+  await assert.rejects(f.business.mutate(f.token, f.companyId, 'MoneyTransfers', draft.recordId, 'transferReverse', { expectedVersion: 4,
+    values: { reversalDate: '2026-10-11', reversalReason: 'Again' } }, 'transfer_reverse_0002'));
+});
+
 test('sync verifies the original owner before applying a queued operation', async () => {
   const f = await setup();
   const ownerId = (await f.service.me(f.token)).ownerId;

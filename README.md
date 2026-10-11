@@ -53,3 +53,8 @@ The authenticated `GET /v1/companies/{companyId}/exchange-rate?currency=INR&date
 Currency dropdowns show codes and names from the public Frankfurter `/v2/currencies` catalog, cached for the app session. Common currencies and saved currency codes remain available offline. Selecting a transaction currency refreshes its dated exchange rate through the authenticated backend endpoint. Receipt and payment currencies remain locked to their source document.
 
 Existing spreadsheet columns are extended without changing historical money or journal values. Existing posted records retain their original ledger scale. This release does not add automatic period-end revaluation, currency-specific bank account registers, or bank-fee reconciliation; bank fees can be recorded separately as expenses. Supported transaction amounts retain the application's two-decimal precision.
+## Cash and bank transfers
+
+The Cash & Bank module records cash deposits and withdrawals as balanced internal
+transfers, with draft/post/reverse workflows and manual bank statement matching.
+See [module and API documentation](backend/cloud-run/MONEY_TRANSFERS.md).

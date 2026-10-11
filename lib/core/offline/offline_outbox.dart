@@ -194,6 +194,7 @@ class OfflineOutbox extends ChangeNotifier {
           'convert',
           'approve',
           'capitalize',
+          'transferPost',
           'capitalPost',
           'loanPost',
         ].contains(action))
@@ -340,6 +341,7 @@ class OfflineOutbox extends ChangeNotifier {
         'convert',
         'approve',
         'capitalize',
+        'transferPost',
         'capitalPost',
         'loanPost'
       ].contains(op['action'])) {

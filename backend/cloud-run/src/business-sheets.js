@@ -26,6 +26,7 @@ export class BusinessSheets {
       if (tables.some(t => ['Tasks', 'TaskComments', 'TaskActivity'].includes(t.title))) {
         await this.google.ensureTaskTables(token, company.resources.spreadsheetId);
       }
+      if (tables.some(t => t.title === 'MoneyTransfers')) await this.google.ensureTables(token, company.resources.spreadsheetId, ['MoneyTransfers']);
       if (tables.some(t => t.title === 'Projects')) await this.google.ensureTables(token, company.resources.spreadsheetId, ['Projects']);
       if (tables.some(t => t.title === 'Shareholders')) await this.google.ensureShareholderFields(token, company.resources.spreadsheetId);
       if (tables.some(t => FX_SCHEMA_TABLES.includes(t.title))) await this.google.ensureCurrencyFields(token, company.resources.spreadsheetId, tables.map(t => t.title));

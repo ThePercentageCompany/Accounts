@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/features/accounting/presentation/transfer_editor.dart';
 import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
 import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
@@ -49,6 +50,7 @@ const workspaceTables = <String, List<String>>{
   'Quotations': ['Quotations'],
   'Customers': ['Customers'],
   'Projects': ['Projects'],
+  'Cash & Bank': ['MoneyTransfers'],
   'Income & Expenses': ['Income', 'Expenses'],
   'Payroll': ['Payroll', 'PayrollItems', 'Payslips'],
   'Fixed Assets': ['Assets'],
@@ -62,6 +64,7 @@ const workspaceTables = <String, List<String>>{
 };
 
 const tableTitles = {
+  'MoneyTransfers': 'Cash / Bank transfers',
   'CreditNotes': 'Credit notes / returns',
   'ReceiptAllocations': 'Payment allocations',
   'PayrollItems': 'Payroll details',
@@ -87,6 +90,7 @@ const workspaceNavigationGroups = <String, List<String>>{
     'Payroll',
   ],
   'Accounting': [
+    'Cash & Bank',
     'Income & Expenses',
     'Fixed Assets',
     'Capital & Equity',
@@ -940,6 +944,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       'Quotations': Icons.request_quote_outlined,
       'Customers': Icons.people_outline,
       'Projects': Icons.work_outline,
+      'Cash & Bank': Icons.account_balance,
       'Income & Expenses': Icons.swap_horiz,
       'Payroll': Icons.payments_outlined,
       'Office & Attendance': Icons.event_available_outlined,
@@ -1177,36 +1182,39 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         'Payroll',
         'Assets',
         'Shareholders',
+        'MoneyTransfers',
         'CapitalTransactions',
         'ShareholderLoans',
       ].contains(table);
-  String get _recordLabel => table == 'CompanyProfile'
-      ? 'company profile'
-      : table == 'FinancialPeriods'
-          ? 'financial period'
-          : table == 'Projects'
-              ? 'project'
-              : table == 'Customers'
-                  ? 'customer'
-                  : table == 'Invoices'
-                      ? 'draft invoice'
-                      : table == 'Receipts'
-                          ? 'receipt'
-                          : table == 'Quotations'
-                              ? 'draft quotation'
-                              : table == 'Payroll'
-                                  ? 'payroll draft'
-                                  : table == 'Assets'
-                                      ? 'asset draft'
-                                      : table == 'Shareholders'
-                                          ? 'shareholder'
-                                          : table == 'CapitalTransactions'
-                                              ? 'capital contribution draft'
-                                              : table == 'ShareholderLoans'
-                                                  ? 'shareholder loan draft'
-                                                  : table == 'Expenses'
-                                                      ? 'expense'
-                                                      : 'income';
+  String get _recordLabel => table == 'MoneyTransfers'
+      ? 'cash / bank transfer'
+      : table == 'CompanyProfile'
+          ? 'company profile'
+          : table == 'FinancialPeriods'
+              ? 'financial period'
+              : table == 'Projects'
+                  ? 'project'
+                  : table == 'Customers'
+                      ? 'customer'
+                      : table == 'Invoices'
+                          ? 'draft invoice'
+                          : table == 'Receipts'
+                              ? 'receipt'
+                              : table == 'Quotations'
+                                  ? 'draft quotation'
+                                  : table == 'Payroll'
+                                      ? 'payroll draft'
+                                      : table == 'Assets'
+                                          ? 'asset draft'
+                                          : table == 'Shareholders'
+                                              ? 'shareholder'
+                                              : table == 'CapitalTransactions'
+                                                  ? 'capital contribution draft'
+                                                  : table == 'ShareholderLoans'
+                                                      ? 'shareholder loan draft'
+                                                      : table == 'Expenses'
+                                                          ? 'expense'
+                                                          : 'income';
   Future<void> _editCustomer([Map<String, dynamic>? record]) async {
     if (busy) return;
     setState(() {
@@ -1396,62 +1404,69 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     final values = await showDialog<Map<String, Object?>>(
       context: context,
       barrierDismissible: !const ['Invoices', 'Quotations'].contains(table),
-      builder: (_) => table == 'CompanyProfile'
-          ? CompanyProfileEditor(record: record!)
-          : table == 'Invoices'
-              ? InvoiceEditor(
-                  onSave: saveDocument,
-                  customers: choices,
-                  record: record,
-                  items: documentItems,
-                  company: documentCompany,
-                )
-              : table == 'Receipts'
-                  ? ReceiptEditor(invoices: choices, rateLoader: _rateLoader)
-                  : table == 'Quotations'
-                      ? QuotationEditor(
-                          onSave: saveDocument,
-                          customers: choices,
-                          record: record,
-                          items: documentItems,
-                          company: documentCompany,
-                        )
-                      : table == 'Payroll'
-                          ? PayrollEditor(
-                              rateLoader: _rateLoader,
-                              employees: choices,
+      builder: (_) => table == 'MoneyTransfers'
+          ? TransferEditor(record: record)
+          : table == 'CompanyProfile'
+              ? CompanyProfileEditor(record: record!)
+              : table == 'Invoices'
+                  ? InvoiceEditor(
+                      onSave: saveDocument,
+                      customers: choices,
+                      record: record,
+                      items: documentItems,
+                      company: documentCompany,
+                    )
+                  : table == 'Receipts'
+                      ? ReceiptEditor(
+                          invoices: choices, rateLoader: _rateLoader)
+                      : table == 'Quotations'
+                          ? QuotationEditor(
+                              onSave: saveDocument,
+                              customers: choices,
                               record: record,
-                              preview: (values) => widget.api.payrollPreview(
-                                widget.companyId,
-                                values,
-                                employee: widget.employee,
-                              ),
+                              items: documentItems,
+                              company: documentCompany,
                             )
-                          : table == 'Assets'
-                              ? AssetEditor(record: record)
-                              : table == 'Shareholders'
-                                  ? ShareholderEditor(record: record)
-                                  : table == 'CapitalTransactions'
-                                      ? CapitalContributionEditor(
-                                          shareholders: choices, record: record)
-                                      : table == 'ShareholderLoans'
-                                          ? ShareholderLoanEditor(
+                          : table == 'Payroll'
+                              ? PayrollEditor(
+                                  rateLoader: _rateLoader,
+                                  employees: choices,
+                                  record: record,
+                                  preview: (values) =>
+                                      widget.api.payrollPreview(
+                                    widget.companyId,
+                                    values,
+                                    employee: widget.employee,
+                                  ),
+                                )
+                              : table == 'Assets'
+                                  ? AssetEditor(record: record)
+                                  : table == 'Shareholders'
+                                      ? ShareholderEditor(record: record)
+                                      : table == 'CapitalTransactions'
+                                          ? CapitalContributionEditor(
                                               shareholders: choices,
                                               record: record)
-                                          : table == 'Projects'
-                                              ? ProjectEditor(record: record)
-                                              : table == 'Customers'
-                                                  ? CustomerEditor(
+                                          : table == 'ShareholderLoans'
+                                              ? ShareholderLoanEditor(
+                                                  shareholders: choices,
+                                                  record: record)
+                                              : table == 'Projects'
+                                                  ? ProjectEditor(
                                                       record: record)
-                                                  : table == 'FinancialPeriods'
-                                                      ? FinancialPeriodEditor(
+                                                  : table == 'Customers'
+                                                      ? CustomerEditor(
                                                           record: record)
-                                                      : CashEntryEditor(
-                                                          rateLoader:
-                                                              _rateLoader,
-                                                          expense: table ==
-                                                              'Expenses',
-                                                          record: record),
+                                                      : table ==
+                                                              'FinancialPeriods'
+                                                          ? FinancialPeriodEditor(
+                                                              record: record)
+                                                          : CashEntryEditor(
+                                                              rateLoader:
+                                                                  _rateLoader,
+                                                              expense: table ==
+                                                                  'Expenses',
+                                                              record: record),
     );
     if (values == null || !mounted) return;
     if (const ['Invoices', 'Quotations'].contains(table)) {
@@ -1901,6 +1916,39 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           () => error =
               'Unable to confirm asset action. Retry the pending request.',
         );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _transferAction(Map<String, dynamic> record, String action,
+      {bool unmatch = false}) async {
+    Map<String, Object?> values = {};
+    if (unmatch) {
+      values = {'bankStatus': 'PENDING'};
+    } else if (action != 'transferPost') {
+      final result = await showDialog<Map<String, Object?>>(
+          context: context,
+          builder: (_) => TransferEditor(record: record, action: action));
+      if (result == null || !mounted) return;
+      values = result;
+    }
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await widget.writes!.enqueue('MoneyTransfers', action, values,
+          recordId: record['recordId'] as String,
+          expectedVersion: int.parse(record['recordVersion'].toString()));
+      await widget.writes!.syncInBackground();
+      if (mounted) await _load();
+    } catch (failure) {
+      if (mounted) {
+        setState(() => error = failure is SaasApiException
+            ? failure.message
+            : 'Unable to confirm transfer action. Retry the pending request.');
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -2634,6 +2682,43 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                     : () => _assetAction(row, 'assetDispose'),
                                 child: const Text('Dispose asset'),
                               ),
+                            if (_editable && table == 'MoneyTransfers') ...[
+                              if (row['status'] == 'DRAFT')
+                                LoadingButton(
+                                    onPressed:
+                                        busy || row['_pendingAction'] != null
+                                            ? null
+                                            : () => _transferAction(
+                                                row, 'transferPost'),
+                                    child: const Text('Post transfer')),
+                              if (row['status'] == 'POSTED') ...[
+                                LoadingButton.outlined(
+                                    onPressed:
+                                        busy || row['_pendingAction'] != null
+                                            ? null
+                                            : () => _transferAction(
+                                                row, 'transferMatch'),
+                                    child: Text(row['bankStatus'] == 'CLEARED'
+                                        ? 'Update statement match'
+                                        : 'Match bank statement')),
+                                if (row['bankStatus'] == 'CLEARED')
+                                  LoadingButton.outlined(
+                                      onPressed:
+                                          busy || row['_pendingAction'] != null
+                                              ? null
+                                              : () => _transferAction(
+                                                  row, 'transferMatch',
+                                                  unmatch: true),
+                                      child: const Text('Mark pending')),
+                                LoadingButton.outlined(
+                                    onPressed:
+                                        busy || row['_pendingAction'] != null
+                                            ? null
+                                            : () => _transferAction(
+                                                row, 'transferReverse'),
+                                    child: const Text('Reverse transfer')),
+                              ],
+                            ],
                             if (_editable &&
                                 table == 'CapitalTransactions' &&
                                 row['status'] == 'DRAFT')
@@ -2720,6 +2805,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 (table != 'Payroll' ||
                                     row['status'] == 'DRAFT') &&
                                 (table != 'Assets' ||
+                                    row['status'] == 'DRAFT') &&
+                                (table != 'MoneyTransfers' ||
                                     row['status'] == 'DRAFT') &&
                                 (table != 'CapitalTransactions' ||
                                     row['status'] == 'DRAFT') &&

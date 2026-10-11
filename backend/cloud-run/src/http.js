@@ -214,6 +214,11 @@ export function createApi(service, config, { log = console.error, workspace, que
           }
           json(200, result); return;
         }
+        const transferAction = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/records\/MoneyTransfers\/([A-Za-z0-9_-]{43})\/(post|reverse|match)$/.exec(url.pathname);
+        if (transferAction && request.method === 'POST') {
+          const action = { post: 'transferPost', reverse: 'transferReverse', match: 'transferMatch' }[transferAction[3]];
+          json(200, await business.mutate(token, transferAction[1], 'MoneyTransfers', transferAction[2], action, await body(request), request.headers['idempotency-key'])); return;
+        }
         const records = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(url.pathname);
         if (records && request.method === 'GET' && !records[3]) {
           requireThat([...url.searchParams.keys()].every(key => key === 'includeDeleted') &&

@@ -221,6 +221,7 @@ class RecordWriteQueue extends ChangeNotifier {
           'convert',
           'approve',
           'capitalize',
+          'transferPost',
           'capitalPost',
           'loanPost',
         ].contains(action))

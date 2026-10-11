@@ -1,10 +1,11 @@
 import { requireThat } from './errors.js';
 
-export const SECTIONS = Object.freeze(['Dashboard', 'Invoices', 'Quotations', 'Income & Expenses', 'Capital & Equity',
+export const SECTIONS = Object.freeze(['Cash & Bank', 'Dashboard', 'Invoices', 'Quotations', 'Income & Expenses', 'Capital & Equity',
   'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance', 'Tasks', 'Calendar', 'Projects']);
-export const WRITE_SECTIONS = Object.freeze(['Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks', 'Projects']);
+export const WRITE_SECTIONS = Object.freeze(['Cash & Bank', 'Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks', 'Projects']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
 export const SECTION_TABLES = {
+  MoneyTransfers: 'Cash & Bank',
   Projects: 'Projects', Tasks: 'Tasks', TaskComments: 'Tasks', TaskActivity: 'Tasks',
   CreditNotes: 'Invoices', CreditNoteItems: 'Invoices',
   CompanyProfile: 'Settings', Customers: 'Customers', ProductsServices: 'Invoices', Invoices: 'Invoices', InvoiceItems: 'Invoices',

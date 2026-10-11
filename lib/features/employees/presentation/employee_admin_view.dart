@@ -466,6 +466,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
         'Projects',
         'Invoices',
         'Quotations',
+        'Cash & Bank',
         'Income & Expenses',
         'Payroll',
         'Fixed Assets',
@@ -476,6 +477,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
       ].contains(section) &&
       !(role == 'Staff' &&
           const [
+            'Cash & Bank',
             'Income & Expenses',
             'Tasks',
             'Payroll',

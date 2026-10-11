@@ -212,12 +212,14 @@ export class GoogleWorkspace {
   async verifySchema(token, company) {
     const id = company.resources.spreadsheetId;
     await this.ensureTaskTables(token, id);
+    await this.ensureTables(token, id, ['MoneyTransfers']);
     await this.ensureShareholderFields(token, id);
     const rows = await this.rows(token, id, TABLES.map(t => `'${t.title}'!1:1`));
     TABLES.forEach((t, i) => requireThat(JSON.stringify(rows[i][0]) === JSON.stringify(t.headers),
       409, 'SCHEMA_MISMATCH', 'Spreadsheet schema verification failed.'));
     const identities = await this.rows(token, id, ["'SystemConfiguration'!A2:L2", "'CompanyProfile'!A2:B2", "'OwnersUsers'!A2:B2"]);
     requireThat(identities.every(rows => rows[0]?.[1] === company.id) && identities[0][0][10] === 'schemaVersion' &&
-      Number(identities[0][0][11]) === SCHEMA_VERSION, 409, 'SCHEMA_MISMATCH', 'Workspace identity verification failed.');
+      [7, SCHEMA_VERSION].includes(Number(identities[0][0][11])), 409, 'SCHEMA_MISMATCH', 'Workspace identity verification failed.');
+    if (Number(identities[0][0][11]) !== SCHEMA_VERSION) await this.request(token, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}:batchUpdate`, 'POST', { requests: [{ updateCells: { start: { sheetId: TABLES.find(t => t.title === 'SystemConfiguration').sheetId, rowIndex: 1, columnIndex: 11 }, rows: [{ values: [{ userEnteredValue: { numberValue: SCHEMA_VERSION } }] }], fields: 'userEnteredValue' } }] });
   }
 }
