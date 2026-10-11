@@ -134,6 +134,41 @@ void main() {
   });
 
   test(
+      'MoneyTransfers table deployment mismatch can retry after backend update',
+      () async {
+    var deployed = false;
+    String? originalId;
+    box = create((op) async {
+      originalId ??= op['operationId'] as String;
+      expect(op['operationId'], originalId);
+      if (!deployed) {
+        throw const SaasApiException(
+            'TABLE_FORBIDDEN', 'This business table is unavailable.',
+            status: 403);
+      }
+      return ack(op, 'server-transfer', 1);
+    });
+    await box.enqueue(
+        'MoneyTransfers',
+        'create',
+        {
+          'date': '2026-10-11',
+          'fromAccount': 'cash',
+          'toAccount': 'bank',
+          'amount': 100,
+          'description': 'Deposit'
+        },
+        expectedVersion: 0);
+    await box.sync();
+    expect(box.pending.single['state'], 'failed');
+    deployed = true;
+    await box.retry();
+    expect(box.pending, isEmpty);
+    expect(box.overlay('MoneyTransfers', []).single['recordId'],
+        'server-transfer');
+  });
+
+  test(
       'correction creates a new request and clears stale background acknowledgement',
       () async {
     var fail = true;

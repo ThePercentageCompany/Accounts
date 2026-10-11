@@ -292,9 +292,13 @@ class OfflineOutbox extends ChangeNotifier {
       for (final op in p['operations'] as List) {
         // Reopen only the known pre-write envelope rejection. Business and
         // version failures still require correction rather than blind retries.
+        final retryableDeploymentMismatch = op['table'] == 'MoneyTransfers' &&
+            op['errorCode'] == 'TABLE_FORBIDDEN' &&
+            op['error'] == 'This business table is unavailable.';
         if (op['state'] == 'failed' &&
-            op['errorCode'] == 'INVALID_BATCH' &&
-            op['error'] == 'Supply between 1 and 20 operations.') {
+            ((op['errorCode'] == 'INVALID_BATCH' &&
+                    op['error'] == 'Supply between 1 and 20 operations.') ||
+                retryableDeploymentMismatch)) {
           op['state'] = 'pending';
         }
         if (op['state'] != 'failed') op['retryAt'] = 0;
