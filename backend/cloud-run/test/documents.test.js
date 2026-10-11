@@ -60,7 +60,11 @@ for (const section of ['Income', 'Expenses']) {
     const p = {companyId:f.companyId, employeeId:'e'.repeat(43), allowedSections:['Income & Expenses'], writableSections:['Income & Expenses'], permissions:{'Income & Expenses':'COMPANY'}};
     f.employees.session = () => ({companyId:f.companyId});
     f.employees.principal = async () => p;
-    f.employees.sheets = {read: async () => ({[section]:[{recordId:input.relatedRecordId,companyId:f.companyId}]})};
+    f.employees.sheets = {read: async (company, names) => {
+      assert.equal(company,f.companyId);
+      assert.deepEqual(names,[section], 'Upload authorization must explicitly load the attachment parent table');
+      return {[section]:[{recordId:input.relatedRecordId,companyId:f.companyId}]};
+    }};
     const result = await f.documents.upload('employee',f.companyId,{...input,relatedSection:section},`employee_${section}_document`,true);
     assert.equal(f.rows[0].relatedSection,section);
     assert.equal(f.rows[0].createdBy,p.employeeId);

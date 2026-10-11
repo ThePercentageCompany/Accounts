@@ -3,7 +3,7 @@ import { requireThat } from './errors.js';
 import { TABLES } from './company-schema.js';
 import { BusinessSheets } from './business-sheets.js';
 import { decodeContent, validateContent, contentHash } from './document-content.js';
-import { visible, SECTION_TABLES } from './employee-policy.js';
+import { visible, SECTION_TABLES, CHILDREN } from './employee-policy.js';
 
 const FOLDERS = { Tasks: 'Task Attachments', CompanyProfile: 'Company Logo', Invoices: 'Invoices', CreditNotes: 'Invoices', Receipts: 'Receipts', Quotations: 'Quotations',
   Income: 'Receipts', Expenses: 'Expenses', Employees: 'Employee Documents', Payroll: 'Payslips', Payslips: 'Payslips', Assets: 'Assets' };
@@ -75,7 +75,9 @@ export class DocumentService {
       const ownProfile = input.relatedSection === 'Employees' && input.relatedRecordId === p.employeeId && p.allowedSections.includes('Employees');
       requireThat(p.companyId === companyId && (ownProfile || p.writableSections.includes(SECTION_TABLES[input.relatedSection])) && input.relatedSection !== 'CompanyProfile',
         403, 'DOCUMENT_FORBIDDEN', 'Uploading documents requires edit access to this section.');
-      const rows = await this.employees.sheets.read(companyId);
+      const parent = CHILDREN[input.relatedSection]?.[0];
+      const rows = await this.employees.sheets.read(companyId,
+        [...new Set([input.relatedSection, ...(parent ? [parent] : [])])]);
       requireThat((rows[input.relatedSection] || []).some(row => row.recordId === input.relatedRecordId && row.companyId === companyId && active(row) && visible(p, input.relatedSection, row, rows)),
         403, 'DOCUMENT_FORBIDDEN', 'Document record unavailable.');
       return p.employeeId;
