@@ -243,6 +243,8 @@ class RecordSummary extends StatelessWidget {
           ),
         if (date != null) Text('$date'),
         if (status != null) StatusChip(value: '$status'),
+        if (record['ledgerStatus'] != null)
+          LedgerStatusChip(value: '${record['ledgerStatus']}'),
         if (record['baseAmount'] != null && record['baseAmount'] != '')
           Text(
               '${record['baseCurrency'] ?? ''} ${record['baseAmount']} in company currency'),
@@ -260,8 +262,10 @@ class RecordSummary extends StatelessWidget {
 }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.value});
+  const StatusChip({super.key, required this.value, this.label, this.icon});
   final String value;
+  final String? label;
+  final IconData? icon;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -273,12 +277,14 @@ class StatusChip extends StatelessWidget {
       'ACTIVE',
       'ISSUED',
       'ACCEPTED',
+      'LINKED',
     ].contains(status);
     final warning = [
       'DRAFT',
       'UNPAID',
       'PENDING',
       'PARTIALLY_PAID',
+      'UNPOSTED',
     ].contains(status);
     final color = dark
         ? colors.onSurface
@@ -289,11 +295,37 @@ class StatusChip extends StatelessWidget {
                 : colors.primary;
     return Chip(
       visualDensity: VisualDensity.compact,
-      label: Text(value.replaceAll('_', ' ').toLowerCase()),
+      avatar: icon == null ? null : Icon(icon, size: 16, color: color),
+      label: Text(label ?? value.replaceAll('_', ' ').toLowerCase()),
       side: BorderSide.none,
       backgroundColor:
           dark ? colors.surfaceContainerHighest : color.withValues(alpha: .09),
       labelStyle: TextStyle(color: color),
+    );
+  }
+}
+
+class LedgerStatusChip extends StatelessWidget {
+  const LedgerStatusChip({super.key, required this.value});
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = value.toUpperCase();
+    return StatusChip(
+      value: status,
+      label: switch (status) {
+        'LINKED' => 'Posted to ledger',
+        'UNPOSTED' => 'Not posted to ledger',
+        'REVERSED' => 'Ledger posting reversed',
+        _ => 'Ledger status unavailable',
+      },
+      icon: switch (status) {
+        'LINKED' => Icons.check_circle_outline,
+        'UNPOSTED' => Icons.pending_outlined,
+        'REVERSED' => Icons.undo,
+        _ => Icons.help_outline,
+      },
     );
   }
 }
@@ -600,7 +632,9 @@ class RecordDetails extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 5),
-                                  if (const {
+                                  if (entry.key == 'ledgerStatus')
+                                    LedgerStatusChip(value: '${entry.value}')
+                                  else if (const {
                                     'status',
                                     'paymentStatus',
                                     'ledgerStatus',
