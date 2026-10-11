@@ -94,7 +94,9 @@
     },
     update: async () => {
       if (!registration?.waiting) return;
-      if (await window.tpcPwa.pendingWork()) throw Error('Sync saved changes first.');
+      // Queued changes are durable in IndexedDB/localStorage. Activating a shell
+      // update only replaces Cache Storage assets; it must not require an empty
+      // outbox, especially when offline or a server rejection needs correction.
       updateRequested = true;
       setUpdateState('applying');
       registration.waiting.postMessage({type:'ACTIVATE_UPDATE'});

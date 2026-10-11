@@ -3,8 +3,8 @@ import 'pwa_runtime.dart';
 import '../widgets/loading.dart';
 
 class PwaControls extends StatefulWidget {
-  const PwaControls({super.key, this.hasPendingWork});
-  final Future<bool> Function()? hasPendingWork;
+  const PwaControls({super.key, this.hasActiveSave});
+  final Future<bool> Function()? hasActiveSave;
   @override
   State<PwaControls> createState() => _PwaControlsState();
 }
@@ -91,7 +91,7 @@ class _PwaControlsState extends State<PwaControls> {
                               ]),
                               const SizedBox(height: 8),
                               const Text(
-                                  'Finish any open forms before updating. Saved changes must be synced first. Other open tabs will stay on their current screen.'),
+                                  'Finish any open forms before updating. Changes already saved on this device stay safe and resume syncing after restart. Other open tabs will stay on their current screen.'),
                               if (_error != null)
                                 Text(_error!,
                                     style: TextStyle(
@@ -108,13 +108,12 @@ class _PwaControlsState extends State<PwaControls> {
                                             if (_runtime.status[
                                                     'updateAvailable'] ==
                                                 true) {
-                                              if (await widget.hasPendingWork
-                                                          ?.call() ==
-                                                      true ||
-                                                  await _runtime
-                                                      .pendingWork()) {
+                                              if (await widget.hasActiveSave
+                                                      ?.call() ==
+                                                  true) {
+                                                if (!mounted) return;
                                                 _error =
-                                                    'Your saved changes are still syncing. You can keep working and install the update once syncing finishes.';
+                                                    'A change is being saved on this device. Please try updating again in a moment.';
                                                 _panelChanges.value++;
                                                 return;
                                               }

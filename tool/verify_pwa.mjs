@@ -95,20 +95,28 @@ try {
     });db.close();
   });
   assert.equal(await page.evaluate(()=>window.tpcPwa.pendingWork()),true);
-  const blocked = await page.evaluate(async()=>{try {await window.tpcPwa.update();return false;} catch {return true;}});
-  assert.equal(blocked,true,'Update must not reload while persisted changes exist');
+  offline = true;
+  await context.setOffline(true);
   await page.evaluate(async () => {
-    const db = await new Promise(resolve => {const r=indexedDB.open('tpc_offline_v1');r.onsuccess=()=>resolve(r.result);});
-    await new Promise(resolve => {const tx=db.transaction('partitions','readwrite');tx.objectStore('partitions').delete('verification');tx.oncomplete=resolve;});
-    db.close();
+    localStorage.setItem('flutter.saas_records_verification', 'saved-change');
     await window.tpcPwa.update();
   });
   await page.waitForFunction(() => JSON.parse(window.tpcPwa.status()).updateState === 'updated', {timeout:90000});
+  assert.equal(await page.evaluate(() => localStorage.getItem('flutter.saas_records_verification')), 'saved-change');
+  const saved = await page.evaluate(async () => {
+    const db = await new Promise(resolve => {const r=indexedDB.open('tpc_offline_v1');r.onsuccess=()=>resolve(r.result);});
+    const value = await new Promise(resolve => {const tx=db.transaction('partitions');const r=tx.objectStore('partitions').get('verification');r.onsuccess=()=>resolve(r.result);});
+    db.close(); return value;
+  });
+  assert.equal(saved.operations[0].operationId, 'pending-verification', 'Update preserves pending operations and retry identities');
+  assert.equal(await page.evaluate(() => window.tpcPwa.pendingWork()), true);
+  offline = false;
+  await context.setOffline(false);
   await page.evaluate(() => window.tpcPwa.checkUpdate());
   assert.equal(await page.evaluate(() => JSON.parse(window.tpcPwa.status()).updateState), 'current');
   assert.deepEqual(errors,[],'Release application has no uncaught browser errors');
   console.log(JSON.stringify({installable:true,offlineShell:true,apiNotCached:true,
-    controlledUpdate:true,pendingUpdateBlocked:true,screenshots:'build/pwa-verification',browserErrors:errors}));
+    controlledUpdate:true,pendingChangesPreserved:true,screenshots:'build/pwa-verification',browserErrors:errors}));
 } finally {
   await context.close(); await new Promise(resolve=>server.close(resolve));
 }

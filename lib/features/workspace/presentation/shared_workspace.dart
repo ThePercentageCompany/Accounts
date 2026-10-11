@@ -635,12 +635,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     );
   }
 
-  Widget _pwaControls() => PwaControls(hasPendingWork: () async {
+  Widget _pwaControls() => PwaControls(hasActiveSave: () async {
         await _initializeSync();
         return !_syncReady ||
-            (_writes?.pending.isNotEmpty ?? false) ||
-            _uploads?.pending != null ||
-            _employees?.hasPending == true;
+            (_writes?.busy ?? false) ||
+            (_uploads?.busy ?? false) ||
+            (_employees?.busy ?? false);
       });
 
   Widget _sectionView(String? selected, bool active) => selected == null
