@@ -15,6 +15,45 @@ async function running(t, options = {}) {
 }
 const headers = { Origin: 'https://app.test', 'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
 
+test('HTML design routes use owner and employee sessions; PDFs use saved HTML and reject changes during rendering', async t => {
+  const companyId = 'c'.repeat(43), recordId = 'r'.repeat(43), calls = [];
+  let source = '<p>Saved HTML</p>';
+  const business = {
+    documentDesign: async (...args) => { calls.push(args); return { source, version: 1 }; },
+    saveDocumentDesign: async (...args) => { calls.push(args); return { source: args[3].source, version: 2 }; },
+    documentHtml: async () => source,
+  };
+  const employees = {
+    documentDesign: async (...args) => { calls.push(args); return { source, version: 1 }; },
+    documentHtml: async (...args) => { calls.push(args); return source; },
+  };
+  let changeDuringRender = false;
+  const f = await running(t, { business, employees, renderPdf: async html => {
+    assert.equal(html, source); if (changeDuringRender) source = 'Changed'; return Buffer.from('%PDF-test');
+  } });
+  const ownerHeaders = { ...headers, Cookie: '__Host-tpc_session=owner' };
+  const employeeHeaders = { ...headers, Cookie: '__Host-tpc_employee=employee', 'X-TPC-Employee': 'staff' };
+  assert.equal((await f.request(`/v1/companies/${companyId}/document-designs/Invoices`, { headers: ownerHeaders })).status, 200);
+  assert.equal(calls.at(-1)[0], 'owner');
+  const saved = await f.request(`/v1/companies/${companyId}/document-designs/Invoices`, {
+    method: 'PUT', headers: ownerHeaders, body: JSON.stringify({ source, expectedVersion: 1 }),
+  });
+  assert.equal(saved.status, 200); assert.equal(calls.at(-1)[3].expectedVersion, 1);
+  assert.equal((await f.request(`/v1/employee/companies/${companyId}/document-designs/Invoices`, { headers: employeeHeaders })).status, 200);
+  assert.equal(calls.at(-1)[0], 'employee'); assert.equal(calls.at(-1)[2].employeeId, 'staff');
+  assert.equal((await f.request(`/v1/employee/companies/${companyId}/document-designs/Invoices`, {
+    headers: { ...employeeHeaders, 'X-TPC-Company': 'other' },
+  })).status, 403);
+  assert.equal((await f.request(`/v1/employee/companies/${companyId}/document-designs/Invoices`, { method: 'PUT', headers: employeeHeaders, body: JSON.stringify({ source, expectedVersion: 1 }) })).status, 404);
+  const pdf = await f.request(`/v1/companies/${companyId}/record-pdf/Invoices/${recordId}`, { headers: ownerHeaders });
+  assert.equal(pdf.status, 200); assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+  assert.equal((await f.request(`/v1/companies/${companyId}/record-pdf/Invoices/${recordId}?style=classic`, { headers: ownerHeaders })).status, 400);
+  const employeePdf = await f.request(`/v1/employee/companies/${companyId}/record-pdf/Invoices/${recordId}`, { headers: employeeHeaders });
+  assert.equal(employeePdf.status, 200);
+  changeDuringRender = true;
+  assert.equal((await f.request(`/v1/companies/${companyId}/record-pdf/Invoices/${recordId}`, { headers: ownerHeaders })).status, 409);
+});
+
 test('exchange-rate endpoint uses company currency and rejects unauthorized access', async t => {
   const companyId = 'c'.repeat(43);
   const business = {
@@ -158,7 +197,7 @@ test('public health uses /health and requires no session', async t => {
   const response = await f.request('/health');
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', phase: 4,
-    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', 'cash-bank-transfers'] });
+    capabilities: ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', 'cash-bank-transfers', 'shared-html-document-designs', 'html-document-pdf'] });
 });
 
 test('new reporting and document listing routes validate queries and preserve session routing', async t => {

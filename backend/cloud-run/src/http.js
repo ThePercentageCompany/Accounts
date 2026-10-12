@@ -4,6 +4,7 @@ import { digest } from './crypto.js';
 import { TaskService } from './task-service.js';
 import { exchangeRate } from './foreign-currency.js';
 import { ApiError, requireThat } from './errors.js';
+import { htmlPdf } from './document-design.js';
 
 const SESSION = '__Host-tpc_session';
 const OAUTH = '__Host-tpc_oauth';
@@ -37,7 +38,7 @@ async function body(request, limit = 16 * 1024) {
   catch { throw new ApiError(400, 'INVALID_JSON', 'Invalid JSON body.'); }
 }
 
-export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents, notifications } = {}) {
+export function createApi(service, config, { log = console.error, workspace, queue, employees, business, documents, notifications, renderPdf = htmlPdf } = {}) {
   const tasks = business && employees ? new TaskService({ business, employees }) : null;
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
@@ -68,7 +69,7 @@ export function createApi(service, config, { log = console.error, workspace, que
       const url = new URL(request.url, config.apiOrigin);
       if (request.method === 'GET' && ['/health', '/healthz'].includes(url.pathname)) {
         json(200, { status: 'ok', phase: business ? 4 : employees ? 3 : workspace ? 2 : 1,
-          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', 'cash-bank-transfers', ...(tasks ? ['task-management', 'task-calendar', 'task-attachments'] : [])] : [] }); return;
+          capabilities: business ? ['complete-document-drafts', 'invoice-item-returns', 'report-configuration', 'multi-currency', 'cash-bank-transfers', 'shared-html-document-designs', 'html-document-pdf', ...(tasks ? ['task-management', 'task-calendar', 'task-attachments'] : [])] : [] }); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/setup' && workspace && queue) {
         await queue.authorize(request.headers.authorization);
@@ -180,6 +181,32 @@ export function createApi(service, config, { log = console.error, workspace, que
         }
       }
       if (business) {
+        const design = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/document-designs\/(Invoices|Quotations)$/.exec(url.pathname);
+        if (design && request.method === 'GET') {
+          requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Document designs do not accept query parameters.');
+          requireThat(design[1] === 'companies' || employeeContext.companyId === undefined || employeeContext.companyId === design[2],
+            403, 'WORKSPACE_CHANGED', 'This request belongs to a different workspace.');
+          json(200, design[1] === 'companies' ? await business.documentDesign(token, design[2], design[3])
+            : await employees.documentDesign(jar[EMPLOYEE], design[3], { ...employeeContext, companyId: design[2] })); return;
+        }
+        if (design && request.method === 'PUT' && design[1] === 'companies') {
+          json(200, await business.saveDocumentDesign(token, design[2], design[3], await body(request, 512 * 1024))); return;
+        }
+        const pdf = /^\/v1\/(companies|employee\/companies)\/([A-Za-z0-9_-]{43})\/record-pdf\/(Invoices|Quotations)\/([A-Za-z0-9_-]{43})$/.exec(url.pathname);
+        if (pdf && request.method === 'GET') {
+          requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'PDFs use the company HTML design without style parameters.');
+          const employee = pdf[1] !== 'companies';
+          requireThat(!employee || employeeContext.companyId === undefined || employeeContext.companyId === pdf[2],
+            403, 'WORKSPACE_CHANGED', 'This request belongs to a different workspace.');
+          const html = employee ? await employees.documentHtml(jar[EMPLOYEE], pdf[3], pdf[4], { ...employeeContext, companyId: pdf[2] })
+            : await business.documentHtml(token, pdf[2], pdf[3], pdf[4]);
+          const bytes = await renderPdf(html);
+          const latest = employee ? await employees.documentHtml(jar[EMPLOYEE], pdf[3], pdf[4], { ...employeeContext, companyId: pdf[2] })
+            : await business.documentHtml(token, pdf[2], pdf[3], pdf[4]);
+          requireThat(latest === html, 409, 'VERSION_CONFLICT', 'Document or design changed. Generate again.');
+          response.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': bytes.length });
+          response.end(bytes); return;
+        }
         const settings = /^\/v1\/companies\/([A-Za-z0-9_-]{43})\/reports\/settings$/.exec(url.pathname);
         if (settings && request.method === 'GET') {
           requireThat(url.searchParams.size === 0, 400, 'INVALID_QUERY', 'Report settings do not accept query parameters.');

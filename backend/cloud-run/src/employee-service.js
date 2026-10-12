@@ -2,6 +2,7 @@ import { BusinessService } from './business-service.js';
 import { opaque, digest } from './crypto.js';
 import { financialReport } from './financial-report.js';
 import { reportConfiguration } from './report-configuration.js';
+import { companyDesign, snapshotHtml } from './document-design.js';
 import { requireThat, ApiError } from './errors.js';
 import { PrivateCode } from './private-code.js';
 import { validLedgerDate } from './financial-period-policy.js';
@@ -392,6 +393,26 @@ export class EmployeeService {
     return rows[table].filter(r => visible(latest, table, r, rows)).map(r => {
       const value = projectRecord(latest, table, r); delete value._row; return value;
     });
+  }
+  async documentDesign(token, section, context = {}) {
+    const p = await this.principal(token);
+    this.verifyContext(p, context);
+    requireThat(p.permissions[section], 403, 'SECTION_FORBIDDEN', 'Document access is not assigned to you.');
+    const state = (await this.registry.read()).state;
+    this.session(state, token);
+    return companyDesign(state.companies[p.companyId], section);
+  }
+  async documentHtml(token, section, recordId, context = {}) {
+    const design = await this.documentDesign(token, section, context);
+    const p = await this.principal(token);
+    const rows = await this.sheets.read(p.companyId, [section, section === 'Invoices' ? 'InvoiceItems' : 'QuotationItems',
+      'CompanyProfile', 'Customers', 'Employees', 'Roles', 'RolePermissions']);
+    const latest = principalFromRows(p.companyId, p.employeeId, rows, this.now());
+    requireThat(visible(latest, section, rows[section].find(r => r.recordId === recordId), rows),
+      403, 'DOCUMENT_FORBIDDEN', 'This document is not available to this employee.');
+    const current = await this.documentDesign(token, section, context);
+    requireThat(current.version === design.version, 409, 'VERSION_CONFLICT', 'Design changed. Generate again.');
+    return snapshotHtml(design.source, section, recordId, rows);
   }
   async report(token, kind, from, asOf, options = {}) {
     const authorize = p => requireThat(p.permissions.Reports === 'COMPANY',

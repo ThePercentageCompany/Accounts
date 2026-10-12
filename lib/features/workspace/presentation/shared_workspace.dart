@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
 import 'package:tpc_invoice/features/accounting/presentation/transfer_editor.dart';
 import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
 import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
@@ -1410,6 +1411,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               ? CompanyProfileEditor(record: record!)
               : table == 'Invoices'
                   ? InvoiceEditor(
+                      loadHtmlDesign: HtmlDocumentDesignStore(
+                              widget.api, widget.companyId, 'Invoices',
+                              employee: widget.employee)
+                          .load,
                       onSave: saveDocument,
                       customers: choices,
                       record: record,
@@ -1421,6 +1426,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           invoices: choices, rateLoader: _rateLoader)
                       : table == 'Quotations'
                           ? QuotationEditor(
+                              loadHtmlDesign: HtmlDocumentDesignStore(
+                                      widget.api,
+                                      widget.companyId,
+                                      'Quotations',
+                                      employee: widget.employee)
+                                  .load,
                               onSave: saveDocument,
                               customers: choices,
                               record: record,

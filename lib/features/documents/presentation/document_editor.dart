@@ -4,7 +4,8 @@ import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/draft_navigation_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/network/draft_navigation_web.dart';
-import 'package:invoice_kit/invoice_kit.dart' as kit;
+import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
+import 'html_document_preview.dart';
 import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 
@@ -13,12 +14,14 @@ class DocumentEditor extends StatefulWidget {
     super.key,
     required this.quotation,
     required this.customers,
+    required this.loadHtmlDesign,
     this.record,
     this.items = const [],
     this.company = const {},
     this.onSave,
     this.rateLoader,
   });
+  final Future<String> Function() loadHtmlDesign;
   final ExchangeRateLoader? rateLoader;
   final bool quotation;
   final List<Map<String, dynamic>> customers;
@@ -166,7 +169,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
       ? [_DraftLine()]
       : widget.items.map(_DraftLine.new).toList();
   final retired = <_DraftLine>[];
-  DocumentStyle style = DocumentStyle.modern;
+  Future<String>? htmlDesign;
   bool preview = false;
   String get title => widget.quotation ? 'quotation' : 'invoice';
   List<Map<String, dynamic>> get values =>
@@ -560,7 +563,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
         ),
       );
 
-  Widget livePreview() => ListenableBuilder(
+  Widget htmlPreview() => ListenableBuilder(
         listenable: Listenable.merge([
           currency,
           issueDate,
@@ -569,154 +572,58 @@ class _DocumentEditorState extends State<DocumentEditor> {
           terms,
           for (final line in lines) ...line.fields.values,
         ]),
-        builder: (context, _) {
-          final totals = estimateDocument(values);
-          final colors = Theme.of(context).colorScheme;
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${widget.quotation ? 'Quotation' : 'Invoice'} preview',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    const Icon(Icons.description_outlined, size: 20),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  '${widget.company['name'] ?? 'Your company'}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 18),
-                ),
-                if ('${widget.company['address'] ?? ''}'.isNotEmpty)
-                  Text('${widget.company['address']}'),
-                const SizedBox(height: 16),
-                Text(
-                  widget.quotation ? 'QUOTATION' : 'INVOICE',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                Text('Draft · ${issueDate.text}'),
-                if (endDate.text.isNotEmpty)
-                  Text(
-                    '${widget.quotation ? 'Valid until' : 'Due date'}: ${endDate.text}',
-                  ),
-                const Divider(height: 32),
-                const Text(
-                  'BILL TO',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${customer['name'] ?? 'Select a customer'}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                if ('${customer['address'] ?? ''}'.isNotEmpty)
-                  Text('${customer['address']}'),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  color: colors.surfaceContainerHighest,
-                  child: const Row(
-                    children: [
-                      Expanded(child: Text('Description')),
-                      SizedBox(width: 42, child: Text('Qty')),
-                      SizedBox(
-                        width: 85,
-                        child: Text('Amount', textAlign: TextAlign.right),
-                      ),
-                    ],
-                  ),
-                ),
-                for (final line in lines)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 10,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            line.fields['description']!.text.isEmpty
-                                ? 'Item description'
-                                : line.fields['description']!.text,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 42,
-                          child: Text(line.fields['quantity']!.text),
-                        ),
-                        SizedBox(
-                          width: 85,
-                          child: Text(
-                            (estimateDocument([line.values])['total'] ?? 0)
-                                .toStringAsFixed(2),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const Divider(),
-                for (final entry in {
-                  'subtotal': 'Subtotal',
-                  'discount': 'Discount',
-                  'taxAmount': 'VAT',
-                  'total': 'Total',
-                }.entries)
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 3),
-                    padding: const EdgeInsets.all(10),
-                    color:
-                        entry.key == 'total' ? colors.primaryContainer : null,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            entry.value,
-                            style: TextStyle(
-                              fontWeight: entry.key == 'total'
-                                  ? FontWeight.w700
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${currency.text} ${(totals[entry.key] ?? 0).toStringAsFixed(2)}',
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 28),
-                if (terms.text.isNotEmpty) ...[
-                  const Text(
-                    'Terms & conditions',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(terms.text),
+        builder: (context, _) => FutureBuilder<String>(
+          future: htmlDesign ??= widget.loadHtmlDesign(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Could not load the company HTML design.'),
+                TextButton(
+                    onPressed: () => setState(() => htmlDesign = null),
+                    child: const Text('Retry')),
+              ]));
+            }
+            if (!snapshot.hasData) {
+              return const CenteredLoading(label: 'Loading company design');
+            }
+            return Column(children: [
+              const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                      'Unsaved preview. Final totals are calculated when saved.')),
+              Expanded(
+                  child: HtmlDocumentPreview(
+                      html: renderHtmlDocument(
+                source: snapshot.data!,
+                section: widget.quotation ? 'Quotations' : 'Invoices',
+                record: {
+                  ...header,
+                  ...estimateDocument(values),
+                  'status': 'DRAFT'
+                },
+                company: {
+                  ...widget.company,
+                  'trn': widget.company['trn'] ?? widget.company['taxNumber']
+                },
+                customer: {
+                  ...customer,
+                  'trn': customer['trn'] ?? customer['taxNumber']
+                },
+                items: [
+                  for (final item in values)
+                    {
+                      ...item,
+                      'lineTotal': estimateDocument([item])['total']
+                    }
                 ],
-                if (notes.text.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(notes.text),
-                ],
-                const SizedBox(height: 28),
-                Text(
-                  'Unsaved preview · Final totals are calculated when saved.',
-                  style:
-                      TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
-                ),
-              ],
-            ),
-          );
-        },
+              ))),
+            ]);
+          },
+        ),
       );
+
+  Widget livePreview() => htmlPreview();
 
   @override
   Widget build(BuildContext context) => PopScope(
@@ -773,38 +680,12 @@ class _DocumentEditorState extends State<DocumentEditor> {
                           setState(() => preview = selected.first);
                         },
                       ),
-                      PopupMenuButton<DocumentStyle>(
-                        tooltip: 'PDF style',
-                        initialValue: style,
-                        icon: const Icon(Icons.tune),
-                        onSelected: (value) => setState(() => style = value),
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: DocumentStyle.modern,
-                            child: Text('Modern'),
-                          ),
-                          const PopupMenuItem(
-                            value: DocumentStyle.classic,
-                            child: Text('Classic'),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: preview
-                        ? kit.InvoiceGenerator.preview(
-                            data: documentData(
-                              quotation: widget.quotation,
-                              record: header,
-                              company: widget.company,
-                              customer: customer,
-                              items: values,
-                              estimate: true,
-                            ),
-                            template: BusinessDocumentTemplate(style: style),
-                          )
+                        ? htmlPreview()
                         : LayoutBuilder(
                             builder: (context, constraints) {
                               if (constraints.maxWidth < 1040) return editor();

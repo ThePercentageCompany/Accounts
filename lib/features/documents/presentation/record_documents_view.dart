@@ -11,7 +11,6 @@ import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/accounting/data/record_write_queue.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/documents/data/shared_record_pdf.dart';
-import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 
 const documentSections = [
   'Tasks',
@@ -86,10 +85,12 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   String? error;
   Uint8List? image;
   String? imageName;
-  DocumentStyle pdfStyle = DocumentStyle.modern;
   bool get logo => widget.section == 'CompanyProfile';
   HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
-        '${widget.api.origin}|${widget.companyId}|${widget.section}',
+        widget.api,
+        widget.companyId,
+        widget.section,
+        employee: widget.employee,
       );
   Future<void> _exportHtml() => _run(() async {
         final html = await savedRecordHtml(
@@ -98,6 +99,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           widget.section,
           _recordId,
           await htmlStore.load(),
+          employee: widget.employee,
         );
         await downloadFile(
           Uint8List.fromList(utf8.encode(html)),
@@ -206,14 +208,26 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           await _read();
         }
       });
+  Future<Uint8List> _pdfBytes() async {
+    if (const ['Invoices', 'Quotations'].contains(widget.section)) {
+      await htmlStore.load();
+    }
+    return sharedRecordPdf(
+      widget.api,
+      widget.companyId,
+      widget.section,
+      _recordId,
+      employee: widget.employee,
+    );
+  }
+
+  Future<void> _downloadPdf() => _run(() async {
+        await downloadFile(await _pdfBytes(),
+            filename: '${widget.section}-$_recordId.pdf',
+            mimeType: 'application/pdf');
+      });
   Future<void> _generate() => _run(() async {
-        final bytes = await sharedRecordPdf(
-          widget.api,
-          widget.companyId,
-          widget.section,
-          _recordId,
-          style: pdfStyle,
-        );
+        final bytes = await _pdfBytes();
         await widget.uploads!.enqueue(
           name: '${widget.section}-${widget.record['recordId']}.pdf',
           mimeType: 'application/pdf',
@@ -284,6 +298,15 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 ),
               ),
               if (error != null) Text(error!),
+              if (const ['Invoices', 'Quotations'].contains(widget.section))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: LoadingButton.textIcon(
+                    onPressed: busy ? null : _downloadPdf,
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Download PDF'),
+                  ),
+                ),
               if (!widget.employee &&
                   const ['Invoices', 'Quotations'].contains(widget.section))
                 Align(
@@ -297,32 +320,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                       PopupMenuItem(
                         value: 'export',
                         child: Text('Export custom HTML'),
-                      ),
-                    ],
-                  ),
-                ),
-              if (widget.uploads != null &&
-                  const [
-                    'Invoices',
-                    'Quotations',
-                    'CreditNotes',
-                  ].contains(widget.section))
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: PopupMenuButton<DocumentStyle>(
-                    tooltip: 'PDF style',
-                    enabled: !busy,
-                    initialValue: pdfStyle,
-                    icon: const Icon(Icons.tune),
-                    onSelected: (value) => setState(() => pdfStyle = value),
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: DocumentStyle.modern,
-                        child: Text('Modern'),
-                      ),
-                      const PopupMenuItem(
-                        value: DocumentStyle.classic,
-                        child: Text('Classic'),
                       ),
                     ],
                   ),

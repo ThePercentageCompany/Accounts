@@ -1353,6 +1353,23 @@ class SaasApi implements SessionRepository {
       ))
           .bodyBytes;
 
+  Future<Map<String, dynamic>> documentDesign(String companyId, String section,
+          {bool employee = false}) =>
+      _json('GET',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/document-designs/$section',
+          force: true);
+
+  Future<Map<String, dynamic>> saveDocumentDesign(String companyId,
+          String section, String source, int expectedVersion) =>
+      _json('PUT', '/v1/companies/${_id(companyId)}/document-designs/$section',
+          data: {'source': source, 'expectedVersion': expectedVersion});
+
+  Future<Uint8List> recordPdf(String companyId, String section, String recordId,
+          {bool employee = false}) async =>
+      (await _send('GET',
+              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-pdf/$section/${_id(recordId)}'))
+          .bodyBytes;
+
   void close() {
     for (final outbox in _outboxes.values) {
       outbox.dispose();

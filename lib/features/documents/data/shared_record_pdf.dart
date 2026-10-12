@@ -11,8 +11,11 @@ Future<Uint8List> sharedRecordPdf(
   String companyId,
   String section,
   String recordId, {
-  DocumentStyle style = DocumentStyle.modern,
+  bool employee = false,
 }) async {
+  if (section == 'Invoices' || section == 'Quotations') {
+    return api.recordPdf(companyId, section, recordId, employee: employee);
+  }
   const titles = {
     'Invoices': 'Invoice',
     'CreditNotes': 'Credit note',
@@ -54,29 +57,28 @@ Future<Uint8List> sharedRecordPdf(
   final itemTable = section == 'Invoices'
       ? 'InvoiceItems'
       : section == 'CreditNotes'
-      ? 'CreditNoteItems'
-      : section == 'Quotations'
-      ? 'QuotationItems'
-      : null;
-  final items =
-      itemTable == null
-            ? <Map<String, dynamic>>[]
-            : (await rows(itemTable))
-                  .where(
-                    (r) =>
-                        r[section == 'CreditNotes'
-                            ? 'creditNoteId'
-                            : section == 'Invoices'
-                            ? 'invoiceId'
-                            : 'quotationId'] ==
-                        recordId,
-                  )
-                  .toList()
-        ..sort(
-          (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
-            num.tryParse('${b['lineNumber']}') ?? 0,
-          ),
-        );
+          ? 'CreditNoteItems'
+          : section == 'Quotations'
+              ? 'QuotationItems'
+              : null;
+  final items = itemTable == null
+      ? <Map<String, dynamic>>[]
+      : (await rows(itemTable))
+          .where(
+            (r) =>
+                r[section == 'CreditNotes'
+                    ? 'creditNoteId'
+                    : section == 'Invoices'
+                        ? 'invoiceId'
+                        : 'quotationId'] ==
+                recordId,
+          )
+          .toList()
+    ..sort(
+      (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
+        num.tryParse('${b['lineNumber']}') ?? 0,
+      ),
+    );
   Uint8List? logo;
   if ('${profile['logoDocumentId'] ?? ''}'.isNotEmpty) {
     logo = await api.document(companyId, profile['logoDocumentId']);
@@ -114,7 +116,7 @@ Future<Uint8List> sharedRecordPdf(
         customer: party ?? {},
         items: items,
       ),
-      template: BusinessDocumentTemplate(style: style, logo: logo),
+      template: BusinessDocumentTemplate(logo: logo),
     );
   }
   final doc = pw.Document();

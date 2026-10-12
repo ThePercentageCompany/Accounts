@@ -71,7 +71,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               spacing: 12,
               children: [
                 const Text(
-                  'Edit HTML and CSS. Saved separately for invoices and quotations in this workspace on this browser/device. Export a backup to use elsewhere. Designs change presentation only.',
+                  'Edit HTML and CSS. Saved online separately for invoices and quotations. All sessions and authorized employees use this design for PDFs. Designs change presentation only.',
                 ),
                 const SelectableText(
                   'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}',
@@ -160,8 +160,8 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
                 : () => run(() async {
                       await widget.store.save(source.text);
                       if (mounted) {
-                        setState(
-                            () => message = 'Design saved on this device.');
+                        setState(() =>
+                            message = 'Design saved online for the company.');
                       }
                     }),
             child: const Text('Save design'),

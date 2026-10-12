@@ -17,7 +17,7 @@ class SystemSettingsPanel extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (_) => HtmlDocumentDesignEditor(
-        store: HtmlDocumentDesignStore('${api.origin}|$companyId|$section'),
+        store: HtmlDocumentDesignStore(api, companyId, section),
         preview: (source) async {
           final records = (await api.records(companyId, section,
               force: true))['records'] as List;
@@ -74,7 +74,7 @@ class SystemSettingsPanel extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Text(
-                  'Designs and appearance are saved on this device. Company details and logo are managed below. Preview uses the first saved document.',
+                  'Document designs are saved online for the company and used in every session and authorized employee login. Appearance is saved on this device. Preview uses the first saved document.',
                 ),
               ),
             ],

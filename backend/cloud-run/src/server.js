@@ -22,6 +22,7 @@ import { BusinessService } from './business-service.js';
 import { DocumentDrive } from './document-drive.js';
 import { DocumentService, DocumentSheets } from './document-service.js';
 import { NotificationService } from './notification-service.js';
+import { htmlPdf } from './document-design.js';
 
 async function main() {
   const config = loadConfig();
@@ -29,6 +30,7 @@ async function main() {
   const clientSecret = await readOAuthSecret(secrets, config.secretVersion);
   const registry = new Registry(new GoogleControlStorage(new Storage(), config.bucket, config.object));
   await registry.read(); // Fail closed on missing permissions/corrupt control data.
+  await htmlPdf('<!doctype html><html><body></body></html>'); // Verify the installed PDF runtime before serving requests.
   const service = new AccountsService(registry, new GoogleIdentity(config, clientSecret), config);
   const queue = new SetupQueue(new CloudTasksClient(), new OAuth2Client(), config);
   const google = new GoogleWorkspace();
@@ -45,6 +47,6 @@ async function main() {
   process.on('SIGTERM', () => { server.close(); setTimeout(() => process.exit(0), 9_000).unref(); });
 }
 main().catch(() => {
-  console.error('API startup failed. Check operator configuration, credentials and control storage.');
+  console.error('API startup failed. Check operator configuration, credentials, control storage and PDF browser installation.');
   process.exitCode = 1;
 });

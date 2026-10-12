@@ -27,11 +27,16 @@ footer { border-top:1px solid #ddd; margin-top:32px; padding-top:16px; }
 <footer><b>Notes</b><p>{{record.notes}}</p><b>Terms</b><p>{{record.paymentTerms}}</p></footer>''';
 
 class HtmlDocumentDesignStore {
-  HtmlDocumentDesignStore(this.scope);
-  final String scope;
+  HtmlDocumentDesignStore(this.api, this.companyId, this.section,
+      {this.employee = false});
+  final SaasApi api;
+  final String companyId, section;
+  final bool employee;
+  String get scope => '${api.origin}|$companyId|$section';
+  int? _version;
   String get key => 'html-document-design-v1:${Uri.encodeComponent(scope)}';
   DurableValue? _durable;
-  Future<String> load() async {
+  Future<String> _legacy() async {
     final prefs = await SharedPreferences.getInstance();
     if (kIsWeb) {
       _durable = DurableValue(
@@ -44,15 +49,27 @@ class HtmlDocumentDesignStore {
     return prefs.getString(key) ?? defaultHtmlDocumentDesign;
   }
 
+  Future<String> load() async {
+    final design =
+        await api.documentDesign(companyId, section, employee: employee);
+    _version = (design['version'] as num).toInt();
+    if (_version == 0 && !employee) {
+      final legacy = await _legacy();
+      if (legacy != defaultHtmlDocumentDesign) {
+        await save(legacy);
+        return legacy;
+      }
+    }
+    return design['source'] as String;
+  }
+
   Future<void> save(String source) async {
     validateHtmlDocumentDesign(source);
-    if (kIsWeb && _durable == null) await load();
-    final saved = _durable != null
-        ? await _durable!.put(jsonEncode(source))
-        : await (await SharedPreferences.getInstance()).setString(key, source);
-    if (!saved) {
-      throw StateError('The design could not be saved on this device.');
-    }
+    if (employee) throw StateError('Only the company owner can save designs.');
+    if (_version == null) await load();
+    final saved =
+        await api.saveDocumentDesign(companyId, section, source, _version!);
+    _version = (saved['version'] as num).toInt();
   }
 }
 
@@ -109,8 +126,11 @@ String renderHtmlDocument({
     final parts = token.split('.');
     final data = {
       'record': record,
-      'company': company,
-      'customer': customer,
+      'company': {...company, 'trn': company['trn'] ?? company['taxNumber']},
+      'customer': {
+        ...customer,
+        'trn': customer['trn'] ?? customer['taxNumber']
+      },
     }[parts[0]]!;
     return money(data[parts[1]]);
   });
@@ -122,18 +142,15 @@ String renderHtmlDocument({
       '<title>${escape(record['number'] ?? section)}</title></head><body>$content</body></html>';
 }
 
-Future<String> savedRecordHtml(
-  SaasApi api,
-  String companyId,
-  String section,
-  String recordId,
-  String source,
-) async {
+Future<String> savedRecordHtml(SaasApi api, String companyId, String section,
+    String recordId, String source,
+    {bool employee = false}) async {
   if (!const ['Invoices', 'Quotations'].contains(section)) {
     throw ArgumentError('Unsupported document');
   }
   Future<List<Map<String, dynamic>>> rows(String table) async =>
-      ((await api.records(companyId, table, force: true))['records'] as List)
+      ((await api.records(companyId, table,
+              force: true, employee: employee))['records'] as List)
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
   Map<String, dynamic> find(List<Map<String, dynamic>> data, String id) =>

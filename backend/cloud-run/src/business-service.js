@@ -1,5 +1,6 @@
 import { currencyValues, convertJournals, validRate, convert, FX_TABLES } from './foreign-currency.js';
 import { validateProject } from './project-policy.js';
+import { companyDesign, validateDesign, snapshotHtml } from './document-design.js';
 import { hasLedgerSources, ledgerStatus } from './ledger-status.js';
 import { validateTask, taskActivityChanges } from './task-policy.js';
 import { opaque, digest } from './crypto.js';
@@ -121,6 +122,29 @@ export class BusinessService {
   async reportSettings(token, companyId) {
     const { company } = this.owner((await this.registry.read()).state, token, companyId);
     return reportConfiguration(company);
+  }
+  async documentDesign(token, companyId, section) {
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return companyDesign(company, section);
+  }
+  async documentHtml(token, companyId, section, recordId) {
+    const design = await this.documentDesign(token, companyId, section);
+    const rows = await this.sheets.read(companyId, [section, section === 'Invoices' ? 'InvoiceItems' : 'QuotationItems', 'CompanyProfile', 'Customers']);
+    const latest = await this.documentDesign(token, companyId, section);
+    requireThat(latest.version === design.version, 409, 'VERSION_CONFLICT', 'Design changed. Generate again.');
+    return snapshotHtml(design.source, section, recordId, rows);
+  }
+  async saveDocumentDesign(token, companyId, section, input) {
+    requireThat(input && Object.keys(input).every(k => ['source', 'expectedVersion'].includes(k)) &&
+      Number.isInteger(input.expectedVersion), 400, 'INVALID_DOCUMENT_DESIGN', 'Supply HTML and its version.');
+    validateDesign(input.source);
+    return this.registry.transact(state => {
+      const { company } = this.owner(state, token, companyId);
+      const current = companyDesign(company, section);
+      requireThat(current.version === input.expectedVersion, 409, 'VERSION_CONFLICT', 'Design changed. Reload before saving.');
+      company.documentDesigns ??= {};
+      return company.documentDesigns[section] = { source: input.source, version: current.version + 1 };
+    });
   }
   async saveReportSettings(token, companyId, input) {
     this.owner((await this.registry.read()).state, token, companyId);

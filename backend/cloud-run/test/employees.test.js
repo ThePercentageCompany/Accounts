@@ -7,6 +7,7 @@ import { PrivateCode } from '../src/private-code.js';
 import { authorizeDocument } from '../src/employee-policy.js';
 import { ApiError } from '../src/errors.js';
 import { TABLES } from '../src/company-schema.js';
+import { BusinessService } from '../src/business-service.js';
 
 async function setup() {
   const f = fixture(), owner = await f.login();
@@ -40,6 +41,26 @@ async function setup() {
     writes: () => writes, company: () => f.storage.state.companies[companyId] };
 }
 const denied = e => ['EMPLOYEE_ACCESS_DENIED', 'EMPLOYEE_SESSION_INVALID', 'EMPLOYEE_SESSION_EXPIRED'].includes(e.code);
+
+test('employee sessions use the company HTML design without Settings access and respect record visibility', async () => {
+  const f = await setup(), id = await f.create();
+  const session = await f.loginEmployee(await f.issue(id));
+  const business = new BusinessService({ accounts: f.service, sheets: f.sheets });
+  const initial = await business.documentDesign(f.owner, f.companyId, 'Invoices');
+  const source = initial.source + '<footer>Shared design</footer>';
+  await business.saveDocumentDesign(f.owner, f.companyId, 'Invoices', { source, expectedVersion: 0 });
+  assert.equal((await f.employees.documentDesign(session.token, 'Invoices')).source, source);
+  await assert.rejects(f.employees.documentDesign(session.token, 'Quotations'), e => e.code === 'SECTION_FORBIDDEN');
+  await assert.rejects(f.employees.documentDesign(session.token, 'Invoices', { companyId: 'other' }), e => e.code === 'WORKSPACE_CHANGED');
+  f.rows.Invoices.push({ companyId: f.companyId, recordId: 'invoice', customerId: 'customer', total: 105, recordVersion: 1 });
+  f.rows.InvoiceItems = [{ companyId: f.companyId, invoiceId: 'invoice', description: 'Service', lineTotal: 105 }];
+  f.rows.CompanyProfile = [{ companyId: f.companyId, recordId: 'company', name: 'Company' }];
+  f.rows.Customers = [{ companyId: f.companyId, recordId: 'customer', name: 'Customer' }];
+  assert.ok((await f.employees.documentHtml(session.token, 'Invoices', 'invoice')).includes('Shared design'));
+  await assert.rejects(f.employees.documentHtml(session.token, 'Invoices', 'missing'), e => e.code === 'DOCUMENT_FORBIDDEN');
+  f.rows.RolePermissions.find(p => p.section === 'Invoices').recordScope = 'SELF';
+  await assert.rejects(f.employees.documentHtml(session.token, 'Invoices', 'invoice'), e => e.code === 'DOCUMENT_FORBIDDEN');
+});
 
 test('pending document upload permits employee identity verification and renewal but blocks unrelated business reads', async () => {
   const f=await setup(), id=await f.create();

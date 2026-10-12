@@ -130,3 +130,19 @@ Flutter navigation/editor/actions, MoneyTransfers sheet provisioning, version 8
 upgrade verification, owner CRUD/action endpoints, owner/employee sync permissions,
 atomic journal posting, reversals and manual transfer statement matching are
 implemented. See [MONEY_TRANSFERS.md](MONEY_TRANSFERS.md) for API and scope.
+# Shared HTML document pipeline - implemented locally
+
+- Company invoice and quotation HTML designs persist online in the control
+  registry with expected-version conflict detection. Existing device designs
+  migrate on the owner's first load when no shared design exists.
+- Owner GET/PUT design endpoints and owner/employee GET PDF endpoints are wired
+  to Flutter settings, previews, PDF downloads and PDF attachment generation.
+  Employee reads check section access, workspace context and record visibility.
+- PDF generation uses saved document records and the shared HTML/CSS through
+  Chromium. Scripts and outbound requests are blocked. Authorization and document
+  contents are rechecked before returning PDF bytes.
+- Container packaging installs Chromium. Startup checks its PDF runtime.
+  Cloud Run deployment uses 1 GiB memory, and deployment health verification
+  requires the shared-design and HTML-PDF capabilities.
+- Service-level HTTP integration covers saved designs and PDF generation for
+  invoices and quotations. Production deployment remains separate.

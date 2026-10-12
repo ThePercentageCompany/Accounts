@@ -131,7 +131,7 @@ for env in service['spec']['template']['spec']['containers'][0].get('env',[]):
 PY
 fi
 gcloud run deploy "$SERVICE" --image="${IMAGE%:*}@$DIGEST" --region="$REGION" --project="$PROJECT" \
-  --service-account="$RUNTIME" --allow-unauthenticated --ingress=all --cpu=1 --memory=512Mi \
+  --service-account="$RUNTIME" --allow-unauthenticated --ingress=all --cpu=1 --memory=1Gi \
   --concurrency=20 --min-instances=0 --max-instances=2 --timeout=300 --env-vars-file="$TASK_TEMP/env.yaml"
 URL="$(gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT" --format='value(status.url)')"
 if ! curl --fail --silent --show-error --retry 4 --retry-delay 5 --max-time 30 "$URL/health" >"$TASK_TEMP/health.json"; then
@@ -143,6 +143,7 @@ python3 - "$TASK_TEMP/health.json" <<'PY'
 import json,sys
 with open(sys.argv[1]) as f: health=json.load(f)
 assert health.get('status')=='ok' and health.get('phase')==4, 'Unexpected API health response'
+assert {'shared-html-document-designs','html-document-pdf'} <= set(health.get('capabilities',[])), 'Document endpoints are missing from this backend revision'
 print('BACKEND_HEALTH_OK')
 PY
 echo "Service: $URL"

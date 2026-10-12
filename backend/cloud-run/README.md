@@ -150,6 +150,39 @@ projection and [the API contract](API.md) for implemented versus future routes.
 
 The Dockerfile packages this service for Cloud Run, runs as an unprivileged user,
 and uses the committed dependency lockfile. Deployment is intentionally not run.
+Invoice and quotation designs are company presentation settings stored in the
+online control registry with version checks. Authorized employees read the same
+design without needing Settings access. PDFs render the saved HTML/CSS using
+Chromium; the Docker build installs its browser and system dependencies. For local
+PDF generation, run `npx playwright install chromium` after `npm ci`. Rendering
+blocks scripts and outbound requests, supports embedded data images/fonts,
+preserves CSS page sizes and backgrounds, and limits concurrent renders to two.
+Existing device designs migrate on the owner's first design load if no online
+design exists. Previously attached PDFs retain their original contents; generate
+a new PDF to apply an updated design.
+The deployment script allocates 1 GiB for the API and bounded Chromium renders.
+
+## Shared document endpoints
+
+The Flutter design editor and document actions call these authenticated endpoints:
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| GET | `/v1/companies/:companyId/document-designs/:section` | Saved HTML source and version |
+| PUT | `/v1/companies/:companyId/document-designs/:section` | Save `{source, expectedVersion}` with conflict detection |
+| GET | `/v1/companies/:companyId/record-pdf/:section/:recordId` | PDF rendered from the saved HTML and saved business records |
+| GET | `/v1/employee/companies/:companyId/document-designs/:section` | Same company design for an authorized employee |
+| GET | `/v1/employee/companies/:companyId/record-pdf/:section/:recordId` | PDF for a record visible to the employee |
+
+`:section` is `Invoices` or `Quotations`. Designs require `{{items}}` and
+`{{record.total}}`, accept the existing company/customer/record placeholders,
+and are limited to 100 KB. Employee requests carry `X-TPC-Company` and
+`X-TPC-Employee`; cookies remain the authentication source. Employee design
+writes are unavailable. PDF routes accept no style options or query parameters.
+Both authentication and rendered content are checked again before PDF delivery.
+The health response advertises `shared-html-document-designs` and
+`html-document-pdf` so operators can verify the deployed backend revision.
+
 The UUID override patches a transitive advisory in gaxios 6.7.1; that package uses
 the compatible CommonJS `v4()` API. Reevaluate the override when upgrading Storage.
 

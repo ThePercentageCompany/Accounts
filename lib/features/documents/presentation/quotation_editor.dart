@@ -6,12 +6,14 @@ class QuotationEditor extends StatelessWidget {
   const QuotationEditor({
     super.key,
     required this.customers,
+    required this.loadHtmlDesign,
     this.record,
     this.items = const [],
     this.company = const {},
     this.onSave,
     this.rateLoader,
   });
+  final Future<String> Function() loadHtmlDesign;
   final ExchangeRateLoader? rateLoader;
   final List<Map<String, dynamic>> customers;
   final Map<String, dynamic>? record;
@@ -22,6 +24,7 @@ class QuotationEditor extends StatelessWidget {
   Widget build(BuildContext context) => DocumentEditor(
         quotation: true,
         customers: customers,
+        loadHtmlDesign: loadHtmlDesign,
         record: record,
         items: items,
         company: company,

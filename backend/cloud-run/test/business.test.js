@@ -4,6 +4,8 @@ import { fixture } from './helpers.js';
 import { BusinessService } from '../src/business-service.js';
 import { ApiError } from '../src/errors.js';
 import { TABLES } from '../src/company-schema.js';
+import { createApi } from '../src/http.js';
+import { once } from 'node:events';
 
 async function setup() {
   const f = fixture(), token = await f.login(), registration = await f.service.createCompany(token, { name: 'Business' }, 'company_business_123');
@@ -21,6 +23,55 @@ async function setup() {
   };
   return { ...f, token, companyId, data, sheets, business: new BusinessService({ accounts: f.service, sheets, now: () => 1_800_000_000_000 }) };
 }
+
+test('online document designs persist across service instances and reject stale or unauthorized saves', async () => {
+  const f = await setup();
+  const initial = await f.business.documentDesign(f.token, f.companyId, 'Invoices');
+  const source = initial.source + '<footer>Shared company design</footer>';
+  const saved = await f.business.saveDocumentDesign(f.token, f.companyId, 'Invoices', { source, expectedVersion: 0 });
+  assert.equal(saved.version, 1);
+  const nextSession = new BusinessService({ accounts: f.service, sheets: f.sheets });
+  assert.equal((await nextSession.documentDesign(f.token, f.companyId, 'Invoices')).source, source);
+  assert.equal((await nextSession.documentDesign(f.token, f.companyId, 'Quotations')).version, 0);
+  await assert.rejects(f.business.saveDocumentDesign(f.token, f.companyId, 'Invoices', { source, expectedVersion: 0 }), e => e.code === 'VERSION_CONFLICT');
+  await assert.rejects(f.business.documentDesign('invalid', f.companyId, 'Invoices'));
+});
+
+test('connected HTTP design and PDF endpoints use real company storage and saved records', async t => {
+  const f = await setup(), recordId = 'r'.repeat(43);
+  f.data.CompanyProfile = [{ recordId: 'company', companyId: f.companyId, name: 'Company', taxNumber: 'TRN-123' }];
+  f.data.Customers = [{ recordId: 'customer', companyId: f.companyId, name: 'Customer' }];
+  for (const section of ['Invoices', 'Quotations']) {
+    f.data[section] = [{ recordId, companyId: f.companyId, customerId: 'customer', total: 105, number: 'DOC-42' }];
+    f.data[section === 'Invoices' ? 'InvoiceItems' : 'QuotationItems'] = [{
+      companyId: f.companyId, [section === 'Invoices' ? 'invoiceId' : 'quotationId']: recordId,
+      description: 'Saved service', quantity: 1, unitPrice: 100, taxRate: 5, lineTotal: 105,
+    }];
+  }
+  let rendered;
+  const server = createApi(f.service, f.config, { business: f.business, renderPdf: async html => {
+    rendered = html; return Buffer.from('%PDF-connected');
+  } });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Origin: f.config.appOrigin, Cookie: `__Host-tpc_session=${f.token}`,
+    'Content-Type': 'application/json', 'X-TPC-CSRF': '1' };
+  const health = await (await fetch(`${base}/health`)).json();
+  assert.ok(health.capabilities.includes('html-document-pdf'));
+  for (const section of ['Invoices', 'Quotations']) {
+    const path = `${base}/v1/companies/${f.companyId}/document-designs/${section}`;
+    const source = '<style>h1{color:purple}</style><h1>{{title}}</h1>{{company.trn}}<table>{{items}}</table>{{record.total}}';
+    const saved = await fetch(path, { method: 'PUT', headers, body: JSON.stringify({ source, expectedVersion: 0 }) });
+    assert.equal(saved.status, 200);
+    assert.equal((await (await fetch(path, { headers })).json()).source, source);
+    const pdf = await fetch(`${base}/v1/companies/${f.companyId}/record-pdf/${section}/${recordId}`, { headers });
+    assert.equal(pdf.status, 200); assert.equal(await pdf.text(), '%PDF-connected');
+    assert.ok(rendered.includes('Saved service')); assert.ok(rendered.includes('105.00'));
+    assert.ok(rendered.includes('TRN-123')); assert.ok(rendered.includes(section === 'Invoices' ? 'INVOICE' : 'QUOTATION'));
+  }
+  assert.equal((await fetch(`${base}/v1/companies/${f.companyId}/document-designs/Invoices`)).status, 401);
+});
 
 test('transfer sync posts atomically, retries without duplication, matches without money movement and reverses once', async () => {
   const f = await setup();
