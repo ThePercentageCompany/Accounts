@@ -149,7 +149,9 @@ projection and [the API contract](API.md) for implemented versus future routes.
 ## Packaging and remaining deployment checks
 
 The Dockerfile packages this service for Cloud Run, runs as an unprivileged user,
-and uses the committed dependency lockfile. Deployment is intentionally not run.
+and uses the committed dependency lockfile. The shared HTML/PDF revision was
+deployed to the existing Cloud Run service on 13 October 2026. Its health
+capabilities and authenticated endpoint routing were verified through the website proxy.
 Invoice and quotation designs are company presentation settings stored in the
 online control registry with version checks. Authorized employees read the same
 design without needing Settings access. PDFs render the saved HTML/CSS using

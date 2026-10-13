@@ -145,4 +145,8 @@ implemented. See [MONEY_TRANSFERS.md](MONEY_TRANSFERS.md) for API and scope.
   Cloud Run deployment uses 1 GiB memory, and deployment health verification
   requires the shared-design and HTML-PDF capabilities.
 - Service-level HTTP integration covers saved designs and PDF generation for
-  invoices and quotations. Production deployment remains separate.
+  invoices and quotations.
+- Deployed on 13 October 2026 to the existing `tpc-accounts-api` service as
+  `tpc-accounts-api-htmlpdf-20261012`, serving 100% of traffic. Verified shared
+  document capabilities through the website proxy and confirmed owner/employee
+  PDF routes enforce authentication instead of returning endpoint-not-found.
