@@ -1,0 +1,28 @@
+import { PGlite } from 'npm:@electric-sql/pglite@0.5.9';
+import { pgcrypto } from 'npm:@electric-sql/pglite@0.5.9/contrib/pgcrypto';
+
+export function assert(value: unknown,message='Assertion failed'){if(!value)throw new Error(message);}
+export const owner='00000000-0000-0000-0000-000000000001';
+export const other='00000000-0000-0000-0000-000000000002';
+
+export async function setup(){
+  const db=new PGlite({extensions:{pgcrypto}});
+  await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
+    create schema auth;create schema storage;create schema cron;
+    create table auth.users(id uuid primary key,email text,raw_app_meta_data jsonb default '{}');
+    create table auth.sessions(id uuid primary key,user_id uuid,created_at timestamptz default now());
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+    grant usage on schema auth to authenticated,service_role;grant execute on function auth.uid() to authenticated,service_role;
+    create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+    create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;
+    create publication supabase_realtime;
+    insert into auth.users(id,email) values('${owner}','admin@example.test'),('${other}','other@example.test');`);
+  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql']){
+    const sql=(await Deno.readTextFile(new URL(`../../migrations/${file}`,import.meta.url))).replace('create extension if not exists pg_cron with schema pg_catalog;','');
+    await db.exec(sql);
+  }
+  await db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[owner]);
+  const result=await db.query<{result:{companyId:string}}>(`select public.create_workspace('Company','company_create_0001') as result`);
+  return {db,company:result.rows[0].result.companyId};
+}
+

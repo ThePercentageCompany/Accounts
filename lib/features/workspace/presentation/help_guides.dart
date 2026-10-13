@@ -25,11 +25,11 @@ const helpGuides = <HelpGuide>[
   HelpGuide(
       category: "Getting started",
       title: "Create a workspace",
-      purpose: "Set up a separate company workspace and its Google storage.",
+      purpose: "Set up a separate company workspace and its secure company storage.",
       useCase: "Starting a company or managing another business separately.",
       steps: [
-        "Sign in with Google and create a company using its name.",
-        "Connect Google when prompted and wait for setup to finish.",
+        "Sign in with your admin email and password and create a company.",
+        "The company workspace is created in Supabase.",
         "Open the workspace and complete the company profile in Settings."
       ]),
   HelpGuide(

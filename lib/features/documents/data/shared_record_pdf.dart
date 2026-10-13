@@ -14,12 +14,11 @@ Future<Uint8List> sharedRecordPdf(
   bool employee = false,
 }) async {
   if (section == 'Invoices' || section == 'Quotations') {
-    return api.recordPdf(companyId, section, recordId, employee: employee);
+    throw const SaasApiException('BROWSER_PRINT_REQUIRED',
+        'Use Print / Save PDF, then upload the saved PDF.');
   }
   const titles = {
-    'Invoices': 'Invoice',
     'CreditNotes': 'Credit note',
-    'Quotations': 'Quotation',
     'Receipts': 'Payment receipt',
     'Payroll': 'Payslip',
     'Assets': 'Asset record',
@@ -54,24 +53,12 @@ Future<Uint8List> sharedRecordPdf(
         .toList();
     party = find(employees, record['employeeId']);
   }
-  final itemTable = section == 'Invoices'
-      ? 'InvoiceItems'
-      : section == 'CreditNotes'
-          ? 'CreditNoteItems'
-          : section == 'Quotations'
-              ? 'QuotationItems'
-              : null;
+  final itemTable = section == 'CreditNotes' ? 'CreditNoteItems' : null;
   final items = itemTable == null
       ? <Map<String, dynamic>>[]
       : (await rows(itemTable))
           .where(
-            (r) =>
-                r[section == 'CreditNotes'
-                    ? 'creditNoteId'
-                    : section == 'Invoices'
-                        ? 'invoiceId'
-                        : 'quotationId'] ==
-                recordId,
+            (r) => r['creditNoteId'] == recordId,
           )
           .toList()
     ..sort(
@@ -92,26 +79,20 @@ Future<Uint8List> sharedRecordPdf(
       'The record or company profile changed. Generate the document again.',
     );
   }
-  if (section == 'Invoices' ||
-      section == 'Quotations' ||
-      section == 'CreditNotes') {
-    final invoice = section == 'CreditNotes'
-        ? find(await rows('Invoices'), record['invoiceId'])
-        : null;
+  if (section == 'CreditNotes') {
+    final invoice = find(await rows('Invoices'), record['invoiceId']);
     return kit.InvoiceGenerator.generate(
       data: documentData(
-        quotation: section == 'Quotations',
-        creditNote: section == 'CreditNotes',
-        record: invoice == null
-            ? record
-            : {
-                ...record,
-                'issueDate': record['date'],
-                'notes':
-                    'Credit for invoice ${invoice['number']}. ${record['reason']}',
-                'paymentTerms':
-                    'Refund: ${record['refundAmount']} ${record['currency']} ${record['refundAccount']}',
-              },
+        quotation: false,
+        creditNote: true,
+        record: {
+          ...record,
+          'issueDate': record['date'],
+          'notes':
+              'Credit for invoice ${invoice['number']}. ${record['reason']}',
+          'paymentTerms':
+              'Refund: ${record['refundAmount']} ${record['currency']} ${record['refundAccount']}',
+        },
         company: profile,
         customer: party ?? {},
         items: items,
@@ -269,18 +250,6 @@ Future<Uint8List> sharedRecordPdf(
               padding: const pw.EdgeInsets.only(top: 12),
               child: pw.Text(text(record[key])),
             ),
-        if (['Invoices', 'Quotations'].contains(section)) ...[
-          pw.SizedBox(height: 16),
-          for (final key in [
-            'bankName',
-            'accountHolder',
-            'accountNumber',
-            'iban',
-            'swift',
-          ])
-            if (text(profile[key]).isNotEmpty)
-              pw.Text('$key: ${text(profile[key])}'),
-        ],
         pw.SizedBox(height: 16),
         pw.Text(
           'Saved record version ${record['recordVersion']}. Generated ${DateTime.now().toUtc().toIso8601String()}.',

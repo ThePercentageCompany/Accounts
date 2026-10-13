@@ -9,7 +9,7 @@ const helpAnswers = <({String topic, String title, String body})>[
     topic: 'Getting started',
     title: 'How do I create my first workspace?',
     body:
-        'Sign in with Google, enter your company name and create a workspace. Connect Google when prompted to prepare the company storage. The setup screen shows progress and updates automatically while setup runs. When setup is complete, open the workspace and review your company settings.'
+        'Sign in with your admin email and password, enter your company name and create a workspace. Company storage is prepared automatically. The setup screen shows progress and updates automatically while setup runs. When setup is complete, open the workspace and review your company settings.'
   ),
   (
     topic: 'Getting started',

@@ -13,7 +13,7 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
 
-/// Shared-backend employee authentication. Never opens legacy Sheets caches.
+/// Shared-backend employee authentication. Uses Supabase Auth and verified employee permissions.
 class EmployeeAccessView extends StatefulWidget {
   const EmployeeAccessView({
     super.key,
@@ -113,7 +113,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
     if (invite == null || _code.text.trim().isEmpty) {
       setState(
         () => _error = invite == null
-            ? 'Use a new employee link from this app. Older Apps Script QR codes must be reissued.'
+            ? 'Use a new employee link from this app. Ask your manager to issue a current employee invitation.'
             : 'Enter the private login code from your manager.',
       );
       return;
@@ -220,7 +220,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                           return uri != null &&
                                   SaasApi.invitation(uri, _appUri) != null
                               ? null
-                              : 'Use a new employee link from this app. Older Apps Script QR codes must be reissued.';
+                              : 'Use a new employee link from this app. Ask your manager to issue a current employee invitation.';
                         },
                         enabled: !busy,
                         autocorrect: false,

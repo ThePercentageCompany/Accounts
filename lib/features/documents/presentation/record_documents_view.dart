@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/utils/report_print.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:typed_data';
 import 'dart:convert';
@@ -222,6 +223,13 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   }
 
   Future<void> _downloadPdf() => _run(() async {
+        if (const ['Invoices', 'Quotations'].contains(widget.section)) {
+          final html = await savedRecordHtml(widget.api, widget.companyId,
+              widget.section, _recordId, await htmlStore.load(),
+              employee: widget.employee);
+          await printReport(html);
+          return;
+        }
         await downloadFile(await _pdfBytes(),
             filename: '${widget.section}-$_recordId.pdf',
             mimeType: 'application/pdf');
@@ -304,7 +312,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   child: LoadingButton.textIcon(
                     onPressed: busy ? null : _downloadPdf,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Download PDF'),
+                    label: const Text('Print / Save PDF'),
                   ),
                 ),
               if (!widget.employee &&
@@ -331,9 +339,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   runSpacing: 8,
                   children: [
                     if (const [
-                      'Invoices',
                       'CreditNotes',
-                      'Quotations',
                       'Receipts',
                       'Payroll',
                       'Assets',
@@ -350,6 +356,11 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     ),
                   ],
                 ),
+              if (const ['Invoices', 'Quotations'].contains(widget.section))
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                        'Save as PDF in the browser print dialog, then use Upload document to attach it.')),
               if (!busy && documents.isEmpty && _localDocuments.isEmpty)
                 const Text('No documents attached.'),
               Expanded(

@@ -111,7 +111,7 @@ class LandingView extends StatelessWidget {
                                               _button(
                                                   busy
                                                       ? 'Opening sign-in…'
-                                                      : 'Get started with Google',
+                                                      : 'Admin sign in',
                                                   onSignIn),
                                               _button('Explore the workspace',
                                                   onFaq,
@@ -130,7 +130,7 @@ class LandingView extends StatelessWidget {
                                               child: Semantics(
                                                   liveRegion: true,
                                                   child: Text(
-                                                      'Please wait while we connect you to Google.',
+                                                      'Signing in to your workspace.',
                                                       style: TextStyle(
                                                           color:
                                                               Colors.white)))),
@@ -269,10 +269,10 @@ class LandingView extends StatelessWidget {
                                                 color: _muted, height: 1.7))
                                       ]);
                                   const steps = Column(children: [
-                                    _Step('01', 'Sign in with Google',
-                                        'Access your owner account with your Google sign-in.'),
+                                    _Step('01', 'Sign in securely',
+                                        'Access your admin account with email and password.'),
                                     _Step('02', 'Connect your company',
-                                        'Create a company and connect Google to prepare its workspace storage.'),
+                                        'Create a company to prepare its secure workspace.'),
                                     _Step('03', 'Make it yours',
                                         'Set up your profile, add your first customer and create an invoice draft.'),
                                   ]);

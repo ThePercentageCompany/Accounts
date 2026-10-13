@@ -1,8 +1,9 @@
 ﻿.git
 .vercel
 .dart_tool
+.codex-tmp
+supabase
 build
-backend
 android
 ios
 linux
@@ -12,5 +13,4 @@ test
 coverage
 *.md
 .env*
-config/google*.json
 *client_secret*.json

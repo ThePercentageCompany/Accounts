@@ -373,19 +373,6 @@ class SaasSession extends Cubit<SessionState> {
         company = companies.isEmpty ? null : companies.first;
       });
 
-  Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
-        await preferences.setString('tpc_saas_session_mode', 'owner');
-        await navigate(await api.startSignIn());
-      });
-
-  Future<void> connectGoogle(Future<void> Function(Uri) navigate) => _run(
-        () async {
-          if (company == null) return;
-          await navigate(
-              await api.connectGoogle(company!['companyId'] as String));
-        },
-      );
-
   Future<void> employeeLogin(String invite, String code) => _run(() async {
         final result = await api.employeeLogin(invite, code);
         _clearIdentity();

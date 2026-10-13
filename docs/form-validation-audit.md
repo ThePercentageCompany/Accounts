@@ -76,8 +76,8 @@ historical values display as legacy values instead of causing a dropdown asserti
 or silently becoming Bank. Income/expense draft accounts are permissive text in
 the backend, so their existing legacy value may be retained unchanged while other
 fields are edited. Strict posting forms require an explicit supported account.
-Read-only historical transactions are not rewritten. Live production Sheets were
-not accessed; compatibility checks use the schema, policies and test fixtures.
+Read-only transactions are not rewritten. Compatibility checks use the schema,
+policies and test fixtures.
 
 ## Verification
 

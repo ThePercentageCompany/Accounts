@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tpc_invoice/core/network/supabase_runtime.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -14,7 +16,7 @@ import 'package:tpc_invoice/core/cache/read_cache.dart';
 import 'package:tpc_invoice/core/network/api_transport_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/network/api_transport_web.dart';
 
-const configuredSaasApiOrigin = String.fromEnvironment('SAAS_API_ORIGIN');
+const configuredSaasApiOrigin = configuredSupabaseUrl;
 
 class SaasApiException implements Exception {
   const SaasApiException(
@@ -41,20 +43,25 @@ class SaasApiException implements Exception {
 }
 
 /// Trusted operator origin only. QR codes identify invitations, never servers.
-/// Authentication lives in secure HttpOnly cookies, not local preferences.
+/// Supabase Auth manages the bearer session used by the Edge API.
 class SaasApi implements SessionRepository {
   SaasApi({
     String origin = configuredSaasApiOrigin,
     http.Client? client,
+    SupabaseClient? auth,
     CacheStore? cacheStore,
     OfflineStore? offlineStore,
     this.offlineAutomatic = true,
   })  : origin = _origin(origin),
         _client = client ?? createSaasTransport(),
+        _auth = auth,
         _cacheStore = cacheStore,
         _offlineStore = offlineStore;
 
   final OfflineStore? _offlineStore;
+  final SupabaseClient? _auth;
+  SupabaseClient? get _supabase => _auth ?? currentSupabaseClient;
+  RealtimeChannel? _realtime;
   final bool offlineAutomatic;
   bool get offlineEnabled => kIsWeb || _offlineStore != null;
   String get _sessionSnapshotScope => 'session-profile:${origin.origin}';
@@ -274,6 +281,7 @@ class SaasApi implements SessionRepository {
     _permissionKey = permission;
     _verifiedAt = DateTime.now();
     cache.configure(scope: scope, account: account);
+    _watchRealtime(companyId);
     for (final outbox in _outboxes.values) {
       outbox.resumeAuthentication();
     }
@@ -281,6 +289,7 @@ class SaasApi implements SessionRepository {
 
   @override
   void detachWorkspace() {
+    _stopRealtime();
     for (final outbox in _outboxes.values) {
       outbox.pause();
     }
@@ -292,6 +301,7 @@ class SaasApi implements SessionRepository {
 
   @override
   Future<void> clearWorkspace() async {
+    _stopRealtime();
     for (final outbox in _outboxes.values) {
       outbox.pause();
     }
@@ -518,15 +528,30 @@ class SaasApi implements SessionRepository {
     final abort =
         method == 'GET' && _cacheable(path) ? Completer<void>() : null;
     if (abort != null) _readAborts.add(abort);
+    final target = origin.resolve(
+        origin.host.endsWith('.supabase.co') ? '/functions/v1/api$path' : path);
     final request = (abort == null
-        ? http.Request(method, origin.resolve(path))
+        ? http.Request(method, target)
         : http.AbortableRequest(
             method,
-            origin.resolve(path),
+            target,
             abortTrigger: abort.future,
           ))
       ..followRedirects = false
       ..headers['Accept'] = 'application/json';
+    final supabase = _supabase;
+    if (supabase != null) {
+      var session = supabase.auth.currentSession;
+      if (session?.expiresAt != null &&
+          DateTime.now().millisecondsSinceEpoch ~/ 1000 >=
+              session!.expiresAt! - 60) {
+        session = (await supabase.auth.refreshSession()).session;
+      }
+      if (session != null) {
+        request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+      request.headers['apikey'] = configuredSupabaseKey;
+    }
     if (method != 'GET') {
       request.headers.addAll({
         'Content-Type': 'application/json',
@@ -757,32 +782,6 @@ class SaasApi implements SessionRepository {
       },
     );
     return future;
-  }
-
-  Future<Uri> _authorization(String path) async {
-    final result = await _json('POST', path);
-    final uri = Uri.tryParse(
-      result['authorizationUrl'] is String
-          ? result['authorizationUrl'] as String
-          : '',
-    );
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.host != 'accounts.google.com' ||
-        uri.userInfo.isNotEmpty ||
-        (uri.hasPort && uri.port != 443)) {
-      throw const SaasApiException(
-        'INVALID_RESPONSE',
-        'Invalid Google sign-in destination.',
-      );
-    }
-    return uri;
-  }
-
-  @override
-  Future<Uri> startSignIn() async {
-    await clearWorkspace();
-    return _authorization('/v1/auth/google/start');
   }
 
   @override
@@ -1018,9 +1017,6 @@ class SaasApi implements SessionRepository {
         operationId: operationId,
       );
   @override
-  Future<Uri> connectGoogle(String companyId) =>
-      _authorization('/v1/companies/${_id(companyId)}/google/connect');
-  @override
   Future<Map<String, dynamic>> setup(String companyId) =>
       _json('GET', '/v1/companies/${_id(companyId)}/setup');
   @override
@@ -1029,7 +1025,8 @@ class SaasApi implements SessionRepository {
   @override
   Future<Map<String, dynamic>> logout() async {
     await clearWorkspace();
-    return _json('POST', '/v1/auth/logout');
+    await _supabase?.auth.signOut();
+    return {};
   }
 
   @override
@@ -1039,11 +1036,17 @@ class SaasApi implements SessionRepository {
   ) async {
     await clearWorkspace();
     _employeeExpiresAt = null;
-    return _json(
+    final result = await _json(
       'POST',
       '/v1/employee/login',
       data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
     );
+    if (_supabase != null) {
+      await _supabase!.auth
+          .setSession((result['session'] as Map)['refresh_token'] as String);
+    }
+    result.remove('session');
+    return result;
   }
 
   @override
@@ -1055,7 +1058,8 @@ class SaasApi implements SessionRepository {
     } catch (_) {}
     _employeeExpiresAt = null;
     await clearWorkspace();
-    return _json('POST', '/v1/employee/logout');
+    await _supabase?.auth.signOut();
+    return {};
   }
 
   Future<Map<String, dynamic>> employees(
@@ -1364,18 +1368,104 @@ class SaasApi implements SessionRepository {
       _json('PUT', '/v1/companies/${_id(companyId)}/document-designs/$section',
           data: {'source': source, 'expectedVersion': expectedVersion});
 
-  Future<Uint8List> recordPdf(String companyId, String section, String recordId,
-          {bool employee = false}) async =>
-      (await _send('GET',
-              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-pdf/$section/${_id(recordId)}'))
-          .bodyBytes;
-
   void close() {
+    _stopRealtime();
     for (final outbox in _outboxes.values) {
       outbox.dispose();
     }
     _cancelReads();
     cache.dispose();
     _client.close();
+  }
+
+  Future<void> signInWithPassword(String email, String password) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException('CONFIGURATION',
+          'Configure SUPABASE_PUBLISHABLE_KEY and rebuild the app.');
+    }
+    await clearWorkspace();
+    await client.auth
+        .signInWithPassword(email: email.trim(), password: password);
+  }
+
+  Future<bool> signUp(String email, String password) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException(
+          'CONFIGURATION', 'Supabase Auth is not configured.');
+    }
+    final result = await client.auth.signUp(
+        email: email.trim(),
+        password: password,
+        emailRedirectTo: Uri.base.origin);
+    return result.session != null;
+  }
+
+  Future<void> resetPassword(String email) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException(
+          'CONFIGURATION', 'Supabase Auth is not configured.');
+    }
+    await client.auth
+        .resetPasswordForEmail(email.trim(), redirectTo: Uri.base.origin);
+  }
+
+  Future<String> recordHtml(String companyId, String section, String recordId,
+          {bool employee = false, String? source}) async =>
+      (await _send(source == null ? 'GET' : 'POST',
+              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-html/$section/${_id(recordId)}',
+              data: source == null ? null : {'source': source}))
+          .body;
+
+  void _stopRealtime() {
+    final channel = _realtime;
+    _realtime = null;
+    if (channel != null) _supabase?.removeChannel(channel).ignore();
+  }
+
+  void _watchRealtime(String companyId) {
+    _stopRealtime();
+    final client = _supabase;
+    if (client == null || client.auth.currentUser == null) return;
+    _realtime = client
+        .channel('workspace:$companyId:${client.auth.currentUser!.id}')
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'company_changes',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'company_id',
+              value: companyId),
+          callback: (_) => cache.invalidateAll())
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'company_memberships',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: client.auth.currentUser!.id),
+          callback: (change) {
+            if (change.newRecord['company_id'] != companyId) return;
+            _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
+            _revalidateContext().catchError((Object _) {
+              onAccessRevoked?.call();
+            }).ignore();
+          })
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'company_id',
+              value: companyId),
+          callback: (_) => cache.invalidateAll())
+      ..subscribe((status, error) {
+        if (status == RealtimeSubscribeStatus.subscribed) cache.invalidateAll();
+      });
   }
 }

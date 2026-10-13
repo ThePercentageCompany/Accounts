@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'admin_login_dialog.dart';
+import 'package:tpc_invoice/core/network/supabase_runtime.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'password_reset_dialog.dart';
 
 import 'package:tpc_invoice/features/workspace/presentation/company_setup_view.dart';
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
@@ -29,6 +32,8 @@ class _SaasAppState extends State<SaasApp> {
   SaasApi? _api;
   SaasSession? _session;
   StreamSubscription<SessionState>? _sessionSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _passwordRecoveryOpen = false;
   String? _initializationError;
   bool _employee = SaasApi.invitation(Uri.base, Uri.base) != null;
   bool _workspace = false;
@@ -75,7 +80,14 @@ class _SaasAppState extends State<SaasApp> {
 
   Future<void> _initialize() async {
     try {
+      if (widget.api == null && currentSupabaseClient == null) {
+        throw const SaasApiException(
+            'CONFIGURATION', 'Supabase Auth is not configured.');
+      }
       final api = widget.api ?? SaasApi();
+      _authSubscription = currentSupabaseClient?.auth.onAuthStateChange.listen((state) {
+        if (state.event == AuthChangeEvent.passwordRecovery) _recoverPassword();
+      });
       _api = api;
       final preferences = await SharedPreferences.getInstance();
       if (!mounted) return;
@@ -103,7 +115,7 @@ class _SaasAppState extends State<SaasApp> {
       if (mounted) {
         setState(
           () => _initializationError =
-              'The shared company service is not configured. The app administrator must configure SAAS_API_ORIGIN and rebuild the app.',
+              'Supabase is not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY and rebuild the app.',
         );
       }
     }
@@ -113,17 +125,27 @@ class _SaasAppState extends State<SaasApp> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _navigate(Uri uri) async {
-    if (!await launchUrl(uri, webOnlyWindowName: '_self')) {
-      throw const SaasApiException(
-        'NAVIGATION',
-        'Could not open Google sign-in. Try again.',
-      );
-    }
+  Future<void> _adminSignIn() async {
+    final result = await showDialog<bool>(
+        context: context, builder: (_) => AdminLoginDialog(api: _api!));
+    if (result != true || !mounted) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString('tpc_saas_session_mode', 'owner');
+    await _session!.restore();
+  }
+
+  Future<void> _recoverPassword() async {
+    if (!mounted || _passwordRecoveryOpen) return;
+    _passwordRecoveryOpen = true;
+    final saved = await showDialog<bool>(context: context, barrierDismissible: false,
+        builder: (_) => const PasswordResetDialog());
+    _passwordRecoveryOpen = false;
+    if (saved == true && mounted) await _session?.restore();
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _pwa.removeListener(_routeTask);
     _pwa.dispose();
     _sessionSubscription?.cancel();
@@ -232,7 +254,7 @@ class _SaasAppState extends State<SaasApp> {
           ? LandingView(
               busy: session.busy,
               error: session.error,
-              onSignIn: () => session.signIn(_navigate),
+              onSignIn: _adminSignIn,
               onFaq: () => Navigator.of(context).push<void>(
                 MaterialPageRoute(builder: (_) => const WorkspaceHelp()),
               ),
@@ -243,7 +265,7 @@ class _SaasAppState extends State<SaasApp> {
                 constraints: const BoxConstraints(maxWidth: 1200),
                 child: CompanySetupView(
                   session: session,
-                  navigate: _navigate,
+                  onSignIn: _adminSignIn,
                   onOpen: () {
                     unawaited(session.rememberWorkspace(true));
                     setState(() => _workspace = true);
