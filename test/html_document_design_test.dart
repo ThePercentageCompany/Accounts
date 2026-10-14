@@ -12,6 +12,28 @@ void main() {
   const record = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
   const origin = 'https://api.test';
 
+  for (final employee in [false, true]) {
+    test(
+        'final HTML uses the online company design for ${employee ? 'employee' : 'admin'}',
+        () async {
+      final api = SaasApi(
+          origin: origin,
+          client: MockClient((request) async {
+            expect(request.method, 'GET');
+            expect(request.body, isEmpty);
+            expect(request.url.path,
+                '/v1/${employee ? 'employee/' : ''}companies/$company/record-html/Invoices/$record');
+            return http.Response(
+                '<html>Latest saved company design</html>', 200);
+          }));
+      addTearDown(api.close);
+      expect(
+          await savedRecordHtml(api, company, 'Invoices', record,
+              employee: employee),
+          '<html>Latest saved company design</html>');
+    });
+  }
+
   test('saved online design is available to later sessions', () async {
     final local = '$defaultHtmlDocumentDesign<p>Existing design</p>';
     SharedPreferences.setMockInitialValues({});

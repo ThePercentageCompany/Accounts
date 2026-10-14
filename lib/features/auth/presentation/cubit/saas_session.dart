@@ -74,7 +74,7 @@ class SaasSession extends Cubit<SessionState> {
                   if (data.containsKey(key)) key: data[key]
               };
     final expiry =
-        DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch;
+        DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
     await client.saveSessionProfile({
       'expiresAt': expiry,
       'owner': select(owner, ['ownerId', 'name', 'email', 'picture']),
@@ -204,7 +204,8 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
-        if (!offlineRestored) _clearIdentity();
+        // Preserve the workspace while verifying the stored login. Temporary
+        // connection failures must not clear a previously restored identity.
         final employeeMode = employeeOnly ||
             preferences.getString('tpc_saas_session_mode') == 'employee';
         if (employeeMode && owner != null) _clearIdentity();

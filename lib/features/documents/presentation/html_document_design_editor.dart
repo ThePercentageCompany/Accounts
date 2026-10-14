@@ -62,7 +62,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
 
   @override
   Widget build(BuildContext context) => AdaptiveFormDialog(
-        title: const Text('Custom HTML design'),
+        title: const Text('Company PDF design'),
         content: SingleChildScrollView(
           child: SizedBox(
             width: 850,
@@ -160,8 +160,8 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
                 : () => run(() async {
                       await widget.store.save(source.text);
                       if (mounted) {
-                        setState(() =>
-                            message = 'Design saved online for the company.');
+                        setState(() => message =
+                            'Design saved in Supabase. All employees use this company design.');
                       }
                     }),
             child: const Text('Save design'),

@@ -24,11 +24,13 @@ class IndexedCacheStore implements CacheStore {
   final String databaseName;
   Future<Database>? _opening;
   Future<void> _writes = Future.value();
+  DateTime? _lastPrune;
   Future<Database> _db() => _opening ??= factory.open(
-    databaseName,
-    version: 1,
-    onUpgradeNeeded: (event) => event.database.createObjectStore('responses'),
-  );
+        databaseName,
+        version: 1,
+        onUpgradeNeeded: (event) =>
+            event.database.createObjectStore('responses'),
+      );
   Future<void> _serialize(Future<void> Function() action) {
     final result = _writes.then((_) => action());
     _writes = result.catchError((Object _) {});
@@ -49,79 +51,94 @@ class IndexedCacheStore implements CacheStore {
   Future<void> write(
     String key,
     Map<String, dynamic> value,
-  ) => _serialize(() async {
-    // A large response can still be used in memory; it must not exhaust storage.
-    if (utf8.encode(jsonEncode(value)).length > 4 * 1024 * 1024) return;
-    final db = await _db();
-    final tx = db.transaction('responses', idbModeReadWrite);
-    final store = tx.objectStore('responses');
-    await store.put(value, key);
-    final all = await store.getAll();
-    final entries = all.map((v) => Map<String, dynamic>.from(v as Map)).toList()
-      ..sort((a, b) => (a['syncedAt'] as int).compareTo(b['syncedAt'] as int));
-    var bytes = entries.fold<int>(
-      0,
-      (n, e) => n + utf8.encode(jsonEncode(e)).length,
-    );
-    var count = entries.length;
-    final cutoff = DateTime.now()
-        .subtract(const Duration(days: 7))
-        .millisecondsSinceEpoch;
-    for (final entry in entries) {
-      if (entry['syncedAt'] < cutoff ||
-          count > 128 ||
-          bytes > 20 * 1024 * 1024) {
-        await store.delete(entry['key']);
-        count--;
-        bytes -= utf8.encode(jsonEncode(entry)).length;
-      }
-    }
-    await tx.completed;
-  });
+  ) =>
+      _serialize(() async {
+        // A large response can still be used in memory; it must not exhaust storage.
+        if (utf8.encode(jsonEncode(value)).length > 4 * 1024 * 1024) return;
+        final db = await _db();
+        final tx = db.transaction('responses', idbModeReadWrite);
+        final store = tx.objectStore('responses');
+        await store.put(value, key);
+        // Scanning and serializing every saved snapshot blocks subsequent reads.
+        // Retention maintenance is periodic, rather than repeated per response.
+        final now = DateTime.now();
+        if (_lastPrune != null &&
+            now.difference(_lastPrune!) < const Duration(minutes: 1)) {
+          await tx.completed;
+          return;
+        }
+        final all = await store.getAll();
+        final entries = all
+            .map((v) => Map<String, dynamic>.from(v as Map))
+            .toList()
+          ..sort(
+              (a, b) => (a['syncedAt'] as int).compareTo(b['syncedAt'] as int));
+        var bytes = entries.fold<int>(
+          0,
+          (n, e) => n + utf8.encode(jsonEncode(e)).length,
+        );
+        var count = entries.length;
+        final cutoff = DateTime.now()
+            .subtract(const Duration(days: 7))
+            .millisecondsSinceEpoch;
+        for (final entry in entries) {
+          if (entry['syncedAt'] < cutoff ||
+              count > 128 ||
+              bytes > 20 * 1024 * 1024) {
+            await store.delete(entry['key']);
+            count--;
+            bytes -= utf8.encode(jsonEncode(entry)).length;
+          }
+        }
+        await tx.completed;
+        _lastPrune = now;
+      });
 
   Future<void> _remove(String field, String value) => _serialize(() async {
-    final db = await _db();
-    final tx = db.transaction('responses', idbModeReadWrite);
-    final store = tx.objectStore('responses');
-    for (final raw in await store.getAll()) {
-      final row = raw as Map;
-      if (row[field] == value) await store.delete(row['key']);
-    }
-    await tx.completed;
-  });
+        final db = await _db();
+        final tx = db.transaction('responses', idbModeReadWrite);
+        final store = tx.objectStore('responses');
+        for (final raw in await store.getAll()) {
+          final row = raw as Map;
+          if (row[field] == value) await store.delete(row['key']);
+        }
+        await tx.completed;
+      });
   @override
   Future<void> removeAccount(String account) => _remove('account', account);
   @override
   Future<void> removeEntry(String key) => _serialize(() async {
-    final db = await _db();
-    final tx = db.transaction('responses', idbModeReadWrite);
-    await tx.objectStore('responses').delete(key);
-    await tx.completed;
-  });
+        final db = await _db();
+        final tx = db.transaction('responses', idbModeReadWrite);
+        await tx.objectStore('responses').delete(key);
+        await tx.completed;
+      });
   @override
   Future<void> removeScope(String scope) => _remove('scope', scope);
   @override
   Future<void> invalidateScope(
     String scope,
     bool Function(String path) affected,
-  ) => _serialize(() async {
-    final db = await _db();
-    final tx = db.transaction('responses', idbModeReadWrite);
-    final store = tx.objectStore('responses');
-    for (final raw in await store.getAll()) {
-      try {
-        final row = Map<String, dynamic>.from(raw as Map);
-        if (row['scope'] == scope &&
-            affected(
-              (jsonDecode(row['resource'] as String) as List).first as String,
-            )) {
-          row['invalidated'] = true;
-          await store.put(row, row['key']);
+  ) =>
+      _serialize(() async {
+        final db = await _db();
+        final tx = db.transaction('responses', idbModeReadWrite);
+        final store = tx.objectStore('responses');
+        for (final raw in await store.getAll()) {
+          try {
+            final row = Map<String, dynamic>.from(raw as Map);
+            if (row['scope'] == scope &&
+                affected(
+                  (jsonDecode(row['resource'] as String) as List).first
+                      as String,
+                )) {
+              row['invalidated'] = true;
+              await store.put(row, row['key']);
+            }
+          } catch (_) {}
         }
-      } catch (_) {}
-    }
-    await tx.completed;
-  });
+        await tx.completed;
+      });
 }
 
 class MemoryCacheStore implements CacheStore {

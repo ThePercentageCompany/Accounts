@@ -16,14 +16,14 @@ class TpcApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: themeController,
-    builder: (context, _) => MaterialApp(
-      title: 'TPC Accounts',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeController.themeMode,
-      home: const SaasApp(),
-    ),
-  );
+        listenable: themeController,
+        builder: (context, _) => MaterialApp(
+          title: 'TPC Business Suite',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: themeController.themeMode,
+          home: const SaasApp(),
+        ),
+      );
 }

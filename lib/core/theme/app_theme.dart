@@ -61,7 +61,8 @@ class AppTheme {
   // Zoho Books / Zoho Finance Color Palette
   // -------------------------------------------------------------
   // Primary Zoho Colors
-  static const Color zohoBlue = Color(0xFF0866FF); // Zoho Books Action Blue
+  static const Color zohoBlue =
+      Color(0xFF087F8C); // Primary business-suite accent
   static const Color zohoBlueDark = Color(0xFF1351A8);
   static const Color zohoBlueBg = Color(0xFFEBF3FC);
   static const Color zohoBlueBgDark = Color(0xFF0F264A);
@@ -123,7 +124,7 @@ class AppTheme {
   // -------------------------------------------------------------
   // Light Mode (Zoho Books Signature Canvas)
   static const Color zohoLightBg = Color(
-    0xFFF7F7F7,
+    0xFFF3F6FA,
   ); // Clean SaaS Light Slate Canvas
   static const Color zohoLightSurface = Color(
     0xFFFFFFFF,
@@ -132,11 +133,11 @@ class AppTheme {
     0xFFF6F6F6,
   ); // Table Header / Subtle surface
   static const Color zohoLightBorder = Color(
-    0xFFE5E5E5,
+    0xFFDDE5EF,
   ); // Crisp 1px card border
   static const Color zohoLightSeparator = Color(0xFFEAECF0);
   static const Color zohoLightTextPrimary = Color(
-    0xFF202020,
+    0xFF142C45,
   ); // High-contrast Charcoal Slate
   static const Color zohoLightTextSecondary = Color(
     0xFF686868,
@@ -153,9 +154,9 @@ class AppTheme {
   static const Color iosLightTextSecondary = zohoLightTextSecondary;
 
   // Dark Mode (Zoho Books Dark Navy)
-  static const Color zohoDarkBg = Color(0xFF080808); // Deep Dark Slate Canvas
+  static const Color zohoDarkBg = Color(0xFF0F172A);
   static const Color zohoDarkSurface = Color(
-    0xFF151515,
+    0xFF162033,
   ); // Dark Slate Card Surface
   static const Color zohoDarkSurfaceElevated = Color(0xFF1D1D1D);
   static const Color zohoDarkBorder = Color(0xFF363636);

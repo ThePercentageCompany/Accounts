@@ -9,7 +9,7 @@ import 'package:tpc_invoice/core/network/supabase_runtime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'password_reset_dialog.dart';
 
-import 'package:tpc_invoice/features/workspace/presentation/company_setup_view.dart';
+import 'package:tpc_invoice/features/workspace/presentation/business_group_view.dart';
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
 import 'package:tpc_invoice/features/auth/presentation/employee_access_view.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
@@ -85,7 +85,8 @@ class _SaasAppState extends State<SaasApp> {
             'CONFIGURATION', 'Supabase Auth is not configured.');
       }
       final api = widget.api ?? SaasApi();
-      _authSubscription = currentSupabaseClient?.auth.onAuthStateChange.listen((state) {
+      _authSubscription =
+          currentSupabaseClient?.auth.onAuthStateChange.listen((state) {
         if (state.event == AuthChangeEvent.passwordRecovery) _recoverPassword();
       });
       _api = api;
@@ -137,7 +138,9 @@ class _SaasAppState extends State<SaasApp> {
   Future<void> _recoverPassword() async {
     if (!mounted || _passwordRecoveryOpen) return;
     _passwordRecoveryOpen = true;
-    final saved = await showDialog<bool>(context: context, barrierDismissible: false,
+    final saved = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
         builder: (_) => const PasswordResetDialog());
     _passwordRecoveryOpen = false;
     if (saved == true && mounted) await _session?.restore();
@@ -195,6 +198,9 @@ class _SaasAppState extends State<SaasApp> {
         api: _api!,
         companyId: session.company!['companyId'] as String,
         title: session.company!['name'] as String,
+        countryCode: session.company!['countryCode'] as String?,
+        currency: session.company!['currency'] as String?,
+        timeZone: session.company!['timeZone'] as String?,
         ownerId: session.owner!['ownerId'] as String,
         preferences: session.preferences,
         onBack: () {
@@ -205,22 +211,15 @@ class _SaasAppState extends State<SaasApp> {
     }
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: session.owner == null && session.employee == null
-            ? const Color(0xff0a0a0c)
-            : null,
-        foregroundColor: session.owner == null && session.employee == null
-            ? Colors.white
-            : null,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         surfaceTintColor: session.owner == null && session.employee == null
             ? Colors.transparent
             : null,
         title: Row(mainAxisSize: MainAxisSize.min, children: [
-          TpcLogo(
-              brightness: session.owner == null && session.employee == null
-                  ? Brightness.dark
-                  : null),
+          const TpcLogo(),
           const SizedBox(width: 10),
-          const Flexible(child: Text('TPC Accounts'))
+          const Flexible(child: Text('TPC Business Suite'))
         ]),
         actions: [
           IconButton(
@@ -231,6 +230,10 @@ class _SaasAppState extends State<SaasApp> {
             ),
           ),
           if (session.owner != null || session.employee != null) ...[
+            IconButton(
+                tooltip: 'Sign out',
+                onPressed: session.busy ? null : session.signOut,
+                icon: const Icon(Icons.logout)),
             const AppearanceSelector(),
             const PwaControls(),
             if (MediaQuery.sizeOf(context).width < 600)
@@ -263,12 +266,18 @@ class _SaasAppState extends State<SaasApp> {
           : Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1200),
-                child: CompanySetupView(
-                  session: session,
-                  onSignIn: _adminSignIn,
-                  onOpen: () {
-                    unawaited(session.rememberWorkspace(true));
-                    setState(() => _workspace = true);
+                child: BusinessGroupView(
+                  api: _api!,
+                  onOpen: (companyId) async {
+                    await session.restore();
+                    await session.selectCompany(companyId);
+                    if (!session.ready ||
+                        session.company?['companyId'] != companyId) {
+                      throw StateError(
+                          session.error ?? 'Entity could not be opened.');
+                    }
+                    await session.rememberWorkspace(true);
+                    if (mounted) setState(() => _workspace = true);
                   },
                 ),
               ),

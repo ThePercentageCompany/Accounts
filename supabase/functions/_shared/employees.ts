@@ -22,7 +22,7 @@ export async function saveEmployee(ctx: any,id: string|null,input: any,key: stri
   const sequence=Math.max(0,...all.map((r:any)=>/^EMP-(\d+)$/.test(r.employeeCode??'')?Number(r.employeeCode.slice(4)):0))+1;
   const employeeCode=values.employeeCode||old?.employeeCode||`EMP-${String(sequence).padStart(6,'0')}`;
   requireThat(!all.some((r:any)=>r.recordId!==employeeId && !r.isDeleted && r.employeeCode===employeeCode),409,'INVALID_EMPLOYEE','Employee code is already used.');
-  const payload={basicSalary:0,allowances:0,currency:'AED',...old,...values,employeeCode,recordId:employeeId,
+  const payload={basicSalary:0,allowances:0,currency:ctx.company.base_currency??'AED',...old,...values,employeeCode,recordId:employeeId,
     companyId:ctx.company.id,recordVersion:values.expectedVersion+1,createdAt:old?.createdAt??now,createdBy:old?.createdBy??ctx.user.id,
     updatedAt:now,updatedBy:ctx.user.id,isDeleted:false,syncStatus:'SYNCED'};
   delete payload.expectedVersion;delete payload._row;

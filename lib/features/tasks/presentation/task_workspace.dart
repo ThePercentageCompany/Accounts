@@ -1,6 +1,7 @@
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'dart:async';
+import 'package:tpc_invoice/core/utils/business_time.dart';
 import 'package:tpc_invoice/features/projects/presentation/project_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -27,8 +28,8 @@ String taskLabel(String value) => value
     .split('_')
     .map((s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}')
     .join(' ');
-DateTime taskToday() {
-  final now = DateTime.now().toUtc().add(const Duration(hours: 4));
+DateTime taskToday([String timeZone = 'Asia/Dubai']) {
+  final now = businessNow(timeZone);
   return DateTime(now.year, now.month, now.day);
 }
 
@@ -50,6 +51,7 @@ class TaskWorkspace extends StatefulWidget {
       this.employee,
       this.calendar = false,
       this.active = true,
+      this.timeZone = 'Asia/Dubai',
       this.uploads,
       this.writes,
       this.taskToOpen});
@@ -58,6 +60,7 @@ class TaskWorkspace extends StatefulWidget {
   final String companyId;
   final Map<String, dynamic>? employee;
   final bool calendar, active;
+  final String timeZone;
   final DocumentUploadQueue? uploads;
   final RecordWriteQueue? writes;
   @override
@@ -68,7 +71,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     with WidgetsBindingObserver {
   final _search = TextEditingController();
   Timer? _debounce, _poll;
-  final Set<String> _reminded = {};
+  Timer? _realtimeDebounce;
+  StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
+  bool _realtimeDirty = false, _live = false;
   final Map<String, String> _pendingIds = {};
   List<Map<String, dynamic>> _tasks = [], _assignees = [];
   Map<String, dynamic> _summary = {}, _dateCounts = {};
@@ -78,7 +83,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       _boardStatus = 'TODO',
       _calendarView = '';
   Map<String, String> _filters = {};
-  DateTime _date = taskToday();
+  late DateTime _date = taskToday(widget.timeZone);
   bool _busy = false, _loaded = false, _saving = false;
   String? _error;
   int _generation = 0,
@@ -102,6 +107,15 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.api.cache.addListener(_cacheChanged);
+    _live = widget.api.taskRealtimeConnected;
+    _taskSubscription = widget.api.taskUpdates.listen((update) {
+      if (update.companyId != widget.companyId || !mounted) return;
+      setState(() => _live = update.connected);
+      if (update.refresh) {
+        _realtimeDirty = true;
+        _scheduleRealtimeRefresh();
+      }
+    });
     _scope = _employee && !_manage ? 'My Tasks' : 'All';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -111,7 +125,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     });
     if (_manage) _loadAssignees();
     _poll = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (widget.active &&
+      if (!_live &&
+          widget.active &&
           _appVisible &&
           !_fetching &&
           !_saving &&
@@ -122,21 +137,41 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     });
   }
 
+  void _scheduleRealtimeRefresh() {
+    if (!_realtimeDirty ||
+        !mounted ||
+        !widget.active ||
+        !_appVisible ||
+        _fetching ||
+        _saving ||
+        _mutationDepth > 0 ||
+        _surfaceDepth > 0) {
+      return;
+    }
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () async {
+      if (!mounted ||
+          !widget.active ||
+          !_appVisible ||
+          _fetching ||
+          _mutationDepth > 0 ||
+          _surfaceDepth > 0) {
+        return;
+      }
+      _realtimeDirty = false;
+      await _load(quiet: true);
+      _scheduleRealtimeRefresh();
+    });
+  }
+
   void _cacheChanged() {
     final resource = _resource;
     if (resource == null) return;
     final state = widget.api.cache.state(resource);
     if (state == null || state.revision == _lastRevision) return;
     _lastRevision = state.revision;
-    if (widget.active &&
-        _appVisible &&
-        !_fetching &&
-        _mutationDepth == 0 &&
-        _surfaceDepth == 0) {
-      scheduleMicrotask(() {
-        if (mounted) _load(quiet: true);
-      });
-    }
+    _realtimeDirty = true;
+    _scheduleRealtimeRefresh();
   }
 
   bool get _pendingTask =>
@@ -214,11 +249,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     _search.dispose();
     _debounce?.cancel();
     _poll?.cancel();
+    _realtimeDebounce?.cancel();
+    _taskSubscription?.cancel();
     super.dispose();
   }
 
   Map<String, String> _query() {
-    final today = taskToday();
+    final today = taskToday(widget.timeZone);
     final filters = <String, String>{
       if (!_employee) ..._filters,
       'sort': _sort,
@@ -263,6 +300,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
 
   Future<void> _load({bool more = false, bool quiet = false}) async {
     if (!widget.active || (quiet && _fetching)) return;
+    _realtimeDirty = false;
+    _realtimeDebounce?.cancel();
     _fetching = true;
     final generation = ++_generation;
     if (!quiet && mounted) {
@@ -319,14 +358,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         _dateCounts =
             Map<String, dynamic>.from(data['dateCounts'] as Map? ?? {});
         _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
-        for (final reminder
-            in (data['reminders'] as List? ?? []).whereType<Map>()) {
-          final key = reminder.toString();
-          if (_reminded.add(key) && widget.active) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Task reminder: ${reminder['title']}')));
-          }
-        }
         _total = data['total'] as int;
         _next = data['nextOffset'] as int?;
         _loaded = true;
@@ -346,7 +377,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         });
       }
     } finally {
-      if (generation == _generation) _fetching = false;
+      if (generation == _generation) {
+        _fetching = false;
+        _scheduleRealtimeRefresh();
+      }
     }
   }
 
@@ -422,6 +456,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       await _load();
     } finally {
       _mutationDepth--;
+      _scheduleRealtimeRefresh();
     }
   }
 
@@ -471,6 +506,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     await _taskSurface(
         context,
         TaskEditor(
+            timeZone: widget.timeZone,
             api: widget.api,
             companyId: widget.companyId,
             employee: _employee,
@@ -528,6 +564,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       if (mounted) await _load();
     } finally {
       _mutationDepth--;
+      _scheduleRealtimeRefresh();
     }
   }
 
@@ -536,6 +573,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     await _taskSurface(
         context,
         TaskDetails(
+            timeZone: widget.timeZone,
             api: widget.api,
             companyId: widget.companyId,
             employee: _employee,
@@ -601,9 +639,24 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                             style: Theme.of(context).textTheme.headlineSmall),
                         Text(
                             widget.calendar
-                                ? 'Your team schedule · UAE time'
+                                ? 'Your team schedule · ${widget.timeZone}'
                                 : 'Assign, track and complete your work',
                             style: Theme.of(context).textTheme.bodyMedium),
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(_live ? Icons.sensors : Icons.sync,
+                              size: 14,
+                              color: _live
+                                  ? Colors.green
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant),
+                          const SizedBox(width: 5),
+                          Text(
+                              _live
+                                  ? 'Live updates'
+                                  : 'Automatic updates',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ]),
                       ])),
                   if (_manage)
                     mobile
@@ -886,6 +939,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       ? _tasks.where((t) => t['status'] != 'COMPLETED').toList()
       : _tasks;
   Widget _card(Map<String, dynamic> task) => TaskCard(
+      timeZone: widget.timeZone,
       task: task,
       onTap: () => _detail(task),
       onEdit: _manage ? () => _edit(task) : null);
@@ -1113,7 +1167,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             OutlinedButton(
-                onPressed: () => _change(() => _date = taskToday()),
+                onPressed: () =>
+                    _change(() => _date = taskToday(widget.timeZone)),
                 child: const Text('Today')),
             IconButton(
                 tooltip: 'Previous $mode',

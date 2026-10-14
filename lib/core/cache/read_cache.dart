@@ -162,8 +162,21 @@ class ReadCache extends ChangeNotifier {
 
   bool _current(int generation) =>
       !_disposed && generation == _generation && scope != null;
+  // Snapshots contain JSON values. Copy containers directly to avoid encoding
+  // and parsing large record lists on every navigation and background refresh.
+  Object? _copyValue(Object? value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          entry.key as String: _copyValue(entry.value),
+      };
+    }
+    if (value is List) return value.map(_copyValue).toList();
+    return value;
+  }
+
   Map<String, dynamic> _copy(Map<String, dynamic> value) =>
-      Map<String, dynamic>.from(jsonDecode(jsonEncode(value)) as Map);
+      _copyValue(value) as Map<String, dynamic>;
   Future<void> _safe(Future<void> Function() action) async {
     try {
       await action().timeout(const Duration(seconds: 3));

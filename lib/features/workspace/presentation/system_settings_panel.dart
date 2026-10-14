@@ -27,12 +27,11 @@ class SystemSettingsPanel extends StatelessWidget {
               'Save an invoice or quotation first to preview its design. You can save the design now.',
             );
           }
-          return savedRecordHtml(
-            api,
+          return api.recordHtml(
             companyId,
             section,
             records.first['recordId'],
-            source,
+            source: source,
           );
         },
       ),

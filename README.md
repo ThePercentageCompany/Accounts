@@ -1,6 +1,6 @@
-# TPC Accounts
+# TPC Business Suite
 
-Flutter business accounting workspace using Supabase Auth, Postgres, Edge Functions, Storage and Realtime. Admins sign in with email and password; employees use admin-issued invitations and private codes.
+Flutter business suite for accounting, employees, task scheduling, invoices and quotations. Supabase provides Auth, Postgres, Edge Functions, Storage and Realtime. Admins sign in with email and password; employees use admin-issued invitations and private codes. [Business groups](docs/BUSINESS_GROUPS.md) organize separate country entities and accounting books.
 
 See [release status](supabase/IMPLEMENTATION_PLAN.md) for implemented features, validation and remaining release work.
 
@@ -12,10 +12,10 @@ Install Flutter with Dart 3.8 or later, then run:
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d chrome --dart-define-from-file=config/saas.example.json
+flutter run -d chrome --web-port=3000 --dart-define-from-file=config/saas.production.json
 ```
 
-Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in the configuration. Use only a public publishable key in the app. See [setup](SETUP.md) for deployment and migration steps.
+The app includes this project's public Supabase configuration for ordinary launches. To use another project, set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY together. See [setup](SETUP.md) for deployment steps.
 
 ## Source layout
 

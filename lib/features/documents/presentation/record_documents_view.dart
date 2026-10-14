@@ -99,7 +99,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
           widget.companyId,
           widget.section,
           _recordId,
-          await htmlStore.load(),
           employee: widget.employee,
         );
         await downloadFile(
@@ -224,8 +223,8 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
 
   Future<void> _downloadPdf() => _run(() async {
         if (const ['Invoices', 'Quotations'].contains(widget.section)) {
-          final html = await savedRecordHtml(widget.api, widget.companyId,
-              widget.section, _recordId, await htmlStore.load(),
+          final html = await savedRecordHtml(
+              widget.api, widget.companyId, widget.section, _recordId,
               employee: widget.employee);
           await printReport(html);
           return;

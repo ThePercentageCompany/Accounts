@@ -9,10 +9,13 @@ The app uses project `ifuucosaautgobwsunmp` for Auth, Postgres, Edge Functions, 
 - Realtime cache invalidation, task notifications and database-scheduled reminders.
 - Ledger posting indicators for admin and employee record views.
 - Flutter offline queues and cached reads retained.
+- Group overview and separate country legal entities, currencies, tax registrations and business time zones.
+- Unified Sales, People, Work and Accounting navigation with entity overview.
+- Realtime task lists, calendars, comments and activity; coalesced refresh, reconnect recovery and periodic fallback.
 
 The owner requested a fresh start. No old company data was imported. The failed import transaction rolled back, and temporary Auth identities and uploads were cleaned up. The operator import interface was removed by migration 006.
 
-Validation: 87 database/domain tests, 27 Flutter tests, Flutter analysis, release web build, production routing checks, and live admin/company/employee invitation/login/deletion smoke checks. Test identities and workspaces were removed.
+Validation includes database/domain tests, Flutter analysis and widget tests, responsive group overview checks, country/time-zone isolation, and live cross-session Realtime task delivery. Temporary test identities, groups and entities are removed after verification. Run the documented checks for the current test counts.
 
 Production web and Edge API are deployed. Old Google backend source has been removed; the notification scheduler, setup task queue and Cloud Run API are retired. Historical Google files and cloud image/backup storage are not used by this application.
 

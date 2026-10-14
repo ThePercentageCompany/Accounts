@@ -13,7 +13,9 @@ class TaskDetails extends StatefulWidget {
       required this.onEdit,
       this.onDelete,
       this.uploads,
-      this.writes});
+      this.writes,
+      this.timeZone = 'Asia/Dubai'});
+  final String timeZone;
   final SaasApi api;
   final String companyId, employeeId;
   final bool employee, manage;
@@ -36,22 +38,36 @@ class _TaskDetailsState extends State<TaskDetails> {
   final _commentForm = GlobalKey<FormState>();
   String? _error;
   bool _loading = true, _busy = false, _unavailable = false;
+  StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
+  Timer? _realtimeDebounce;
+  bool _fetching = false, _realtimeDirty = false;
   String _commentId = const Uuid().v4(), _lastComment = '';
   bool get _canStatus =>
       widget.manage || _task['employeeId'] == widget.employeeId;
   @override
   void initState() {
     super.initState();
+    _taskSubscription = widget.api.taskUpdates.listen((update) {
+      if (update.companyId != widget.companyId || !update.refresh) return;
+      _realtimeDirty = true;
+      _refreshRealtime();
+    });
     _load();
   }
 
   @override
   void dispose() {
     _comment.dispose();
+    _taskSubscription?.cancel();
+    _realtimeDebounce?.cancel();
     super.dispose();
   }
 
   Future<void> _load() async {
+    if (_fetching) {
+      _realtimeDirty = true;
+      return;
+    }
     if ('${_task['recordId']}'.startsWith('local_')) {
       if (mounted) {
         setState(() {
@@ -64,6 +80,7 @@ class _TaskDetailsState extends State<TaskDetails> {
       }
       return;
     }
+    _fetching = true;
     try {
       final data = await widget.api.taskDetail(
           widget.companyId, '${_task['recordId']}',
@@ -96,7 +113,20 @@ class _TaskDetailsState extends State<TaskDetails> {
           _loading = false;
         });
       }
+    } finally {
+      _fetching = false;
+      _refreshRealtime();
     }
+  }
+
+  void _refreshRealtime() {
+    if (!mounted || !_realtimeDirty || _busy || _fetching) return;
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || _busy || _fetching) return;
+      _realtimeDirty = false;
+      _load();
+    });
   }
 
   Future<void> _status(String status) async {
@@ -110,7 +140,10 @@ class _TaskDetailsState extends State<TaskDetails> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        _refreshRealtime();
+      }
     }
   }
 
@@ -134,7 +167,10 @@ class _TaskDetailsState extends State<TaskDetails> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        _refreshRealtime();
+      }
     }
   }
 
@@ -169,9 +205,8 @@ class _TaskDetailsState extends State<TaskDetails> {
     final parsed = int.tryParse('$value');
     return parsed == null
         ? ''
-        : DateFormat('d MMM, HH:mm').format(
-            DateTime.fromMillisecondsSinceEpoch(parsed, isUtc: true)
-                .add(const Duration(hours: 4)));
+        : DateFormat('d MMM, HH:mm')
+            .format(businessTimestamp(parsed, widget.timeZone));
   }
 
   @override

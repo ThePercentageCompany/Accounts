@@ -115,7 +115,7 @@ String renderHtmlDocument({
       '<title>${escape(record['number'] ?? section)}</title></head><body>$content</body></html>';
 }
 
-Future<String> savedRecordHtml(SaasApi api, String companyId, String section,
-        String recordId, String source, {bool employee = false}) =>
-    api.recordHtml(companyId, section, recordId,
-        employee: employee, source: employee ? null : source);
+Future<String> savedRecordHtml(
+        SaasApi api, String companyId, String section, String recordId,
+        {bool employee = false}) =>
+    api.recordHtml(companyId, section, recordId, employee: employee);

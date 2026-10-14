@@ -9,15 +9,17 @@ import { previewPayroll } from '../_shared/domain/payroll-policy.js';
 import { companyDesign,validateDesign,snapshotHtml } from '../_shared/domain/document-design.js';
 import { SECTION_TABLES } from '../_shared/domain/employee-policy.js';
 import { exchangeRate } from '../_shared/domain/foreign-currency.js';
+import { groupOverview } from '../_shared/groups.ts';
 
 const appOrigin=Deno.env.get('APP_ORIGIN')??'https://accounts.thepercentagecompany.com';
 const supabaseUrl=Deno.env.get('SUPABASE_URL')!;
 const publicKey=Deno.env.get('SUPABASE_ANON_KEY')!;
 const db=createClient(supabaseUrl,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const companyView=(c:any)=>({companyId:c.id,name:c.name,stage:'READY',version:Number(c.revision)+1,
-  createdAt:Date.parse(c.created_at),updatedAt:Date.parse(c.updated_at),employeeInvitationsEnabled:true,nextAction:null,errorCode:null});
+  createdAt:Date.parse(c.created_at),updatedAt:Date.parse(c.updated_at),employeeInvitationsEnabled:true,nextAction:null,errorCode:null,
+  groupId:c.group_id,countryCode:c.country_code,currency:c.base_currency,timeZone:c.time_zone});
 const employeeView=(ctx:any)=>({companyId:ctx.company.id,employeeId:ctx.member.employee_id,name:ctx.principal.name,
-  role:ctx.member.role,allowedSections:ctx.principal.allowedSections,writableSections:ctx.principal.writableSections});
+  role:ctx.member.role,allowedSections:ctx.principal.allowedSections,writableSections:ctx.principal.writableSections,timeZone:ctx.company.time_zone});
 const keyOf=(request:Request)=>request.headers.get('Idempotency-Key')??'';
 const blocked=['DocumentRegistry','NumberSequences','Employees'];
 
@@ -66,6 +68,20 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       requireThat(user.app_metadata?.kind!=='employee',401,'UNAUTHORIZED','Use employee login for this account.');
       return json(200,{owner:{ownerId:user.id,email:user.email,name:user.user_metadata?.full_name??user.email}});
     }
+    if(path==='/v1/groups'&&request.method==='GET') {
+      requireThat(user.app_metadata?.kind!=='employee',403,'ADMIN_REQUIRED','Group access requires an admin account.');
+      return json(200,await groupOverview(db,user.id));
+    }
+    if(path==='/v1/groups'&&request.method==='POST') {
+      const {data,error}=await auth.rpc('create_business_group',{p_name:input.name,p_key:keyOf(request)});if(error)databaseError(error);
+      return json(201,{group:data});
+    }
+    const countryEntity=/^\/v1\/groups\/([A-Za-z0-9_-]{43})\/entities$/.exec(path);
+    if(countryEntity&&request.method==='POST'){
+      const {data,error}=await auth.rpc('create_country_entity',{p_group:countryEntity[1],p_name:input.name,p_country:input.countryCode,
+        p_currency:input.currency,p_zone:input.timeZone,p_tax:input.taxRegistration??'',p_key:keyOf(request)});if(error)databaseError(error);
+      return json(201,{company:data});
+    }
     if(path==='/v1/companies'&&request.method==='GET') {
       const {data,error}=await db.from('company_memberships').select('companies(*)').eq('user_id',user.id).eq('role','ADMIN').eq('status','ACTIVE');
       if(error)databaseError(error);return json(200,{companies:data.map((r:any)=>r.companies).filter((c:any)=>c&&!c.deleted_at).map(companyView)});
@@ -108,6 +124,10 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     if(['/v1/employee/me','/v1/employee/refresh'].includes(path))return json(200,{employee:employeeView(ctx),expiresAt:claims.exp*1000});
     const finish=async(value:any,status=200)=>{await ctx.commit();return json(status,value);};
     const tail=companyMatch?path.slice(companyMatch[0].length- (companyMatch[0].endsWith('/')?1:0)) : path.replace('/v1/employee','');
+    if(tail==='/overview'&&request.method==='GET'){
+      requireThat(ctx.admin,403,'ADMIN_REQUIRED','Entity overview requires admin access.');
+      const overview=await groupOverview(db,user.id,companyId!);return json(200,{entity:overview.entities[0]});
+    }
     if(tail==='/setup'||tail==='/setup/retry')return json(200,{company:companyView(ctx.company)});
     if(tail==='/employees'&&request.method==='GET') {
       const employees=await ctx.read('Employees');
@@ -199,7 +219,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const employees:any={principal:async()=>ctx.principal,verifyContext:()=>{},records:async(_t:any,table:string)=>ctx.read(table)};
       const service=new TaskService({business:ctx.business,employees});
       const value=tasks[1]==='assignees'?await service.assignees('',companyId!,employeeMode,{},url.searchParams)
-        :tasks[1]?await service.detail('',companyId!,tasks[1],employeeMode,{}):await service.list('',companyId!,url.searchParams,employeeMode,{});
+        :tasks[1]?await service.detail('',companyId!,tasks[1],employeeMode,{}):await service.list('',companyId!,url.searchParams,employeeMode,{timeZone:ctx.company.time_zone});
       return json(200,value);
     }
     const documents=/^\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(tail);

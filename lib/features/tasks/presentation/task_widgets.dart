@@ -2,14 +2,19 @@ part of 'task_workspace.dart';
 
 class TaskCard extends StatelessWidget {
   const TaskCard(
-      {super.key, required this.task, required this.onTap, this.onEdit});
+      {super.key,
+      required this.task,
+      required this.onTap,
+      this.onEdit,
+      this.timeZone = 'Asia/Dubai'});
+  final String timeZone;
   final Map<String, dynamic> task;
   final VoidCallback onTap;
   final VoidCallback? onEdit;
   @override
   Widget build(BuildContext context) {
     final due = DateTime.tryParse('${task['dueDate']}');
-    final today = taskToday();
+    final today = taskToday(timeZone);
     final dueLabel = due == null
         ? 'No due date'
         : taskDate(due) == taskDate(today)

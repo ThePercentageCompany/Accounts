@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import {setup,assert,owner} from './_fixture.ts';
 import {workspace} from '../_shared/workspace.ts';
+import {companyDesign} from '../_shared/domain/document-design.js';
 
 function client(pg:any){
   return {
@@ -30,6 +31,36 @@ function client(pg:any){
     }catch(error){return {data:null,error:{message:String(error)}};}},
   };
 }
+
+Deno.test('company HTML designs persist in Postgres across fresh workspace sessions',async()=>{
+  const {db:pg,company}=await setup();
+  try {
+    for(const section of ['Invoices','Quotations']) {
+      const source=`<h1>Company ${section}</h1>{{items}}<b>{{record.total}}</b>`;
+      const first=await workspace(client(pg),{id:owner},company);
+      await first.business.saveDocumentDesign('',company,section,{source,expectedVersion:0});
+      await first.commit();
+      const next=await workspace(client(pg),{id:owner},company);
+      const saved=companyDesign(next.company.configuration,section);
+      assert(saved.source===source && saved.version===1);
+    }
+  } finally { await pg.close(); }
+});
+
+Deno.test('task writes atomically commit valid activity IDs and Realtime invalidation',async()=>{
+  const {db:pg,company}=await setup();const db=client(pg),user={id:owner,email:'admin@example.test'},employee='e'.repeat(43);
+  try{
+    await pg.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      values($1,'Employees',$2,2,1,jsonb_build_object('recordId',$2::text,'companyId',$1::text,'recordVersion',1,'isDeleted',false,'fullName','Employee','employmentStatus','ACTIVE'))`,[company,employee]);
+    const ctx=await workspace(db,user,company,['task_create_0001']);
+    await ctx.business.mutate('',company,'Tasks',null,'create',{expectedVersion:0,values:{title:'Live task',employeeId:employee,status:'TODO',priority:'MEDIUM',dueDate:'2026-10-14',startDate:'',startTime:'',endTime:'',project:'',tags:'',reminder:'NONE',description:''}},'task_create_0001');
+    await ctx.commit();
+    const activity=await pg.query<{record_id:string}>(`select record_id from public.business_records where company_id=$1 and section='TaskActivity'`,[company]);
+    assert(activity.rows.length===1&&activity.rows[0].record_id.length===43);
+    const changes=await pg.query<{sections:string[]}>(`select sections from public.company_changes where company_id=$1`,[company]);
+    assert(changes.rows.length===1&&changes.rows[0].sections.includes('Tasks')&&changes.rows[0].sections.includes('TaskActivity'));
+  }finally{await pg.close();}
+});
 
 Deno.test('invoice draft, issue, ledger and idempotent retry commit through the Postgres adapter',async()=>{
   const {db:pg,company}=await setup();const db=client(pg),user={id:owner,email:'admin@example.test'};

@@ -18,6 +18,13 @@ import 'package:tpc_invoice/core/network/api_transport_stub.dart'
 
 const configuredSaasApiOrigin = configuredSupabaseUrl;
 
+class TaskRealtimeUpdate {
+  const TaskRealtimeUpdate(
+      {required this.companyId, required this.connected, this.refresh = true});
+  final String companyId;
+  final bool connected, refresh;
+}
+
 class SaasApiException implements Exception {
   const SaasApiException(
     this.code,
@@ -61,14 +68,58 @@ class SaasApi implements SessionRepository {
   final OfflineStore? _offlineStore;
   final SupabaseClient? _auth;
   SupabaseClient? get _supabase => _auth ?? currentSupabaseClient;
+  Future<Session?>? _authRefresh;
+  Future<Session?> _refreshAuthSession(SupabaseClient client) {
+    final pending = _authRefresh;
+    if (pending != null) return pending;
+    final future = (() async {
+      try {
+        return (await client.auth.refreshSession()).session;
+      } on AuthRetryableFetchException {
+        throw const SaasApiException(
+            'NETWORK', 'Connection unavailable. Your login is preserved.');
+      } on AuthException catch (error) {
+        if (const {
+          'refresh_token_not_found',
+          'refresh_token_already_used',
+          'session_not_found',
+          'user_banned',
+          'user_not_found'
+        }.contains(error.code)) {
+          throw const SaasApiException(
+              'UNAUTHORIZED', 'Your session is no longer valid. Sign in again.',
+              status: 401);
+        }
+        throw const SaasApiException(
+            'NETWORK', 'Could not refresh your login. Retry when connected.');
+      }
+    })();
+    _authRefresh = future;
+    future.then((_) {
+      if (identical(_authRefresh, future)) _authRefresh = null;
+    }, onError: (Object _, StackTrace __) {
+      if (identical(_authRefresh, future)) _authRefresh = null;
+    });
+    return future;
+  }
+
   RealtimeChannel? _realtime;
+  final _taskUpdates = StreamController<TaskRealtimeUpdate>.broadcast();
+  Stream<TaskRealtimeUpdate> get taskUpdates => _taskUpdates.stream;
+  bool _taskRealtimeConnected = false;
+  bool get taskRealtimeConnected => _taskRealtimeConnected;
+  int _realtimeGeneration = 0;
   final bool offlineAutomatic;
   bool get offlineEnabled => kIsWeb || _offlineStore != null;
   String get _sessionSnapshotScope => 'session-profile:${origin.origin}';
   Future<void> saveSessionProfile(Map<String, dynamic> profile) async {
     if (!offlineEnabled) return;
     await offlineStore.change(
-        _sessionSnapshotScope, (p) => p['profile'] = profile);
+        _sessionSnapshotScope,
+        (p) => p['profile'] = {
+              ...profile,
+              'authUserId': _supabase?.auth.currentUser?.id,
+            });
   }
 
   Future<Map<String, dynamic>?> offlineSessionProfile() async {
@@ -77,6 +128,12 @@ class SaasApi implements SessionRepository {
     if (profile is! Map ||
         (profile['expiresAt'] as int? ?? 0) <=
             DateTime.now().millisecondsSinceEpoch) {
+      return null;
+    }
+    final auth = _supabase;
+    if (auth != null &&
+        (auth.auth.currentSession == null ||
+            profile['authUserId'] != auth.auth.currentUser?.id)) {
       return null;
     }
     return Map<String, dynamic>.from(profile);
@@ -361,6 +418,7 @@ class SaasApi implements SessionRepository {
     }
     final prefix = '/v1/companies/$_cacheCompany/';
     return uri.path.startsWith('${prefix}records/') ||
+        uri.path == '${prefix}overview' ||
         uri.path.startsWith('${prefix}reports/') ||
         uri.path == '${prefix}employees' ||
         uri.path == '${prefix}documents' ||
@@ -440,6 +498,7 @@ class SaasApi implements SessionRepository {
     }
     cache.invalidate(
       (p) =>
+          p.endsWith('/overview') ||
           affected.contains(Uri.parse(p).path.split('/').last) ||
           (financial && p.contains('/reports/')) ||
           (tables.contains('Employees') &&
@@ -519,6 +578,7 @@ class SaasApi implements SessionRepository {
     String path, {
     Map<String, Object?>? data,
     String? operationId,
+    bool retryAuth = true,
   }) async {
     if (!path.startsWith('/v1/') ||
         path.startsWith('//') ||
@@ -545,7 +605,7 @@ class SaasApi implements SessionRepository {
       if (session?.expiresAt != null &&
           DateTime.now().millisecondsSinceEpoch ~/ 1000 >=
               session!.expiresAt! - 60) {
-        session = (await supabase.auth.refreshSession()).session;
+        session = await _refreshAuthSession(supabase);
       }
       if (session != null) {
         request.headers['Authorization'] = 'Bearer ${session.accessToken}';
@@ -608,6 +668,19 @@ class SaasApi implements SessionRepository {
         }
       } catch (_) {
         /* A proxy error is not a valid API response. */
+      }
+      // A background refresh can race an in-flight read using the old token.
+      // Renew and replay a read once before treating it as a lost login.
+      if (retryAuth &&
+          method == 'GET' &&
+          response.statusCode == 401 &&
+          code == 'UNAUTHORIZED' &&
+          supabase?.auth.currentSession != null) {
+        final refreshed = await _refreshAuthSession(supabase!);
+        if (refreshed != null) {
+          return _send(method, path,
+              data: data, operationId: operationId, retryAuth: false);
+        }
       }
       final retryHeader = response.headers['retry-after'] ?? '';
       final retrySeconds = int.tryParse(retryHeader);
@@ -1005,6 +1078,16 @@ class SaasApi implements SessionRepository {
       );
   @override
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
+  Future<Map<String, dynamic>> businessGroups() => _json('GET', '/v1/groups');
+  Future<Map<String, dynamic>> entityOverview(String companyId,
+          {bool force = false}) =>
+      _json('GET', '/v1/companies/${_id(companyId)}/overview', force: force);
+  Future<Map<String, dynamic>> createBusinessGroup(String name, String key) =>
+      _json('POST', '/v1/groups', data: {'name': name}, operationId: key);
+  Future<Map<String, dynamic>> createCountryEntity(
+          String groupId, Map<String, dynamic> values, String key) =>
+      _json('POST', '/v1/groups/${_id(groupId)}/entities',
+          data: values, operationId: key);
   @override
   Future<Map<String, dynamic>> deleteCompany(String companyId) =>
       _json('DELETE', '/v1/companies/${_id(companyId)}');
@@ -1370,6 +1453,7 @@ class SaasApi implements SessionRepository {
 
   void close() {
     _stopRealtime();
+    _taskUpdates.close();
     for (final outbox in _outboxes.values) {
       outbox.dispose();
     }
@@ -1420,6 +1504,8 @@ class SaasApi implements SessionRepository {
           .body;
 
   void _stopRealtime() {
+    _realtimeGeneration++;
+    _taskRealtimeConnected = false;
     final channel = _realtime;
     _realtime = null;
     if (channel != null) _supabase?.removeChannel(channel).ignore();
@@ -1429,6 +1515,18 @@ class SaasApi implements SessionRepository {
     _stopRealtime();
     final client = _supabase;
     if (client == null || client.auth.currentUser == null) return;
+    final generation = _realtimeGeneration;
+    bool current() =>
+        generation == _realtimeGeneration && _cacheCompany == companyId;
+    void taskUpdate({bool refresh = true}) {
+      if (current() && !_taskUpdates.isClosed) {
+        _taskUpdates.add(TaskRealtimeUpdate(
+            companyId: companyId,
+            connected: _taskRealtimeConnected,
+            refresh: refresh));
+      }
+    }
+
     _realtime = client
         .channel('workspace:$companyId:${client.auth.currentUser!.id}')
       ..onPostgresChanges(
@@ -1439,7 +1537,34 @@ class SaasApi implements SessionRepository {
               type: PostgresChangeFilterType.eq,
               column: 'company_id',
               value: companyId),
-          callback: (_) => cache.invalidateAll())
+          callback: (change) {
+            if (!current()) return;
+            final sections = change.newRecord['sections'] as List? ?? [];
+            if (sections.isEmpty) {
+              cache.invalidateAll();
+            } else {
+              _invalidateMutation('/v1/companies/$companyId/sync', {
+                'operations': [
+                  for (final section in sections)
+                    {'operationId': section, 'table': section},
+                ],
+              }, {
+                'results': [
+                  for (final section in sections)
+                    {'operationId': section, 'status': 'APPLIED'},
+                ],
+              });
+            }
+            if (sections.any((s) => const [
+                  'Tasks',
+                  'TaskComments',
+                  'TaskActivity',
+                  'Employees',
+                  'Projects'
+                ].contains(s))) {
+              taskUpdate();
+            }
+          })
       ..onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -1449,10 +1574,14 @@ class SaasApi implements SessionRepository {
               column: 'user_id',
               value: client.auth.currentUser!.id),
           callback: (change) {
-            if (change.newRecord['company_id'] != companyId) return;
+            if (!current() || change.newRecord['company_id'] != companyId) {
+              return;
+            }
             _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
-            _revalidateContext().catchError((Object _) {
-              onAccessRevoked?.call();
+            _revalidateContext().catchError((Object error) {
+              if (error is SaasApiException && error.requiresSignIn) {
+                onAccessRevoked?.call();
+              }
             }).ignore();
           })
       ..onPostgresChanges(
@@ -1463,9 +1592,17 @@ class SaasApi implements SessionRepository {
               type: PostgresChangeFilterType.eq,
               column: 'company_id',
               value: companyId),
-          callback: (_) => cache.invalidateAll())
+          callback: (_) {
+            if (current()) {
+              cache.invalidate(
+                  (path) => Uri.parse(path).path.endsWith('/notifications'));
+            }
+          })
       ..subscribe((status, error) {
-        if (status == RealtimeSubscribeStatus.subscribed) cache.invalidateAll();
+        if (!current()) return;
+        _taskRealtimeConnected = status == RealtimeSubscribeStatus.subscribed;
+        if (_taskRealtimeConnected) cache.invalidateAll();
+        taskUpdate(refresh: _taskRealtimeConnected);
       });
   }
 }

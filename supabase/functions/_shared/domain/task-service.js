@@ -26,14 +26,12 @@ export class TaskService {
       (!q.from || r.dueDate >= q.from) && (!q.to || r.dueDate <= q.to));
     rows.sort((a, b) => (q.sort === 'priority' ? TASK_PRIORITIES.indexOf(b.priority) - TASK_PRIORITIES.indexOf(a.priority) :
       q.sort === 'updated' ? Number(b.updatedAt) - Number(a.updatedAt) : String(a.dueDate + a.endTime).localeCompare(String(b.dueDate + b.endTime))) || a.recordId.localeCompare(b.recordId));
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: context.timeZone ?? 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
     const summaryRows = all; // records() already enforces assigned-only or task-manager access.
     const upcoming = {};
     for (const r of summaryRows) if (r.status !== 'COMPLETED' && r.dueDate > today) upcoming[r.dueDate] = (upcoming[r.dueDate] || 0) + 1;
-    const lead = { AT_DUE: 0, '15_MIN': 15, '30_MIN': 30, '1_HOUR': 60, '2_HOURS': 120, '1_DAY': 1440 };
-    const reminders = summaryRows.filter(r => r.status !== 'COMPLETED' && Object.hasOwn(lead, r.reminder) &&
-      Date.parse(r.dueDate + 'T' + (r.endTime || '23:59') + ':00+04:00') - lead[r.reminder] * 60000 <= this.business.now() && r.dueDate >= today)
-      .map(r => ({ recordId: r.recordId, title: r.title, dueDate: r.dueDate, endTime: r.endTime, reminder: r.reminder }));
+    // Database Cron and Realtime deliver reminders in the entity's time zone.
+    const reminders = [];
     const dateCounts = {};
     for (const row of rows) dateCounts[row.dueDate] = (dateCounts[row.dueDate] || 0) + 1;
     return { dateCounts, summary: { todo: summaryRows.filter(r => r.status === 'TODO').length,

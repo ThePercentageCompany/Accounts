@@ -7,10 +7,12 @@ import { hasLedgerSources, ledgerStatus } from './domain/ledger-status.js';
 import { SECTION_TABLES, CHILDREN, SECTIONS, scopeFor, visible, projectRecord } from './domain/employee-policy.js';
 
 export function databaseError(error: any): never {
-  const known = ['VERSION_CONFLICT','IDEMPOTENCY_CONFLICT','WORKSPACE_CHANGED','COMPANY_NOT_FOUND','INVALID_COMPANY'];
+  const known = ['VERSION_CONFLICT','IDEMPOTENCY_CONFLICT','WORKSPACE_CHANGED','COMPANY_NOT_FOUND','INVALID_COMPANY','INVALID_GROUP','INVALID_ENTITY','ADMIN_REQUIRED'];
   const code = known.find(k => error?.message?.includes(k));
-  throw new ApiError(code ? 409 : 503, code ?? 'SERVICE_UNAVAILABLE', code === 'VERSION_CONFLICT'
-    ? 'Workspace changed. Refresh and retry the same operation.' : code ? 'Workspace access or operation changed.' : 'Database unavailable. Retry without discarding changes.');
+  throw new ApiError(code==='ADMIN_REQUIRED'?403:code?.startsWith('INVALID_')?400:code ? 409 : 503, code ?? 'SERVICE_UNAVAILABLE', code === 'VERSION_CONFLICT'
+    ? 'Workspace changed. Refresh and retry the same operation.' : code==='INVALID_ENTITY'
+    ? 'Use a valid country code, currency and IANA business time zone.' : code==='INVALID_GROUP'
+    ? 'Enter a group name between 1 and 160 characters.' : code ? 'Workspace access or operation changed.' : 'Database unavailable. Retry without discarding changes.');
 }
 
 export class RecordStore {
@@ -57,13 +59,18 @@ export class RecordStore {
 }
 
 export async function workspace(db: any,user: any,companyId: string,keys: string[] = []) {
-  const { data: company,error: ce } = await db.from('companies').select('*').eq('id',companyId).is('deleted_at',null).maybeSingle();
+  const [companyResult, memberResult, grantsResult] = await Promise.all([
+    db.from('companies').select('*').eq('id',companyId).is('deleted_at',null).maybeSingle(),
+    db.from('company_memberships').select('*').eq('company_id',companyId)
+      .eq('user_id',user.id).eq('status','ACTIVE').maybeSingle(),
+    db.from('section_permissions').select('*').eq('company_id',companyId).eq('user_id',user.id),
+  ]);
+  const { data: company,error: ce } = companyResult;
   if (ce) databaseError(ce);
-  const { data: member,error: me } = await db.from('company_memberships').select('*').eq('company_id',companyId)
-    .eq('user_id',user.id).eq('status','ACTIVE').maybeSingle();
+  const { data: member,error: me } = memberResult;
   if (me) databaseError(me);
   requireThat(company && member,403,'WORKSPACE_CHANGED','Company access is unavailable.');
-  const { data: grants,error: ge } = await db.from('section_permissions').select('*').eq('company_id',companyId).eq('user_id',user.id);
+  const { data: grants,error: ge } = grantsResult;
   if (ge) databaseError(ge);
   const admin = member.role === 'ADMIN';
   requireThat(admin || member.access_valid_after === '-infinity' ||
