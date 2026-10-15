@@ -23,15 +23,27 @@ class _ProjectDropdownState extends State<ProjectDropdown> {
   List<String> _names = [];
   bool _loading = true;
   String? _error;
+  int _localRevision = 0;
+  void _localChanged() {
+    if (!mounted || _localRevision == widget.api.cache.localRevision) return;
+    _localRevision = widget.api.cache.localRevision;
+    _load();
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.api.cache.addListener(_localChanged);
     _load();
   }
 
   @override
   void didUpdateWidget(covariant ProjectDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.api != widget.api) {
+      oldWidget.api.cache.removeListener(_localChanged);
+      widget.api.cache.addListener(_localChanged);
+    }
     if (oldWidget.companyId != widget.companyId ||
         oldWidget.employee != widget.employee ||
         oldWidget.api != widget.api) {
@@ -69,6 +81,12 @@ class _ProjectDropdownState extends State<ProjectDropdown> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    widget.api.cache.removeListener(_localChanged);
+    super.dispose();
   }
 
   @override

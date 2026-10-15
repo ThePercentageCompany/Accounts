@@ -144,7 +144,12 @@ class ReadCache extends ChangeNotifier {
 
   /// Outbox overlays are separate from server snapshots. Notify consumers
   /// without invalidating/fetching a server resource after a local-only write.
-  void localChanged(String path) => _notify();
+  int localRevision = 0;
+  void localChanged(String path) {
+    localRevision++;
+    _notify();
+  }
+
   void activate(String path) {
     final key = normalizedResource(path);
     _active[key] = (_active[key] ?? 0) + 1;

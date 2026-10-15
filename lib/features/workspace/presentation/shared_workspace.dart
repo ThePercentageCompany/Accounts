@@ -697,6 +697,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         )
       : selected == 'Dashboard' && widget.employee == null
           ? EntityOverview(
+              onTask: _openTask,
+              onSection: _navigate,
               api: widget.api,
               companyId: widget.companyId,
               name: widget.title,

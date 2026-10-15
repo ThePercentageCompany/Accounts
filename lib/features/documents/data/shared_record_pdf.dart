@@ -5,7 +5,7 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/documents/data/invoice_document.dart';
 import 'package:invoice_kit/invoice_kit.dart' as kit;
 
-/// Uses saved server totals, never the legacy local accounting repositories.
+/// Builds PDF bytes on the device from cached/local-first workspace records.
 Future<Uint8List> sharedRecordPdf(
   SaasApi api,
   String companyId,
@@ -13,11 +13,9 @@ Future<Uint8List> sharedRecordPdf(
   String recordId, {
   bool employee = false,
 }) async {
-  if (section == 'Invoices' || section == 'Quotations') {
-    throw const SaasApiException('BROWSER_PRINT_REQUIRED',
-        'Use Print / Save PDF, then upload the saved PDF.');
-  }
   const titles = {
+    'Invoices': 'Invoice',
+    'Quotations': 'Quotation',
     'CreditNotes': 'Credit note',
     'Receipts': 'Payment receipt',
     'Payroll': 'Payslip',
@@ -30,7 +28,8 @@ Future<Uint8List> sharedRecordPdf(
     );
   }
   Future<List<Map<String, dynamic>>> rows(String table) async =>
-      ((await api.records(companyId, table, force: true))['records'] as List)
+      ((await api.records(companyId, table, employee: employee))['records']
+              as List)
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
   Map<String, dynamic> find(List<Map<String, dynamic>> rows, String id) =>
@@ -42,25 +41,47 @@ Future<Uint8List> sharedRecordPdf(
         ),
       );
   final record = find(await rows(section), recordId);
-  final profile = find(await rows('CompanyProfile'), 'company');
+  Future<List<Map<String, dynamic>>> references(String table) async =>
+      ((await api.editorReferences(companyId, table, section,
+              employee: employee))['records'] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+  final profile = find(await references('CompanyProfile'), 'company');
   Map<String, dynamic>? party;
   if (record['customerId'] != null) {
-    party = find(await rows('Customers'), record['customerId']);
+    party = find(await references('Customers'), record['customerId']);
   }
   if (section == 'Payroll') {
-    final employees = ((await api.employees(companyId))['employees'] as List)
+    final employees = (employee
+            ? await references('Employees')
+            : ((await api.employees(companyId))['employees'] as List))
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
     party = find(employees, record['employeeId']);
   }
-  final itemTable = section == 'CreditNotes' ? 'CreditNoteItems' : null;
-  final items = itemTable == null
-      ? <Map<String, dynamic>>[]
-      : (await rows(itemTable))
-          .where(
-            (r) => r['creditNoteId'] == recordId,
-          )
+  final itemTable = switch (section) {
+    'Invoices' => 'InvoiceItems',
+    'Quotations' => 'QuotationItems',
+    'CreditNotes' => 'CreditNoteItems',
+    _ => null,
+  };
+  final parentKey = section == 'Invoices'
+      ? 'invoiceId'
+      : section == 'Quotations'
+          ? 'quotationId'
+          : 'creditNoteId';
+  final items = record['items'] is List &&
+          const ['Invoices', 'Quotations'].contains(section)
+      ? (record['items'] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
           .toList()
+      : itemTable == null
+          ? <Map<String, dynamic>>[]
+          : (await rows(itemTable))
+              .where(
+                (r) => r[parentKey] == recordId,
+              )
+              .toList()
     ..sort(
       (a, b) => (num.tryParse('${a['lineNumber']}') ?? 0).compareTo(
         num.tryParse('${b['lineNumber']}') ?? 0,
@@ -68,16 +89,20 @@ Future<Uint8List> sharedRecordPdf(
     );
   Uint8List? logo;
   if ('${profile['logoDocumentId'] ?? ''}'.isNotEmpty) {
-    logo = await api.document(companyId, profile['logoDocumentId']);
+    logo = await api.document(companyId, profile['logoDocumentId'],
+        employee: employee);
   }
-  final latest = find(await rows(section), recordId);
-  final latestProfile = find(await rows('CompanyProfile'), 'company');
-  if (latest['recordVersion'] != record['recordVersion'] ||
-      latestProfile['recordVersion'] != profile['recordVersion']) {
-    throw const SaasApiException(
-      'VERSION_CONFLICT',
-      'The record or company profile changed. Generate the document again.',
-    );
+  if (const ['Invoices', 'Quotations'].contains(section)) {
+    return kit.InvoiceGenerator.generate(
+        data: documentData(
+            quotation: section == 'Quotations',
+            record: record,
+            company: profile,
+            customer: party ?? {},
+            items: items,
+            estimate: record['syncStatus'] == 'PENDING' ||
+                record['syncStatus'] == 'FAILED'),
+        template: BusinessDocumentTemplate(logo: logo));
   }
   if (section == 'CreditNotes') {
     final invoice = find(await rows('Invoices'), record['invoiceId']);

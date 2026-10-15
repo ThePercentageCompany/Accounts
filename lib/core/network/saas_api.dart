@@ -9,6 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tpc_invoice/core/offline/offline_store.dart';
 import 'package:tpc_invoice/core/offline/offline_outbox.dart';
+import 'package:tpc_invoice/core/offline/task_projection.dart';
+import 'package:tpc_invoice/core/offline/provisional_report.dart';
+import 'package:tpc_invoice/core/offline/entity_projection.dart';
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 import 'package:tpc_invoice/core/cache/cache_store.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
@@ -716,7 +719,25 @@ class SaasApi implements SessionRepository {
     bool force = false,
   }) async {
     if (method == 'GET' && _cacheable(path)) {
-      return cache.read(path, () => _networkJson(method, path), force: force);
+      final result = await cache.read(path, () => _networkJson(method, path),
+          force: force);
+      final kind = Uri.parse(path).path.split('/').last;
+      if (_cacheCompany != null &&
+          path.contains('/reports/') &&
+          const [
+            'dashboard',
+            'general-ledger',
+            'trial-balance',
+            'profit-and-loss',
+            'balance-sheet'
+          ].contains(kind)) {
+        return localFinancialReport(_cacheCompany!, result, kind,
+            employee: _cacheEmployee);
+      }
+      if (_cacheCompany != null && Uri.parse(path).path.endsWith('/overview')) {
+        return localEntityOverview(_cacheCompany!, result);
+      }
+      return result;
     }
     final mutationScope = cache.scope;
     final result = await _networkJson(
@@ -926,20 +947,37 @@ class SaasApi implements SessionRepository {
     String? compareAsOf,
     bool employee = false,
     bool force = false,
-  }) =>
-      _json(
-        'GET',
-        financialReportPath(
-          companyId,
-          kind,
-          asOf: asOf,
-          from: from,
-          compareFrom: compareFrom,
-          compareAsOf: compareAsOf,
-          employee: employee,
-        ),
-        force: force,
-      );
+  }) async {
+    final result = await _json(
+      'GET',
+      financialReportPath(
+        companyId,
+        kind,
+        asOf: asOf,
+        from: from,
+        compareFrom: compareFrom,
+        compareAsOf: compareAsOf,
+        employee: employee,
+      ),
+      force: force,
+    );
+    return result;
+  }
+
+  Map<String, dynamic> localFinancialReport(
+      String companyId, Map<String, dynamic> snapshot, String kind,
+      {bool employee = false}) {
+    final box = workspaceOutbox(companyId, employee: employee);
+    if (box == null) return snapshot;
+    return projectFinancialReport(box, snapshot, kind, (table) {
+      final rows = cache
+              .state(recordsPath(companyId, table, employee: employee))
+              ?.data?['records'] as List? ??
+          [];
+      return box.overlay(table,
+          rows.map((row) => Map<String, dynamic>.from(row as Map)).toList());
+    });
+  }
 
   Future<Map<String, dynamic>> reportSettings(
     String companyId, {
@@ -1082,6 +1120,16 @@ class SaasApi implements SessionRepository {
   Future<Map<String, dynamic>> entityOverview(String companyId,
           {bool force = false}) =>
       _json('GET', '/v1/companies/${_id(companyId)}/overview', force: force);
+  Map<String, dynamic> localEntityOverview(
+      String companyId, Map<String, dynamic> snapshot) {
+    final box = workspaceOutbox(companyId);
+    return box == null
+        ? snapshot
+        : projectEntity(box, snapshot,
+            syncedAt:
+                cache.state('/v1/companies/$companyId/overview')?.syncedAt);
+  }
+
   Future<Map<String, dynamic>> createBusinessGroup(String name, String key) =>
       _json('POST', '/v1/groups', data: {'name': name}, operationId: key);
   Future<Map<String, dynamic>> createCountryEntity(
@@ -1216,12 +1264,57 @@ class SaasApi implements SessionRepository {
     bool employee = false,
     bool force = false,
     Map<String, String> filters = const {},
-  }) =>
-      _json(
-        'GET',
-        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}',
-        force: force,
-      );
+  }) async {
+    final box = workspaceOutbox(companyId, employee: employee);
+    if (box != null) await box.reload();
+    final path =
+        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}';
+    final pending = _json(
+      'GET',
+      path,
+      force: force,
+    );
+    if (box != null &&
+        cache.state(path)?.data == null &&
+        box.localRecords('Tasks').isNotEmpty) {
+      pending.ignore();
+      return projectTaskPage(
+          box,
+          {
+            'records': [],
+            'total': 0,
+            'summary': {},
+            'dateCounts': {},
+            'nextOffset': null
+          },
+          filters,
+          hasSnapshot: false);
+    }
+    final result = await pending;
+    return localTaskPage(companyId, result,
+        employee: employee, filters: filters);
+  }
+
+  Map<String, dynamic> localTaskPage(
+      String companyId, Map<String, dynamic> page,
+      {bool employee = false, Map<String, String> filters = const {}}) {
+    final box = workspaceOutbox(companyId, employee: employee);
+    final path =
+        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}';
+    return box == null
+        ? page
+        : projectTaskPage(box, page, filters,
+            syncedAt: cache.state(path)?.syncedAt);
+  }
+
+  OfflineOutbox? workspaceOutbox(String companyId, {bool employee = false}) =>
+      offlineEnabled &&
+              _cacheUser != null &&
+              _cacheCompany == companyId &&
+              _cacheEmployee == employee
+          ? outbox(employee ? 'employee_$_cacheUser' : _cacheUser!, companyId,
+              employee: employee)
+          : null;
 
   Future<Map<String, dynamic>> taskDetail(
     String companyId,
@@ -1231,7 +1324,7 @@ class SaasApi implements SessionRepository {
       _json(
         'GET',
         '${tasksPath(companyId, employee: employee)}/${_id(taskId)}',
-        force: true,
+        force: false,
       );
 
   Future<Map<String, dynamic>> taskAssignees(
@@ -1555,13 +1648,14 @@ class SaasApi implements SessionRepository {
                 ],
               });
             }
-            if (sections.any((s) => const [
-                  'Tasks',
-                  'TaskComments',
-                  'TaskActivity',
-                  'Employees',
-                  'Projects'
-                ].contains(s))) {
+            if (sections.isEmpty ||
+                sections.any((s) => const [
+                      'Tasks',
+                      'TaskComments',
+                      'TaskActivity',
+                      'Employees',
+                      'Projects'
+                    ].contains(s))) {
               taskUpdate();
             }
           })

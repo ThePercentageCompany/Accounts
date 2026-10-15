@@ -74,8 +74,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   Timer? _realtimeDebounce;
   StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
   bool _realtimeDirty = false, _live = false;
+  int _localRevision = 0;
   final Map<String, String> _pendingIds = {};
   List<Map<String, dynamic>> _tasks = [], _assignees = [];
+  List<Map<String, dynamic>> _serverTasks = [];
   Map<String, dynamic> _summary = {}, _dateCounts = {};
   String _view = '',
       _scope = 'All',
@@ -165,6 +167,25 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   }
 
   void _cacheChanged() {
+    if (_localRevision != widget.api.cache.localRevision) {
+      _localRevision = widget.api.cache.localRevision;
+      if (mounted) {
+        setState(() {
+          _tasks = _visibleTasks(_serverTasks);
+          final saved = _resource == null
+              ? null
+              : widget.api.cache.state(_resource!)?.data;
+          if (saved != null) {
+            final projected = widget.api.localTaskPage(widget.companyId, saved,
+                employee: _employee, filters: _query());
+            _summary = Map<String, dynamic>.from(projected['summary'] as Map);
+            _dateCounts =
+                Map<String, dynamic>.from(projected['dateCounts'] as Map);
+            _total = projected['total'] as int;
+          }
+        });
+      }
+    }
     final resource = _resource;
     if (resource == null) return;
     final state = widget.api.cache.state(resource);
@@ -180,7 +201,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       false;
   List<Map<String, dynamic>> _visibleTasks(List<Map<String, dynamic>> rows) {
     final q = _query();
-    return (widget.writes?.visibleRows('Tasks', rows) ?? rows)
+    return (widget.writes?.visibleRows('Tasks', rows) ??
+            widget.api
+                .workspaceOutbox(widget.companyId, employee: _employee)
+                ?.overlay('Tasks', rows) ??
+            rows)
         .where((r) =>
             ['employeeId', 'status', 'priority', 'project']
                 .every((k) => !q.containsKey(k) || r[k] == q[k]) &&
@@ -322,9 +347,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       final saved = widget.api.cache.state(_resource!)?.data;
       if (!_loaded && !more && saved != null && mounted) {
         setState(() {
-          _tasks = _visibleTasks((saved['records'] as List)
+          _serverTasks = (saved['records'] as List)
               .map((r) => Map<String, dynamic>.from(r as Map))
-              .toList());
+              .toList();
+          _tasks = _visibleTasks(_serverTasks);
           _summary = Map<String, dynamic>.from(saved['summary'] as Map? ?? {});
           _dateCounts =
               Map<String, dynamic>.from(saved['dateCounts'] as Map? ?? {});
@@ -337,6 +363,16 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           employee: _employee,
           force: quiet || more,
           filters: filters));
+      List<Map<String, dynamic>> snapshotRows(Map<String, dynamic> fallback) {
+        final path =
+            '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
+        final snapshot = widget.api.cache.state(path)?.data ?? fallback;
+        return (snapshot['records'] as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
+      }
+
+      final serverRows = snapshotRows(data);
       if (quiet && !more) {
         final rows = List<Map<String, dynamic>>.from(data['records'] as List);
         while (rows.length < target &&
@@ -346,6 +382,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           filters['offset'] = data['nextOffset'].toString();
           final page = await widget.api.tasks(widget.companyId,
               employee: _employee, force: true, filters: filters);
+          serverRows.addAll(snapshotRows(page));
           rows.addAll(List<Map<String, dynamic>>.from(page['records'] as List));
           data['nextOffset'] = page['nextOffset'];
         }
@@ -353,8 +390,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       }
       if (!mounted || generation != _generation) return;
       setState(() {
-        final rows = List<Map<String, dynamic>>.from(data['records'] as List);
-        _tasks = _visibleTasks(more ? [..._tasks, ...rows] : rows);
+        _serverTasks = more ? [..._serverTasks, ...serverRows] : serverRows;
+        _tasks = _visibleTasks(_serverTasks);
         _dateCounts =
             Map<String, dynamic>.from(data['dateCounts'] as Map? ?? {});
         _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
@@ -403,7 +440,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
             expectedVersion:
                 row == null ? 0 : int.parse(row['recordVersion'].toString()),
             baseRecord: row);
-        if (mounted) setState(() => _tasks = _visibleTasks(_tasks));
+        if (mounted) setState(() => _tasks = _visibleTasks(_serverTasks));
         return;
       }
       if (queue != null) {
@@ -651,10 +688,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                       .colorScheme
                                       .onSurfaceVariant),
                           const SizedBox(width: 5),
-                          Text(
-                              _live
-                                  ? 'Live updates'
-                                  : 'Automatic updates',
+                          Text(_live ? 'Live updates' : 'Automatic updates',
                               style: Theme.of(context).textTheme.bodySmall),
                         ]),
                       ])),

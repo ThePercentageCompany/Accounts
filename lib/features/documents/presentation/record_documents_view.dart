@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/utils/file_download.dart';
 import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
@@ -87,12 +88,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   Uint8List? image;
   String? imageName;
   bool get logo => widget.section == 'CompanyProfile';
-  HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
-        widget.api,
-        widget.companyId,
-        widget.section,
-        employee: widget.employee,
-      );
   Future<void> _exportHtml() => _run(() async {
         final html = await savedRecordHtml(
           widget.api,
@@ -209,9 +204,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
         }
       });
   Future<Uint8List> _pdfBytes() async {
-    if (const ['Invoices', 'Quotations'].contains(widget.section)) {
-      await htmlStore.load();
-    }
     return sharedRecordPdf(
       widget.api,
       widget.companyId,
@@ -222,16 +214,15 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   }
 
   Future<void> _downloadPdf() => _run(() async {
-        if (const ['Invoices', 'Quotations'].contains(widget.section)) {
-          final html = await savedRecordHtml(
-              widget.api, widget.companyId, widget.section, _recordId,
-              employee: widget.employee);
-          await printReport(html);
-          return;
-        }
         await downloadFile(await _pdfBytes(),
             filename: '${widget.section}-$_recordId.pdf',
             mimeType: 'application/pdf');
+      });
+  Future<void> _printDesign() => _run(() async {
+        final html = await savedRecordHtml(
+            widget.api, widget.companyId, widget.section, _recordId,
+            employee: widget.employee);
+        await printReport(html);
       });
   Future<void> _generate() => _run(() async {
         final bytes = await _pdfBytes();
@@ -306,12 +297,30 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
               ),
               if (error != null) Text(error!),
               if (const ['Invoices', 'Quotations'].contains(widget.section))
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  children: [
+                    LoadingButton.textIcon(
+                      onPressed: busy ? null : _downloadPdf,
+                      icon: const Icon(Icons.download_outlined),
+                      label: const Text('Download PDF'),
+                    ),
+                    if (kIsWeb)
+                      LoadingButton.textIcon(
+                        onPressed: busy ? null : _printDesign,
+                        icon: const Icon(Icons.print_outlined),
+                        label: const Text('Print company design'),
+                      )
+                  ],
+                ),
+              if (const ['CreditNotes', 'Receipts', 'Payroll', 'Assets']
+                  .contains(widget.section))
                 Align(
                   alignment: Alignment.centerRight,
                   child: LoadingButton.textIcon(
                     onPressed: busy ? null : _downloadPdf,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Print / Save PDF'),
+                    label: const Text('Download PDF'),
                   ),
                 ),
               if (!widget.employee &&
@@ -338,6 +347,8 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   runSpacing: 8,
                   children: [
                     if (const [
+                      'Invoices',
+                      'Quotations',
                       'CreditNotes',
                       'Receipts',
                       'Payroll',
@@ -358,8 +369,9 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
               if (const ['Invoices', 'Quotations'].contains(widget.section))
                 const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                        'Save as PDF in the browser print dialog, then use Upload document to attach it.')),
+                    child: Text(kIsWeb
+                        ? 'PDFs are generated on this device. Print company design uses the saved HTML layout.'
+                        : 'PDFs are generated on this device.')),
               if (!busy && documents.isEmpty && _localDocuments.isEmpty)
                 const Text('No documents attached.'),
               Expanded(

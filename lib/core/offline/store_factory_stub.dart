@@ -1,5 +1,4 @@
-import 'package:idb_shim/idb_client_memory.dart';
 import 'offline_store.dart';
+import 'preferences_store.dart';
 
-OfflineStore platformOfflineStore() =>
-    IndexedOfflineStore(newIdbFactoryMemory());
+OfflineStore platformOfflineStore() => PreferencesOfflineStore();

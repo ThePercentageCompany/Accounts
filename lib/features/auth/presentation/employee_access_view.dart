@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/features/auth/presentation/employee_qr_scanner.dart';
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/core/network/workspace_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
 
@@ -58,7 +59,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
     try {
       final preferences = await SharedPreferences.getInstance();
       if (!mounted) return;
-      _api = widget.api ?? SaasApi();
+      _api = widget.api ?? createWorkspaceApi();
       _session = SaasSession(_api!, preferences);
       _sessionSubscription = _session!.stream.listen((_) => _changed());
       if (widget.restoreSession && _link.text.isEmpty) {

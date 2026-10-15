@@ -13,6 +13,7 @@ import 'package:tpc_invoice/features/workspace/presentation/business_group_view.
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
 import 'package:tpc_invoice/features/auth/presentation/employee_access_view.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/core/network/workspace_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
 import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart';
@@ -84,7 +85,7 @@ class _SaasAppState extends State<SaasApp> {
         throw const SaasApiException(
             'CONFIGURATION', 'Supabase Auth is not configured.');
       }
-      final api = widget.api ?? SaasApi();
+      final api = widget.api ?? createWorkspaceApi();
       _authSubscription =
           currentSupabaseClient?.auth.onAuthStateChange.listen((state) {
         if (state.event == AuthChangeEvent.passwordRecovery) _recoverPassword();

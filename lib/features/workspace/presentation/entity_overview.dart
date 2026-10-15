@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+import 'package:tpc_invoice/features/reports/presentation/dashboard_financial_overview.dart';
+import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
+import 'package:tpc_invoice/features/reports/presentation/dashboard_tasks.dart';
 
 class EntityOverview extends StatefulWidget {
   const EntityOverview(
@@ -8,11 +11,15 @@ class EntityOverview extends StatefulWidget {
       required this.companyId,
       required this.name,
       this.active = true,
+      this.onSection,
+      this.onTask,
       required this.onNavigate});
   final SaasApi api;
   final String companyId, name;
   final bool active;
   final void Function(String section) onNavigate;
+  final void Function(String section, String table)? onSection;
+  final ValueChanged<String>? onTask;
   @override
   State<EntityOverview> createState() => _EntityOverviewState();
 }
@@ -25,7 +32,8 @@ class _EntityOverviewState extends State<EntityOverview> {
   void cacheChanged() {
     final data = widget.api.cache.state(path)?.data;
     if (!mounted || data == null) return;
-    final next = data['entity'];
+    final next =
+        widget.api.localEntityOverview(widget.companyId, data)['entity'];
     if (next is Map) {
       setState(() => entity = Map<String, dynamic>.from(next));
     }
@@ -154,6 +162,47 @@ class _EntityOverviewState extends State<EntityOverview> {
                                   ])))),
               ]),
               const SizedBox(height: 32),
+              DashboardFinancialOverview(
+                  api: widget.api,
+                  companyId: widget.companyId,
+                  active: widget.active,
+                  timeZone: '${entity?['timeZone'] ?? 'Asia/Dubai'}',
+                  onReportSelected: (kind) => widget.onSection != null
+                      ? widget.onSection!('Reports', kind)
+                      : widget.onNavigate('Reports')),
+              const SizedBox(height: 24),
+              Text('Workspace details',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              DashboardTasks(
+                  api: widget.api,
+                  companyId: widget.companyId,
+                  employee: false,
+                  active: widget.active,
+                  onTask: widget.onTask ?? (_) => widget.onNavigate('Tasks')),
+              const SizedBox(height: 12),
+              for (final section in employeeOverviewTables.entries)
+                Card(
+                    elevation: 0,
+                    child: ExpansionTile(
+                      title: Text(section.key),
+                      subtitle:
+                          const Text('Status, activity and recent records'),
+                      children: [
+                        SectionOverview(
+                            api: widget.api,
+                            companyId: widget.companyId,
+                            section: section.key,
+                            tables: section.value,
+                            employee: false,
+                            active: widget.active,
+                            onSection: (section, table) =>
+                                widget.onSection != null
+                                    ? widget.onSection!(section, table)
+                                    : widget.onNavigate(section))
+                      ],
+                    )),
+              const SizedBox(height: 24),
               Text('Your business, connected',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),

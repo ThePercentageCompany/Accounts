@@ -41,12 +41,33 @@ class _TaskDetailsState extends State<TaskDetails> {
   StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
   Timer? _realtimeDebounce;
   bool _fetching = false, _realtimeDirty = false;
+  int _localRevision = 0;
+  void _localChanged() {
+    if (!mounted || _localRevision == widget.api.cache.localRevision) return;
+    _localRevision = widget.api.cache.localRevision;
+    final box =
+        widget.api.workspaceOutbox(widget.companyId, employee: widget.employee);
+    if (box == null) return;
+    final rows = box.overlay('Tasks', [_task]);
+    setState(() {
+      final id = box.resolveRecordId('${_task['recordId']}');
+      final task = rows.where((row) => row['recordId'] == id).firstOrNull;
+      _unavailable = task == null;
+      if (task != null) _task = task;
+      _comments = box
+          .overlay('TaskComments', _comments)
+          .where((row) => row['taskId'] == _task['recordId'])
+          .toList();
+    });
+  }
+
   String _commentId = const Uuid().v4(), _lastComment = '';
   bool get _canStatus =>
       widget.manage || _task['employeeId'] == widget.employeeId;
   @override
   void initState() {
     super.initState();
+    widget.api.cache.addListener(_localChanged);
     _taskSubscription = widget.api.taskUpdates.listen((update) {
       if (update.companyId != widget.companyId || !update.refresh) return;
       _realtimeDirty = true;
@@ -58,6 +79,7 @@ class _TaskDetailsState extends State<TaskDetails> {
   @override
   void dispose() {
     _comment.dispose();
+    widget.api.cache.removeListener(_localChanged);
     _taskSubscription?.cancel();
     _realtimeDebounce?.cancel();
     super.dispose();
