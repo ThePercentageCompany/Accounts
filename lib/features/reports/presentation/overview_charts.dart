@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 const overviewPalette = [
-  Color(0xff287b82),
-  Color(0xffdeaa62),
+  Color(0xffb7420b),
+  Color(0xffbe9c72),
   Color(0xff788ac0),
   Color(0xffa481a9),
   Color(0xff8ba992),

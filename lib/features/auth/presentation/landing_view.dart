@@ -15,131 +15,266 @@ class LandingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context), colors = theme.colorScheme;
     return LayoutBuilder(builder: (context, bounds) {
       final wide = bounds.maxWidth >= 900;
-      final intro = Container(
-          padding: EdgeInsets.all(wide ? 48 : 28),
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF142C45), Color(0xFF087F8C)])),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.business_center_outlined,
-                    color: Color(0xFF90E4DE), size: 36),
-                const SizedBox(height: 32),
-                Text('Your business,\nin one place.',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: wide ? 46 : 34,
-                        height: 1.12,
-                        letterSpacing: -1,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 20),
-                const Text(
-                    'A clear view of your accounts, your team and the work ahead.',
-                    style: TextStyle(
-                        color: Color(0xFFD7E9EE), fontSize: 17, height: 1.6)),
-                const SizedBox(height: 36),
-                for (final item in const [
-                  (Icons.account_balance_outlined, 'Accounts & reporting'),
-                  (Icons.groups_outlined, 'Employees & task scheduling'),
-                  (Icons.receipt_long_outlined, 'Invoices & quotations'),
-                  (Icons.public, 'Country entities & group overview'),
-                ])
-                  Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Row(children: [
-                        Icon(item.$1, color: const Color(0xFF90E4DE), size: 22),
-                        const SizedBox(width: 14),
-                        Expanded(
-                            child: Text(item.$2,
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 15)))
-                      ])),
-              ]));
-      final login = Padding(
-          padding: EdgeInsets.all(wide ? 40 : 24),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.lock_outline, size: 32, color: colors.primary),
-                const SizedBox(height: 24),
-                Text('Welcome back',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                Text('Sign in to continue to your workspace.',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(color: colors.onSurfaceVariant, height: 1.5)),
-                const SizedBox(height: 32),
-                LoadingButton.icon(
-                    busy: busy,
-                    onPressed: busy ? null : onSignIn,
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52)),
-                    icon: const Icon(Icons.login),
-                    label:
-                        Text(busy ? 'Opening workspace...' : 'Admin sign in')),
-                const SizedBox(height: 14),
-                LoadingButton.outlinedIcon(
-                    onPressed: busy ? null : onEmployeeLogin,
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52)),
-                    icon: const Icon(Icons.badge_outlined),
-                    label: const Text('Employee sign in')),
-                const SizedBox(height: 20),
-                Text(
-                    'Employees: use the invitation link and private code provided by your company.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontSize: 13,
-                        height: 1.5)),
-                if (error != null)
-                  Padding(
-                      padding: const EdgeInsets.only(top: 20),
-                      child: Semantics(
-                          liveRegion: true,
-                          child: Text(error!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: colors.error)))),
-                const SizedBox(height: 24),
-                TextButton.icon(
-                    onPressed: busy ? null : onFaq,
-                    icon: const Icon(Icons.help_outline, size: 18),
-                    label: const Text('Help & getting started')),
-              ]));
+      final hero =
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                  color: Color(0xffef5a00), shape: BoxShape.circle)),
+          const SizedBox(width: 9),
+          Expanded(
+              child: Text('THE PERCENTAGE COMPANY',
+                  style:
+                      theme.textTheme.labelSmall?.copyWith(letterSpacing: 2)))
+        ]),
+        const SizedBox(height: 28),
+        Text('Less admin.\nMore business.',
+            style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: wide ? 76 : 46,
+                height: 1.02,
+                letterSpacing: wide ? -4 : -2,
+                fontWeight: FontWeight.w500,
+                color: colors.onSurface)),
+        const SizedBox(height: 24),
+        ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Text(
+                'Your accounts, your people and your next move.\nOne considered workspace for everything ahead.',
+                style: theme.textTheme.bodyLarge
+                    ?.copyWith(color: colors.onSurfaceVariant, height: 1.7))),
+        const SizedBox(height: 30),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          LoadingButton.icon(
+              busy: busy,
+              onPressed: busy ? null : onSignIn,
+              icon: const Icon(Icons.arrow_forward, size: 18),
+              label: Text(busy ? 'Opening workspace...' : 'Admin sign in'),
+              style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 20))),
+          LoadingButton.outlinedIcon(
+              onPressed: busy ? null : onEmployeeLogin,
+              icon: const Icon(Icons.person_outline, size: 18),
+              label: const Text('Employee sign in'),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 20))),
+        ]),
+        const SizedBox(height: 16),
+        Text('Employees: enter with your company invitation and private code.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: colors.onSurfaceVariant)),
+        if (error != null)
+          Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Semantics(
+                  liveRegion: true,
+                  child: Text(error!, style: TextStyle(color: colors.error)))),
+        const SizedBox(height: 16),
+        TextButton(
+            onPressed: busy ? null : onFaq,
+            child: const Text('Explore the workspace  ↗')),
+      ]);
+      final preview = _WorkspaceIllustration();
       return SingleChildScrollView(
           child: Center(
               child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1160),
+                  constraints: const BoxConstraints(maxWidth: 1320),
                   child: Padding(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: wide ? 32 : 16, vertical: wide ? 64 : 24),
-                      child: DecoratedBox(
-                          decoration: BoxDecoration(
-                              color: colors.surface,
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(color: colors.outlineVariant)),
-                          child: wide
-                              ? Row(
+                      padding: EdgeInsets.fromLTRB(
+                          wide ? 64 : 24, wide ? 80 : 40, wide ? 64 : 24, 40),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (wide)
+                              Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                      Expanded(flex: 6, child: intro),
-                                      Expanded(flex: 5, child: login)
+                                    Expanded(flex: 6, child: hero),
+                                    const SizedBox(width: 48),
+                                    Expanded(flex: 5, child: preview)
+                                  ])
+                            else ...[hero, const SizedBox(height: 36), preview],
+                            const SizedBox(height: 64),
+                            const Divider(),
+                            const SizedBox(height: 28),
+                            Text('Everything connected. Nothing in your way.',
+                                style: theme.textTheme.headlineSmall),
+                            const SizedBox(height: 24),
+                            LayoutBuilder(builder: (context, size) {
+                              final columns = size.maxWidth >= 850
+                                  ? 4
+                                  : size.maxWidth >= 500
+                                      ? 2
+                                      : 1;
+                              return Wrap(
+                                  spacing: 24,
+                                  runSpacing: 28,
+                                  children: [
+                                    for (final feature in const [
+                                      (
+                                        Icons.receipt_long_outlined,
+                                        '01',
+                                        'Sales, simplified.',
+                                        'Quotations, invoices and customer payments.'
+                                      ),
+                                      (
+                                        Icons.insights_outlined,
+                                        '02',
+                                        'Clarity in the numbers.',
+                                        'Reports, cash and a detailed financial overview.'
+                                      ),
+                                      (
+                                        Icons.people_outline,
+                                        '03',
+                                        'A team in sync.',
+                                        'People, payroll, projects and everyday tasks.'
+                                      ),
+                                      (
+                                        Icons.public_outlined,
+                                        '04',
+                                        'Room to grow.',
+                                        'Country entities with a connected group view.'
+                                      ),
                                     ])
-                              : Column(children: [login, intro]))))));
+                                      SizedBox(
+                                          width: (size.maxWidth -
+                                                  24 * (columns - 1)) /
+                                              columns,
+                                          child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(children: [
+                                                  Icon(feature.$1, size: 23),
+                                                  const Spacer(),
+                                                  Text(feature.$2,
+                                                      style: theme
+                                                          .textTheme.labelSmall)
+                                                ]),
+                                                const SizedBox(height: 22),
+                                                Text(feature.$3,
+                                                    style: theme
+                                                        .textTheme.titleMedium),
+                                                const SizedBox(height: 8),
+                                                Text(feature.$4,
+                                                    style: theme
+                                                        .textTheme.bodySmall
+                                                        ?.copyWith(
+                                                            color: colors
+                                                                .onSurfaceVariant)),
+                                              ])),
+                                  ]);
+                            }),
+                            const SizedBox(height: 48),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            Text(
+                                'TPC Business Suite · Built for the work ahead.',
+                                style: theme.textTheme.bodySmall),
+                          ])))));
     });
+  }
+}
+
+class _WorkspaceIllustration extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) => Opacity(
+            opacity: value,
+            child: Transform.translate(
+                offset: Offset(0, 18 * (1 - value)), child: child)),
+        child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colors.outlineVariant)),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.grid_view_outlined, size: 17),
+                    const SizedBox(width: 9),
+                    const Expanded(child: Text('Your workspace')),
+                    Text('PREVIEW',
+                        style: TextStyle(
+                            fontSize: 9,
+                            letterSpacing: 1.5,
+                            color: colors.onSurfaceVariant))
+                  ]),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  const Text('A clearer view.\nA better working day.',
+                      style: TextStyle(
+                          fontSize: 28, height: 1.15, letterSpacing: -1)),
+                  const SizedBox(height: 26),
+                  SizedBox(
+                      height: 112,
+                      child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (var i = 0; i < 10; i++)
+                              Expanded(
+                                  child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 3),
+                                      child: Container(
+                                          height: [
+                                            28.0,
+                                            46.0,
+                                            39.0,
+                                            60.0,
+                                            55.0,
+                                            77.0,
+                                            67.0,
+                                            87.0,
+                                            81.0,
+                                            108.0
+                                          ][i],
+                                          decoration: BoxDecoration(
+                                              color: i == 9
+                                                  ? const Color(0xffef5a00)
+                                                  : colors.onSurface.withValues(
+                                                      alpha: .08 + i * .018),
+                                              borderRadius: const BorderRadius
+                                                  .vertical(
+                                                  top: Radius.circular(3)))))),
+                          ])),
+                  const SizedBox(height: 12),
+                  Text('ILLUSTRATIVE ACTIVITY',
+                      style: TextStyle(
+                          fontSize: 9,
+                          letterSpacing: 1.2,
+                          color: colors.onSurfaceVariant)),
+                  const SizedBox(height: 24),
+                  for (final item in const [
+                    (Icons.check_circle_outline, 'Accounts in focus'),
+                    (Icons.view_kanban_outlined, 'Work moving forward'),
+                    (Icons.groups_outlined, 'People connected')
+                  ])
+                    Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(children: [
+                          Icon(item.$1, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(item.$2)),
+                          const Icon(Icons.arrow_outward, size: 14)
+                        ])),
+                ])));
   }
 }

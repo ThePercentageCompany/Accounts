@@ -58,14 +58,14 @@ class AppTheme {
       ).apply(fontFamily: 'Inter');
 
   // -------------------------------------------------------------
-  // Zoho Books / Zoho Finance Color Palette
+  // Editorial palette. Legacy aliases preserve existing screen integrations.
   // -------------------------------------------------------------
   // Primary Zoho Colors
   static const Color zohoBlue =
-      Color(0xFF087F8C); // Primary business-suite accent
-  static const Color zohoBlueDark = Color(0xFF1351A8);
-  static const Color zohoBlueBg = Color(0xFFEBF3FC);
-  static const Color zohoBlueBgDark = Color(0xFF0F264A);
+      Color(0xFFB7420B); // Primary business-suite accent
+  static const Color zohoBlueDark = Color(0xFF80300C);
+  static const Color zohoBlueBg = Color(0xFFFBE9DE);
+  static const Color zohoBlueBgDark = Color(0xFF38271F);
 
   static const Color zohoRed = Color(0xFFE42528); // Zoho Corporate Red
   static const Color zohoRedDark = Color(0xFFC61B1E);
@@ -124,20 +124,20 @@ class AppTheme {
   // -------------------------------------------------------------
   // Light Mode (Zoho Books Signature Canvas)
   static const Color zohoLightBg = Color(
-    0xFFF3F6FA,
+    0xFFF2F1EC,
   ); // Clean SaaS Light Slate Canvas
   static const Color zohoLightSurface = Color(
     0xFFFFFFFF,
   ); // Pure White Card Surface
   static const Color zohoLightSurfaceElevated = Color(
-    0xFFF6F6F6,
+    0xFFF6F5F0,
   ); // Table Header / Subtle surface
   static const Color zohoLightBorder = Color(
-    0xFFDDE5EF,
+    0xFFDEDCD4,
   ); // Crisp 1px card border
-  static const Color zohoLightSeparator = Color(0xFFEAECF0);
+  static const Color zohoLightSeparator = Color(0xFFE8E6DF);
   static const Color zohoLightTextPrimary = Color(
-    0xFF142C45,
+    0xFF1F1D1B,
   ); // High-contrast Charcoal Slate
   static const Color zohoLightTextSecondary = Color(
     0xFF686868,
@@ -154,9 +154,9 @@ class AppTheme {
   static const Color iosLightTextSecondary = zohoLightTextSecondary;
 
   // Dark Mode (Zoho Books Dark Navy)
-  static const Color zohoDarkBg = Color(0xFF0F172A);
+  static const Color zohoDarkBg = Color(0xFF191816);
   static const Color zohoDarkSurface = Color(
-    0xFF162033,
+    0xFF22211E,
   ); // Dark Slate Card Surface
   static const Color zohoDarkSurfaceElevated = Color(0xFF1D1D1D);
   static const Color zohoDarkBorder = Color(0xFF363636);
@@ -178,10 +178,10 @@ class AppTheme {
   // Zoho Card Curves & Geometry Tokens
   // -------------------------------------------------------------
   // Compact, sharp geometry keeps finance-dense screens calm and legible.
-  static const double cardRadiusVal = 14.0;
-  static const double buttonRadiusVal = 8.0;
-  static const double inputRadiusVal = 10.0;
-  static const double badgeRadiusVal = 10.0;
+  static const double cardRadiusVal = 12.0;
+  static const double buttonRadiusVal = 28.0;
+  static const double inputRadiusVal = 8.0;
+  static const double badgeRadiusVal = 6.0;
 
   static final BorderRadius cardRadius = BorderRadius.circular(cardRadiusVal);
   static final BorderRadius buttonRadius = BorderRadius.circular(
@@ -223,6 +223,7 @@ class AppTheme {
   static ThemeData light() {
     final colorScheme = const ColorScheme.light(
       primary: zohoBlue,
+      onSurfaceVariant: zohoLightTextSecondary,
       onPrimary: Colors.white,
       primaryContainer: zohoBlueBg,
       onPrimaryContainer: zohoBlueDark,
@@ -230,7 +231,7 @@ class AppTheme {
       onSecondary: Colors.white,
       secondaryContainer: zohoBlueBg,
       onSecondaryContainer: zohoBlueDark,
-      surfaceContainerHighest: Color(0xFFF1F4F9),
+      surfaceContainerHighest: Color(0xFFECEAE2),
       surfaceTint: Colors.transparent,
       surface: zohoLightSurface,
       onSurface: zohoLightTextPrimary,
@@ -243,9 +244,33 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      drawerTheme: const DrawerThemeData(
+          backgroundColor: zohoLightSurface,
+          surfaceTintColor: Colors.transparent),
+      iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+              foregroundColor: zohoLightTextSecondary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)))),
+      snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: zohoLightTextPrimary,
+          contentTextStyle:
+              const TextStyle(color: Colors.white, fontFamily: 'Inter'),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: zohoBlue, linearTrackColor: zohoBlueBg),
+      menuTheme: MenuThemeData(
+          style: MenuStyle(
+              elevation: const WidgetStatePropertyAll(2),
+              backgroundColor: const WidgetStatePropertyAll(zohoLightSurface),
+              shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(color: zohoLightBorder))))),
       textTheme: _typography(zohoLightTextPrimary),
       iconTheme: const IconThemeData(size: 20, color: zohoLightTextSecondary),
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: zohoLightSurface,
         surfaceTintColor: Colors.transparent,
@@ -306,7 +331,7 @@ class AppTheme {
         backgroundColor: zohoLightSurface,
         foregroundColor: zohoLightTextPrimary,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         toolbarHeight: 64,
@@ -329,6 +354,8 @@ class AppTheme {
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: zohoLightSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
         ),
@@ -530,9 +557,33 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      drawerTheme: const DrawerThemeData(
+          backgroundColor: zohoDarkSurface,
+          surfaceTintColor: Colors.transparent),
+      iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+              foregroundColor: zohoDarkTextSecondary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)))),
+      snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: zohoDarkTextPrimary,
+          contentTextStyle:
+              const TextStyle(color: zohoDarkBg, fontFamily: 'Inter'),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: Color(0xFFFFB28A), linearTrackColor: zohoDarkBorder),
+      menuTheme: MenuThemeData(
+          style: MenuStyle(
+              elevation: const WidgetStatePropertyAll(2),
+              backgroundColor: const WidgetStatePropertyAll(zohoDarkSurface),
+              shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(color: zohoDarkBorder))))),
       textTheme: _typography(zohoDarkTextPrimary),
       iconTheme: const IconThemeData(size: 20, color: zohoDarkTextSecondary),
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: zohoDarkSurface,
         surfaceTintColor: Colors.transparent,
@@ -593,7 +644,7 @@ class AppTheme {
         backgroundColor: zohoDarkSurface,
         foregroundColor: zohoDarkTextPrimary,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         toolbarHeight: 64,
@@ -616,6 +667,8 @@ class AppTheme {
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: zohoDarkSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(cardRadiusVal),
         ),

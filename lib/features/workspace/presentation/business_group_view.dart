@@ -72,14 +72,14 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
               Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                      color: const Color(0xff142c45),
+                      color: const Color(0xff1f1d1b),
                       borderRadius: BorderRadius.circular(20)),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('BUSINESS GROUP',
                             style: TextStyle(
-                                color: Color(0xff83c8d7),
+                                color: Color(0xffffb28a),
                                 letterSpacing: 2,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700)),
@@ -93,7 +93,7 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
                         const Text(
                             'Accounts, people, work and sales — with independent books for each country entity.',
                             style: TextStyle(
-                                color: Color(0xffd0deeb), height: 1.6)),
+                                color: Color(0xffdcd8d0), height: 1.6)),
                         const SizedBox(height: 24),
                         Wrap(spacing: 12, runSpacing: 12, children: [
                           FilledButton.icon(

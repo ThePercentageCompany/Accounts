@@ -970,7 +970,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     const icons = <String, IconData>{
-      'Tasks': Icons.task_alt,
+      'Tasks': Icons.check_circle_outline,
       'Calendar': Icons.calendar_month_outlined,
       'Reports': Icons.space_dashboard_outlined,
       'Dashboard': Icons.dashboard_outlined,
@@ -979,7 +979,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
       'Quotations': Icons.request_quote_outlined,
       'Customers': Icons.people_outline,
       'Projects': Icons.work_outline,
-      'Cash & Bank': Icons.account_balance,
+      'Cash & Bank': Icons.account_balance_outlined,
       'Income & Expenses': Icons.swap_horiz,
       'Payroll': Icons.payments_outlined,
       'Office & Attendance': Icons.event_available_outlined,
@@ -997,7 +997,14 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
             child: Row(
               children: [
-                Icon(Icons.auto_graph, color: colors.primary),
+                Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(7)),
+                    child:
+                        Icon(Icons.percent, size: 19, color: colors.onPrimary)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -1048,7 +1055,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   ),
                   selected: selected == section,
                   selectedTileColor:
-                      dark ? const Color(0xFF333333) : colors.primaryContainer,
+                      dark ? const Color(0xFF33302A) : colors.primaryContainer,
                   selectedColor: dark ? colors.onSurface : colors.primary,
                   textColor: colors.onSurfaceVariant,
                   iconColor: colors.onSurfaceVariant,

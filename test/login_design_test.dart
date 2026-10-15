@@ -31,7 +31,7 @@ void main() {
                   onSignIn: () {},
                   onFaq: () {},
                   onEmployeeLogin: () {}))));
-      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.text('Less admin.\nMore business.'), findsOneWidget);
       expect(find.text('Employee sign in'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
