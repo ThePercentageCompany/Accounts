@@ -34,7 +34,7 @@ const FIELDS = {
   CreditNoteItems: ['creditNoteId', 'invoiceId', 'invoiceItemId', 'lineNumber', 'description', 'quantity', 'unitPrice', 'discount', 'taxRate', 'taxAmount', 'lineTotal', 'subtotal'],
   Tasks: ['title', 'description', 'employeeId', 'assigneeName', 'priority', 'status', 'startDate', 'dueDate', 'startTime', 'endTime', 'project', 'tags', 'reminder'],
   TaskComments: ['taskId', 'body'],
-  TaskActivity: ['taskId', 'action', 'summary'],
+  TaskActivity: ['taskId', 'action', 'summary', 'authorName'],
   Projects: ['name', 'description', 'status'],
   MoneyTransfers: ['date', 'fromAccount', 'toAccount', 'amount', 'description', 'reference', 'status', 'bankStatus', 'statementDate', 'statementReference', 'reversalDate', 'reversalReason'],
 };

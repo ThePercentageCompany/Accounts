@@ -52,14 +52,17 @@ export class TaskService {
     requireThat((await this.records(token, companyId, 'Tasks', employee, context)).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
     const names = (await this.business.records.readReferences(companyId, ['Employees'])).Employees;
-    const author = row => ({ ...clean(row), authorName: names.find(e => e.recordId === row.createdBy)?.fullName || 'Company owner' });
+    const author = async row => ({ ...clean(row), authorName: row.authorName ||
+      names.find(e => e.recordId === row.createdBy)?.fullName ||
+      await this.business.accounts?.actorName?.(row.createdBy) || 'Unknown user' });
     // Older activity inherited the task creator; updatedBy/updatedAt identify
     // the actual actor and time of each generated activity entry.
     const activityAuthor = row => author({ ...row,
       createdBy: row.updatedBy || row.createdBy, createdAt: row.updatedAt || row.createdAt });
     requireThat((await this.records(token, companyId, 'Tasks', employee, context)).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
-    return { task: clean(task), comments: comments.filter(c => c.taskId === id).map(author), activity: activity.filter(a => a.taskId === id).map(activityAuthor) };
+    return { task: clean(task), comments: await Promise.all(comments.filter(c => c.taskId === id).map(author)),
+      activity: await Promise.all(activity.filter(a => a.taskId === id).map(activityAuthor)) };
   }
   async assignees(token, companyId, employee = false, context = {}, query = new URLSearchParams()) {
     requireThat([...query.keys()].every(k => ['search', 'offset', 'limit'].includes(k) && query.getAll(k).length === 1),

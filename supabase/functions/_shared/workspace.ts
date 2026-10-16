@@ -106,6 +106,25 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
   const accounts: any = {registry,companyOwner:(_state: any,_token: any,id: string) => {
     requireThat(id===companyId,403,'WORKSPACE_CHANGED','Workspace changed.');return {id:admin ? user.id : member.employee_id};
   }};
+  accounts.actorName = async (actor:string) => {
+    const employees=(await records.read(companyId,['Employees'])).Employees;
+    const employee=employees.find((e:any)=>e.recordId===actor);
+    if(employee?.fullName)return employee.fullName;
+    let identity=actor===user.id?user:null;
+    if(!identity&&/^[0-9a-f-]{36}$/i.test(actor)) {
+      const {data:membership,error}=await db.from('company_memberships').select('employee_id')
+        .eq('company_id',companyId).eq('user_id',actor).maybeSingle();
+      if(error)databaseError(error);
+      const memberName=employees.find((e:any)=>e.recordId===membership?.employee_id)?.fullName;
+      if(memberName)return memberName;
+      if(membership) {
+        const {data,error:authError}=await db.auth.admin.getUserById(actor);
+        if(authError)databaseError(authError);
+        identity=data.user;
+      }
+    }
+    return identity?.user_metadata?.full_name||identity?.user_metadata?.name||identity?.email||'Unknown user';
+  };
   const business = new (BusinessService as any)({accounts,records,authorizeWrite});
   const canRead = (section: string) => requireThat(admin || principal.permissions[section],403,'SECTION_FORBIDDEN','Section access is not assigned to you.');
   const read = async (table: string,includeDeleted = false) => {

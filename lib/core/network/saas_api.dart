@@ -443,6 +443,10 @@ class SaasApi implements SessionRepository {
     if (path.endsWith('/documents')) {
       cache.invalidate((p) => Uri.parse(p).path == path);
     }
+    if (path.contains('/documents/')) {
+      final collection = path.substring(0, path.lastIndexOf('/'));
+      cache.invalidate((p) => Uri.parse(p).path == collection);
+    }
     final tables = <String>{};
     if (path.endsWith('/sync')) {
       final applied = (result['results'] as List? ?? [])
@@ -1078,10 +1082,12 @@ class SaasApi implements SessionRepository {
     String section,
     String recordId, {
     bool employee = false,
+    bool force = false,
   }) =>
       _json(
         'GET',
         '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents?section=${Uri.encodeQueryComponent(section)}&recordId=${Uri.encodeQueryComponent(recordId)}',
+        force: force,
       );
   Future<Map<String, dynamic>> balanceSheet(
     String companyId,
@@ -1521,6 +1527,14 @@ class SaasApi implements SessionRepository {
           'data': base64Encode(bytes),
         },
       );
+
+  Future<Map<String, dynamic>> deleteDocument(
+    String companyId,
+    String documentId, {
+    bool employee = false,
+  }) =>
+      _json('DELETE',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents/${_id(documentId)}');
 
   Future<Uint8List> document(
     String companyId,

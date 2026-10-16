@@ -313,6 +313,10 @@ export class BusinessService {
           writeValues.baseAmount = convert(record.total ?? record.netSalary ?? record.amount ?? 0, Number(record.exchangeRate || 1));
         }
         const taskExtra = await taskActivityChanges(this.records, companyId, tableName, action, old, writeValues, system, opKey);
+        if (taskExtra.length && this.accounts.actorName) {
+          const name = await this.accounts.actorName(actor);
+          for (const entry of taskExtra) entry.values.authorName = name;
+        }
         const ledger = action === 'reverse' ? await reverseCashChanges(this.records, companyId, tableName,
           old, { ...system, createdAt: now, createdBy: actor }, opKey, values) : ['post', 'pay'].includes(action) ? await cashLedgerChanges(this.records, companyId, tableName,
           { ...old, ...writeValues }, { ...system, createdAt: now, createdBy: actor }, opKey, action === 'pay') : null;

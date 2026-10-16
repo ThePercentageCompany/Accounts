@@ -142,6 +142,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
       widget.section,
       _recordId,
       employee: widget.employee,
+      force: true,
     );
     if (mounted) {
       setState(() {
@@ -166,6 +167,30 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     } finally {
       if (mounted) setState(() => _reading = false);
     }
+  }
+
+  Future<void> _deleteDocument(Map<String, dynamic> doc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete document?'),
+        content: Text('Delete ${doc['name']}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _run(() async {
+      await widget.api.deleteDocument(widget.companyId, doc['documentId'],
+          employee: widget.employee);
+      await _read();
+    });
   }
 
   Future<void> _upload() => _run(() async {
@@ -389,15 +414,29 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                                     '${doc['mimeType']} · ${doc['byteLength']} bytes',
                                   ),
                                   onTap: busy ? null : () => _open(doc),
-                                  trailing: logo && widget.writes != null
-                                      ? LoadingButton.text(
-                                          onPressed: busy
-                                              ? null
-                                              : () =>
-                                                  _useLogo(doc['documentId']),
-                                          child: const Text('Use as logo'),
-                                        )
-                                      : const Icon(Icons.download),
+                                  trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (doc['canDelete'] == true)
+                                          IconButton(
+                                            tooltip: 'Delete document',
+                                            onPressed: busy
+                                                ? null
+                                                : () => _deleteDocument(doc),
+                                            icon: const Icon(
+                                                Icons.delete_outline),
+                                          ),
+                                        logo && widget.writes != null
+                                            ? LoadingButton.text(
+                                                onPressed: busy
+                                                    ? null
+                                                    : () => _useLogo(
+                                                        doc['documentId']),
+                                                child:
+                                                    const Text('Use as logo'),
+                                              )
+                                            : const Icon(Icons.download),
+                                      ]),
                                 )),
                           if (image != null)
                             Image.memory(

@@ -6,7 +6,7 @@ import { databaseError } from './workspace.ts';
 const sections=['Tasks','CompanyProfile','Invoices','CreditNotes','Receipts','Quotations','Income','Expenses','Employees','Payroll','Payslips','Assets'];
 export async function authorizeDocument(ctx:any,section:string,id:string,write=false) {
   requireThat(sections.includes(section),400,'INVALID_DOCUMENT','Unsupported document section.');
-  if(write)requireThat(ctx.admin||ctx.principal.writableSections.includes(({CompanyProfile:'Settings',Expenses:'Income & Expenses',Income:'Income & Expenses',Assets:'Fixed Assets',CreditNotes:'Invoices',Receipts:'Invoices',Payslips:'Payroll'} as any)[section]??section),403,'DOCUMENT_FORBIDDEN','Document upload access is not assigned.');
+  if(write)requireThat(ctx.admin||section==='Tasks'||ctx.principal.writableSections.includes(({CompanyProfile:'Settings',Expenses:'Income & Expenses',Income:'Income & Expenses',Assets:'Fixed Assets',CreditNotes:'Invoices',Receipts:'Invoices',Payslips:'Payroll'} as any)[section]??section),403,'DOCUMENT_FORBIDDEN','Document upload access is not assigned.');
   const rows=await ctx.read(section);
   requireThat(rows.some((r:any)=>r.recordId===id && !r.isDeleted),403,'DOCUMENT_FORBIDDEN','Document record is unavailable.');
 }
@@ -32,7 +32,8 @@ export async function uploadDocument(ctx:any,input:any,key:string) {
     requireThat(saved.length===bytes.length&&saved.every((v,i)=>v===bytes[i]),409,'IDEMPOTENCY_CONFLICT','Stored upload differs.');
   }
   const descriptor={documentId:id,path,name:input.name,mimeType:input.mimeType,byteLength:bytes.length,
-    relatedSection:input.section,relatedRecordId:input.relatedRecordId,fingerprint,status:'READY'};
+    relatedSection:input.section,relatedRecordId:input.relatedRecordId,fingerprint,status:'READY',
+    uploadedBy:ctx.user.id,uploadedByEmployeeId:ctx.member.employee_id};
   await ctx.registry.transact((next:any)=>{next.companies[ctx.company.id].documents??={};next.companies[ctx.company.id].documents[id]=descriptor;});
   const rows=(await ctx.records.read(ctx.company.id,['DocumentRegistry'])).DocumentRegistry;
   await ctx.records.write(ctx.company.id,'DocumentRegistry',Math.max(1,...rows.map((r:any)=>r._row))+1,
@@ -40,5 +41,27 @@ export async function uploadDocument(ctx:any,input:any,key:string) {
       kind:input.section,name:input.name,mimeType:input.mimeType,byteLength:bytes.length,relatedSection:input.section,
       relatedRecordId:input.relatedRecordId,status:'READY',isDeleted:false});
   return {documentId:id};
+}
+export async function canDeleteDocument(ctx:any,d:any) {
+  if(ctx.admin)return true;
+  if(d.uploadedBy)return d.uploadedBy===ctx.user.id||!!ctx.member.employee_id&&d.uploadedByEmployeeId===ctx.member.employee_id;
+  const rows=(await ctx.records.read(ctx.company.id,['DocumentRegistry'])).DocumentRegistry;
+  return rows.some((r:any)=>r.recordId===d.documentId&&r.createdBy===ctx.user.id);
+}
+export async function deleteDocument(ctx:any,id:string) {
+  const state=(await ctx.registry.read()).state;
+  const doc=state.companies[ctx.company.id].documents?.[id];
+  requireThat(doc,404,'DOCUMENT_UNAVAILABLE','Document is unavailable.');
+  await authorizeDocument(ctx,doc.relatedSection,doc.relatedRecordId);
+  requireThat(await canDeleteDocument(ctx,doc),403,'DOCUMENT_FORBIDDEN','Only the uploader or an admin can delete this document.');
+  if(doc.status==='DELETED')return {deleted:true};
+  const {error}=await ctx.db.storage.from('company-documents').remove([doc.path]);
+  if(error)databaseError(error);
+  await ctx.registry.transact((next:any)=>{next.companies[ctx.company.id].documents[id].status='DELETED';});
+  const rows=(await ctx.records.read(ctx.company.id,['DocumentRegistry'])).DocumentRegistry;
+  const row=rows.find((r:any)=>r.recordId===id);
+  if(row)await ctx.records.write(ctx.company.id,'DocumentRegistry',row._row,
+    {...row,isDeleted:true,status:'DELETED',recordVersion:row.recordVersion+1,updatedBy:ctx.user.id,updatedAt:Date.now()});
+  return {deleted:true};
 }
 export function publicDocument(d:any){return {documentId:d.documentId,name:d.name,mimeType:d.mimeType,byteLength:d.byteLength};}

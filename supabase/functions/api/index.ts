@@ -2,7 +2,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 import { workspace,databaseError } from '../_shared/workspace.ts';
 import { saveEmployee,employeeAccess } from '../_shared/employees.ts';
-import { authorizeDocument,uploadDocument,publicDocument } from '../_shared/documents.ts';
+import { authorizeDocument,uploadDocument,publicDocument,deleteDocument,canDeleteDocument } from '../_shared/documents.ts';
 import { ApiError,requireThat } from '../_shared/domain/errors.js';
 import { TaskService } from '../_shared/domain/task-service.js';
 import { previewPayroll } from '../_shared/domain/payroll-policy.js';
@@ -230,17 +230,19 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     }
     const documents=/^\/documents(?:\/([A-Za-z0-9_-]{43}))?$/.exec(tail);
     if(documents) {
+      if(request.method==='DELETE'&&documents[1])return finish(await deleteDocument(ctx,documents[1]));
       if(request.method==='POST'&&!documents[1])return finish(await uploadDocument(ctx,input,keyOf(request)),201);
       const descriptors=Object.values(ctx.company.configuration.documents??{}) as any[];
       if(documents[1]) {
-        const doc=descriptors.find(d=>d.documentId===documents[1]);requireThat(doc,404,'DOCUMENT_UNAVAILABLE','Document is unavailable.');
+        const doc=descriptors.find(d=>d.documentId===documents[1]&&d.status!=='DELETED');requireThat(doc,404,'DOCUMENT_UNAVAILABLE','Document is unavailable.');
         await authorizeDocument(ctx,doc.relatedSection,doc.relatedRecordId);
         const {data,error}=await db.storage.from('company-documents').download(doc.path);if(error)databaseError(error);
         return new Response(data,{headers:{...headers,'Content-Type':doc.mimeType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(doc.name)}`}});
       }
       const section=url.searchParams.get('section')??'',recordId=url.searchParams.get('recordId')??'';
       await authorizeDocument(ctx,section,recordId);
-      return json(200,{documents:descriptors.filter(d=>d.relatedSection===section&&d.relatedRecordId===recordId).map(publicDocument)});
+      return json(200,{documents:await Promise.all(descriptors.filter(d=>d.status!=='DELETED'&&d.relatedSection===section&&d.relatedRecordId===recordId)
+        .map(async d=>({...publicDocument(d),canDelete:await canDeleteDocument(ctx,d)})))});
     }
     if(tail==='/notifications'&&request.method==='GET') {
       if(ctx.admin)return json(200,{notifications:[],unread:0,pushAvailable:false,nativePushAvailable:false,pushEndpoints:[],pushDevices:[],subscriptionCount:0});
