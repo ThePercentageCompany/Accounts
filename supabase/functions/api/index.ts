@@ -10,6 +10,7 @@ import { companyDesign,validateDesign,snapshotHtml } from '../_shared/domain/doc
 import { SECTION_TABLES } from '../_shared/domain/employee-policy.js';
 import { exchangeRate } from '../_shared/domain/foreign-currency.js';
 import { groupOverview } from '../_shared/groups.ts';
+import { employeeLoginPassword } from '../_shared/domain/employee-login.js';
 
 const appOrigin=Deno.env.get('APP_ORIGIN')??'https://accounts.thepercentagecompany.com';
 const supabaseUrl=Deno.env.get('SUPABASE_URL')!;
@@ -45,8 +46,13 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
         400,'INVALID_EMPLOYEE_LOGIN','Supply an employee invitation and private code.');
       const {data:invite,error}=await db.rpc('employee_invitation',{p_invite:input.inviteId});if(error)databaseError(error);
       requireThat(invite,401,'EMPLOYEE_ACCESS_DENIED','The invitation or private code is invalid.');
+      const secret=Deno.env.get('EMPLOYEE_INVITE_KEY');
+      if (/^[A-Za-z0-9]{4}$/.test(input.privateCode.trim())) {
+        requireThat(secret && secret.length>=32,503,'INVITE_CONFIGURATION','Employee invitation signing is not configured.');
+      }
+      const password=employeeLoginPassword(secret??'',input.inviteId,input.privateCode);
       const auth=createClient(supabaseUrl,publicKey,{auth:{persistSession:false,autoRefreshToken:false}});
-      const {data,error:ae}=await auth.auth.signInWithPassword({email:invite.auth_email,password:input.privateCode});
+      const {data,error:ae}=await auth.auth.signInWithPassword({email:invite.auth_email,password});
       requireThat(!ae&&data.user?.id===invite.user_id&&data.session,401,'EMPLOYEE_ACCESS_DENIED','The invitation or private code is invalid.');
       const ctx=await workspace(db,{...data.user,sessionCreatedAt:new Date().toISOString()},invite.company_id);
       ctx.principal.name=(await ctx.records.read(invite.company_id,['Employees'])).Employees.find((r:any)=>r.recordId===invite.employee_id)?.fullName??'';

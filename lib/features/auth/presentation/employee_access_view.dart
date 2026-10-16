@@ -246,6 +246,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
                         autocorrect: false,
                         decoration: InputDecoration(
                           labelText: 'Private login code',
+                          hintText: '4 characters, e.g. 7K3M',
                           counterText: '',
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(

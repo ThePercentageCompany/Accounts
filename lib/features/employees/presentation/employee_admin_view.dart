@@ -139,7 +139,7 @@ class _EmployeeAdminViewState extends State<EmployeeAdminView> {
               const SizedBox(height: 12),
               SelectableText(result['inviteLink'] as String),
               const SizedBox(height: 20),
-              const Text('Private login code — share separately'),
+              const Text('4-character login code — share separately'),
               SelectableText(
                 result['privateCode'] as String,
                 style: const TextStyle(

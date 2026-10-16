@@ -1516,7 +1516,7 @@ class SaasApi implements SessionRepository {
         data: {
           'name': name,
           'mimeType': mimeType,
-          'relatedSection': relatedSection,
+          'section': relatedSection,
           'relatedRecordId': relatedRecordId,
           'data': base64Encode(bytes),
         },

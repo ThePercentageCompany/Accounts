@@ -3,6 +3,7 @@ import { employeeInput } from './domain/employee-input.js';
 import { opaque, digest } from './domain/crypto.js';
 import { requireThat } from './domain/errors.js';
 import { databaseError } from './workspace.ts';
+import { employeeLoginCode, employeeLoginPassword } from './domain/employee-login.js';
 
 export async function saveEmployee(ctx: any,id: string|null,input: any,key: string) {
   requireThat(ctx.admin,403,'ADMIN_REQUIRED','Only company admins can manage employees.');
@@ -41,18 +42,16 @@ export async function employeeAccess(db:any,user:any,companyId:string,employeeId
   if(action==='revoke')return {revoked:true};
   const secret=Deno.env.get('EMPLOYEE_INVITE_KEY');
   requireThat(secret && secret.length>=32,503,'INVITE_CONFIGURATION','Employee invitation signing is not configured.');
-  const encoder=new TextEncoder();
-  const hmac=await crypto.subtle.importKey('raw',encoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
-  const signature=new Uint8Array(await crypto.subtle.sign('HMAC',hmac,encoder.encode(`${companyId}:${employeeId}:${key}`)));
-  const privateCode=btoa(String.fromCharCode(...signature)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+  const privateCode=employeeLoginCode(secret,companyId,employeeId,key);
+  const password=employeeLoginPassword(secret,op.invite_id,privateCode);
   if(op.status!=='COMPLETED') {
     const {data:existing,error:ie}=await db.rpc('employee_auth_identity',{p_email:op.auth_email});if(ie)databaseError(ie);
     let authUserId=existing;
     if(authUserId) {
-      const {error:ue}=await db.auth.admin.updateUserById(authUserId,{password:privateCode,email_confirm:true});
+      const {error:ue}=await db.auth.admin.updateUserById(authUserId,{password,email_confirm:true});
       if(ue)databaseError(ue);
     } else {
-      const {data:created,error:ae}=await db.auth.admin.createUser({email:op.auth_email,password:privateCode,email_confirm:true,
+      const {data:created,error:ae}=await db.auth.admin.createUser({email:op.auth_email,password,email_confirm:true,
         app_metadata:{kind:'employee'}});
       if(ae)databaseError(ae);authUserId=created.user.id;
     }

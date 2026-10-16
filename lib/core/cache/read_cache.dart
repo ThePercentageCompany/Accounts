@@ -333,8 +333,13 @@ class ReadCache extends ChangeNotifier {
     final future = (() async {
       try {
         final result = await loader();
-        if (!_current(generation) || state.revision != revision) {
-          throw StateError('Outdated response discarded.');
+        if (!_current(generation)) {
+          throw StateError('Workspace context changed.');
+        }
+        if (state.revision != revision) {
+          // Let the current request handle its own errors and refresh state.
+          // ignore: unawaited_return_in_try_block
+          return _latestRefresh(key, loader);
         }
         // API responses are complete snapshots, including empty lists and deletions.
         state.data = _copy(result);
@@ -362,7 +367,8 @@ class ReadCache extends ChangeNotifier {
         unawaited(_safe(() => store.write(storageKey, entry)));
         return _copy(result);
       } catch (error) {
-        if (!_current(generation) || state.revision != revision) rethrow;
+        if (!_current(generation)) rethrow;
+        if (state.revision != revision) return _latestRefresh(key, loader);
         if (isAuthorizationError?.call(error) == true) {
           final oldAccount = account;
           detach();
@@ -411,6 +417,22 @@ class ReadCache extends ChangeNotifier {
       },
     );
     return future;
+  }
+
+  // Invalidation supersedes the request, not the caller waiting for its data.
+  // Join the replacement request or reuse its completed snapshot. Never publish
+  // the superseded response or record its error against the current revision.
+  Future<Map<String, dynamic>> _latestRefresh(
+    String key,
+    Future<Map<String, dynamic>> Function() loader,
+  ) {
+    final pending = _refreshes[key];
+    if (pending != null) return pending;
+    final state = _states[key];
+    if (state?.data != null && !state!.stale) {
+      return Future.value(_copy(state.data!));
+    }
+    return _refresh(key, _loaders[key] ?? loader);
   }
 
   void invalidate(

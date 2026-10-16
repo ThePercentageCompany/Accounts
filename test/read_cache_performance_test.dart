@@ -4,6 +4,84 @@ import 'package:tpc_invoice/core/cache/cache_store.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
 
 void main() {
+  for (final active in [false, true]) {
+    for (final obsoleteFails in [false, true]) {
+      test(
+          'invalidated read follows replacement (active: $active, '
+          'obsolete fails: $obsoleteFails)', () async {
+        final cache = ReadCache(store: MemoryCacheStore(), automatic: false);
+        addTearDown(cache.dispose);
+        cache.configure(scope: 'company-a', account: 'owner-a');
+        final old = Completer<Map<String, dynamic>>();
+        final replacement = Completer<Map<String, dynamic>>();
+        var calls = 0;
+        Future<Map<String, dynamic>> loader() =>
+            ++calls == 1 ? old.future : replacement.future;
+        final waiting = cache.read('/records', loader);
+        await Future<void>.delayed(Duration.zero);
+        if (active) cache.activate('/records');
+        cache.invalidate((path) => path == '/records');
+        if (obsoleteFails) {
+          old.completeError(StateError('Obsolete network failure'));
+        } else {
+          old.complete({
+            'records': ['old']
+          });
+        }
+        await Future<void>.delayed(Duration.zero);
+        expect(calls, 2);
+        expect(cache.state('/records')!.data, isNull);
+        expect(cache.state('/records')!.error, isNull);
+        expect(cache.state('/records')!.refreshing, isTrue);
+        replacement.complete({
+          'records': ['current']
+        });
+        expect(await waiting, {
+          'records': ['current']
+        });
+        expect(cache.state('/records')!.data, {
+          'records': ['current']
+        });
+        expect(cache.state('/records')!.refreshing, isFalse);
+        expect(cache.state('/records')!.failures, 0);
+      });
+    }
+  }
+
+  test('late response uses an already completed replacement', () async {
+    final cache = ReadCache(store: MemoryCacheStore(), automatic: false);
+    addTearDown(cache.dispose);
+    cache.configure(scope: 'company-a', account: 'owner-a');
+    final old = Completer<Map<String, dynamic>>();
+    var calls = 0;
+    Future<Map<String, dynamic>> loader() async =>
+        ++calls == 1 ? old.future : {'value': 'current'};
+    final waiting = cache.read('/records', loader);
+    await Future<void>.delayed(Duration.zero);
+    cache.activate('/records');
+    cache.invalidate((_) => true);
+    await Future<void>.delayed(Duration.zero);
+    old.complete({'value': 'old'});
+    expect(await waiting, {'value': 'current'});
+    expect(calls, 2);
+  });
+
+  test('workspace switch still rejects the previous workspace response',
+      () async {
+    final cache = ReadCache(store: MemoryCacheStore(), automatic: false);
+    addTearDown(cache.dispose);
+    cache.configure(scope: 'company-a', account: 'owner-a');
+    final old = Completer<Map<String, dynamic>>();
+    final waiting = cache.read('/records', () => old.future);
+    final rejected = expectLater(waiting, throwsStateError);
+    await Future<void>.delayed(Duration.zero);
+    cache.configure(scope: 'company-b', account: 'owner-b');
+    await cache.read('/records', () async => {'value': 'company-b'});
+    old.complete({'value': 'company-a'});
+    await rejected;
+    expect(cache.state('/records')!.data, {'value': 'company-b'});
+  });
+
   test('saved snapshots return while a stale refresh is still pending',
       () async {
     final store = MemoryCacheStore();
