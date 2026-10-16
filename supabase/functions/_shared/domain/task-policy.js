@@ -31,7 +31,8 @@ export async function taskActivityChanges(records, companyId, table, action, old
   const rows = (await records.read(companyId, ['TaskActivity'])).TaskActivity;
   const changed = Object.keys(values).filter(k => values[k] !== old?.[k]);
   return [{ table: 'TaskActivity', row: Math.max(1, ...rows.map(r => r._row)) + 1,
-    values: { ...system, recordId: challenge('task-activity:' + companyId + ':' + key), isDeleted: false,
+    values: { ...system, createdBy: system.updatedBy, createdAt: system.updatedAt,
+      recordId: challenge('task-activity:' + companyId + ':' + key), isDeleted: false,
       taskId: system.recordId, action, summary: action === 'create' ? 'Task created' : action === 'delete' ? 'Task deleted' :
         changed.map(k => k === 'status' ? 'Status: ' + values[k] : k === 'employeeId' ? 'Employee reassigned' : k + ' updated').join(', ') || 'Task saved' } }];
 }

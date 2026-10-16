@@ -348,7 +348,7 @@ class _TaskDetailsState extends State<TaskDetails> {
             Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                    '${a['summary']}\n${a['authorName'] ?? 'Team member'} ? ${_stamp(a['createdAt'])}',
+                    '${a['summary']}\nUpdated by ${a['authorName'] ?? 'Team member'} · ${_stamp(a['createdAt'])}',
                     style: Theme.of(context).textTheme.bodyMedium)),
         ]);
     return Scaffold(
