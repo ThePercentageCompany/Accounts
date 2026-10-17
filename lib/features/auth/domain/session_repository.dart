@@ -15,8 +15,6 @@ abstract interface class SessionRepository {
   Future<Map<String, dynamic>> employeeLogin(String invite, String code);
   Future<Map<String, dynamic>> employeeLogout();
   Future<Map<String, dynamic>> logout();
-  Future<Uri> startSignIn();
-  Future<Uri> connectGoogle(String companyId);
   Future<void> clearWorkspace();
   void detachWorkspace();
   void useVerifiedWorkspace(

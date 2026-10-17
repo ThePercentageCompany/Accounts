@@ -1,8 +1,8 @@
-# TPC Accounts
+# TPC Business Suite
 
-Flutter business accounting workspace backed by a shared Cloud Run API. Owners sign in through the backend and provision company Google storage; employees use backend-issued invitations and private codes.
+Flutter business suite for accounting, employees, task scheduling, invoices and quotations. Supabase provides Auth, Postgres, Edge Functions, Storage and Realtime. Admins sign in with email and password; employees use admin-issued invitations and private codes. [Business groups](docs/BUSINESS_GROUPS.md) organize separate country entities and accounting books.
 
-The project is under implementation. See [workflow and delivery status](SOFTWARE_WORKFLOW_AND_STATUS.md) for implemented features, validation and remaining release work.
+See [release status](supabase/IMPLEMENTATION_PLAN.md) for implemented features, validation and remaining release work.
 
 ## Local development
 
@@ -12,10 +12,10 @@ Install Flutter with Dart 3.8 or later, then run:
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d chrome --dart-define-from-file=config/saas.example.json
+flutter run -d chrome --web-port=3000 --dart-define-from-file=config/saas.production.json
 ```
 
-Set the example configuration's SAAS_API_ORIGIN to a trusted backend. Without an API origin the app displays a configuration error. See [setup](SETUP.md) for operator configuration and release builds.
+The app includes this project's public Supabase configuration for ordinary launches. To use another project, set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY together. See [setup](SETUP.md) for deployment steps.
 
 ## Source layout
 
@@ -26,7 +26,7 @@ Set the example configuration's SAAS_API_ORIGIN to a trusted backend. Without an
 - `lib/features/employees/presentation/cubit/`: employee administration state and durable write coordination.
 - `lib/core/network/` and `cache/`: shared API transport and persistent read cache.
 - `lib/core/theme/`, `widgets/` and `utils/`: shared appearance, QR rendering and platform downloads.
-- `backend/cloud-run/`: shared API, provisioning, permissions and accounting policies.
+- `supabase/`: database migrations, Edge API, permissions and accounting policies.
 - `test/`: tests for the active Flutter application.
 - `scripts/`: setup, build and verification tools.
 
@@ -52,9 +52,9 @@ The authenticated `GET /v1/companies/{companyId}/exchange-rate?currency=INR&date
 
 Currency dropdowns show codes and names from the public Frankfurter `/v2/currencies` catalog, cached for the app session. Common currencies and saved currency codes remain available offline. Selecting a transaction currency refreshes its dated exchange rate through the authenticated backend endpoint. Receipt and payment currencies remain locked to their source document.
 
-Existing spreadsheet columns are extended without changing historical money or journal values. Existing posted records retain their original ledger scale. This release does not add automatic period-end revaluation, currency-specific bank account registers, or bank-fee reconciliation; bank fees can be recorded separately as expenses. Supported transaction amounts retain the application's two-decimal precision.
+Existing posted records retain their original ledger scale. This release does not add automatic period-end revaluation, currency-specific bank account registers, or bank-fee reconciliation; bank fees can be recorded separately as expenses. Supported transaction amounts retain the application's two-decimal precision.
 ## Cash and bank transfers
 
 The Cash & Bank module records cash deposits and withdrawals as balanced internal
 transfers, with draft/post/reverse workflows and manual bank statement matching.
-See [module and API documentation](backend/cloud-run/MONEY_TRANSFERS.md).
+See [module and API documentation](docs/MONEY_TRANSFERS.md).

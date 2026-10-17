@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/core/utils/report_print.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:typed_data';
 import 'dart:convert';
@@ -5,6 +6,7 @@ import 'dart:async';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/utils/file_download.dart';
 import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
@@ -86,19 +88,12 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   Uint8List? image;
   String? imageName;
   bool get logo => widget.section == 'CompanyProfile';
-  HtmlDocumentDesignStore get htmlStore => HtmlDocumentDesignStore(
-        widget.api,
-        widget.companyId,
-        widget.section,
-        employee: widget.employee,
-      );
   Future<void> _exportHtml() => _run(() async {
         final html = await savedRecordHtml(
           widget.api,
           widget.companyId,
           widget.section,
           _recordId,
-          await htmlStore.load(),
           employee: widget.employee,
         );
         await downloadFile(
@@ -147,6 +142,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
       widget.section,
       _recordId,
       employee: widget.employee,
+      force: true,
     );
     if (mounted) {
       setState(() {
@@ -171,6 +167,30 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     } finally {
       if (mounted) setState(() => _reading = false);
     }
+  }
+
+  Future<void> _deleteDocument(Map<String, dynamic> doc) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete document?'),
+        content: Text('Delete ${doc['name']}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _run(() async {
+      await widget.api.deleteDocument(widget.companyId, doc['documentId'],
+          employee: widget.employee);
+      await _read();
+    });
   }
 
   Future<void> _upload() => _run(() async {
@@ -209,9 +229,6 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
         }
       });
   Future<Uint8List> _pdfBytes() async {
-    if (const ['Invoices', 'Quotations'].contains(widget.section)) {
-      await htmlStore.load();
-    }
     return sharedRecordPdf(
       widget.api,
       widget.companyId,
@@ -225,6 +242,12 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
         await downloadFile(await _pdfBytes(),
             filename: '${widget.section}-$_recordId.pdf',
             mimeType: 'application/pdf');
+      });
+  Future<void> _printDesign() => _run(() async {
+        final html = await savedRecordHtml(
+            widget.api, widget.companyId, widget.section, _recordId,
+            employee: widget.employee);
+        await printReport(html);
       });
   Future<void> _generate() => _run(() async {
         final bytes = await _pdfBytes();
@@ -298,7 +321,24 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 ),
               ),
               if (error != null) Text(error!),
-              if (const ['Invoices', 'Quotations'].contains(widget.section))
+              if (htmlDocumentSections.contains(widget.section))
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  children: [
+                    LoadingButton.textIcon(
+                      onPressed: busy ? null : _downloadPdf,
+                      icon: const Icon(Icons.download_outlined),
+                      label: const Text('Download PDF'),
+                    ),
+                    if (kIsWeb)
+                      LoadingButton.textIcon(
+                        onPressed: busy ? null : _printDesign,
+                        icon: const Icon(Icons.print_outlined),
+                        label: const Text('Print company design'),
+                      )
+                  ],
+                ),
+              if (const ['Payroll', 'Assets'].contains(widget.section))
                 Align(
                   alignment: Alignment.centerRight,
                   child: LoadingButton.textIcon(
@@ -308,7 +348,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   ),
                 ),
               if (!widget.employee &&
-                  const ['Invoices', 'Quotations'].contains(widget.section))
+                  htmlDocumentSections.contains(widget.section))
                 Align(
                   alignment: Alignment.centerRight,
                   child: PopupMenuButton<String>(
@@ -332,8 +372,8 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   children: [
                     if (const [
                       'Invoices',
-                      'CreditNotes',
                       'Quotations',
+                      'CreditNotes',
                       'Receipts',
                       'Payroll',
                       'Assets',
@@ -350,6 +390,12 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     ),
                   ],
                 ),
+              if (htmlDocumentSections.contains(widget.section))
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(kIsWeb
+                        ? 'PDFs are generated on this device. Print company design uses the saved HTML layout.'
+                        : 'PDFs are generated on this device.')),
               if (!busy && documents.isEmpty && _localDocuments.isEmpty)
                 const Text('No documents attached.'),
               Expanded(
@@ -367,15 +413,29 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                                     '${doc['mimeType']} · ${doc['byteLength']} bytes',
                                   ),
                                   onTap: busy ? null : () => _open(doc),
-                                  trailing: logo && widget.writes != null
-                                      ? LoadingButton.text(
-                                          onPressed: busy
-                                              ? null
-                                              : () =>
-                                                  _useLogo(doc['documentId']),
-                                          child: const Text('Use as logo'),
-                                        )
-                                      : const Icon(Icons.download),
+                                  trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (doc['canDelete'] == true)
+                                          IconButton(
+                                            tooltip: 'Delete document',
+                                            onPressed: busy
+                                                ? null
+                                                : () => _deleteDocument(doc),
+                                            icon: const Icon(
+                                                Icons.delete_outline),
+                                          ),
+                                        logo && widget.writes != null
+                                            ? LoadingButton.text(
+                                                onPressed: busy
+                                                    ? null
+                                                    : () => _useLogo(
+                                                        doc['documentId']),
+                                                child:
+                                                    const Text('Use as logo'),
+                                              )
+                                            : const Icon(Icons.download),
+                                      ]),
                                 )),
                           if (image != null)
                             Image.memory(

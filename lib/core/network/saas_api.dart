@@ -2,11 +2,16 @@ import 'dart:async';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tpc_invoice/core/network/supabase_runtime.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:tpc_invoice/core/offline/offline_store.dart';
 import 'package:tpc_invoice/core/offline/offline_outbox.dart';
+import 'package:tpc_invoice/core/offline/task_projection.dart';
+import 'package:tpc_invoice/core/offline/provisional_report.dart';
+import 'package:tpc_invoice/core/offline/entity_projection.dart';
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 import 'package:tpc_invoice/core/cache/cache_store.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
@@ -14,7 +19,14 @@ import 'package:tpc_invoice/core/cache/read_cache.dart';
 import 'package:tpc_invoice/core/network/api_transport_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/network/api_transport_web.dart';
 
-const configuredSaasApiOrigin = String.fromEnvironment('SAAS_API_ORIGIN');
+const configuredSaasApiOrigin = configuredSupabaseUrl;
+
+class TaskRealtimeUpdate {
+  const TaskRealtimeUpdate(
+      {required this.companyId, required this.connected, this.refresh = true});
+  final String companyId;
+  final bool connected, refresh;
+}
 
 class SaasApiException implements Exception {
   const SaasApiException(
@@ -41,27 +53,76 @@ class SaasApiException implements Exception {
 }
 
 /// Trusted operator origin only. QR codes identify invitations, never servers.
-/// Authentication lives in secure HttpOnly cookies, not local preferences.
+/// Supabase Auth manages the bearer session used by the Edge API.
 class SaasApi implements SessionRepository {
   SaasApi({
     String origin = configuredSaasApiOrigin,
     http.Client? client,
+    SupabaseClient? auth,
     CacheStore? cacheStore,
     OfflineStore? offlineStore,
     this.offlineAutomatic = true,
   })  : origin = _origin(origin),
         _client = client ?? createSaasTransport(),
+        _auth = auth,
         _cacheStore = cacheStore,
         _offlineStore = offlineStore;
 
   final OfflineStore? _offlineStore;
+  final SupabaseClient? _auth;
+  SupabaseClient? get _supabase => _auth ?? currentSupabaseClient;
+  Future<Session?>? _authRefresh;
+  Future<Session?> _refreshAuthSession(SupabaseClient client) {
+    final pending = _authRefresh;
+    if (pending != null) return pending;
+    final future = (() async {
+      try {
+        return (await client.auth.refreshSession()).session;
+      } on AuthRetryableFetchException {
+        throw const SaasApiException(
+            'NETWORK', 'Connection unavailable. Your login is preserved.');
+      } on AuthException catch (error) {
+        if (const {
+          'refresh_token_not_found',
+          'refresh_token_already_used',
+          'session_not_found',
+          'user_banned',
+          'user_not_found'
+        }.contains(error.code)) {
+          throw const SaasApiException(
+              'UNAUTHORIZED', 'Your session is no longer valid. Sign in again.',
+              status: 401);
+        }
+        throw const SaasApiException(
+            'NETWORK', 'Could not refresh your login. Retry when connected.');
+      }
+    })();
+    _authRefresh = future;
+    future.then((_) {
+      if (identical(_authRefresh, future)) _authRefresh = null;
+    }, onError: (Object _, StackTrace __) {
+      if (identical(_authRefresh, future)) _authRefresh = null;
+    });
+    return future;
+  }
+
+  RealtimeChannel? _realtime;
+  final _taskUpdates = StreamController<TaskRealtimeUpdate>.broadcast();
+  Stream<TaskRealtimeUpdate> get taskUpdates => _taskUpdates.stream;
+  bool _taskRealtimeConnected = false;
+  bool get taskRealtimeConnected => _taskRealtimeConnected;
+  int _realtimeGeneration = 0;
   final bool offlineAutomatic;
   bool get offlineEnabled => kIsWeb || _offlineStore != null;
   String get _sessionSnapshotScope => 'session-profile:${origin.origin}';
   Future<void> saveSessionProfile(Map<String, dynamic> profile) async {
     if (!offlineEnabled) return;
     await offlineStore.change(
-        _sessionSnapshotScope, (p) => p['profile'] = profile);
+        _sessionSnapshotScope,
+        (p) => p['profile'] = {
+              ...profile,
+              'authUserId': _supabase?.auth.currentUser?.id,
+            });
   }
 
   Future<Map<String, dynamic>?> offlineSessionProfile() async {
@@ -70,6 +131,12 @@ class SaasApi implements SessionRepository {
     if (profile is! Map ||
         (profile['expiresAt'] as int? ?? 0) <=
             DateTime.now().millisecondsSinceEpoch) {
+      return null;
+    }
+    final auth = _supabase;
+    if (auth != null &&
+        (auth.auth.currentSession == null ||
+            profile['authUserId'] != auth.auth.currentUser?.id)) {
       return null;
     }
     return Map<String, dynamic>.from(profile);
@@ -274,6 +341,7 @@ class SaasApi implements SessionRepository {
     _permissionKey = permission;
     _verifiedAt = DateTime.now();
     cache.configure(scope: scope, account: account);
+    _watchRealtime(companyId);
     for (final outbox in _outboxes.values) {
       outbox.resumeAuthentication();
     }
@@ -281,6 +349,7 @@ class SaasApi implements SessionRepository {
 
   @override
   void detachWorkspace() {
+    _stopRealtime();
     for (final outbox in _outboxes.values) {
       outbox.pause();
     }
@@ -292,6 +361,7 @@ class SaasApi implements SessionRepository {
 
   @override
   Future<void> clearWorkspace() async {
+    _stopRealtime();
     for (final outbox in _outboxes.values) {
       outbox.pause();
     }
@@ -351,6 +421,7 @@ class SaasApi implements SessionRepository {
     }
     final prefix = '/v1/companies/$_cacheCompany/';
     return uri.path.startsWith('${prefix}records/') ||
+        uri.path == '${prefix}overview' ||
         uri.path.startsWith('${prefix}reports/') ||
         uri.path == '${prefix}employees' ||
         uri.path == '${prefix}documents' ||
@@ -371,6 +442,10 @@ class SaasApi implements SessionRepository {
     if (cache.scope == null) return;
     if (path.endsWith('/documents')) {
       cache.invalidate((p) => Uri.parse(p).path == path);
+    }
+    if (path.contains('/documents/')) {
+      final collection = path.substring(0, path.lastIndexOf('/'));
+      cache.invalidate((p) => Uri.parse(p).path == collection);
     }
     final tables = <String>{};
     if (path.endsWith('/sync')) {
@@ -430,6 +505,7 @@ class SaasApi implements SessionRepository {
     }
     cache.invalidate(
       (p) =>
+          p.endsWith('/overview') ||
           affected.contains(Uri.parse(p).path.split('/').last) ||
           (financial && p.contains('/reports/')) ||
           (tables.contains('Employees') &&
@@ -509,6 +585,7 @@ class SaasApi implements SessionRepository {
     String path, {
     Map<String, Object?>? data,
     String? operationId,
+    bool retryAuth = true,
   }) async {
     if (!path.startsWith('/v1/') ||
         path.startsWith('//') ||
@@ -518,15 +595,30 @@ class SaasApi implements SessionRepository {
     final abort =
         method == 'GET' && _cacheable(path) ? Completer<void>() : null;
     if (abort != null) _readAborts.add(abort);
+    final target = origin.resolve(
+        origin.host.endsWith('.supabase.co') ? '/functions/v1/api$path' : path);
     final request = (abort == null
-        ? http.Request(method, origin.resolve(path))
+        ? http.Request(method, target)
         : http.AbortableRequest(
             method,
-            origin.resolve(path),
+            target,
             abortTrigger: abort.future,
           ))
       ..followRedirects = false
       ..headers['Accept'] = 'application/json';
+    final supabase = _supabase;
+    if (supabase != null) {
+      var session = supabase.auth.currentSession;
+      if (session?.expiresAt != null &&
+          DateTime.now().millisecondsSinceEpoch ~/ 1000 >=
+              session!.expiresAt! - 60) {
+        session = await _refreshAuthSession(supabase);
+      }
+      if (session != null) {
+        request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+      request.headers['apikey'] = configuredSupabaseKey;
+    }
     if (method != 'GET') {
       request.headers.addAll({
         'Content-Type': 'application/json',
@@ -584,6 +676,19 @@ class SaasApi implements SessionRepository {
       } catch (_) {
         /* A proxy error is not a valid API response. */
       }
+      // A background refresh can race an in-flight read using the old token.
+      // Renew and replay a read once before treating it as a lost login.
+      if (retryAuth &&
+          method == 'GET' &&
+          response.statusCode == 401 &&
+          code == 'UNAUTHORIZED' &&
+          supabase?.auth.currentSession != null) {
+        final refreshed = await _refreshAuthSession(supabase!);
+        if (refreshed != null) {
+          return _send(method, path,
+              data: data, operationId: operationId, retryAuth: false);
+        }
+      }
       final retryHeader = response.headers['retry-after'] ?? '';
       final retrySeconds = int.tryParse(retryHeader);
       Duration? retryAfter;
@@ -618,7 +723,25 @@ class SaasApi implements SessionRepository {
     bool force = false,
   }) async {
     if (method == 'GET' && _cacheable(path)) {
-      return cache.read(path, () => _networkJson(method, path), force: force);
+      final result = await cache.read(path, () => _networkJson(method, path),
+          force: force);
+      final kind = Uri.parse(path).path.split('/').last;
+      if (_cacheCompany != null &&
+          path.contains('/reports/') &&
+          const [
+            'dashboard',
+            'general-ledger',
+            'trial-balance',
+            'profit-and-loss',
+            'balance-sheet'
+          ].contains(kind)) {
+        return localFinancialReport(_cacheCompany!, result, kind,
+            employee: _cacheEmployee);
+      }
+      if (_cacheCompany != null && Uri.parse(path).path.endsWith('/overview')) {
+        return localEntityOverview(_cacheCompany!, result);
+      }
+      return result;
     }
     final mutationScope = cache.scope;
     final result = await _networkJson(
@@ -759,32 +882,6 @@ class SaasApi implements SessionRepository {
     return future;
   }
 
-  Future<Uri> _authorization(String path) async {
-    final result = await _json('POST', path);
-    final uri = Uri.tryParse(
-      result['authorizationUrl'] is String
-          ? result['authorizationUrl'] as String
-          : '',
-    );
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.host != 'accounts.google.com' ||
-        uri.userInfo.isNotEmpty ||
-        (uri.hasPort && uri.port != 443)) {
-      throw const SaasApiException(
-        'INVALID_RESPONSE',
-        'Invalid Google sign-in destination.',
-      );
-    }
-    return uri;
-  }
-
-  @override
-  Future<Uri> startSignIn() async {
-    await clearWorkspace();
-    return _authorization('/v1/auth/google/start');
-  }
-
   @override
   Future<Map<String, dynamic>> me() => _json('GET', '/v1/me');
   Future<Map<String, dynamic>> employeeReport(
@@ -854,20 +951,37 @@ class SaasApi implements SessionRepository {
     String? compareAsOf,
     bool employee = false,
     bool force = false,
-  }) =>
-      _json(
-        'GET',
-        financialReportPath(
-          companyId,
-          kind,
-          asOf: asOf,
-          from: from,
-          compareFrom: compareFrom,
-          compareAsOf: compareAsOf,
-          employee: employee,
-        ),
-        force: force,
-      );
+  }) async {
+    final result = await _json(
+      'GET',
+      financialReportPath(
+        companyId,
+        kind,
+        asOf: asOf,
+        from: from,
+        compareFrom: compareFrom,
+        compareAsOf: compareAsOf,
+        employee: employee,
+      ),
+      force: force,
+    );
+    return result;
+  }
+
+  Map<String, dynamic> localFinancialReport(
+      String companyId, Map<String, dynamic> snapshot, String kind,
+      {bool employee = false}) {
+    final box = workspaceOutbox(companyId, employee: employee);
+    if (box == null) return snapshot;
+    return projectFinancialReport(box, snapshot, kind, (table) {
+      final rows = cache
+              .state(recordsPath(companyId, table, employee: employee))
+              ?.data?['records'] as List? ??
+          [];
+      return box.overlay(table,
+          rows.map((row) => Map<String, dynamic>.from(row as Map)).toList());
+    });
+  }
 
   Future<Map<String, dynamic>> reportSettings(
     String companyId, {
@@ -968,10 +1082,12 @@ class SaasApi implements SessionRepository {
     String section,
     String recordId, {
     bool employee = false,
+    bool force = false,
   }) =>
       _json(
         'GET',
         '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents?section=${Uri.encodeQueryComponent(section)}&recordId=${Uri.encodeQueryComponent(recordId)}',
+        force: force,
       );
   Future<Map<String, dynamic>> balanceSheet(
     String companyId,
@@ -1006,6 +1122,26 @@ class SaasApi implements SessionRepository {
       );
   @override
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
+  Future<Map<String, dynamic>> businessGroups() => _json('GET', '/v1/groups');
+  Future<Map<String, dynamic>> entityOverview(String companyId,
+          {bool force = false}) =>
+      _json('GET', '/v1/companies/${_id(companyId)}/overview', force: force);
+  Map<String, dynamic> localEntityOverview(
+      String companyId, Map<String, dynamic> snapshot) {
+    final box = workspaceOutbox(companyId);
+    return box == null
+        ? snapshot
+        : projectEntity(box, snapshot,
+            syncedAt:
+                cache.state('/v1/companies/$companyId/overview')?.syncedAt);
+  }
+
+  Future<Map<String, dynamic>> createBusinessGroup(String name, String key) =>
+      _json('POST', '/v1/groups', data: {'name': name}, operationId: key);
+  Future<Map<String, dynamic>> createCountryEntity(
+          String groupId, Map<String, dynamic> values, String key) =>
+      _json('POST', '/v1/groups/${_id(groupId)}/entities',
+          data: values, operationId: key);
   @override
   Future<Map<String, dynamic>> deleteCompany(String companyId) =>
       _json('DELETE', '/v1/companies/${_id(companyId)}');
@@ -1018,9 +1154,6 @@ class SaasApi implements SessionRepository {
         operationId: operationId,
       );
   @override
-  Future<Uri> connectGoogle(String companyId) =>
-      _authorization('/v1/companies/${_id(companyId)}/google/connect');
-  @override
   Future<Map<String, dynamic>> setup(String companyId) =>
       _json('GET', '/v1/companies/${_id(companyId)}/setup');
   @override
@@ -1029,7 +1162,8 @@ class SaasApi implements SessionRepository {
   @override
   Future<Map<String, dynamic>> logout() async {
     await clearWorkspace();
-    return _json('POST', '/v1/auth/logout');
+    await _supabase?.auth.signOut();
+    return {};
   }
 
   @override
@@ -1039,11 +1173,17 @@ class SaasApi implements SessionRepository {
   ) async {
     await clearWorkspace();
     _employeeExpiresAt = null;
-    return _json(
+    final result = await _json(
       'POST',
       '/v1/employee/login',
       data: {'inviteId': _id(inviteId), 'privateCode': privateCode},
     );
+    if (_supabase != null) {
+      await _supabase!.auth
+          .setSession((result['session'] as Map)['refresh_token'] as String);
+    }
+    result.remove('session');
+    return result;
   }
 
   @override
@@ -1055,7 +1195,8 @@ class SaasApi implements SessionRepository {
     } catch (_) {}
     _employeeExpiresAt = null;
     await clearWorkspace();
-    return _json('POST', '/v1/employee/logout');
+    await _supabase?.auth.signOut();
+    return {};
   }
 
   Future<Map<String, dynamic>> employees(
@@ -1129,12 +1270,57 @@ class SaasApi implements SessionRepository {
     bool employee = false,
     bool force = false,
     Map<String, String> filters = const {},
-  }) =>
-      _json(
-        'GET',
-        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}',
-        force: force,
-      );
+  }) async {
+    final box = workspaceOutbox(companyId, employee: employee);
+    if (box != null) await box.reload();
+    final path =
+        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}';
+    final pending = _json(
+      'GET',
+      path,
+      force: force,
+    );
+    if (box != null &&
+        cache.state(path)?.data == null &&
+        box.localRecords('Tasks').isNotEmpty) {
+      pending.ignore();
+      return projectTaskPage(
+          box,
+          {
+            'records': [],
+            'total': 0,
+            'summary': {},
+            'dateCounts': {},
+            'nextOffset': null
+          },
+          filters,
+          hasSnapshot: false);
+    }
+    final result = await pending;
+    return localTaskPage(companyId, result,
+        employee: employee, filters: filters);
+  }
+
+  Map<String, dynamic> localTaskPage(
+      String companyId, Map<String, dynamic> page,
+      {bool employee = false, Map<String, String> filters = const {}}) {
+    final box = workspaceOutbox(companyId, employee: employee);
+    final path =
+        '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}';
+    return box == null
+        ? page
+        : projectTaskPage(box, page, filters,
+            syncedAt: cache.state(path)?.syncedAt);
+  }
+
+  OfflineOutbox? workspaceOutbox(String companyId, {bool employee = false}) =>
+      offlineEnabled &&
+              _cacheUser != null &&
+              _cacheCompany == companyId &&
+              _cacheEmployee == employee
+          ? outbox(employee ? 'employee_$_cacheUser' : _cacheUser!, companyId,
+              employee: employee)
+          : null;
 
   Future<Map<String, dynamic>> taskDetail(
     String companyId,
@@ -1144,7 +1330,7 @@ class SaasApi implements SessionRepository {
       _json(
         'GET',
         '${tasksPath(companyId, employee: employee)}/${_id(taskId)}',
-        force: true,
+        force: false,
       );
 
   Future<Map<String, dynamic>> taskAssignees(
@@ -1336,11 +1522,19 @@ class SaasApi implements SessionRepository {
         data: {
           'name': name,
           'mimeType': mimeType,
-          'relatedSection': relatedSection,
+          'section': relatedSection,
           'relatedRecordId': relatedRecordId,
           'data': base64Encode(bytes),
         },
       );
+
+  Future<Map<String, dynamic>> deleteDocument(
+    String companyId,
+    String documentId, {
+    bool employee = false,
+  }) =>
+      _json('DELETE',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/documents/${_id(documentId)}');
 
   Future<Uint8List> document(
     String companyId,
@@ -1364,18 +1558,159 @@ class SaasApi implements SessionRepository {
       _json('PUT', '/v1/companies/${_id(companyId)}/document-designs/$section',
           data: {'source': source, 'expectedVersion': expectedVersion});
 
-  Future<Uint8List> recordPdf(String companyId, String section, String recordId,
-          {bool employee = false}) async =>
-      (await _send('GET',
-              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-pdf/$section/${_id(recordId)}'))
-          .bodyBytes;
-
   void close() {
+    _stopRealtime();
+    _taskUpdates.close();
     for (final outbox in _outboxes.values) {
       outbox.dispose();
     }
     _cancelReads();
     cache.dispose();
     _client.close();
+  }
+
+  Future<void> signInWithPassword(String email, String password) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException('CONFIGURATION',
+          'Configure SUPABASE_PUBLISHABLE_KEY and rebuild the app.');
+    }
+    await clearWorkspace();
+    await client.auth
+        .signInWithPassword(email: email.trim(), password: password);
+  }
+
+  Future<bool> signUp(String email, String password) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException(
+          'CONFIGURATION', 'Supabase Auth is not configured.');
+    }
+    final result = await client.auth.signUp(
+        email: email.trim(),
+        password: password,
+        emailRedirectTo: Uri.base.origin);
+    return result.session != null;
+  }
+
+  Future<void> resetPassword(String email) async {
+    final client = _supabase;
+    if (client == null) {
+      throw const SaasApiException(
+          'CONFIGURATION', 'Supabase Auth is not configured.');
+    }
+    await client.auth
+        .resetPasswordForEmail(email.trim(), redirectTo: Uri.base.origin);
+  }
+
+  Future<String> recordHtml(String companyId, String section, String recordId,
+          {bool employee = false, String? source}) async =>
+      (await _send(source == null ? 'GET' : 'POST',
+              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-html/$section/${_id(recordId)}',
+              data: source == null ? null : {'source': source}))
+          .body;
+
+  void _stopRealtime() {
+    _realtimeGeneration++;
+    _taskRealtimeConnected = false;
+    final channel = _realtime;
+    _realtime = null;
+    if (channel != null) _supabase?.removeChannel(channel).ignore();
+  }
+
+  void _watchRealtime(String companyId) {
+    _stopRealtime();
+    final client = _supabase;
+    if (client == null || client.auth.currentUser == null) return;
+    final generation = _realtimeGeneration;
+    bool current() =>
+        generation == _realtimeGeneration && _cacheCompany == companyId;
+    void taskUpdate({bool refresh = true}) {
+      if (current() && !_taskUpdates.isClosed) {
+        _taskUpdates.add(TaskRealtimeUpdate(
+            companyId: companyId,
+            connected: _taskRealtimeConnected,
+            refresh: refresh));
+      }
+    }
+
+    _realtime = client
+        .channel('workspace:$companyId:${client.auth.currentUser!.id}')
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'company_changes',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'company_id',
+              value: companyId),
+          callback: (change) {
+            if (!current()) return;
+            final sections = change.newRecord['sections'] as List? ?? [];
+            if (sections.isEmpty) {
+              cache.invalidateAll();
+            } else {
+              _invalidateMutation('/v1/companies/$companyId/sync', {
+                'operations': [
+                  for (final section in sections)
+                    {'operationId': section, 'table': section},
+                ],
+              }, {
+                'results': [
+                  for (final section in sections)
+                    {'operationId': section, 'status': 'APPLIED'},
+                ],
+              });
+            }
+            if (sections.isEmpty ||
+                sections.any((s) => const [
+                      'Tasks',
+                      'TaskComments',
+                      'TaskActivity',
+                      'Employees',
+                      'Projects'
+                    ].contains(s))) {
+              taskUpdate();
+            }
+          })
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'company_memberships',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: client.auth.currentUser!.id),
+          callback: (change) {
+            if (!current() || change.newRecord['company_id'] != companyId) {
+              return;
+            }
+            _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
+            _revalidateContext().catchError((Object error) {
+              if (error is SaasApiException && error.requiresSignIn) {
+                onAccessRevoked?.call();
+              }
+            }).ignore();
+          })
+      ..onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'company_id',
+              value: companyId),
+          callback: (_) {
+            if (current()) {
+              cache.invalidate(
+                  (path) => Uri.parse(path).path.endsWith('/notifications'));
+            }
+          })
+      ..subscribe((status, error) {
+        if (!current()) return;
+        _taskRealtimeConnected = status == RealtimeSubscribeStatus.subscribed;
+        if (_taskRealtimeConnected) cache.invalidateAll();
+        taskUpdate(refresh: _taskRealtimeConnected);
+      });
   }
 }

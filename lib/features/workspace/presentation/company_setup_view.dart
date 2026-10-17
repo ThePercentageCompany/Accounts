@@ -12,12 +12,12 @@ class CompanySetupView extends StatefulWidget {
   const CompanySetupView({
     super.key,
     required this.session,
-    required this.navigate,
     this.onOpen,
+    this.onSignIn,
   });
   final SaasSession session;
-  final Future<void> Function(Uri) navigate;
   final VoidCallback? onOpen;
+  final VoidCallback? onSignIn;
   @override
   State<CompanySetupView> createState() => _CompanySetupViewState();
 }
@@ -29,35 +29,6 @@ class _CompanySetupViewState extends State<CompanySetupView> {
   bool _creating = false;
   bool _registering = false;
   final _progressKey = GlobalKey();
-  Timer? _statusPoll;
-
-  @override
-  void initState() {
-    super.initState();
-    _statusPoll = Timer.periodic(const Duration(seconds: 5), (_) {
-      final session = widget.session;
-      if (!mounted ||
-          session.state.busy ||
-          session.state.error != null ||
-          WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
-          WidgetsBinding.instance.lifecycleState ==
-              AppLifecycleState.inactive ||
-          WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden) {
-        return;
-      }
-      if (const [
-        'GOOGLE_CONNECTED',
-        'CREATING_FOLDER',
-        'FOLDER_READY',
-        'CREATING_SPREADSHEET',
-        'SPREADSHEET_READY',
-        'CREATING_SCHEMA',
-        'VERIFYING_SCHEMA'
-      ].contains(session.company?['stage'])) {
-        unawaited(session.refreshSetup());
-      }
-    });
-  }
 
   Future<void> _createCompany() async {
     final session = widget.session;
@@ -104,7 +75,7 @@ class _CompanySetupViewState extends State<CompanySetupView> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'All invoices, quotations, accounting records, employees, uploaded documents and Google Drive workspace files will be permanently removed.',
+                'All invoices, quotations, accounting records, employees, uploaded documents and uploaded files will be permanently removed.',
               ),
               const SizedBox(height: 16),
               const Text(
@@ -131,7 +102,6 @@ class _CompanySetupViewState extends State<CompanySetupView> {
 
   @override
   void dispose() {
-    _statusPoll?.cancel();
     _name.dispose();
     super.dispose();
   }
@@ -140,9 +110,6 @@ class _CompanySetupViewState extends State<CompanySetupView> {
         'READY' => 'Ready',
         'DELETING' => 'Deletion in progress',
         'RECOVERABLE_FAILURE' => 'Needs attention',
-        'GOOGLE_CONNECTION_REQUIRED' ||
-        'RECONNECT_REQUIRED' =>
-          'Connect Google',
         _ => 'Setup in progress',
       };
 
@@ -162,7 +129,6 @@ class _CompanySetupViewState extends State<CompanySetupView> {
               .where(
                   (item) => '${item['name']}'.toLowerCase().contains(_search))
               .toList();
-          final action = company?['nextAction'];
           final overview = _card(
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,12 +200,9 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                       ? 'Create a workspace to bring your customers, invoices and accounting together.'
                       : session.ready
                           ? 'Everything is ready. Open your workspace and get back to business.'
-                          : action == 'CONNECT_GOOGLE' ||
-                                  action == 'RECONNECT_GOOGLE'
-                              ? 'Connect your Google account to finish preparing company storage.'
-                              : company['stage'] == 'DELETING'
-                                  ? 'Workspace deletion has started. If it was interrupted, use Delete workspace to retry removing the remaining data.'
-                                  : 'We are preparing your company workspace. You can refresh its status or return later.',
+                          : company['stage'] == 'DELETING'
+                              ? 'Workspace deletion has started. If it was interrupted, use Delete workspace to retry removing the remaining data.'
+                              : 'We are preparing your company workspace. You can refresh its status or return later.',
                   style: TextStyle(color: colors.onSurfaceVariant, height: 1.6),
                 ),
                 const SizedBox(height: 24),
@@ -252,19 +215,6 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                         onPressed: state.busy ? null : widget.onOpen,
                         icon: const Icon(Icons.arrow_forward),
                         label: const Text('Open company workspace'),
-                      ),
-                    if (action == 'CONNECT_GOOGLE' ||
-                        action == 'RECONNECT_GOOGLE')
-                      LoadingButton.icon(
-                        onPressed: state.busy
-                            ? null
-                            : () => session.connectGoogle(widget.navigate),
-                        icon: const Icon(Icons.link),
-                        label: Text(
-                          action == 'RECONNECT_GOOGLE'
-                              ? 'Reconnect Google'
-                              : 'Connect Google',
-                        ),
                       ),
                     if (company != null && !session.ready)
                       LoadingButton.outlinedIcon(
@@ -383,10 +333,8 @@ class _CompanySetupViewState extends State<CompanySetupView> {
                         ),
                         const SizedBox(height: 24),
                         LoadingButton(
-                          onPressed: state.busy
-                              ? null
-                              : () => session.signIn(widget.navigate),
-                          child: const Text('Sign in with Google'),
+                          onPressed: state.busy ? null : widget.onSignIn,
+                          child: const Text('Admin sign in'),
                         ),
                       ],
                     ),

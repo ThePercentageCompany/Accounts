@@ -1,1 +1,0 @@
-me-central1-docker.pkg.dev/accounts-508118/tpc-backend-v2/api:tasks-20261006-010617

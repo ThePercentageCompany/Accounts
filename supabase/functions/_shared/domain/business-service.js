@@ -1,0 +1,377 @@
+import { currencyValues, convertJournals, validRate, convert, FX_TABLES } from './foreign-currency.js';
+import { validateProject } from './project-policy.js';
+import { companyDesign, validateDesign, snapshotHtml, documentTables } from './document-design.js';
+import { hasLedgerSources, ledgerStatus } from './ledger-status.js';
+import { validateTask, taskActivityChanges } from './task-policy.js';
+import { opaque, digest } from './crypto.js';
+import { ApiError, requireThat } from './errors.js';
+import { validateRelations } from './business-relations.js';
+import { validateBusinessValues } from './business-values.js';
+import { validateJournal } from './journal-policy.js';
+import { cashEntryValues, assertCashEntryEditable } from './cash-entry-policy.js';
+import { financialPeriodValues } from './financial-period-policy.js';
+import { cashLedgerChanges, reverseCashChanges } from './cash-ledger.js';
+import { financialReport } from './financial-report.js';
+import { reportConfiguration, validateReportConfiguration } from './report-configuration.js';
+import { invoiceChanges } from './invoice-policy.js';
+import { receiptChanges, receiptInput } from './receipt-policy.js';
+import { quotationChanges } from './quotation-policy.js';
+import { payrollChanges } from './payroll-policy.js';
+import { assetChanges } from './asset-policy.js';
+import { transferChanges } from './transfer-policy.js';
+import { capitalChanges } from './capital-policy.js';
+import { draftItems } from './document-draft.js';
+import { returnInput } from './invoice-return.js';
+
+const SYSTEM = new Set(['recordId', 'companyId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy',
+  'recordVersion', 'syncStatus', 'isDeleted', 'idempotencyKey']);
+const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
+const validRecordId = (table, value) => validId(value) || (table === 'CompanyProfile' && value === 'company');
+const validKey = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(value);
+const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
+const publicRecord = row => Object.fromEntries(Object.entries(row).filter(([key]) => key !== '_row' && key !== 'idempotencyKey'));
+
+export class BusinessService {
+  constructor({ accounts, records, now = Date.now, authorizeWrite = async () => {} }) { Object.assign(this, { accounts, records, now, authorizeWrite }); this.registry = accounts.registry; }
+  owner(state, token, companyId, allowPending = false) {
+    const owner = this.accounts.companyOwner(state, token, companyId), company = state.companies[companyId];
+    requireThat(company.stage === 'READY', 409, company.stage === 'RECONNECT_REQUIRED' ? 'RECONNECT_REQUIRED' : 'WORKSPACE_NOT_READY', 'Company workspace is not ready.');
+    requireThat(!company.employeeWrite, 409, 'EMPLOYEE_UPDATE_PENDING', 'Confirm the pending employee update first.');
+    requireThat(!company.documentWrite, 409, 'DOCUMENT_WRITE_PENDING', 'Confirm the pending document upload first.');
+    requireThat(allowPending || !company.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'A business update is being confirmed. Retry shortly.');
+    return { owner, company };
+  }
+  values(tableName, input) {
+    const table = this.records.table(tableName);
+    requireThat(input && typeof input === 'object' && !Array.isArray(input), 400, 'INVALID_RECORD', 'Record values are required.');
+    if (['Invoices', 'Quotations'].includes(tableName) && Object.hasOwn(input, 'items')) {
+      const { items, ...header } = input;
+      // Normalize and validate the complete document before reserving a write.
+      return { ...this.values(tableName, header), items: draftItems(items).map(({ lineNumber, ...line }) => line) };
+    }
+    const allowed = new Set(table.headers.filter(key => !SYSTEM.has(key)));
+    requireThat(Object.keys(input).length > 0 && Object.keys(input).every(key => allowed.has(key)),
+      400, 'INVALID_RECORD', 'Record contains unsupported fields.');
+    for (const value of Object.values(input)) requireThat(['string', 'number', 'boolean'].includes(typeof value) &&
+      (typeof value !== 'number' || Number.isFinite(value)) && (typeof value !== 'string' || value.length <= 10000),
+    400, 'INVALID_RECORD', 'Record fields must be bounded scalar values.');
+    validateBusinessValues(input);
+    return Object.fromEntries(Object.keys(input).sort().map(key => [key, input[key]]));
+  }
+  async sync(token, companyId, input) {
+    const principal = this.owner((await this.registry.read()).state, token, companyId, true);
+    requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => ['operations', 'ownerId'].includes(k)) &&
+      Array.isArray(input.operations) && input.operations.length > 0 && input.operations.length <= 20,
+    400, 'INVALID_BATCH', 'Supply between 1 and 20 operations.');
+    requireThat(input.ownerId === undefined || input.ownerId === principal.owner.id,
+      401, 'SYNC_ACCOUNT_MISMATCH', 'Sign in to the original account to sync these changes.');
+    const seen = new Set();
+    for (const op of input.operations) {
+      requireThat(op && !Array.isArray(op) && Object.keys(op).every(k =>
+        ['operationId', 'table', 'recordId', 'action', 'expectedVersion', 'values'].includes(k)) &&
+        validKey(op.operationId) && !seen.has(op.operationId) && ['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay', 'transferPost', 'transferReverse', 'transferMatch'].includes(op.action) &&
+        Number.isSafeInteger(op.expectedVersion) && (['create', 'receive'].includes(op.action) ?
+          op.expectedVersion === 0 && op.recordId === undefined : op.expectedVersion > 0 && validRecordId(op.table, op.recordId)),
+      400, 'INVALID_BATCH', 'Invalid or duplicate operation.');
+      this.records.table(op.table);
+      if (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(op.action)) requireThat(!Object.hasOwn(op, 'values') &&
+        (op.action !== 'post' || ['Income', 'Expenses'].includes(op.table)), 400, 'INVALID_BATCH', 'Invalid posting or deletion.');
+      else if (op.action === 'receive') receiptInput(op.values);
+      else if (op.action === 'invoiceReturn') returnInput(op.values);
+      else this.values(op.table, op.values);
+      seen.add(op.operationId);
+    }
+    const results = [];
+    let stopped = false;
+    for (const op of input.operations) {
+      if (stopped) { results.push({ operationId: op.operationId, status: 'NOT_ATTEMPTED' }); continue; }
+      try {
+        const value = await this.mutate(token, companyId, op.table, op.recordId ?? null, op.action,
+          { expectedVersion: op.expectedVersion, ...(['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(op.action) ? {} : { values: op.values }) }, op.operationId);
+        results.push({ operationId: op.operationId, status: 'APPLIED', ...value });
+      } catch (error) {
+        results.push({ operationId: op.operationId, status: 'FAILED',
+          error: { code: error instanceof ApiError ? error.code : 'SERVICE_UNAVAILABLE',
+            message: error instanceof ApiError ? error.message : 'Retry with the same operation IDs.' } });
+        stopped = true;
+      }
+    }
+    return { results };
+  }
+  async list(token, companyId, tableName, { includeDeleted = false } = {}) {
+    this.records.table(tableName);
+    this.owner((await this.registry.read()).state, token, companyId);
+    const rows = (await this.records.read(companyId, [tableName]))[tableName];
+    const journals = hasLedgerSources(tableName) ?
+      (await this.records.read(companyId, ['Journals'])).Journals : [];
+    const invoiceParents = tableName === 'InvoiceItems' ?
+      (await this.records.read(companyId, ['Invoices'])).Invoices : [];
+    const quotationParents = tableName === 'QuotationItems' ?
+      (await this.records.read(companyId, ['Quotations'])).Quotations : [];
+    this.owner((await this.registry.read()).state, token, companyId);
+    return rows.filter(row => includeDeleted || active(row)).map(row =>
+      active(row) ? { ...publicRecord(row), ...(tableName === 'InvoiceItems' ? {
+        parentStatus: invoiceParents.find(invoice => invoice.recordId === row.invoiceId && active(invoice))?.status ?? 'UNAVAILABLE',
+      } : tableName === 'QuotationItems' ? {
+        parentStatus: quotationParents.find(quotation => quotation.recordId === row.quotationId && active(quotation))?.status ?? 'UNAVAILABLE',
+      } : {}), ...(ledgerStatus(tableName, row, journals, companyId) !== undefined ? {
+        ledgerStatus: ledgerStatus(tableName, row, journals, companyId),
+      } : {}) } : { recordId: row.recordId, companyId,
+        recordVersion: row.recordVersion, updatedAt: row.updatedAt, isDeleted: true });
+  }
+  async reportSettings(token, companyId) {
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return reportConfiguration(company);
+  }
+  async documentDesign(token, companyId, section) {
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return companyDesign(company, section);
+  }
+  async documentHtml(token, companyId, section, recordId) {
+    const design = await this.documentDesign(token, companyId, section);
+    const rows = await this.records.read(companyId, documentTables(section));
+    const latest = await this.documentDesign(token, companyId, section);
+    requireThat(latest.version === design.version, 409, 'VERSION_CONFLICT', 'Design changed. Generate again.');
+    return snapshotHtml(design.source, section, recordId, rows);
+  }
+  async saveDocumentDesign(token, companyId, section, input) {
+    requireThat(input && Object.keys(input).every(k => ['source', 'expectedVersion'].includes(k)) &&
+      Number.isInteger(input.expectedVersion), 400, 'INVALID_DOCUMENT_DESIGN', 'Supply HTML and its version.');
+    validateDesign(input.source);
+    return this.registry.transact(state => {
+      const { company } = this.owner(state, token, companyId);
+      const current = companyDesign(company, section);
+      requireThat(current.version === input.expectedVersion, 409, 'VERSION_CONFLICT', 'Design changed. Reload before saving.');
+      company.documentDesigns ??= {};
+      return company.documentDesigns[section] = { source: input.source, version: current.version + 1 };
+    });
+  }
+  async saveReportSettings(token, companyId, input) {
+    this.owner((await this.registry.read()).state, token, companyId);
+    const settings = validateReportConfiguration(input);
+    const data = await this.records.read(companyId, ['JournalLines']);
+    for (const account of settings.accounts) requireThat(!data.JournalLines.some(l => active(l) && l.companyId === companyId &&
+      l.accountId === account.accountId && l.accountGroup !== account.group), 409, 'REPORT_CLASSIFICATION_CONFLICT',
+      'Account groups must match existing journal lines.');
+    return this.registry.transact(state => {
+      const { company } = this.owner(state, token, companyId);
+      const current = reportConfiguration(company);
+      requireThat(current.version === input.expectedVersion, 409, 'VERSION_CONFLICT', 'Report settings changed. Reload before saving.');
+      company.reporting = { ...settings, version: current.version + 1 };
+      return structuredClone(company.reporting);
+    });
+  }
+  async financialReport(token, companyId, kind, from, asOf, options = {}) {
+    this.owner((await this.registry.read()).state, token, companyId);
+    const data = await this.records.read(companyId, ['Journals', 'JournalLines', 'CompanyProfile']);
+    const { company } = this.owner((await this.registry.read()).state, token, companyId);
+    return financialReport(companyId, kind, from, asOf, data, company, options, this.now());
+  }
+  async trialBalance(token, companyId, asOf, from = null, options = {}) {
+    return this.financialReport(token, companyId, 'trial-balance', from, asOf, options);
+  }
+  async report(token, companyId, kind, from, asOf, options = {}) {
+    return this.financialReport(token, companyId, kind, from, asOf, options);
+  }
+  async balanceSheet(token, companyId, asOf, options = {}) {
+    return this.financialReport(token, companyId, 'balance-sheet', null, asOf, options);
+  }
+  async profitAndLoss(token, companyId, from, asOf, options = {}) {
+    return this.financialReport(token, companyId, 'profit-and-loss', from, asOf, options);
+  }
+  async mutate(token, companyId, tableName, recordId, action, input, key) {
+    requireThat(!['CreditNotes', 'CreditNoteItems'].includes(tableName), 409,
+      'CREDIT_NOTE_LOCKED', 'Credit notes are created only through an issued invoice return.');
+    requireThat(tableName !== 'TaskActivity', 403, 'TABLE_FORBIDDEN', 'Task activity is generated by the server.');
+    this.records.table(tableName);
+    await this.authorizeWrite(token, companyId, tableName);
+    requireThat(validKey(key), 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Use one stable Idempotency-Key for each intended change.');
+    requireThat(['create', 'update', 'delete', 'post', 'pay', 'reverse', 'issue', 'invoiceVoid', 'invoiceReturn', 'receive', 'receiptReverse', 'send', 'convert', 'approve', 'payrollPay', 'payrollReverse', 'capitalize', 'depreciate', 'assetDispose', 'capitalPost', 'loanPost', 'loanRepay', 'transferPost', 'transferReverse', 'transferMatch'].includes(action) &&
+      (!['post', 'pay', 'reverse'].includes(action) || ['Income', 'Expenses'].includes(tableName)), 400, 'INVALID_RECORD', 'Invalid record action.');
+    const expectedVersion = input?.expectedVersion;
+    requireThat(Number.isSafeInteger(expectedVersion) && expectedVersion >= 0 &&
+      (['create', 'receive'].includes(action) ? recordId === null && expectedVersion === 0 : validRecordId(tableName, recordId) && expectedVersion > 0),
+    400, 'INVALID_RECORD', 'Supply the correct record ID and expectedVersion.');
+    requireThat(action !== 'issue' || tableName === 'Invoices', 400, 'INVALID_RECORD', 'Only invoices can be issued.');
+    requireThat(!['invoiceVoid', 'invoiceReturn'].includes(action) || tableName === 'Invoices', 400, 'INVALID_RECORD', 'Only invoices can be voided.');
+    requireThat(action !== 'receive' || tableName === 'Receipts', 400, 'INVALID_RECORD', 'Only receipts can record a payment.');
+    requireThat(action !== 'receiptReverse' || tableName === 'Receipts', 400, 'INVALID_RECORD', 'Only receipts support receipt reversal.');
+    requireThat(!['send', 'convert'].includes(action) || tableName === 'Quotations', 400, 'INVALID_RECORD', 'Only quotations support this action.');
+    requireThat(!['approve', 'payrollPay', 'payrollReverse'].includes(action) || tableName === 'Payroll', 400, 'INVALID_RECORD', 'Only payroll supports this action.');
+    requireThat(!['capitalize', 'depreciate', 'assetDispose'].includes(action) || tableName === 'Assets', 400, 'INVALID_RECORD', 'Only assets support this action.');
+    requireThat(action !== 'capitalPost' || tableName === 'CapitalTransactions', 400, 'INVALID_RECORD', 'Only capital contributions support this action.');
+    requireThat(!['loanPost', 'loanRepay'].includes(action) || tableName === 'ShareholderLoans', 400, 'INVALID_RECORD', 'Only shareholder loans support this action.');
+    requireThat(!['transferPost', 'transferReverse', 'transferMatch'].includes(action) || tableName === 'MoneyTransfers', 400, 'INVALID_TRANSFER', 'Only money transfers support this action.');
+    const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : action === 'invoiceReturn' ? returnInput(input.values) : this.values(tableName, input.values);
+    if (Object.hasOwn(values, 'items')) {
+      requireThat(['create', 'update'].includes(action), 400, 'INVALID_DOCUMENT_ITEMS', 'Only draft creation or editing accepts lines.');
+      await this.authorizeWrite(token, companyId, tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
+    }
+    if (action === 'reverse') requireThat(Object.keys(values).every(k => ['date', 'description'].includes(k)) &&
+      typeof values.date === 'string' && typeof values.description === 'string' &&
+      values.description.trim().length > 0 && values.description.length <= 500,
+    400, 'INVALID_REVERSAL', 'Supply a reversal date and reason of up to 500 characters.');
+    if (action === 'pay') requireThat(Object.keys(values).every(k => ['paidDate', 'account', 'reference', 'paymentExchangeRate'].includes(k)) &&
+      typeof values.paidDate === 'string' && typeof values.account === 'string',
+    400, 'INVALID_PAYMENT', 'Supply only the payment date, Cash/Bank account and optional reference.');
+    requireThat(tableName !== 'CompanyProfile' || (action === 'update' && recordId === 'company'),
+      409, 'COMPANY_PROFILE_SINGLETON', 'Update the existing company profile. It cannot be created or deleted here.');
+    requireThat(input && Object.keys(input).every(k => ['expectedVersion', 'values'].includes(k)) &&
+      (['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(action) ? !Object.hasOwn(input, 'values') : true), 400, 'INVALID_RECORD', 'Unsupported mutation fields.');
+    const proposedId = recordId || opaque(), fingerprint = digest(JSON.stringify({ tableName, recordId, action, expectedVersion, values }));
+    const opKey = digest(`business:${companyId}:${key}`), marker = `business:${opKey}`, now = this.now(), reservation = opaque();
+    try {
+      let op = await this.registry.transact(state => {
+        const { company } = this.owner(state, token, companyId, true); company.businessOps ??= {};
+        const previous = company.businessOps[opKey];
+        if (previous) { requireThat(previous.fingerprint === fingerprint, 409, 'IDEMPOTENCY_CONFLICT', 'This key was used for a different change.'); return structuredClone(previous); }
+        requireThat(!company.businessWrite, 409, 'BUSINESS_WRITE_PENDING', 'Confirm the previous business update first.');
+        company.businessWrite = opKey;
+        return structuredClone(company.businessOps[opKey] = { tableName, recordId: proposedId, action, expectedVersion,
+          resultVersion: expectedVersion + 1, fingerprint, reservation, submitted: false, completed: false, at: now });
+      });
+      if (op.completed) return { recordId: op.recordId, version: op.resultVersion, replayed: true };
+      const rows = (await this.records.read(companyId, [tableName]))[tableName], old = rows.find(row => row.recordId === op.recordId);
+      const confirmed = old?.idempotencyKey === marker && Number(old.recordVersion) === op.resultVersion;
+      if (!confirmed) {
+        requireThat(!op.submitted, 409, 'BUSINESS_WRITE_CONFIRMATION_PENDING', 'Confirming the previous write. Retry with the same key.');
+        requireThat((Number(old?.recordVersion) || 0) === expectedVersion &&
+          (['create', 'receive'].includes(action) ? !old : active(old)), 409, 'VERSION_CONFLICT', 'Record changed. Refresh before editing.');
+        if (tableName === 'CompanyProfile') {
+          const profile = { ...old, ...values };
+          requireThat(typeof profile.name === 'string' && profile.name.trim().length > 0 && profile.name.length <= 200 &&
+            ['invoicePrefix', 'quotationPrefix'].every(k => !profile[k] || /^[A-Z0-9-]{1,12}$/.test(profile[k])) &&
+            (!profile.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)),
+          400, 'INVALID_COMPANY_PROFILE', 'Supply a company name, valid email and uppercase document prefixes.');
+          if (Object.hasOwn(values, 'currency') && values.currency !== old.currency && old.currency) {
+            const data = await this.records.read(companyId, ['Journals']);
+            requireThat(!data.Journals.some(j => j.companyId === companyId && active(j) && j.status === 'POSTED'),
+              409, 'COMPANY_CURRENCY_LOCKED', 'Accounting currency cannot change after posting journals.');
+          }
+        }
+        await this.authorizeWrite(token, companyId, tableName, { action, recordId: op.recordId, old, values });
+        validateTask(tableName, action, old, values);
+        await validateProject(this.records, companyId, tableName, action, old, values);
+        await validateRelations(this.records, companyId, tableName, op.recordId, action, { ...old, ...values });
+        if (values.items?.some(item => item.productId)) {
+          const products = (await this.records.read(companyId, ['ProductsServices'])).ProductsServices;
+          requireThat(values.items.every(item => !item.productId || products.some(product =>
+            product.companyId === companyId && product.recordId === item.productId && active(product))),
+          400, 'INVALID_DOCUMENT_ITEMS', 'A referenced product is missing or deleted in this company.');
+        }
+        await validateJournal(this.records, companyId, tableName, op.recordId, action, old, values);
+        if (!['pay', 'reverse'].includes(action)) await assertCashEntryEditable(this.records, companyId, tableName, op.recordId, action);
+        if (action === 'pay') requireThat(old.paymentStatus === 'UNPAID', 409, 'PAYMENT_NOT_AVAILABLE', 'Only an unpaid posted entry can be paid.');
+        let taskAssigneeName;
+        if (tableName === 'Tasks' && action !== 'delete') {
+          const employeeId = values.employeeId ?? old?.employeeId;
+          const employees = (await this.records.readReferences(companyId, ['Employees'])).Employees;
+          const employee = employees.find(e => e.recordId === employeeId && active(e) && e.companyId === companyId);
+          requireThat(employee && (employee.employmentStatus === 'ACTIVE' || (old && employeeId === old.employeeId)),
+            409, 'TASK_ASSIGNEE_UNAVAILABLE', 'Select an active employee for assignment.');
+          taskAssigneeName = employee.fullName;
+        }
+        let writeValues = action === 'reverse' ? {} : cashEntryValues(tableName, action, old, action === 'pay' ? { ...values, paymentStatus: 'PAID' } : values);
+        if (taskAssigneeName !== undefined) writeValues = { ...writeValues, assigneeName: taskAssigneeName };
+        if (action === 'pay') requireThat(old.total === writeValues.total && old.taxAmount === writeValues.taxAmount,
+          409, 'PAYMENT_NOT_AVAILABLE', 'The saved totals need reconciliation before payment.');
+        const { state } = await this.registry.read(), actor = this.owner(state, token, companyId, true).owner.id;
+        writeValues = await financialPeriodValues(this.records, companyId, tableName, op.recordId, action, old, writeValues, actor, now);
+        for (const field of ['documentId', 'logoDocumentId']) {
+          if (!Object.hasOwn(values, field) || values[field] === '') continue;
+          const document = state.companies[companyId].documents?.[values[field]];
+          const targetTable = tableName === 'ExpenseAttachments' ? 'Expenses' : tableName;
+          const targetId = tableName === 'ExpenseAttachments' ? (values.expenseId ?? old?.expenseId) : op.recordId;
+          requireThat(document?.status === 'READY' && document.relatedSection === targetTable && document.relatedRecordId === targetId,
+            409, 'DOCUMENT_REFERENCE_INVALID', 'Upload the document for this record before attaching it.');
+        }
+        const system = { recordId: op.recordId, companyId, createdAt: old?.createdAt || now, createdBy: old?.createdBy || actor,
+          updatedAt: now, updatedBy: actor, recordVersion: op.resultVersion, syncStatus: 'SYNCED',
+          isDeleted: action === 'delete', idempotencyKey: marker };
+        const row = old?._row || Math.max(1, ...rows.map(item => item._row)) + 1;
+        writeValues = await currencyValues(this.records, companyId, tableName, action, old, writeValues);
+        if (values.paymentExchangeRate != null) {
+          validRate(values.paymentExchangeRate);
+          if (old?.baseCurrency && old.currency === old.baseCurrency) requireThat(values.paymentExchangeRate === 1, 400, 'INVALID_EXCHANGE_RATE', 'Same-currency payments use rate 1.');
+        }
+        const invoice = await invoiceChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = invoice.values;
+        const receipt = await receiptChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = receipt.values;
+        const quotation = await quotationChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = quotation.values;
+        const payroll = await payrollChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = payroll.values;
+        const asset = await assetChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = asset.values;
+        const capital = await capitalChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = capital.values;
+        const transfer = await transferChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = transfer.values;
+        if (FX_TABLES.includes(tableName) && action !== 'delete') {
+          const record = { ...old, ...writeValues };
+          writeValues.baseAmount = convert(record.total ?? record.netSalary ?? record.amount ?? 0, Number(record.exchangeRate || 1));
+        }
+        const taskExtra = await taskActivityChanges(this.records, companyId, tableName, action, old, writeValues, system, opKey);
+        if (taskExtra.length && this.accounts.actorName) {
+          const name = await this.accounts.actorName(actor);
+          for (const entry of taskExtra) entry.values.authorName = name;
+        }
+        const ledger = action === 'reverse' ? await reverseCashChanges(this.records, companyId, tableName,
+          old, { ...system, createdAt: now, createdBy: actor }, opKey, values) : ['post', 'pay'].includes(action) ? await cashLedgerChanges(this.records, companyId, tableName,
+          { ...old, ...writeValues }, { ...system, createdAt: now, createdBy: actor }, opKey, action === 'pay') : null;
+        await this.authorizeWrite(token, companyId, tableName, { action, recordId: op.recordId, old, values });
+        if (Object.hasOwn(values, 'items')) await this.authorizeWrite(token, companyId,
+          tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
+        const writes = [{ table: tableName, row, values: { ...system, ...writeValues } },
+          ...(ledger || [...invoice.extra, ...receipt.extra, ...quotation.extra,
+            ...payroll.extra, ...asset.extra, ...capital.extra, ...transfer.extra, ...taskExtra])];
+        if (['issue', 'approve', 'receive', 'post', 'pay', 'payrollPay', 'invoiceReturn'].includes(action)) {
+          let controlRate;
+          const controlAmounts = {};
+          if (action === 'receive') {
+            const data = await this.records.read(companyId, ['Invoices', 'ReceiptAllocations', 'Journals', 'JournalLines']);
+            controlRate = Number(data.Invoices.find(r => r.recordId === values.invoiceId)?.exchangeRate || 1);
+            const updated = writes.find(w => w.table === 'Invoices');
+            if (updated?.values.balance === 0) {
+              const sources = new Set([values.invoiceId, ...data.ReceiptAllocations.filter(r => r.invoiceId === values.invoiceId && active(r)).map(r => r.receiptId)]);
+              const ids = new Set(data.Journals.filter(j => sources.has(j.sourceId) && active(j) && j.status === 'POSTED').map(j => j.recordId));
+              const carry = data.JournalLines.filter(l => ids.has(l.journalId) && active(l) && l.accountId === 'accounts_receivable')
+                .reduce((s, l) => s + Math.round((Number(l.debit || 0) - Number(l.credit || 0)) * 100), 0);
+              if (carry > 0) controlAmounts.accounts_receivable = carry / 100;
+            }
+          }
+          if (['pay', 'payrollPay'].includes(action)) {
+            const data = await this.records.read(companyId, ['Journals', 'JournalLines']);
+            const source = data.Journals.find(j => j.sourceId === op.recordId && j.sourceType === (tableName === 'Payroll' ? 'Payroll' : tableName) && active(j));
+            for (const line of data.JournalLines.filter(l => l.journalId === source?.recordId && active(l))) {
+              if (['accounts_receivable', 'accounts_payable', 'salary_payable'].includes(line.accountId)) controlAmounts[line.accountId] = line.debit || line.credit;
+            }
+          }
+          convertJournals(writes, { ...old, ...writeValues }, values.paymentExchangeRate, controlRate, controlAmounts);
+        }
+        if (writes.some(write => write.table === 'Journals')) {
+          assignJournalNumbers(writes, (await this.records.read(companyId, ['Journals'])).Journals);
+        }
+        await this.registry.transact(state => { const { company } = this.owner(state, token, companyId, true);
+          requireThat(company.businessWrite === opKey && company.businessOps[opKey]?.reservation === op.reservation && !company.businessOps[opKey].submitted, 409, 'BUSINESS_WRITE_PENDING', 'Business update changed.');
+          company.businessOps[opKey].submitted = true; });
+        try {
+          if (writes.length > 1) await this.records.writeBatch(companyId, writes);
+          else await this.records.write(companyId, tableName, row, writes[0].values);
+        }
+        catch (error) { if (error.definitelyNotSubmitted || error.definitelyRejected || (error.upstreamStatus >= 400 && error.upstreamStatus < 500))
+          await this.registry.transact(state => { const company = state.companies[companyId]; if (company?.businessWrite === opKey) company.businessOps[opKey].submitted = false; });
+          throw error; }
+      }
+      await this.registry.transact(state => { const { company } = this.owner(state, token, companyId, true), pending = company.businessOps[opKey];
+        if (!pending.completed) { requireThat(company.businessWrite === opKey, 409, 'BUSINESS_WRITE_PENDING', 'Business update changed.'); pending.completed = true; delete company.businessWrite; } });
+      return { recordId: op.recordId, version: op.resultVersion, replayed: confirmed };
+    } catch (error) {
+      await this.registry.transact(state => { const company = state.companies[companyId], op = company?.businessOps?.[opKey];
+        if (company?.businessWrite === opKey && op?.reservation === reservation && !op.submitted && !op.completed) { delete company.businessWrite; delete company.businessOps[opKey]; } });
+      throw error;
+    }
+  }
+}
+import { assignJournalNumbers } from './journal-number.js';

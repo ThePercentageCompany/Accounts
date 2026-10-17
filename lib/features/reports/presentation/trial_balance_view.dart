@@ -184,7 +184,10 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
       final data = widget.api.cache.state(_path)?.data;
       if (widget.api.cache.scope != null || _displayed != null) {
         setState(() {
-          _displayed = data;
+          _displayed = data == null
+              ? null
+              : widget.api.localFinancialReport(widget.companyId, data, _kind,
+                  employee: widget.employee);
         });
       }
     });
@@ -238,7 +241,11 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
 
   void _load({bool force = false}) {
     _watch();
-    _displayed = widget.api.cache.state(_path)?.data;
+    final saved = widget.api.cache.state(_path)?.data;
+    _displayed = saved == null
+        ? null
+        : widget.api.localFinancialReport(widget.companyId, saved, _kind,
+            employee: widget.employee);
     final request = ++_request;
     final future = _fetchReport(force: force);
     _report = future.then((data) {
@@ -1273,6 +1280,15 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                   key: PageStorageKey(_path),
                   child: Column(
                     children: [
+                      if (data['provisional'] == true)
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text((data['pendingCalculation'] as num? ??
+                                      0) >
+                                  0
+                              ? 'Provisional totals · changes pending sync. ${data['pendingCalculation']} operation(s) require online calculation.'
+                              : 'Provisional totals · includes locally saved changes pending sync.'),
+                        ),
                       SizedBox(
                         height: 18,
                         child: Align(

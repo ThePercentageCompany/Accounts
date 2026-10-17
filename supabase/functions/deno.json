@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "checkJs": false, "strict": true },
+  "tasks": { "check": "deno check api/index.ts", "test": "deno test --allow-env --allow-read --allow-sys tests/" }
+}

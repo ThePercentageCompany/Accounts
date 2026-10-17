@@ -1,8 +1,28 @@
-# Offline-first web data flow
+# Local-first workspace data flow
 
-The shared-backend web application retains its existing stale-while-revalidate
-read cache and now adds durable local writes for Customers and DRAFT Invoices
-and Quotations. Final accounting and authorization remain server operations.
+Workspace saves commit a durable record overlay and outbox operation before
+returning to the screen. Related views receive a local change notification;
+Supabase synchronization and authoritative validation run in the background.
+Server snapshots remain separate from local projections.
+
+Web uses IndexedDB. Native owner and employee sessions use serialized device
+preferences for durable outbox partitions and cached snapshots. A storage failure
+is reported as an unsuccessful save. Each partition remains scoped to its
+origin, account, role and workspace.
+
+Task lists, calendars, details, dashboard cards, employee section overviews,
+project choices and entity counts consume local changes. Draft document and
+cash-entry totals are calculated locally without modifying the queued request.
+
+Financial reports project pending posting operations over confirmed snapshots
+and label the result provisional. Available previews cover cash posting,
+same-rate settlements, invoice issue, transfers, payroll approval/payment,
+asset acquisition/depreciation/disposal, capital contributions and shareholder
+loans. Reversals require cached original journals and lines. Missing inputs,
+unsupported operations and foreign-currency settlement calculations are explicitly
+counted as requiring online calculation; their totals are not guessed. Draft
+saves alone do not post transactions or change posted report totals. Failed
+operations are excluded from financial previews.
 
 ## Storage choice and boundaries
 
@@ -36,12 +56,15 @@ This is structured IndexedDB storage, not a localStorage record cache.
 | Invoice/quotation draft create/update/delete | Atomic header/items draft and queued operation |
 | Read previously fetched records/reports | Cached snapshots in a verified open session |
 | HTML document design | Local IndexedDB preference, independent of synchronization |
-| Issue/send/convert, payments, posting/reversals, payroll, assets, capital/loans | Online server confirmation required |
-| Tasks, employee administration, uploads, setup | Online actions; uncertain requests retain their exact retry identity |
+| Tasks, projects, employee records, attendance, overtime and supported reference records | Durable local overlays with background sync |
+| Draft financial records, transfers and draft journals | Durable local overlays with background sync |
+| Payments, posting/reversals, payroll, assets, capital/loans | Durable pending requests; provisional report previews where inputs are available; server confirmation assigns final accounting results |
+| Uploads and report settings | Durable local queue with background delivery |
+| Sign-in, access management and workspace setup | Online identity/authorization operations |
 
 Draft editors need previously available customer/company reference data. Local
 drafts display “Saved on this device”; final numbers, validation, totals and
-reports remain authoritative on the server. Pending deletion uses a tombstone;
+confirmed reports remain authoritative on the server. Pending deletion uses a tombstone;
 a rejected deletion becomes visible again with its failure explanation.
 
 ## Synchronization and conflicts
@@ -106,7 +129,8 @@ uncertain response retry, revisions/correction, quota failures, authentication,
 account switching, coordinator exclusion and local API reads without a snapshot.
 Existing responsive/editor/navigation tests remain part of the suite.
 
-Verified locally: Flutter analysis reports no issues; the complete Flutter suite
+Historical verification before the local projection/native persistence changes:
+Flutter analysis reported no issues; the complete Flutter suite
 passes 242 tests with one existing skipped test; the business/employee backend
 suites pass 70 tests. Chrome and Edge release fixtures retained pending work
 through offline page reload and acknowledged one submission across two tabs.

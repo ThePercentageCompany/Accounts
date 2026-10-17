@@ -1,3 +1,4 @@
 {
-  "SAAS_API_ORIGIN": "https://api.example.com"
+  "SUPABASE_URL": "https://ifuucosaautgobwsunmp.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_lLPDVb8F51KcQfniJxisVg_3n1OOWJf"
 }

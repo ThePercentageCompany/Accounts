@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 
-/// Opens only the camera; accepting a QR never starts Google authentication.
+/// Opens the camera to scan an employee invitation.
 Future<String?> scanEmployeeQr(BuildContext context) {
   return showModalBottomSheet<String>(
     context: context,

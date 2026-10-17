@@ -74,7 +74,7 @@ class SaasSession extends Cubit<SessionState> {
                   if (data.containsKey(key)) key: data[key]
               };
     final expiry =
-        DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch;
+        DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
     await client.saveSessionProfile({
       'expiresAt': expiry,
       'owner': select(owner, ['ownerId', 'name', 'email', 'picture']),
@@ -204,7 +204,8 @@ class SaasSession extends Cubit<SessionState> {
   }
 
   Future<void> restore({bool employeeOnly = false}) => _run(() async {
-        if (!offlineRestored) _clearIdentity();
+        // Preserve the workspace while verifying the stored login. Temporary
+        // connection failures must not clear a previously restored identity.
         final employeeMode = employeeOnly ||
             preferences.getString('tpc_saas_session_mode') == 'employee';
         if (employeeMode && owner != null) _clearIdentity();
@@ -372,19 +373,6 @@ class SaasSession extends Cubit<SessionState> {
         companies.removeWhere((entry) => entry['companyId'] == id);
         company = companies.isEmpty ? null : companies.first;
       });
-
-  Future<void> signIn(Future<void> Function(Uri) navigate) => _run(() async {
-        await preferences.setString('tpc_saas_session_mode', 'owner');
-        await navigate(await api.startSignIn());
-      });
-
-  Future<void> connectGoogle(Future<void> Function(Uri) navigate) => _run(
-        () async {
-          if (company == null) return;
-          await navigate(
-              await api.connectGoogle(company!['companyId'] as String));
-        },
-      );
 
   Future<void> employeeLogin(String invite, String code) => _run(() async {
         final result = await api.employeeLogin(invite, code);

@@ -6,10 +6,11 @@ import 'package:tpc_invoice/core/cache/cache_lifecycle_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/cache/cache_lifecycle_web.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'offline_store.dart';
+import 'local_values.dart';
 import 'sync_lock_stub.dart' if (dart.library.js_interop) 'sync_lock_web.dart';
 
 /// Durable, ordered per-account/workspace outbox. The server owns validation,
-/// numbering, calculations and posting; local overlays never update reports.
+/// numbering and posting. Reports can project separately labelled local previews.
 class OfflineOutbox extends ChangeNotifier {
   OfflineOutbox({
     required this.store,
@@ -28,6 +29,7 @@ class OfflineOutbox extends ChangeNotifier {
     }, (kind, target) {
       if (kind == 'outbox' && target == scope) {
         reload().then((_) async {
+          changed('');
           if (automatic) await sync();
         }).ignore();
       }
@@ -88,9 +90,21 @@ class OfflineOutbox extends ChangeNotifier {
             'Projects',
             'Shareholders',
             'Employees',
-            'FinancialPeriods'
+            'FinancialPeriods',
+            'Attendance',
+            'Overtime',
+            'ExpenseAttachments',
+            'CapitalAccounts',
+            'ShareholderEquity'
           ].contains(table) ||
           (table == 'TaskComments' && action == 'create') ||
+          (const [
+                'InvoiceItems',
+                'QuotationItems',
+                'PayrollItems',
+                'JournalLines'
+              ].contains(table) &&
+              (action == 'create' || record?['parentStatus'] == 'DRAFT')) ||
           (const [
                 'Invoices',
                 'Quotations',
@@ -99,7 +113,9 @@ class OfflineOutbox extends ChangeNotifier {
                 'Payroll',
                 'Assets',
                 'CapitalTransactions',
-                'ShareholderLoans'
+                'ShareholderLoans',
+                'MoneyTransfers',
+                'Journals'
               ].contains(table) &&
               (action == 'create' || record?['status'] == 'DRAFT')));
 
@@ -215,6 +231,8 @@ class OfflineOutbox extends ChangeNotifier {
         records[key] = {
           ...old,
           ...resolvedValues,
+          ...localDerivedValues(table, {...old, ...resolvedValues}),
+          '_localBase': old['_localBase'] ?? base ?? <String, dynamic>{},
           'recordId': localId,
           'recordVersion': version,
           if (action == 'create' &&
@@ -224,7 +242,9 @@ class OfflineOutbox extends ChangeNotifier {
                 'Payroll',
                 'Assets',
                 'CapitalTransactions',
-                'ShareholderLoans'
+                'ShareholderLoans',
+                'MoneyTransfers',
+                'Journals'
               ].contains(table))
             'status': 'DRAFT',
           'isDeleted': action == 'delete',
@@ -244,7 +264,18 @@ class OfflineOutbox extends ChangeNotifier {
     List<Map<String, dynamic>> server,
   ) {
     if (!isCurrent()) return server;
-    final records = {for (final r in server) '${r['recordId']}': copyJson(r)};
+    final records = <String, Map<String, dynamic>>{};
+    for (final raw in server) {
+      var row = copyJson(raw);
+      final id = (data['ids'] as Map)[row['recordId']] ?? row['recordId'];
+      if (row['_localOnly'] == true &&
+          !(data['records'] as Map).containsKey('$table:$id')) {
+        row = copyJson(row['_localBase'] as Map? ?? {});
+        if (row.isEmpty) continue;
+      }
+      row['recordId'] = id;
+      records['$id'] = row;
+    }
     for (final entry in (data['records'] as Map).entries) {
       if (!entry.key.toString().startsWith('$table:')) continue;
       final row = copyJson(entry.value as Map);
@@ -262,6 +293,17 @@ class OfflineOutbox extends ChangeNotifier {
         .where((r) => r['isDeleted'] != true || r['syncStatus'] == 'FAILED')
         .toList();
   }
+
+  List<Map<String, dynamic>> localRecords(String table) => !isCurrent()
+      ? []
+      : (data['records'] as Map)
+          .entries
+          .where((entry) => entry.key.toString().startsWith('$table:'))
+          .map((entry) => copyJson(entry.value as Map))
+          .toList();
+
+  String resolveRecordId(String id) =>
+      (data['ids'] as Map)[id] as String? ?? id;
 
   Future<void> reconcile(
     String table,
@@ -295,10 +337,15 @@ class OfflineOutbox extends ChangeNotifier {
         final retryableDeploymentMismatch = op['table'] == 'MoneyTransfers' &&
             op['errorCode'] == 'TABLE_FORBIDDEN' &&
             op['error'] == 'This business table is unavailable.';
+        final retryableUploadPermission = op['table'] == 'Documents' &&
+            op['action'] == 'upload' &&
+            op['errorCode'] == 'DOCUMENT_FORBIDDEN' &&
+            op['error'] == 'Document upload access is not assigned.';
         if (op['state'] == 'failed' &&
             ((op['errorCode'] == 'INVALID_BATCH' &&
                     op['error'] == 'Supply between 1 and 20 operations.') ||
-                retryableDeploymentMismatch)) {
+                retryableDeploymentMismatch ||
+                retryableUploadPermission)) {
           op['state'] = 'pending';
         }
         if (op['state'] != 'failed') op['retryAt'] = 0;
@@ -572,6 +619,8 @@ class OfflineOutbox extends ChangeNotifier {
             'recordId': to,
             'recordVersion': result['version'],
             'syncStatus': pendingForRow ? 'PENDING' : 'SYNCED',
+            if (!pendingForRow)
+              '_acknowledgedAt': clock().millisecondsSinceEpoch,
           };
           if (!pendingForRow) {
             (records['${op['table']}:$to'] as Map).remove('_pendingAction');

@@ -144,7 +144,12 @@ class ReadCache extends ChangeNotifier {
 
   /// Outbox overlays are separate from server snapshots. Notify consumers
   /// without invalidating/fetching a server resource after a local-only write.
-  void localChanged(String path) => _notify();
+  int localRevision = 0;
+  void localChanged(String path) {
+    localRevision++;
+    _notify();
+  }
+
   void activate(String path) {
     final key = normalizedResource(path);
     _active[key] = (_active[key] ?? 0) + 1;
@@ -162,8 +167,21 @@ class ReadCache extends ChangeNotifier {
 
   bool _current(int generation) =>
       !_disposed && generation == _generation && scope != null;
+  // Snapshots contain JSON values. Copy containers directly to avoid encoding
+  // and parsing large record lists on every navigation and background refresh.
+  Object? _copyValue(Object? value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          entry.key as String: _copyValue(entry.value),
+      };
+    }
+    if (value is List) return value.map(_copyValue).toList();
+    return value;
+  }
+
   Map<String, dynamic> _copy(Map<String, dynamic> value) =>
-      Map<String, dynamic>.from(jsonDecode(jsonEncode(value)) as Map);
+      _copyValue(value) as Map<String, dynamic>;
   Future<void> _safe(Future<void> Function() action) async {
     try {
       await action().timeout(const Duration(seconds: 3));
@@ -315,8 +333,13 @@ class ReadCache extends ChangeNotifier {
     final future = (() async {
       try {
         final result = await loader();
-        if (!_current(generation) || state.revision != revision) {
-          throw StateError('Outdated response discarded.');
+        if (!_current(generation)) {
+          throw StateError('Workspace context changed.');
+        }
+        if (state.revision != revision) {
+          // Let the current request handle its own errors and refresh state.
+          // ignore: unawaited_return_in_try_block
+          return _latestRefresh(key, loader);
         }
         // API responses are complete snapshots, including empty lists and deletions.
         state.data = _copy(result);
@@ -344,7 +367,8 @@ class ReadCache extends ChangeNotifier {
         unawaited(_safe(() => store.write(storageKey, entry)));
         return _copy(result);
       } catch (error) {
-        if (!_current(generation) || state.revision != revision) rethrow;
+        if (!_current(generation)) rethrow;
+        if (state.revision != revision) return _latestRefresh(key, loader);
         if (isAuthorizationError?.call(error) == true) {
           final oldAccount = account;
           detach();
@@ -393,6 +417,22 @@ class ReadCache extends ChangeNotifier {
       },
     );
     return future;
+  }
+
+  // Invalidation supersedes the request, not the caller waiting for its data.
+  // Join the replacement request or reuse its completed snapshot. Never publish
+  // the superseded response or record its error against the current revision.
+  Future<Map<String, dynamic>> _latestRefresh(
+    String key,
+    Future<Map<String, dynamic>> Function() loader,
+  ) {
+    final pending = _refreshes[key];
+    if (pending != null) return pending;
+    final state = _states[key];
+    if (state?.data != null && !state!.stale) {
+      return Future.value(_copy(state.data!));
+    }
+    return _refresh(key, _loaders[key] ?? loader);
   }
 
   void invalidate(

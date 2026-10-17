@@ -5,7 +5,6 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
-import 'package:tpc_invoice/features/documents/data/shared_record_pdf.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -13,15 +12,66 @@ void main() {
   const record = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
   const origin = 'https://api.test';
 
-  test(
-      'local design migrates online once and later sessions use the online source',
-      () async {
-    final local = '$defaultHtmlDocumentDesign<p>Existing design</p>';
-    final scope = '$origin|$company|Invoices';
-    // Uri.toString includes no trailing slash for this origin.
-    SharedPreferences.setMockInitialValues({
-      'html-document-design-v1:${Uri.encodeComponent(scope)}': local,
+  for (final section in ['Receipts', 'CreditNotes']) {
+    test('$section template saves separately and prints the saved design',
+        () async {
+      var version = 0;
+      var source = defaultHtmlDocumentDesign;
+      final api = SaasApi(
+          origin: origin,
+          client: MockClient((request) async {
+            if (request.url.path.contains('/record-html/')) {
+              expect(request.url.path,
+                  '/v1/companies/$company/record-html/$section/$record');
+              return http.Response('<html>$section saved design</html>', 200);
+            }
+            expect(request.url.path,
+                '/v1/companies/$company/document-designs/$section');
+            if (request.method == 'PUT') {
+              final input = jsonDecode(request.body) as Map;
+              expect(input['expectedVersion'], version);
+              source = input['source'];
+              version++;
+            }
+            return http.Response(
+                jsonEncode({'source': source, 'version': version}), 200);
+          }));
+      addTearDown(api.close);
+      final store = HtmlDocumentDesignStore(api, company, section);
+      await store.load();
+      await store.save('$defaultHtmlDocumentDesign<p>$section</p>');
+      expect(await store.load(), contains('<p>$section</p>'));
+      expect(await savedRecordHtml(api, company, section, record),
+          '<html>$section saved design</html>');
+      expect(version, 1);
     });
+  }
+
+  for (final employee in [false, true]) {
+    test(
+        'final HTML uses the online company design for ${employee ? 'employee' : 'admin'}',
+        () async {
+      final api = SaasApi(
+          origin: origin,
+          client: MockClient((request) async {
+            expect(request.method, 'GET');
+            expect(request.body, isEmpty);
+            expect(request.url.path,
+                '/v1/${employee ? 'employee/' : ''}companies/$company/record-html/Invoices/$record');
+            return http.Response(
+                '<html>Latest saved company design</html>', 200);
+          }));
+      addTearDown(api.close);
+      expect(
+          await savedRecordHtml(api, company, 'Invoices', record,
+              employee: employee),
+          '<html>Latest saved company design</html>');
+    });
+  }
+
+  test('saved online design is available to later sessions', () async {
+    final local = '$defaultHtmlDocumentDesign<p>Existing design</p>';
+    SharedPreferences.setMockInitialValues({});
     var version = 0, writes = 0;
     var source = defaultHtmlDocumentDesign;
     final api = SaasApi(
@@ -38,8 +88,9 @@ void main() {
               jsonEncode({'source': source, 'version': version}), 200);
         }));
     addTearDown(api.close);
-    expect(
-        await HtmlDocumentDesignStore(api, company, 'Invoices').load(), local);
+    final firstSession = HtmlDocumentDesignStore(api, company, 'Invoices');
+    expect(await firstSession.load(), defaultHtmlDocumentDesign);
+    await firstSession.save(local);
     expect(writes, 1);
     SharedPreferences.setMockInitialValues({});
     expect(
@@ -47,8 +98,7 @@ void main() {
     expect(writes, 1);
   });
 
-  test(
-      'employees load the company source and PDF bytes from employee endpoints',
+  test('employees load the company source and HTML from employee endpoints',
       () async {
     SharedPreferences.setMockInitialValues({});
     final calls = <String>[];
@@ -57,8 +107,8 @@ void main() {
         client: MockClient((request) async {
           calls.add(request.url.path);
           expect(request.method, 'GET');
-          if (request.url.path.contains('/record-pdf/')) {
-            return http.Response('%PDF-company-html', 200);
+          if (request.url.path.contains('/record-html/')) {
+            return http.Response('<html>Company design</html>', 200);
           }
           return http.Response(
               jsonEncode({'source': defaultHtmlDocumentDesign, 'version': 2}),
@@ -69,12 +119,12 @@ void main() {
         HtmlDocumentDesignStore(api, company, 'Quotations', employee: true);
     expect(await store.load(), defaultHtmlDocumentDesign);
     await expectLater(store.save(defaultHtmlDocumentDesign), throwsStateError);
-    final bytes = await sharedRecordPdf(api, company, 'Quotations', record,
-        employee: true);
-    expect(utf8.decode(bytes), '%PDF-company-html');
+    final html =
+        await api.recordHtml(company, 'Quotations', record, employee: true);
+    expect(html, '<html>Company design</html>');
     expect(calls, [
       '/v1/employee/companies/$company/document-designs/Quotations',
-      '/v1/employee/companies/$company/record-pdf/Quotations/$record',
+      '/v1/employee/companies/$company/record-html/Quotations/$record',
     ]);
   });
 }

@@ -1,0 +1,29 @@
+project_id = "tpc-invoice"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "https://accounts.thepercentagecompany.com"
+additional_redirect_urls = ["http://localhost:3000", "http://localhost:8080"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[storage]
+enabled = true
+file_size_limit = "6MiB"
+
+[functions.api]
+verify_jwt = false
+# JWTs are verified using Supabase Auth inside the function. Public health and
+# invitation/password exchange routes must also reach the handler.

@@ -8,7 +8,9 @@ class TaskEditor extends StatefulWidget {
       required this.employee,
       required this.assignees,
       required this.onSave,
-      this.task});
+      this.task,
+      this.timeZone = 'Asia/Dubai'});
+  final String timeZone;
   final SaasApi api;
   final String companyId;
   final bool employee;
@@ -35,7 +37,7 @@ class _TaskEditorState extends State<TaskEditor> {
     ])
       key: TextEditingController(
           text: widget.task?[key]?.toString() ??
-              (key == 'dueDate' ? taskDate(taskToday()) : ''))
+              (key == 'dueDate' ? taskDate(taskToday(widget.timeZone)) : ''))
   };
   late String _employeeId = widget.task?['employeeId']?.toString() ?? '';
   late String _priority = widget.task?['priority']?.toString() ?? 'MEDIUM';

@@ -1,10 +1,18 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:tpc_invoice/core/offline/durable_value.dart';
-import 'package:tpc_invoice/core/offline/offline_store.dart';
-
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
+
+const htmlDocumentSections = [
+  'Invoices',
+  'Quotations',
+  'Receipts',
+  'CreditNotes'
+];
+const htmlDocumentLabels = {
+  'Invoices': 'Invoice',
+  'Quotations': 'Quotation',
+  'Receipts': 'Receipt',
+  'CreditNotes': 'Credit note / return',
+};
 
 const defaultHtmlDocumentDesign = '''<style>
 @page { size: A4; margin: 18mm; }
@@ -32,34 +40,12 @@ class HtmlDocumentDesignStore {
   final SaasApi api;
   final String companyId, section;
   final bool employee;
-  String get scope => '${api.origin}|$companyId|$section';
   int? _version;
-  String get key => 'html-document-design-v1:${Uri.encodeComponent(scope)}';
-  DurableValue? _durable;
-  Future<String> _legacy() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (kIsWeb) {
-      _durable = DurableValue(
-          createOfflineStore(), 'document-design:$scope', key, prefs);
-      await _durable!.load(migrateLegacy: jsonEncode);
-      return _durable!.value == null
-          ? defaultHtmlDocumentDesign
-          : jsonDecode(_durable!.value!) as String;
-    }
-    return prefs.getString(key) ?? defaultHtmlDocumentDesign;
-  }
 
   Future<String> load() async {
     final design =
         await api.documentDesign(companyId, section, employee: employee);
     _version = (design['version'] as num).toInt();
-    if (_version == 0 && !employee) {
-      final legacy = await _legacy();
-      if (legacy != defaultHtmlDocumentDesign) {
-        await save(legacy);
-        return legacy;
-      }
-    }
     return design['source'] as String;
   }
 
@@ -118,7 +104,13 @@ String renderHtmlDocument({
     final token = match[1]!.trim();
     if (token == 'items') return rows;
     if (token == 'title') {
-      return section == 'Invoices' ? 'INVOICE' : 'QUOTATION';
+      return const {
+            'Invoices': 'INVOICE',
+            'Quotations': 'QUOTATION',
+            'Receipts': 'PAYMENT RECEIPT',
+            'CreditNotes': 'CREDIT NOTE / RETURN'
+          }[section] ??
+          section;
     }
     if (token == 'endDate') {
       return escape(record[section == 'Invoices' ? 'dueDate' : 'validUntil']);
@@ -142,50 +134,7 @@ String renderHtmlDocument({
       '<title>${escape(record['number'] ?? section)}</title></head><body>$content</body></html>';
 }
 
-Future<String> savedRecordHtml(SaasApi api, String companyId, String section,
-    String recordId, String source,
-    {bool employee = false}) async {
-  if (!const ['Invoices', 'Quotations'].contains(section)) {
-    throw ArgumentError('Unsupported document');
-  }
-  Future<List<Map<String, dynamic>>> rows(String table) async =>
-      ((await api.records(companyId, table,
-              force: true, employee: employee))['records'] as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
-  Map<String, dynamic> find(List<Map<String, dynamic>> data, String id) =>
-      data.firstWhere(
-        (r) => r['recordId'] == id,
-        orElse: () => throw const SaasApiException(
-          'RECORD_UNAVAILABLE',
-          'A document record is unavailable. Refresh and retry.',
-        ),
-      );
-  final record = find(await rows(section), recordId);
-  final company = find(await rows('CompanyProfile'), 'company');
-  final customer = find(await rows('Customers'), record['customerId']);
-  final invoice = section == 'Invoices';
-  final items = (await rows(invoice ? 'InvoiceItems' : 'QuotationItems'))
-      .where((r) => r[invoice ? 'invoiceId' : 'quotationId'] == recordId)
-      .toList()
-    ..sort(
-      (a, b) => (a['lineNumber'] as num).compareTo(b['lineNumber'] as num),
-    );
-  final latest = find(await rows(section), recordId);
-  final latestCompany = find(await rows('CompanyProfile'), 'company');
-  if (record['recordVersion'] != latest['recordVersion'] ||
-      company['recordVersion'] != latestCompany['recordVersion']) {
-    throw const SaasApiException(
-      'VERSION_CONFLICT',
-      'Document changed. Export again.',
-    );
-  }
-  return renderHtmlDocument(
-    source: source,
-    section: section,
-    record: record,
-    company: company,
-    customer: customer,
-    items: items,
-  );
-}
+Future<String> savedRecordHtml(
+        SaasApi api, String companyId, String section, String recordId,
+        {bool employee = false}) =>
+    api.recordHtml(companyId, section, recordId, employee: employee);

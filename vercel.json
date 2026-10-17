@@ -4,12 +4,8 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/v1/:path*",
-      "destination": "https://tpc-accounts-api-110697421185.me-central1.run.app/v1/:path*"
-    },
-    {
       "source": "/health",
-      "destination": "https://tpc-accounts-api-110697421185.me-central1.run.app/health"
+      "destination": "https://ifuucosaautgobwsunmp.supabase.co/functions/v1/api/health"
     },
     {
       "source": "/(.*)",
@@ -19,14 +15,11 @@
   "headers": [
     {
       "source": "/update:rest*",
-      "headers": [{"key":"Cache-Control","value":"no-store"}]
-    },
-    {
-      "source": "/v1/:path*",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" },
-        { "key": "CDN-Cache-Control", "value": "no-store" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     }
   ]

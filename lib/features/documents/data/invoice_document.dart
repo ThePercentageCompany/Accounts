@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:invoice_kit/invoice_kit.dart' as kit;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -86,10 +87,10 @@ class BusinessDocumentTemplate extends kit.InvoiceTemplate {
         (num.tryParse('$value') ?? 0).toStringAsFixed(2);
     final currency =
         text(record['currency']).isEmpty ? 'AED' : text(record['currency']);
-    final unicode = data.toMap().toString().runes.any((rune) => rune > 126);
-    final fonts = unicode ? await kit.FontLoader.autoLoad(data) : null;
-    final regular = config?.baseFont ?? fonts?.regular ?? pw.Font.helvetica();
-    final bold = config?.boldFont ?? fonts?.bold ?? pw.Font.helveticaBold();
+    final bundled =
+        pw.Font.ttf(await rootBundle.load('assets/fonts/Inter.ttf'));
+    final regular = config?.baseFont ?? bundled;
+    final bold = config?.boldFont ?? bundled;
     final color = PdfColor.fromHex('#155E75');
     final doc = pw.Document(
       compress: config?.extras['compress'] != false,

@@ -7,4 +7,4 @@ flutter pub get
 dart format lib test
 flutter analyze
 flutter test
-printf '%s\n' 'Dependencies checked. See SETUP.md for shared API configuration and operator preview. Production integration is still in progress.'
+printf '%s\n' 'Dependencies checked. See SETUP.md for Supabase configuration and deployment.'

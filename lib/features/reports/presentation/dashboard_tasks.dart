@@ -35,13 +35,51 @@ class _DashboardTasksState extends State<DashboardTasks> {
   bool _busy = false;
   String? _error;
   int _generation = 0;
-  Timer? _timer;
+  Timer? _timer, _realtimeDebounce;
+  StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
+  bool _realtimeDirty = false, _forceRealtime = false;
+  int _localRevision = 0;
+
+  void _localChanged() {
+    if (_localRevision == widget.api.cache.localRevision) return;
+    _localRevision = widget.api.cache.localRevision;
+    _realtimeDirty = true;
+    _scheduleRealtimeRefresh();
+  }
+
+  void _watchTasks() {
+    _taskSubscription?.cancel();
+    _taskSubscription = widget.api.taskUpdates.listen((update) {
+      if (!mounted || update.companyId != widget.companyId || !update.refresh) {
+        return;
+      }
+      _realtimeDirty = true;
+      _forceRealtime = true;
+      _scheduleRealtimeRefresh();
+    });
+  }
+
+  void _scheduleRealtimeRefresh() {
+    if (!_realtimeDirty || !widget.active || _busy || !mounted) return;
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted || !widget.active || _busy) return;
+      _realtimeDirty = false;
+      final force = _forceRealtime;
+      _forceRealtime = false;
+      _load(force: force);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    _watchTasks();
+    widget.api.cache.addListener(_localChanged);
     _load();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (widget.active &&
+      if (!widget.api.taskRealtimeConnected &&
+          widget.active &&
           (WidgetsBinding.instance.lifecycleState == null ||
               WidgetsBinding.instance.lifecycleState ==
                   AppLifecycleState.resumed)) {
@@ -53,6 +91,11 @@ class _DashboardTasksState extends State<DashboardTasks> {
   @override
   void didUpdateWidget(covariant DashboardTasks oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.api != widget.api) {
+      oldWidget.api.cache.removeListener(_localChanged);
+      widget.api.cache.addListener(_localChanged);
+      _watchTasks();
+    }
     if (oldWidget.api != widget.api ||
         oldWidget.companyId != widget.companyId ||
         oldWidget.employee != widget.employee ||
@@ -120,13 +163,19 @@ class _DashboardTasksState extends State<DashboardTasks> {
           ? error.message
           : 'Could not load tasks. Please retry.');
     } finally {
-      if (mounted && generation == _generation) setState(() => _busy = false);
+      if (mounted && generation == _generation) {
+        setState(() => _busy = false);
+        _scheduleRealtimeRefresh();
+      }
     }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _realtimeDebounce?.cancel();
+    _taskSubscription?.cancel();
+    widget.api.cache.removeListener(_localChanged);
     super.dispose();
   }
 
