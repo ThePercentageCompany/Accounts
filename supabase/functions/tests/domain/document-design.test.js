@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultDesign, renderDocumentHtml, validateDesign, companyDesign } from '../../_shared/domain/document-design.js';
+import { defaultDesign, renderDocumentHtml, validateDesign, companyDesign, snapshotHtml, documentTables } from '../../_shared/domain/document-design.js';
 
 test('HTML keeps company CSS and embeds escaped document values and saved totals', () => {
   const source = '<style>@page{size:A5}h1{color:purple}</style><h1>{{title}}</h1>{{company.trn}}{{customer.name}}<table>{{items}}</table>{{record.total}}';
@@ -11,6 +11,31 @@ test('HTML keeps company CSS and embeds escaped document values and saved totals
   assert.ok(html.includes('TRN123')); assert.ok(html.includes('A&amp;B'));
   assert.ok(html.includes('&lt;script&gt;')); assert.ok(html.includes("default-src 'none'"));
   assert.ok(renderDocumentHtml(source, 'Quotations', {}, {}, {}, []).includes('QUOTATION'));
+});
+
+test('receipt and credit note / return designs render their own authoritative data', () => {
+  const rows = {
+    CompanyProfile:[{recordId:'company',name:'Company'}],Customers:[{recordId:'customer',name:'Customer'}],
+    Invoices:[{recordId:'invoice',number:'INV-1',customerId:'customer'}],
+    Receipts:[{recordId:'receipt',customerId:'customer',amount:105,paymentDate:'2026-10-17',currency:'AED'}],
+    ReceiptAllocations:[{receiptId:'receipt',invoiceId:'invoice',amount:105}],
+    CreditNotes:[{recordId:'credit',invoiceId:'invoice',date:'2026-10-17',total:52.5,reason:'Returned goods'}],
+    CreditNoteItems:[{creditNoteId:'credit',description:'Returned product',quantity:1,lineTotal:52.5},
+      {creditNoteId:'other',description:'Unrelated product'}],
+  };
+  const source='{{title}} {{record.issueDate}} {{record.notes}} {{items}} {{record.total}} {{customer.name}}';
+  const receipt=snapshotHtml(source,'Receipts','receipt',rows);
+  assert.ok(receipt.includes('PAYMENT RECEIPT'));
+  assert.ok(receipt.includes('105.00')&&receipt.includes('2026-10-17')&&receipt.includes('Payment for invoice INV-1'));
+  const credit=snapshotHtml(source,'CreditNotes','credit',rows);
+  assert.ok(credit.includes('CREDIT NOTE / RETURN')&&credit.includes('Returned goods')&&credit.includes('Customer'));
+  assert.ok(credit.includes('52.50')&&credit.includes('Returned product')&&!credit.includes('Unrelated product'));
+  for(const section of ['Receipts','CreditNotes']) {
+    assert.equal(companyDesign({},section).version,0);
+    assert.ok(documentTables(section).includes('Invoices'));
+    const saved={source,version:1};
+    assert.deepEqual(companyDesign({documentDesigns:{[section]:saved}},section),saved);
+  }
 });
 
 test('designs are separate for invoices and quotations and malformed sources are rejected', () => {

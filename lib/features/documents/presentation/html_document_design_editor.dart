@@ -71,7 +71,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               spacing: 12,
               children: [
                 const Text(
-                  'Edit HTML and CSS. Saved online separately for invoices and quotations. All sessions and authorized employees use this design for PDFs. Designs change presentation only.',
+                  'Edit HTML and CSS. Saved online separately for invoices, quotations, receipts and credit notes / returns. Authorized employees use the saved design with Print company design / Save as PDF. Designs change presentation only.',
                 ),
                 const SelectableText(
                   'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}',

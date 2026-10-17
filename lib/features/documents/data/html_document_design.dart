@@ -1,6 +1,19 @@
 import 'dart:convert';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 
+const htmlDocumentSections = [
+  'Invoices',
+  'Quotations',
+  'Receipts',
+  'CreditNotes'
+];
+const htmlDocumentLabels = {
+  'Invoices': 'Invoice',
+  'Quotations': 'Quotation',
+  'Receipts': 'Receipt',
+  'CreditNotes': 'Credit note / return',
+};
+
 const defaultHtmlDocumentDesign = '''<style>
 @page { size: A4; margin: 18mm; }
 body { font: 14px Arial, sans-serif; color: #202124; margin: 32px; }
@@ -91,7 +104,13 @@ String renderHtmlDocument({
     final token = match[1]!.trim();
     if (token == 'items') return rows;
     if (token == 'title') {
-      return section == 'Invoices' ? 'INVOICE' : 'QUOTATION';
+      return const {
+            'Invoices': 'INVOICE',
+            'Quotations': 'QUOTATION',
+            'Receipts': 'PAYMENT RECEIPT',
+            'CreditNotes': 'CREDIT NOTE / RETURN'
+          }[section] ??
+          section;
     }
     if (token == 'endDate') {
       return escape(record[section == 'Invoices' ? 'dueDate' : 'validUntil']);

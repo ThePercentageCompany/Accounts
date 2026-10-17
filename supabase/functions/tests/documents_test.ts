@@ -23,6 +23,16 @@ Deno.test('employees can upload task documents without task edit permission',asy
   assert(rejected);
 });
 
+Deno.test('staff can attach files to visible records without section edit permission',async()=>{
+  for(const section of ['Tasks','Employees','Invoices','Expenses','Payroll','Assets']) {
+    const {ctx}=fixture();
+    await authorizeDocument(ctx,section,'task',true);
+    ctx.read=async()=>[];
+    let rejected=false;try{await authorizeDocument(ctx,section,'task',true);}catch{rejected=true;}
+    assert(rejected);
+  }
+});
+
 Deno.test('only admins and the uploader can delete, including legacy uploads',async()=>{
   const own=fixture();assert(await canDeleteDocument(own.ctx,own.doc));
   const other=fixture(false,'another');assert(!await canDeleteDocument(other.ctx,other.doc));

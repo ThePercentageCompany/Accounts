@@ -1,6 +1,6 @@
 import { currencyValues, convertJournals, validRate, convert, FX_TABLES } from './foreign-currency.js';
 import { validateProject } from './project-policy.js';
-import { companyDesign, validateDesign, snapshotHtml } from './document-design.js';
+import { companyDesign, validateDesign, snapshotHtml, documentTables } from './document-design.js';
 import { hasLedgerSources, ledgerStatus } from './ledger-status.js';
 import { validateTask, taskActivityChanges } from './task-policy.js';
 import { opaque, digest } from './crypto.js';
@@ -129,7 +129,7 @@ export class BusinessService {
   }
   async documentHtml(token, companyId, section, recordId) {
     const design = await this.documentDesign(token, companyId, section);
-    const rows = await this.records.read(companyId, [section, section === 'Invoices' ? 'InvoiceItems' : 'QuotationItems', 'CompanyProfile', 'Customers']);
+    const rows = await this.records.read(companyId, documentTables(section));
     const latest = await this.documentDesign(token, companyId, section);
     requireThat(latest.version === design.version, 409, 'VERSION_CONFLICT', 'Design changed. Generate again.');
     return snapshotHtml(design.source, section, recordId, rows);

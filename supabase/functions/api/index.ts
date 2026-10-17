@@ -6,7 +6,7 @@ import { authorizeDocument,uploadDocument,publicDocument,deleteDocument,canDelet
 import { ApiError,requireThat } from '../_shared/domain/errors.js';
 import { TaskService } from '../_shared/domain/task-service.js';
 import { previewPayroll } from '../_shared/domain/payroll-policy.js';
-import { companyDesign,validateDesign,snapshotHtml } from '../_shared/domain/document-design.js';
+import { companyDesign,validateDesign,snapshotHtml,documentTables } from '../_shared/domain/document-design.js';
 import { SECTION_TABLES } from '../_shared/domain/employee-policy.js';
 import { exchangeRate } from '../_shared/domain/foreign-currency.js';
 import { groupOverview } from '../_shared/groups.ts';
@@ -179,19 +179,19 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];
       if(action)return finish(await ctx.business.mutate('',companyId!,record[1],record[2]??null,action,input,keyOf(request)),action==='create'?201:200);
     }
-    const design=/^\/document-designs\/(Invoices|Quotations)$/.exec(tail);
+    const design=/^\/document-designs\/(Invoices|Quotations|Receipts|CreditNotes)$/.exec(tail);
     if(design) {
-      ctx.canRead(design[1]);
+      ctx.canRead(['Receipts','CreditNotes'].includes(design[1])?'Invoices':design[1]);
       if(request.method==='GET')return json(200,companyDesign(ctx.company.configuration,design[1]));
       requireThat(ctx.admin&&request.method==='PUT',403,'ADMIN_REQUIRED','Only admins can save designs.');
       return finish(await ctx.business.saveDocumentDesign('',companyId!,design[1],input));
     }
-    const html=/^\/record-html\/(Invoices|Quotations)\/([A-Za-z0-9_-]{43})$/.exec(tail);
+    const html=/^\/record-html\/(Invoices|Quotations|Receipts|CreditNotes)\/([A-Za-z0-9_-]{43})$/.exec(tail);
     if(html) {
       requireThat((await ctx.read(html[1])).some((r:any)=>r.recordId===html[2]),403,'DOCUMENT_FORBIDDEN','Document is unavailable.');
       requireThat(request.method==='GET'||request.method==='POST'&&ctx.admin,403,'ADMIN_REQUIRED','Only admins can preview unsaved designs.');
       const source=request.method==='POST'?input.source:companyDesign(ctx.company.configuration,html[1]).source;validateDesign(source);
-      const rows=await ctx.records.read(companyId!,[html[1],html[1]==='Invoices'?'InvoiceItems':'QuotationItems','CompanyProfile','Customers']);
+      const rows=await ctx.records.read(companyId!,documentTables(html[1]));
       return new Response(snapshotHtml(source,html[1],html[2],rows),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
     }
     if(tail==='/payroll/preview'&&request.method==='POST') {

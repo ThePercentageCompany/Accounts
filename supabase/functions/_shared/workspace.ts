@@ -110,20 +110,19 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
     const employees=(await records.read(companyId,['Employees'])).Employees;
     const employee=employees.find((e:any)=>e.recordId===actor);
     if(employee?.fullName)return employee.fullName;
-    let identity=actor===user.id?user:null;
-    if(!identity&&/^[0-9a-f-]{36}$/i.test(actor)) {
-      const {data:membership,error}=await db.from('company_memberships').select('employee_id')
+    if(actor===user.id) {
+      if(admin)return 'Admin';
+      return employees.find((e:any)=>e.recordId===member.employee_id)?.fullName||'Unknown user';
+    }
+    if(/^[0-9a-f-]{36}$/i.test(actor)) {
+      const {data:membership,error}=await db.from('company_memberships').select('employee_id,role')
         .eq('company_id',companyId).eq('user_id',actor).maybeSingle();
       if(error)databaseError(error);
+      if(membership?.role==='ADMIN')return 'Admin';
       const memberName=employees.find((e:any)=>e.recordId===membership?.employee_id)?.fullName;
       if(memberName)return memberName;
-      if(membership) {
-        const {data,error:authError}=await db.auth.admin.getUserById(actor);
-        if(authError)databaseError(authError);
-        identity=data.user;
-      }
     }
-    return identity?.user_metadata?.full_name||identity?.user_metadata?.name||identity?.email||'Unknown user';
+    return 'Unknown user';
   };
   const business = new (BusinessService as any)({accounts,records,authorizeWrite});
   const canRead = (section: string) => requireThat(admin || principal.permissions[section],403,'SECTION_FORBIDDEN','Section access is not assigned to you.');

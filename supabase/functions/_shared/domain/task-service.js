@@ -52,9 +52,12 @@ export class TaskService {
     requireThat((await this.records(token, companyId, 'Tasks', employee, context)).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
     const names = (await this.business.records.readReferences(companyId, ['Employees'])).Employees;
-    const author = async row => ({ ...clean(row), authorName: row.authorName ||
-      names.find(e => e.recordId === row.createdBy)?.fullName ||
-      await this.business.accounts?.actorName?.(row.createdBy) || 'Unknown user' });
+    const author = async row => {
+      const employeeName = names.find(e => e.recordId === row.createdBy)?.fullName;
+      const resolved = employeeName || await this.business.accounts?.actorName?.(row.createdBy);
+      const saved = row.authorName === 'Company owner' ? null : row.authorName;
+      return { ...clean(row), authorName: resolved && resolved !== 'Unknown user' ? resolved : saved || 'Unknown user' };
+    };
     // Older activity inherited the task creator; updatedBy/updatedAt identify
     // the actual actor and time of each generated activity entry.
     const activityAuthor = row => author({ ...row,

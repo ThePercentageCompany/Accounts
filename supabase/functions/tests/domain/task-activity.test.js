@@ -21,14 +21,14 @@ test('history resolves actual updater for older entries and preserves comment au
     TaskComments: [{ taskId: 'task', createdBy: 'creator', createdAt: 100 }],
     TaskActivity: [
       { taskId: 'task', createdBy: 'creator', createdAt: 100,
-        updatedBy: 'updater', updatedAt: 200 },
+        updatedBy: 'updater', updatedAt: 200, authorName: 'Company owner' },
       { taskId: 'task', createdBy: 'owner', createdAt: 100,
-        updatedBy: 'owner', updatedAt: 300 },
+        updatedBy: 'owner', updatedAt: 300, authorName: 'Company owner' },
     ],
   };
   const service = new TaskService({ business: {
     list: async (_token, _company, table) => rows[table],
-    accounts: { actorName: async id => id === 'owner' ? 'Alex Admin' : 'Unknown user' },
+    accounts: { actorName: async id => id === 'owner' ? 'Admin' : 'Unknown user' },
     records: { readReferences: async () => ({ Employees: [
       { recordId: 'creator', fullName: 'Task Creator' },
       { recordId: 'updater', fullName: 'Status Updater' },
@@ -37,7 +37,7 @@ test('history resolves actual updater for older entries and preserves comment au
   const detail = await service.detail('', 'company', 'task');
   assert.equal(detail.activity[0].authorName, 'Status Updater');
   assert.equal(detail.activity[0].createdAt, 200);
-  assert.equal(detail.activity[1].authorName, 'Alex Admin');
+  assert.equal(detail.activity[1].authorName, 'Admin');
   assert.equal(detail.comments[0].authorName, 'Task Creator');
   assert.equal(detail.comments[0].createdAt, 100);
 });

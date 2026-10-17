@@ -1,6 +1,11 @@
 import { requireThat } from './errors.js';
 
-export const documentSections = ['Invoices', 'Quotations'];
+export const documentSections = ['Invoices', 'Quotations', 'Receipts', 'CreditNotes'];
+export function documentTables(section) {
+  return [section, ...({ Invoices: ['InvoiceItems'], Quotations: ['QuotationItems'],
+    Receipts: ['ReceiptAllocations', 'Invoices'], CreditNotes: ['CreditNoteItems', 'Invoices'] }[section] ?? []),
+    'CompanyProfile', 'Customers'];
+}
 export const defaultDesign = "<style>\n@page { size: A4; margin: 18mm; }\nbody { font: 14px Arial, sans-serif; color: #202124; margin: 32px; }\nheader { display:flex; justify-content:space-between; border-bottom:2px solid #1677ff; padding-bottom:20px; }\nh1 { margin:0; font-size:28px; } h2 { font-size:18px; }\n.details { display:flex; justify-content:space-between; margin:28px 0; }\ntable { border-collapse:collapse; width:100%; }\nth, td { padding:12px; border-bottom:1px solid #ddd; text-align:right; }\nth:first-child, td:first-child { text-align:left; }\nth { background:#f4f6f8; } .totals { margin:24px 0 24px auto; width:300px; }\nfooter { border-top:1px solid #ddd; margin-top:32px; padding-top:16px; }\n</style>\n<header><div><h2>{{company.name}}</h2>{{company.address}}<br>TRN: {{company.trn}}<br>{{company.email}}</div>\n<div><h1>{{title}}</h1>{{record.number}}<br>{{record.status}}</div></header>\n<div class=\"details\"><div><b>Bill to</b><h2>{{customer.name}}</h2>{{customer.address}}<br>TRN: {{customer.trn}}</div>\n<div>Issue date: {{record.issueDate}}<br>Due / valid until: {{endDate}}<br>Currency: {{record.currency}}</div></div>\n<table><thead><tr><th>Description</th><th>Quantity</th><th>Unit price</th><th>Discount</th><th>VAT %</th><th>Amount</th></tr></thead><tbody>{{items}}</tbody></table>\n<div class=\"totals\">Subtotal: {{record.subtotal}}<br>Discount: {{record.discount}}<br>VAT: {{record.taxAmount}}<h2>Total: {{record.currency}} {{record.total}}</h2></div>\n<footer><b>Notes</b><p>{{record.notes}}</p><b>Terms</b><p>{{record.paymentTerms}}</p></footer>";
 export function validateDesign(source) {
   requireThat(typeof source === 'string' && source.trim() && new TextEncoder().encode(source).length <= 100000,
@@ -14,7 +19,7 @@ export function validateDesign(source) {
   }
 }
 export function companyDesign(company, section) {
-  requireThat(documentSections.includes(section), 400, 'INVALID_DOCUMENT_SECTION', 'Choose invoices or quotations.');
+  requireThat(documentSections.includes(section), 400, 'INVALID_DOCUMENT_SECTION', 'Choose an invoice, quotation, receipt or credit note / return.');
   return company.documentDesigns?.[section] ?? { source: defaultDesign, version: 0 };
 }
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -25,7 +30,7 @@ export function renderDocumentHtml(source, section, record, company, customer, i
   const content = source.replace(/\{\{([^{}]+)\}\}/g, (_, raw) => {
     const token = raw.trim();
     if (token === 'items') return rows;
-    if (token === 'title') return section === 'Invoices' ? 'INVOICE' : 'QUOTATION';
+    if (token === 'title') return ({Invoices:'INVOICE',Quotations:'QUOTATION',Receipts:'PAYMENT RECEIPT',CreditNotes:'CREDIT NOTE / RETURN'})[section];
     if (token === 'endDate') return escape(record[section === 'Invoices' ? 'dueDate' : 'validUntil']);
     const [kind, field] = token.split('.');
     const data = { record, company: { ...company, trn: company.trn ?? company.taxNumber }, customer: { ...customer, trn: customer.trn ?? customer.taxNumber } }[kind];
@@ -36,14 +41,28 @@ export function renderDocumentHtml(source, section, record, company, customer, i
 
 export function snapshotHtml(source, section, recordId, rows) {
   const active = r => r.isDeleted !== true && r.isDeleted !== 'TRUE';
-  const record = rows[section].find(r => r.recordId === recordId && active(r));
+  let record = rows[section].find(r => r.recordId === recordId && active(r));
   requireThat(record, 404, 'RECORD_UNAVAILABLE', 'Document record is unavailable.');
   const company = rows.CompanyProfile.find(r => r.recordId === 'company' && active(r));
-  const customer = rows.Customers.find(r => r.recordId === record.customerId && active(r));
+  const invoice = section === 'CreditNotes' ? rows.Invoices.find(r => r.recordId === record.invoiceId && active(r)) : null;
+  const customer = rows.Customers.find(r => r.recordId === (record.customerId ?? invoice?.customerId) && active(r));
   requireThat(company && customer, 409, 'RECORD_UNAVAILABLE', 'Company or customer is unavailable.');
-  const invoice = section === 'Invoices';
-  const items = rows[invoice ? 'InvoiceItems' : 'QuotationItems'].filter(r => active(r) &&
-    r[invoice ? 'invoiceId' : 'quotationId'] === recordId).sort((a, b) => Number(a.lineNumber) - Number(b.lineNumber));
+  const itemTable = {Invoices:'InvoiceItems',Quotations:'QuotationItems',CreditNotes:'CreditNoteItems'}[section];
+  const parentKey = {Invoices:'invoiceId',Quotations:'quotationId',CreditNotes:'creditNoteId'}[section];
+  let items = itemTable ? rows[itemTable].filter(r => active(r) && r[parentKey] === recordId)
+    .sort((a, b) => Number(a.lineNumber) - Number(b.lineNumber)) : [];
+  if(section === 'Receipts') {
+    items = rows.ReceiptAllocations.filter(r => active(r) && r.receiptId === recordId).map(r => ({
+      description: `Payment for invoice ${rows.Invoices.find(i => i.recordId === r.invoiceId)?.number ?? r.invoiceId}`,
+      quantity:1,unitPrice:r.amount,discount:0,taxRate:0,lineTotal:r.amount,
+    }));
+    if(!items.length)items=[{description:record.reference||'Payment received',quantity:1,unitPrice:record.amount,discount:0,taxRate:0,lineTotal:record.amount}];
+    record={...record,issueDate:record.paymentDate,total:record.amount,subtotal:record.amount,discount:0,taxAmount:0,
+      notes:record.reference,paymentTerms:record.paymentAccount};
+  }
+  if(section === 'CreditNotes')record={...record,issueDate:record.date,invoiceNumber:invoice?.number,
+    notes:`Credit for invoice ${invoice?.number ?? record.invoiceId}. ${record.reason ?? ''}`,
+    paymentTerms:`Refund: ${record.refundAmount ?? 0} ${record.currency ?? ''} ${record.refundAccount ?? ''}`};
   return renderDocumentHtml(source, section, record, company, customer, items);
 }
 

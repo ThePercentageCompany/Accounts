@@ -24,7 +24,7 @@ class SystemSettingsPanel extends StatelessWidget {
           if (records.isEmpty) {
             throw const SaasApiException(
               'NO_PREVIEW_RECORD',
-              'Save an invoice or quotation first to preview its design. You can save the design now.',
+              'Save a document of this type first to preview its design. You can save the design now.',
             );
           }
           return api.recordHtml(
@@ -56,13 +56,11 @@ class SystemSettingsPanel extends StatelessWidget {
                 subtitle: Text('Light, dark or system theme'),
                 trailing: AppearanceSelector(),
               ),
-              for (final section in const ['Invoices', 'Quotations'])
+              for (final section in htmlDocumentSections)
                 ListTile(
                   leading: const Icon(Icons.code),
                   title: Text(
-                    section == 'Invoices'
-                        ? 'Invoice design'
-                        : 'Quotation design',
+                    '${htmlDocumentLabels[section]} design',
                   ),
                   subtitle: const Text(
                     'Edit, import, preview and update HTML / CSS',

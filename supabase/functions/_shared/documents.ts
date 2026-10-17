@@ -6,7 +6,8 @@ import { databaseError } from './workspace.ts';
 const sections=['Tasks','CompanyProfile','Invoices','CreditNotes','Receipts','Quotations','Income','Expenses','Employees','Payroll','Payslips','Assets'];
 export async function authorizeDocument(ctx:any,section:string,id:string,write=false) {
   requireThat(sections.includes(section),400,'INVALID_DOCUMENT','Unsupported document section.');
-  if(write)requireThat(ctx.admin||section==='Tasks'||ctx.principal.writableSections.includes(({CompanyProfile:'Settings',Expenses:'Income & Expenses',Income:'Income & Expenses',Assets:'Fixed Assets',CreditNotes:'Invoices',Receipts:'Invoices',Payslips:'Payroll'} as any)[section]??section),403,'DOCUMENT_FORBIDDEN','Document upload access is not assigned.');
+  // Attaching a file does not grant edit access to the underlying record.
+  // Staff may upload wherever they can already view the parent record.
   const rows=await ctx.read(section);
   requireThat(rows.some((r:any)=>r.recordId===id && !r.isDeleted),403,'DOCUMENT_FORBIDDEN','Document record is unavailable.');
 }

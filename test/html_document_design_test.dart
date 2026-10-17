@@ -12,6 +12,41 @@ void main() {
   const record = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
   const origin = 'https://api.test';
 
+  for (final section in ['Receipts', 'CreditNotes']) {
+    test('$section template saves separately and prints the saved design',
+        () async {
+      var version = 0;
+      var source = defaultHtmlDocumentDesign;
+      final api = SaasApi(
+          origin: origin,
+          client: MockClient((request) async {
+            if (request.url.path.contains('/record-html/')) {
+              expect(request.url.path,
+                  '/v1/companies/$company/record-html/$section/$record');
+              return http.Response('<html>$section saved design</html>', 200);
+            }
+            expect(request.url.path,
+                '/v1/companies/$company/document-designs/$section');
+            if (request.method == 'PUT') {
+              final input = jsonDecode(request.body) as Map;
+              expect(input['expectedVersion'], version);
+              source = input['source'];
+              version++;
+            }
+            return http.Response(
+                jsonEncode({'source': source, 'version': version}), 200);
+          }));
+      addTearDown(api.close);
+      final store = HtmlDocumentDesignStore(api, company, section);
+      await store.load();
+      await store.save('$defaultHtmlDocumentDesign<p>$section</p>');
+      expect(await store.load(), contains('<p>$section</p>'));
+      expect(await savedRecordHtml(api, company, section, record),
+          '<html>$section saved design</html>');
+      expect(version, 1);
+    });
+  }
+
   for (final employee in [false, true]) {
     test(
         'final HTML uses the online company design for ${employee ? 'employee' : 'admin'}',

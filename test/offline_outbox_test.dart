@@ -168,6 +168,40 @@ void main() {
         'server-transfer');
   });
 
+  test('staff upload rejected by old permissions can retry the original file',
+      () async {
+    var updated = false;
+    String? originalId;
+    box = create((op) async {
+      originalId ??= op['operationId'] as String;
+      expect(op['operationId'], originalId);
+      expect((op['values'] as Map)['data'], 'JVBERi0=');
+      if (!updated) {
+        throw const SaasApiException(
+            'DOCUMENT_FORBIDDEN', 'Document upload access is not assigned.',
+            status: 403);
+      }
+      return ack(op, 'document', 1);
+    });
+    await box.enqueue(
+        'Documents',
+        'upload',
+        {
+          'section': 'Tasks',
+          'relatedRecordId': 'task',
+          'name': 'file.pdf',
+          'mimeType': 'application/pdf',
+          'data': 'JVBERi0=',
+        },
+        expectedVersion: 0,
+        local: false);
+    await box.sync();
+    expect(box.pending.single['state'], 'failed');
+    updated = true;
+    await box.retry();
+    expect(box.pending, isEmpty);
+  });
+
   test(
       'correction creates a new request and clears stale background acknowledgement',
       () async {

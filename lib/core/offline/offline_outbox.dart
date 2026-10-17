@@ -337,10 +337,15 @@ class OfflineOutbox extends ChangeNotifier {
         final retryableDeploymentMismatch = op['table'] == 'MoneyTransfers' &&
             op['errorCode'] == 'TABLE_FORBIDDEN' &&
             op['error'] == 'This business table is unavailable.';
+        final retryableUploadPermission = op['table'] == 'Documents' &&
+            op['action'] == 'upload' &&
+            op['errorCode'] == 'DOCUMENT_FORBIDDEN' &&
+            op['error'] == 'Document upload access is not assigned.';
         if (op['state'] == 'failed' &&
             ((op['errorCode'] == 'INVALID_BATCH' &&
                     op['error'] == 'Supply between 1 and 20 operations.') ||
-                retryableDeploymentMismatch)) {
+                retryableDeploymentMismatch ||
+                retryableUploadPermission)) {
           op['state'] = 'pending';
         }
         if (op['state'] != 'failed') op['retryAt'] = 0;

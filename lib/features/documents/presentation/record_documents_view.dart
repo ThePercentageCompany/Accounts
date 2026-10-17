@@ -321,7 +321,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                 ),
               ),
               if (error != null) Text(error!),
-              if (const ['Invoices', 'Quotations'].contains(widget.section))
+              if (htmlDocumentSections.contains(widget.section))
                 Wrap(
                   alignment: WrapAlignment.end,
                   children: [
@@ -338,8 +338,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                       )
                   ],
                 ),
-              if (const ['CreditNotes', 'Receipts', 'Payroll', 'Assets']
-                  .contains(widget.section))
+              if (const ['Payroll', 'Assets'].contains(widget.section))
                 Align(
                   alignment: Alignment.centerRight,
                   child: LoadingButton.textIcon(
@@ -349,7 +348,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                   ),
                 ),
               if (!widget.employee &&
-                  const ['Invoices', 'Quotations'].contains(widget.section))
+                  htmlDocumentSections.contains(widget.section))
                 Align(
                   alignment: Alignment.centerRight,
                   child: PopupMenuButton<String>(
@@ -391,7 +390,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     ),
                   ],
                 ),
-              if (const ['Invoices', 'Quotations'].contains(widget.section))
+              if (htmlDocumentSections.contains(widget.section))
                 const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(kIsWeb

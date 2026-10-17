@@ -859,15 +859,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                                                   .contains(selected)
                                           ? _writes
                                           : null,
-                                      uploads: widget.employee == null ||
-                                              selected == 'Employees' ||
-                                              (widget.employee![
-                                                              'writableSections']
-                                                          as List? ??
-                                                      [])
-                                                  .contains(selected)
-                                          ? _uploads
-                                          : null,
+                                      uploads: _uploads,
                                       selectedTable: _children(selected).isEmpty
                                           ? 'Employees'
                                           : _subsection(selected),
