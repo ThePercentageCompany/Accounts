@@ -416,7 +416,9 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                                   trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (doc['canDelete'] == true)
+                                        if (doc['canDelete'] == true ||
+                                            (!widget.employee &&
+                                                doc['_localData'] == null))
                                           IconButton(
                                             tooltip: 'Delete document',
                                             onPressed: busy

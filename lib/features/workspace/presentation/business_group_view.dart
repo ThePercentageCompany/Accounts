@@ -48,6 +48,50 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
     if (saved == true && mounted) await load();
   }
 
+  Future<void> remove(Map item, {bool group = false}) async {
+    final kind = group ? 'business group' : 'entity';
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text('Delete $kind?'),
+              content: Text(group
+                  ? 'Delete ${item['name']}? All entities must be deleted first.'
+                  : 'Permanently delete ${item['name']}, its records, employee access and uploaded documents? This cannot be undone.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Delete')),
+              ],
+            ));
+    if (confirmed != true || !mounted) return;
+    setState(() => loading = true);
+    try {
+      if (group) {
+        await widget.api.deleteBusinessGroup('${item['id']}');
+        if (mounted) setState(() => selectedGroup = null);
+      } else {
+        final id = '${item['companyId']}';
+        final box = widget.api.workspaceOutbox(id);
+        await box?.reload();
+        if (box != null &&
+            (box.pending.isNotEmpty ||
+                (box.data['aux'] as Map? ?? {}).isNotEmpty)) {
+          throw const SaasApiException('PENDING',
+              'Sync or export pending changes before deleting this entity.');
+        }
+        await widget.api.deleteCompany(id);
+      }
+      if (mounted) await load();
+    } catch (failure) {
+      if (mounted) setState(() => error = '$failure');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final groups = (data?['groups'] as List? ?? []).cast<Map>();
@@ -131,6 +175,19 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
                       onSelected: (_) =>
                           setState(() => selectedGroup = '${group['id']}')),
               ]),
+              if (selectedGroup != null)
+                Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: loading || opening
+                          ? null
+                          : () => remove(
+                              groups
+                                  .firstWhere((g) => g['id'] == selectedGroup),
+                              group: true),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Delete business group'),
+                    )),
               const SizedBox(height: 24),
               Wrap(spacing: 16, runSpacing: 16, children: [
                 _Summary('Legal entities', entities.length,
@@ -203,6 +260,16 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Row(children: [
+                                              IconButton(
+                                                tooltip: 'Delete entity',
+                                                onPressed: loading || opening
+                                                    ? null
+                                                    : () => remove(entity),
+                                                icon: Icon(Icons.delete_outline,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .error),
+                                              ),
                                               const Icon(
                                                   Icons.business_outlined),
                                               const SizedBox(width: 12),
@@ -249,7 +316,7 @@ class _BusinessGroupViewState extends State<BusinessGroupView> {
                                                           .textTheme
                                                           .bodySmall)),
                                               FilledButton.icon(
-                                                  onPressed: opening
+                                                  onPressed: opening || loading
                                                       ? null
                                                       : () async {
                                                           setState(() =>

@@ -83,6 +83,14 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       return json(201,{group:data});
     }
     const countryEntity=/^\/v1\/groups\/([A-Za-z0-9_-]{43})\/entities$/.exec(path);
+    const deletingGroup=/^\/v1\/groups\/([A-Za-z0-9_-]{43})$/.exec(path);
+    if(deletingGroup&&request.method==='DELETE') {
+      requireThat(user.app_metadata?.kind!=='employee',403,'ADMIN_REQUIRED','Only admins can delete business groups.');
+      const {error}=await db.rpc('delete_business_group',{p_group:deletingGroup[1],p_actor:user.id});
+      if(error?.message?.includes('GROUP_NOT_EMPTY'))throw new ApiError(409,'GROUP_NOT_EMPTY','Delete the group’s entities before deleting the business group.');
+      if(error)databaseError(error);
+      return json(200,{deleted:true});
+    }
     if(countryEntity&&request.method==='POST'){
       const {data,error}=await auth.rpc('create_country_entity',{p_group:countryEntity[1],p_name:input.name,p_country:input.countryCode,
         p_currency:input.currency,p_zone:input.timeZone,p_tax:input.taxRegistration??'',p_key:keyOf(request)});if(error)databaseError(error);

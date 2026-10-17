@@ -63,11 +63,15 @@ void main() {
               body: BusinessGroupView(api: api, onOpen: (_) async {}))));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'TPC Group'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete business group'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('AED 100.00'), 300,
           scrollable: find.byType(Scrollable).first);
       expect(find.text('AED 100.00'), findsOneWidget);
       expect(find.text('INR 200.00'), findsOneWidget);
       expect(find.text('300.00'), findsNothing);
+      expect(find.byTooltip('Delete entity'), findsWidgets);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       api.close();
