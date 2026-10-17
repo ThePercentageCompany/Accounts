@@ -1,7 +1,8 @@
 import { requireThat } from './errors.js';
 
-export const documentSections = ['Invoices', 'Quotations', 'Receipts', 'CreditNotes'];
+export const documentSections = ['Invoices', 'Quotations', 'Receipts', 'CreditNotes', 'Payroll'];
 export function documentTables(section) {
+  if(section==='Payroll')return ['Payroll','Employees','CompanyProfile'];
   return [section, ...({ Invoices: ['InvoiceItems'], Quotations: ['QuotationItems'],
     Receipts: ['ReceiptAllocations', 'Invoices'], CreditNotes: ['CreditNoteItems', 'Invoices'] }[section] ?? []),
     'CompanyProfile', 'Customers'];
@@ -19,18 +20,29 @@ export function validateDesign(source) {
   }
 }
 export function companyDesign(company, section) {
-  requireThat(documentSections.includes(section), 400, 'INVALID_DOCUMENT_SECTION', 'Choose an invoice, quotation, receipt or credit note / return.');
-  return company.documentDesigns?.[section] ?? { source: defaultDesign, version: 0 };
+  requireThat(documentSections.includes(section), 400, 'INVALID_DOCUMENT_SECTION', 'Choose an invoice, quotation, receipt, credit note / return or payslip.');
+  return company.documentDesigns?.[section] ?? { source: section==='Payroll'?defaultPayslipDesign:defaultDesign, version: 0 };
 }
+export const defaultPayslipDesign = `<style>
+@page { size:A4; margin:18mm } body { font:14px Arial,sans-serif; color:#202124 }
+header { border-bottom:2px solid #1677ff; padding-bottom:16px } h1 { margin:8px 0 }
+table { width:100%; border-collapse:collapse; margin-top:24px } th,td { padding:12px; border-bottom:1px solid #ddd; text-align:left } th:last-child,td:last-child { text-align:right }
+.net { text-align:right; margin-top:24px; font-size:20px } footer { margin-top:32px }
+</style><header><h2>{{company.name}}</h2>{{company.address}}<h1>{{title}}</h1>Pay period: {{record.month}}</header>
+<h2>{{record.employeeName}}</h2>Employee code: {{record.employeeCode}}<br>Department: {{record.department}}<br>Designation: {{record.designation}}<br>Status: {{record.status}}<br>Currency: {{record.currency}}
+<table><thead><tr><th>Component</th><th>Amount</th></tr></thead><tbody>{{items}}</tbody></table>
+<div class="net">Net pay: {{record.currency}} {{record.total}}</div><footer>Paid date: {{record.paidDate}}<br>Payment reference: {{record.paymentReference}}</footer>`;
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = value => escape(typeof value === 'number' ? value.toFixed(2) : value);
 export function renderDocumentHtml(source, section, record, company, customer, items) {
   validateDesign(source);
-  const rows = items.map(item => `<tr><td>${escape(item.description)}</td><td>${escape(item.quantity)}</td><td>${money(item.unitPrice)}</td><td>${money(item.discount)}</td><td>${escape(item.taxRate)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
+  const rows = items.map(item => section==='Payroll'
+    ? `<tr><td>${escape(item.description)}</td><td>${money(item.lineTotal)}</td></tr>`
+    : `<tr><td>${escape(item.description)}</td><td>${escape(item.quantity)}</td><td>${money(item.unitPrice)}</td><td>${money(item.discount)}</td><td>${escape(item.taxRate)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
   const content = source.replace(/\{\{([^{}]+)\}\}/g, (_, raw) => {
     const token = raw.trim();
     if (token === 'items') return rows;
-    if (token === 'title') return ({Invoices:'INVOICE',Quotations:'QUOTATION',Receipts:'PAYMENT RECEIPT',CreditNotes:'CREDIT NOTE / RETURN'})[section];
+    if (token === 'title') return ({Invoices:'INVOICE',Quotations:'QUOTATION',Receipts:'PAYMENT RECEIPT',CreditNotes:'CREDIT NOTE / RETURN',Payroll:'PAYSLIP'})[section];
     if (token === 'endDate') return escape(record[section === 'Invoices' ? 'dueDate' : 'validUntil']);
     const [kind, field] = token.split('.');
     const data = { record, company: { ...company, trn: company.trn ?? company.taxNumber }, customer: { ...customer, trn: customer.trn ?? customer.taxNumber } }[kind];
@@ -45,7 +57,9 @@ export function snapshotHtml(source, section, recordId, rows) {
   requireThat(record, 404, 'RECORD_UNAVAILABLE', 'Document record is unavailable.');
   const company = rows.CompanyProfile.find(r => r.recordId === 'company' && active(r));
   const invoice = section === 'CreditNotes' ? rows.Invoices.find(r => r.recordId === record.invoiceId && active(r)) : null;
-  const customer = rows.Customers.find(r => r.recordId === (record.customerId ?? invoice?.customerId) && active(r));
+  const customer = section==='Payroll'
+    ? rows.Employees.find(r => r.recordId===record.employeeId && active(r))
+    : rows.Customers.find(r => r.recordId === (record.customerId ?? invoice?.customerId) && active(r));
   requireThat(company && customer, 409, 'RECORD_UNAVAILABLE', 'Company or customer is unavailable.');
   const itemTable = {Invoices:'InvoiceItems',Quotations:'QuotationItems',CreditNotes:'CreditNoteItems'}[section];
   const parentKey = {Invoices:'invoiceId',Quotations:'quotationId',CreditNotes:'creditNoteId'}[section];
@@ -63,6 +77,14 @@ export function snapshotHtml(source, section, recordId, rows) {
   if(section === 'CreditNotes')record={...record,issueDate:record.date,invoiceNumber:invoice?.number,
     notes:`Credit for invoice ${invoice?.number ?? record.invoiceId}. ${record.reason ?? ''}`,
     paymentTerms:`Refund: ${record.refundAmount ?? 0} ${record.currency ?? ''} ${record.refundAccount ?? ''}`};
+  if(section === 'Payroll') {
+    items=[['Basic salary','basicSalary'],['Allowances','allowances'],['Overtime','overtimeAmount'],
+      ['Bonus','bonus'],['Gross salary','grossSalary'],['Deductions','deductions']]
+      .map(([description,field])=>({description,lineTotal:record[field]??0}));
+    record={...record,total:record.netSalary,employeeName:customer.fullName,employeeCode:customer.employeeCode,
+      department:customer.department,designation:customer.designation,
+      currency:record.currency||customer.currency||company.currency};
+  }
   return renderDocumentHtml(source, section, record, company, customer, items);
 }
 

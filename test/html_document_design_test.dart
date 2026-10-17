@@ -12,7 +12,7 @@ void main() {
   const record = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
   const origin = 'https://api.test';
 
-  for (final section in ['Receipts', 'CreditNotes']) {
+  for (final section in ['Receipts', 'CreditNotes', 'Payroll']) {
     test('$section template saves separately and prints the saved design',
         () async {
       var version = 0;

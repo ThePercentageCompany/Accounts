@@ -338,7 +338,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                       )
                   ],
                 ),
-              if (const ['Payroll', 'Assets'].contains(widget.section))
+              if (widget.section == 'Assets')
                 Align(
                   alignment: Alignment.centerRight,
                   child: LoadingButton.textIcon(

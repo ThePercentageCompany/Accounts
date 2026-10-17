@@ -71,11 +71,14 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
               spacing: 12,
               children: [
                 const Text(
-                  'Edit HTML and CSS. Saved online separately for invoices, quotations, receipts and credit notes / returns. Authorized employees use the saved design with Print company design / Save as PDF. Designs change presentation only.',
+                  'Edit HTML and CSS. Saved online separately for invoices, quotations, receipts, credit notes / returns and payslips. Authorized employees use the saved design with Print company design / Save as PDF. Designs change presentation only.',
                 ),
                 const SelectableText(
                   'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}',
                 ),
+                if (widget.store.section == 'Payroll')
+                  const SelectableText(
+                      'Payslip fields: {{record.month}}, {{record.employeeName}}, {{record.employeeCode}}, {{record.department}}, {{record.designation}}, {{record.basicSalary}}, {{record.allowances}}, {{record.overtimeAmount}}, {{record.bonus}}, {{record.grossSalary}}, {{record.deductions}}, {{record.netSalary}}, {{record.paidDate}}, {{record.paymentReference}}. {{items}} renders component and amount columns; {{record.total}} is net pay.'),
                 TextField(
                   inputFormatters: [AppInputFormatters.text],
                   controller: source,

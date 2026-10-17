@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultDesign, renderDocumentHtml, validateDesign, companyDesign, snapshotHtml, documentTables } from '../../_shared/domain/document-design.js';
+import { defaultDesign, defaultPayslipDesign, renderDocumentHtml, validateDesign, companyDesign, snapshotHtml, documentTables } from '../../_shared/domain/document-design.js';
 
 test('HTML keeps company CSS and embeds escaped document values and saved totals', () => {
   const source = '<style>@page{size:A5}h1{color:purple}</style><h1>{{title}}</h1>{{company.trn}}{{customer.name}}<table>{{items}}</table>{{record.total}}';
@@ -11,6 +11,21 @@ test('HTML keeps company CSS and embeds escaped document values and saved totals
   assert.ok(html.includes('TRN123')); assert.ok(html.includes('A&amp;B'));
   assert.ok(html.includes('&lt;script&gt;')); assert.ok(html.includes("default-src 'none'"));
   assert.ok(renderDocumentHtml(source, 'Quotations', {}, {}, {}, []).includes('QUOTATION'));
+});
+
+test('payslip design renders only the selected payroll and employee with authoritative net pay', () => {
+  const rows={CompanyProfile:[{recordId:'company',name:'Business',currency:'AED'}],
+    Employees:[{recordId:'employee',fullName:'Aisha',employeeCode:'EMP-1',department:'Sales'},
+      {recordId:'other',fullName:'Another employee'}],
+    Payroll:[{recordId:'payroll',employeeId:'employee',month:'2026-10',basicSalary:5000,
+      allowances:500,overtimeAmount:200,bonus:100,grossSalary:5800,deductions:300,netSalary:5500}]};
+  assert.equal(companyDesign({},'Payroll').source,defaultPayslipDesign);
+  validateDesign(defaultPayslipDesign);
+  assert.deepEqual(documentTables('Payroll'),['Payroll','Employees','CompanyProfile']);
+  const html=snapshotHtml(defaultPayslipDesign,'Payroll','payroll',rows);
+  for(const value of ['PAYSLIP','Aisha','EMP-1','Sales','2026-10','5500.00','5800.00','300.00','AED'])assert.ok(html.includes(value));
+  assert.ok(!html.includes('Another employee'));
+  assert.throws(()=>snapshotHtml(defaultPayslipDesign,'Payroll','missing',rows),e=>e.code==='RECORD_UNAVAILABLE');
 });
 
 test('receipt and credit note / return designs render their own authoritative data', () => {

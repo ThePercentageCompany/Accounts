@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/reports/presentation/dashboard_financial_overview.dart';
 import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
-import 'package:tpc_invoice/features/reports/presentation/dashboard_tasks.dart';
 
 class EntityOverview extends StatefulWidget {
   const EntityOverview(
@@ -171,37 +170,45 @@ class _EntityOverviewState extends State<EntityOverview> {
                       ? widget.onSection!('Reports', kind)
                       : widget.onNavigate('Reports')),
               const SizedBox(height: 24),
-              Text('Workspace details',
+              Text('Workspace at a glance',
                   style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              DashboardTasks(
-                  api: widget.api,
-                  companyId: widget.companyId,
-                  employee: false,
-                  active: widget.active,
-                  onTask: widget.onTask ?? (_) => widget.onNavigate('Tasks')),
+              const SizedBox(height: 4),
+              Text(
+                  'Record counts, status mix and totals · tap a table to explore',
+                  style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 12),
-              for (final section in employeeOverviewTables.entries)
-                Card(
-                    elevation: 0,
-                    child: ExpansionTile(
-                      title: Text(section.key),
-                      subtitle:
-                          const Text('Status, activity and recent records'),
-                      children: [
-                        SectionOverview(
+              LayoutBuilder(builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 1180
+                    ? 4
+                    : constraints.maxWidth >= 850
+                        ? 3
+                        : constraints.maxWidth >= 560
+                            ? 2
+                            : 1;
+                final width =
+                    (constraints.maxWidth - (columns - 1) * 12) / columns;
+                return Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final section in {
+                    'Tasks': ['Tasks'],
+                    ...employeeOverviewTables
+                  }.entries)
+                    SizedBox(
+                        width: width,
+                        child: SectionOverview(
+                            key: ValueKey((widget.companyId, section.key)),
                             api: widget.api,
                             companyId: widget.companyId,
                             section: section.key,
                             tables: section.value,
                             employee: false,
+                            compact: true,
                             active: widget.active,
                             onSection: (section, table) =>
                                 widget.onSection != null
                                     ? widget.onSection!(section, table)
-                                    : widget.onNavigate(section))
-                      ],
-                    )),
+                                    : widget.onNavigate(section))),
+                ]);
+              }),
               const SizedBox(height: 24),
               Text('Your business, connected',
                   style: Theme.of(context).textTheme.headlineSmall),

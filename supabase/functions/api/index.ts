@@ -179,14 +179,14 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];
       if(action)return finish(await ctx.business.mutate('',companyId!,record[1],record[2]??null,action,input,keyOf(request)),action==='create'?201:200);
     }
-    const design=/^\/document-designs\/(Invoices|Quotations|Receipts|CreditNotes)$/.exec(tail);
+    const design=/^\/document-designs\/(Invoices|Quotations|Receipts|CreditNotes|Payroll)$/.exec(tail);
     if(design) {
       ctx.canRead(['Receipts','CreditNotes'].includes(design[1])?'Invoices':design[1]);
       if(request.method==='GET')return json(200,companyDesign(ctx.company.configuration,design[1]));
       requireThat(ctx.admin&&request.method==='PUT',403,'ADMIN_REQUIRED','Only admins can save designs.');
       return finish(await ctx.business.saveDocumentDesign('',companyId!,design[1],input));
     }
-    const html=/^\/record-html\/(Invoices|Quotations|Receipts|CreditNotes)\/([A-Za-z0-9_-]{43})$/.exec(tail);
+    const html=/^\/record-html\/(Invoices|Quotations|Receipts|CreditNotes|Payroll)\/([A-Za-z0-9_-]{43})$/.exec(tail);
     if(html) {
       requireThat((await ctx.read(html[1])).some((r:any)=>r.recordId===html[2]),403,'DOCUMENT_FORBIDDEN','Document is unavailable.');
       requireThat(request.method==='GET'||request.method==='POST'&&ctx.admin,403,'ADMIN_REQUIRED','Only admins can preview unsaved designs.');

@@ -5,13 +5,15 @@ const htmlDocumentSections = [
   'Invoices',
   'Quotations',
   'Receipts',
-  'CreditNotes'
+  'CreditNotes',
+  'Payroll'
 ];
 const htmlDocumentLabels = {
   'Invoices': 'Invoice',
   'Quotations': 'Quotation',
   'Receipts': 'Receipt',
   'CreditNotes': 'Credit note / return',
+  'Payroll': 'Payslip',
 };
 
 const defaultHtmlDocumentDesign = '''<style>
@@ -108,7 +110,8 @@ String renderHtmlDocument({
             'Invoices': 'INVOICE',
             'Quotations': 'QUOTATION',
             'Receipts': 'PAYMENT RECEIPT',
-            'CreditNotes': 'CREDIT NOTE / RETURN'
+            'CreditNotes': 'CREDIT NOTE / RETURN',
+            'Payroll': 'PAYSLIP'
           }[section] ??
           section;
     }

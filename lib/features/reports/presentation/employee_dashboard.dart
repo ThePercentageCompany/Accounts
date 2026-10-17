@@ -6,6 +6,7 @@ import '../data/report_format.dart';
 import 'dashboard_tasks.dart';
 import 'overview_charts.dart';
 import 'dashboard_financial_overview.dart';
+import 'workspace_quick_look_card.dart';
 
 const employeeOverviewTables = <String, List<String>>{
   'Income & Expenses': ['Income', 'Expenses'],
@@ -104,11 +105,12 @@ class SectionOverview extends StatefulWidget {
       required this.tables,
       required this.active,
       this.employee = true,
+      this.compact = false,
       required this.onSection});
   final SaasApi api;
   final String companyId, section;
   final List<String> tables;
-  final bool active, employee;
+  final bool active, employee, compact;
   final void Function(String, String) onSection;
   @override
   State<SectionOverview> createState() => _SectionOverviewState();
@@ -190,95 +192,121 @@ class _SectionOverviewState extends State<SectionOverview> {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-      child: Padding(
-          padding: const EdgeInsets.all(16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(
-                  child: Text(widget.section,
-                      style: Theme.of(context).textTheme.titleLarge)),
-              if (_busy) const AppActivityIndicator(radius: 8),
-              IconButton(
-                  tooltip: 'Refresh overview',
-                  onPressed: _busy ? null : () => _load(force: true),
-                  icon: const Icon(Icons.refresh)),
-            ]),
-            for (final table in widget.tables) ...[
-              const SizedBox(height: 12),
-              Text(table, style: Theme.of(context).textTheme.titleMedium),
-              if (_rows.containsKey(table)) ...[
-                Text('${_rows[table]!.length} records'),
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final status in _statusCounts(_rows[table]!).entries)
-                    Chip(
-                        label: Text(
-                            '${status.key.replaceAll('_', ' ')}: ${status.value}')),
-                  for (final amount in _amounts(_rows[table]!).entries)
-                    Chip(
-                        label: Text(
-                            '${amount.key}: ${const ReportFormat().money(reportDecimal(amount.value))}')),
-                ]),
-                if (_rows[table]!.any((row) => row['syncStatus'] == 'PENDING'))
-                  const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('Includes changes saved on this device.')),
-                if (_rows[table]!.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  OverviewDonut(centerLabel: 'Records', data: [
-                    for (final entry in _statusCounts(_rows[table]!).entries)
-                      OverviewDatum(entry.key.replaceAll('_', ' '),
-                          entry.value.toDouble(),
-                          onTap: () => widget.onSection(widget.section, table)),
-                    if (_statusCounts(_rows[table]!).isEmpty)
-                      OverviewDatum('Records', _rows[table]!.length.toDouble(),
-                          onTap: () => widget.onSection(widget.section, table)),
-                  ]),
-                  const SizedBox(height: 12),
-                  ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: const Text('Activity & recent records'),
-                      children: [
-                        OverviewBars(
-                            data: _activity(_rows[table]!)
-                                .entries
-                                .map((entry) => OverviewDatum(
-                                    entry.key, entry.value.toDouble(),
-                                    onTap: () => widget.onSection(
-                                        widget.section, table)))
-                                .toList()),
-                        for (final row in _recent(_rows[table]!))
-                          ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              title: Text(
-                                  '${row['title'] ?? row['number'] ?? row['fullName'] ?? row['name'] ?? row['description'] ?? table}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              subtitle: Text(
-                                  '${row['status'] ?? row['paymentStatus'] ?? row['employmentStatus'] ?? 'Open record'}'
-                                      .replaceAll('_', ' ')),
-                              trailing:
-                                  const Icon(Icons.arrow_outward, size: 16),
-                              onTap: () =>
-                                  widget.onSection(widget.section, table)),
-                      ]),
-                ] else if (!_busy)
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('No records yet.')),
-              ],
-              if (_errors[table] != null) Text(_errors[table]!),
-              Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                      onPressed: () => widget.onSection(widget.section, table),
-                      icon: const Icon(Icons.arrow_forward),
-                      label: Text('Open $table'))),
-            ],
-          ])));
+  Widget build(BuildContext context) => widget.compact
+      ? WorkspaceQuickLookCard(
+          section: widget.section,
+          tables: widget.tables,
+          rows: _rows,
+          errors: _errors,
+          busy: _busy,
+          onOpen: (table) => widget.onSection(widget.section, table),
+          onRefresh: () => _load(force: true),
+          amounts: {
+              for (final table in widget.tables)
+                table: [
+                  for (final amount in _amounts(_rows[table] ?? []).entries)
+                    '${amount.key} ${const ReportFormat().money(reportDecimal(amount.value))}',
+                ],
+            })
+      : Card(
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                          child: Text(widget.section,
+                              style: Theme.of(context).textTheme.titleLarge)),
+                      if (_busy) const AppActivityIndicator(radius: 8),
+                      IconButton(
+                          tooltip: 'Refresh overview',
+                          onPressed: _busy ? null : () => _load(force: true),
+                          icon: const Icon(Icons.refresh)),
+                    ]),
+                    for (final table in widget.tables) ...[
+                      const SizedBox(height: 12),
+                      Text(table,
+                          style: Theme.of(context).textTheme.titleMedium),
+                      if (_rows.containsKey(table)) ...[
+                        Text('${_rows[table]!.length} records'),
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          for (final status
+                              in _statusCounts(_rows[table]!).entries)
+                            Chip(
+                                label: Text(
+                                    '${status.key.replaceAll('_', ' ')}: ${status.value}')),
+                          for (final amount in _amounts(_rows[table]!).entries)
+                            Chip(
+                                label: Text(
+                                    '${amount.key}: ${const ReportFormat().money(reportDecimal(amount.value))}')),
+                        ]),
+                        if (_rows[table]!
+                            .any((row) => row['syncStatus'] == 'PENDING'))
+                          const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Text(
+                                  'Includes changes saved on this device.')),
+                        if (_rows[table]!.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          OverviewDonut(centerLabel: 'Records', data: [
+                            for (final entry
+                                in _statusCounts(_rows[table]!).entries)
+                              OverviewDatum(entry.key.replaceAll('_', ' '),
+                                  entry.value.toDouble(),
+                                  onTap: () =>
+                                      widget.onSection(widget.section, table)),
+                            if (_statusCounts(_rows[table]!).isEmpty)
+                              OverviewDatum(
+                                  'Records', _rows[table]!.length.toDouble(),
+                                  onTap: () =>
+                                      widget.onSection(widget.section, table)),
+                          ]),
+                          const SizedBox(height: 12),
+                          ExpansionTile(
+                              tilePadding: EdgeInsets.zero,
+                              title: const Text('Activity & recent records'),
+                              children: [
+                                OverviewBars(
+                                    data: _activity(_rows[table]!)
+                                        .entries
+                                        .map((entry) => OverviewDatum(
+                                            entry.key, entry.value.toDouble(),
+                                            onTap: () => widget.onSection(
+                                                widget.section, table)))
+                                        .toList()),
+                                for (final row in _recent(_rows[table]!))
+                                  ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      title: Text(
+                                          '${row['title'] ?? row['number'] ?? row['fullName'] ?? row['name'] ?? row['description'] ?? table}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(
+                                          '${row['status'] ?? row['paymentStatus'] ?? row['employmentStatus'] ?? 'Open record'}'
+                                              .replaceAll('_', ' ')),
+                                      trailing: const Icon(Icons.arrow_outward,
+                                          size: 16),
+                                      onTap: () => widget.onSection(
+                                          widget.section, table)),
+                              ]),
+                        ] else if (!_busy)
+                          const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('No records yet.')),
+                      ],
+                      if (_errors[table] != null) Text(_errors[table]!),
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                              onPressed: () =>
+                                  widget.onSection(widget.section, table),
+                              icon: const Icon(Icons.arrow_forward),
+                              label: Text('Open $table'))),
+                    ],
+                  ])));
 }
 
 List<Map<String, dynamic>> _recent(List<Map<String, dynamic>> rows) {
