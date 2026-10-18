@@ -463,6 +463,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
   bool canGrantEdit(String section) =>
       const [
         'Customers',
+        'Employees',
         'Projects',
         'Invoices',
         'Quotations',
@@ -477,6 +478,7 @@ class _EmployeeEditorState extends State<_EmployeeEditor> {
       ].contains(section) &&
       !(role == 'Staff' &&
           const [
+            'Employees',
             'Cash & Bank',
             'Income & Expenses',
             'Tasks',

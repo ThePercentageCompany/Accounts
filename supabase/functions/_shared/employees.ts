@@ -1,14 +1,14 @@
 // deno-lint-ignore-file no-explicit-any
-import { employeeInput } from './domain/employee-input.js';
+import { employeeInput,delegatedEmployeeInput } from './domain/employee-input.js';
 import { opaque, digest } from './domain/crypto.js';
 import { requireThat } from './domain/errors.js';
 import { databaseError } from './workspace.ts';
 import { employeeLoginCode, employeeLoginPassword } from './domain/employee-login.js';
 
 export async function saveEmployee(ctx: any,id: string|null,input: any,key: string) {
-  requireThat(ctx.admin,403,'ADMIN_REQUIRED','Only company admins can manage employees.');
+  requireThat(ctx.admin||id&&ctx.principal.writableSections.includes('Employees'),403,'ADMIN_REQUIRED','Employee edit access is required.');
   requireThat(/^[A-Za-z0-9_-]{16,128}$/.test(key),400,'IDEMPOTENCY_KEY_REQUIRED','Use a stable operation key.');
-  const values:any=employeeInput(input),opKey=digest(`business:${ctx.company.id}:${key}`);
+  const opKey=digest(`business:${ctx.company.id}:${key}`);
   const fingerprint=digest(JSON.stringify({id,input}));
   const state=(await ctx.registry.read()).state;
   const previous=state.companies[ctx.company.id].businessOps[opKey];
@@ -18,6 +18,7 @@ export async function saveEmployee(ctx: any,id: string|null,input: any,key: stri
   }
   const all=(await ctx.records.read(ctx.company.id,['Employees'])).Employees;
   const old=all.find((r:any)=>r.recordId===id);
+  const values:any=ctx.admin?employeeInput(input):delegatedEmployeeInput(old,input);
   requireThat((old?.recordVersion??0)===values.expectedVersion && (id ? old && !old.isDeleted : values.expectedVersion===0),409,'VERSION_CONFLICT','Employee changed. Refresh before saving.');
   const employeeId=id??opaque(),now=Date.now();
   const sequence=Math.max(0,...all.map((r:any)=>/^EMP-(\d+)$/.test(r.employeeCode??'')?Number(r.employeeCode.slice(4)):0))+1;

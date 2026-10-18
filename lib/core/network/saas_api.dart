@@ -1125,6 +1125,12 @@ class SaasApi implements SessionRepository {
   @override
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
   Future<Map<String, dynamic>> businessGroups() => _json('GET', '/v1/groups');
+  Future<Map<String, dynamic>> updateEmployeeProfile(String companyId,
+          String employeeId, Map<String, Object?> values, String operationId,
+          {bool employee = true}) =>
+      _json('PATCH',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/employees/${_id(employeeId)}',
+          data: values, operationId: operationId);
   Future<Map<String, dynamic>> deleteBusinessGroup(String groupId) =>
       _json('DELETE', '/v1/groups/${_id(groupId)}');
   Future<Map<String, dynamic>> entityOverview(String companyId,

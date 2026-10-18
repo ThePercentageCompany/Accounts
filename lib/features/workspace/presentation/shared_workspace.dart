@@ -1,4 +1,5 @@
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
+import 'package:tpc_invoice/features/employees/presentation/employee_profile_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/transfer_editor.dart';
 import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
 import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
@@ -2871,6 +2872,24 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 child: Text('Delete $_recordLabel'),
                               ),
                             RecordDetails(record: row),
+                            if (table == 'Employees' && widget.writes != null)
+                              LoadingButton.outlined(
+                                onPressed: busy
+                                    ? null
+                                    : () async {
+                                        final saved = await showDialog<bool>(
+                                            context: context,
+                                            builder: (_) =>
+                                                EmployeeProfileEditor(
+                                                    api: widget.api,
+                                                    companyId: widget.companyId,
+                                                    record: row));
+                                        if (saved == true && mounted) {
+                                          await _load(force: true);
+                                        }
+                                      },
+                                child: const Text('Edit employee'),
+                              ),
                           ],
                         );
                       },

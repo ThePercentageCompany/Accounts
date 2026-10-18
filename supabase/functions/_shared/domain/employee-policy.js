@@ -1,6 +1,6 @@
 export const SECTIONS = Object.freeze(['Cash & Bank', 'Dashboard', 'Invoices', 'Quotations', 'Income & Expenses', 'Capital & Equity',
   'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance', 'Tasks', 'Calendar', 'Projects']);
-export const WRITE_SECTIONS = Object.freeze(['Cash & Bank', 'Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks', 'Projects']);
+export const WRITE_SECTIONS = Object.freeze(['Cash & Bank', 'Customers', 'Employees', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks', 'Projects']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
 // The employee directory is readable through records with normal visibility
 // and field projection. Employee management uses its dedicated admin endpoint.

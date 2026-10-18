@@ -3,6 +3,13 @@ import {SECTIONS,WRITE_SECTIONS,ROLES,scopeFor} from './employee-policy.js';
 import { validLedgerDate } from './financial-period-policy.js';
 const profileFields = ['employeeCode', 'email', 'phone', 'department', 'designation', 'joinDate', 'lastEmploymentDate',
   'basicSalary', 'allowances', 'iban', 'address', 'bankName', 'emiratesId', 'passportNumber', 'visaExpiry', 'currency'];
+export function delegatedEmployeeInput(old, input) {
+  const editable=['fullName','email','phone','department','designation','expectedVersion'];
+  requireThat(old&&input&&!Array.isArray(input)&&Object.keys(input).every(k=>editable.includes(k)),
+    403,'EMPLOYEE_FIELDS_FORBIDDEN','Only admins can change employee access, employment or pay settings.');
+  const fields=['fullName',...profileFields,'employmentStatus','role','allowedSections','writableSections'];
+  return employeeInput({...Object.fromEntries(fields.filter(k=>Object.hasOwn(old,k)).map(k=>[k,old[k]])),...input});
+}
 export function employeeInput(input) {
     const allowed = ['fullName', ...profileFields, 'employmentStatus', 'role', 'allowedSections', 'writableSections', 'expectedVersion'];
     requireThat(input && !Array.isArray(input) && Object.keys(input).every(k => allowed.includes(k)), 400, 'INVALID_EMPLOYEE', 'Unsupported employee fields.');
