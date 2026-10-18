@@ -8,7 +8,7 @@ import { TaskService } from '../_shared/domain/task-service.js';
 import { previewPayroll } from '../_shared/domain/payroll-policy.js';
 import { companyDesign,validateDesign,snapshotHtml,documentTables } from '../_shared/domain/document-design.js';
 import { documentRoute } from '../_shared/domain/document-route.js';
-import { SECTION_TABLES } from '../_shared/domain/employee-policy.js';
+import { SECTION_TABLES,recordsEndpointAllowed } from '../_shared/domain/employee-policy.js';
 import { exchangeRate } from '../_shared/domain/foreign-currency.js';
 import { groupOverview } from '../_shared/groups.ts';
 import { employeeLoginPassword } from '../_shared/domain/employee-login.js';
@@ -183,7 +183,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     }
     const record=/^\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(tail);
     if(record) {
-      requireThat(!blocked.includes(record[1]),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
+      requireThat(recordsEndpointAllowed(record[1],request.method,!!record[2]),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
       if(request.method==='GET'&&!record[2])return json(200,{records:await ctx.read(record[1],url.searchParams.get('includeDeleted')==='true')});
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];
       if(action)return finish(await ctx.business.mutate('',companyId!,record[1],record[2]??null,action,input,keyOf(request)),action==='create'?201:200);

@@ -2,6 +2,12 @@ export const SECTIONS = Object.freeze(['Cash & Bank', 'Dashboard', 'Invoices', '
   'Fixed Assets', 'Balance Sheet', 'Customers', 'Employees', 'Payroll', 'Reports', 'Settings', 'Office & Attendance', 'Tasks', 'Calendar', 'Projects']);
 export const WRITE_SECTIONS = Object.freeze(['Cash & Bank', 'Customers', 'Invoices', 'Quotations', 'Income & Expenses', 'Payroll', 'Fixed Assets', 'Capital & Equity', 'Balance Sheet', 'Settings', 'Tasks', 'Projects']);
 export const ROLES = Object.freeze(['Staff', 'Manager', 'Accountant']);
+// The employee directory is readable through records with normal visibility
+// and field projection. Employee management uses its dedicated admin endpoint.
+export function recordsEndpointAllowed(table, method, hasRecordId = false) {
+  if (table === 'Employees') return method === 'GET' && !hasRecordId;
+  return !['DocumentRegistry', 'NumberSequences'].includes(table);
+}
 export const SECTION_TABLES = {
   MoneyTransfers: 'Cash & Bank',
   Projects: 'Projects', Tasks: 'Tasks', TaskComments: 'Tasks', TaskActivity: 'Tasks',
