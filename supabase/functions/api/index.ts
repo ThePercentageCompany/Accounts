@@ -2,11 +2,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 import { workspace,databaseError } from '../_shared/workspace.ts';
 import { saveEmployee,employeeAccess } from '../_shared/employees.ts';
-import { authorizeDocument,uploadDocument,publicDocument,deleteDocument,canDeleteDocument } from '../_shared/documents.ts';
+import { authorizeDocument,uploadDocument,publicDocument,deleteDocument,canDeleteDocument,embedCompanyLogo,authorizeDocumentDownload } from '../_shared/documents.ts';
 import { ApiError,requireThat } from '../_shared/domain/errors.js';
 import { TaskService } from '../_shared/domain/task-service.js';
 import { previewPayroll } from '../_shared/domain/payroll-policy.js';
 import { companyDesign,validateDesign,snapshotHtml,documentTables } from '../_shared/domain/document-design.js';
+import { documentRoute } from '../_shared/domain/document-route.js';
 import { SECTION_TABLES } from '../_shared/domain/employee-policy.js';
 import { exchangeRate } from '../_shared/domain/foreign-currency.js';
 import { groupOverview } from '../_shared/groups.ts';
@@ -37,7 +38,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS'}});
     const url=new URL(request.url),path=url.pathname.replace(/^.*?\/api(?=\/|$)/,'');
     if(request.method==='GET'&&['/health','/healthz'].includes(path))return json(200,{status:'ok',phase:4,
-      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','task-management','task-calendar','task-attachments']});
+      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','extended-document-designs','embedded-company-logo','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','task-management','task-calendar','task-attachments']});
     const raw=request.method==='GET'?'':await request.text();
     requireThat(new TextEncoder().encode(raw).length<=9*1024*1024,413,'BODY_TOO_LARGE','Request is too large.');
     let input:any={};if(raw){try{input=JSON.parse(raw);}catch{throw new ApiError(400,'INVALID_JSON','Use valid JSON.');}}
@@ -187,20 +188,22 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];
       if(action)return finish(await ctx.business.mutate('',companyId!,record[1],record[2]??null,action,input,keyOf(request)),action==='create'?201:200);
     }
-    const design=/^\/document-designs\/(Invoices|Quotations|Receipts|CreditNotes|Payroll)$/.exec(tail);
-    if(design) {
-      ctx.canRead(['Receipts','CreditNotes'].includes(design[1])?'Invoices':design[1]);
-      if(request.method==='GET')return json(200,companyDesign(ctx.company.configuration,design[1]));
+    const documentEndpoint=documentRoute(tail);
+    if(documentEndpoint?.kind==='document-designs') {
+      const section=documentEndpoint.section;
+      ctx.canRead(['Receipts','CreditNotes'].includes(section)?'Invoices':section);
+      if(request.method==='GET')return json(200,companyDesign(ctx.company.configuration,section));
       requireThat(ctx.admin&&request.method==='PUT',403,'ADMIN_REQUIRED','Only admins can save designs.');
-      return finish(await ctx.business.saveDocumentDesign('',companyId!,design[1],input));
+      return finish(await ctx.business.saveDocumentDesign('',companyId!,section,input));
     }
-    const html=/^\/record-html\/(Invoices|Quotations|Receipts|CreditNotes|Payroll)\/([A-Za-z0-9_-]{43})$/.exec(tail);
-    if(html) {
-      requireThat((await ctx.read(html[1])).some((r:any)=>r.recordId===html[2]),403,'DOCUMENT_FORBIDDEN','Document is unavailable.');
+    if(documentEndpoint?.kind==='record-html') {
+      const section=documentEndpoint.section,id=documentEndpoint.recordId!;
+      requireThat((await ctx.read(section)).some((r:any)=>r.recordId===id),403,'DOCUMENT_FORBIDDEN','Document is unavailable.');
       requireThat(request.method==='GET'||request.method==='POST'&&ctx.admin,403,'ADMIN_REQUIRED','Only admins can preview unsaved designs.');
-      const source=request.method==='POST'?input.source:companyDesign(ctx.company.configuration,html[1]).source;validateDesign(source);
-      const rows=await ctx.records.read(companyId!,documentTables(html[1]));
-      return new Response(snapshotHtml(source,html[1],html[2],rows),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+      const source=request.method==='POST'?input.source:companyDesign(ctx.company.configuration,section).source;validateDesign(source);
+      const rows=await ctx.records.read(companyId!,documentTables(section));
+      await embedCompanyLogo(ctx,rows);
+      return new Response(snapshotHtml(source,section,id,rows),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
     }
     if(tail==='/payroll/preview'&&request.method==='POST') {
       requireThat(ctx.admin||ctx.principal.writableSections.includes('Payroll'),403,'WRITE_FORBIDDEN','Payroll edit access is required.');
@@ -243,7 +246,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const descriptors=Object.values(ctx.company.configuration.documents??{}) as any[];
       if(documents[1]) {
         const doc=descriptors.find(d=>d.documentId===documents[1]&&d.status!=='DELETED');requireThat(doc,404,'DOCUMENT_UNAVAILABLE','Document is unavailable.');
-        await authorizeDocument(ctx,doc.relatedSection,doc.relatedRecordId);
+        await authorizeDocumentDownload(ctx,doc);
         const {data,error}=await db.storage.from('company-documents').download(doc.path);if(error)databaseError(error);
         return new Response(data,{headers:{...headers,'Content-Type':doc.mimeType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(doc.name)}`}});
       }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'document_endpoint.dart';
 import 'package:tpc_invoice/features/auth/domain/password_recovery.dart';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
@@ -1553,12 +1554,13 @@ class SaasApi implements SessionRepository {
   Future<Map<String, dynamic>> documentDesign(String companyId, String section,
           {bool employee = false}) =>
       _json('GET',
-          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/document-designs/$section',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/document-designs/${documentEndpointSection(section)}',
           force: true);
 
   Future<Map<String, dynamic>> saveDocumentDesign(String companyId,
           String section, String source, int expectedVersion) =>
-      _json('PUT', '/v1/companies/${_id(companyId)}/document-designs/$section',
+      _json('PUT',
+          '/v1/companies/${_id(companyId)}/document-designs/${documentEndpointSection(section)}',
           data: {'source': source, 'expectedVersion': expectedVersion});
 
   void close() {
@@ -1609,7 +1611,7 @@ class SaasApi implements SessionRepository {
   Future<String> recordHtml(String companyId, String section, String recordId,
           {bool employee = false, String? source}) async =>
       (await _send(source == null ? 'GET' : 'POST',
-              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-html/$section/${_id(recordId)}',
+              '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/record-html/${documentEndpointSection(section)}/${_id(recordId)}',
               data: source == null ? null : {'source': source}))
           .body;
 

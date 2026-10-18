@@ -102,33 +102,51 @@ String renderHtmlDocument({
             '<td>${money(item['lineTotal'])}</td></tr>',
       )
       .join();
-  final content = source.replaceAllMapped(RegExp(r'\{\{([^{}]+)\}\}'), (match) {
-    final token = match[1]!.trim();
-    if (token == 'items') return rows;
-    if (token == 'title') {
-      return const {
-            'Invoices': 'INVOICE',
-            'Quotations': 'QUOTATION',
-            'Receipts': 'PAYMENT RECEIPT',
-            'CreditNotes': 'CREDIT NOTE / RETURN',
-            'Payroll': 'PAYSLIP'
-          }[section] ??
-          section;
-    }
-    if (token == 'endDate') {
-      return escape(record[section == 'Invoices' ? 'dueDate' : 'validUntil']);
-    }
-    final parts = token.split('.');
-    final data = {
-      'record': record,
-      'company': {...company, 'trn': company['trn'] ?? company['taxNumber']},
-      'customer': {
-        ...customer,
-        'trn': customer['trn'] ?? customer['taxNumber']
-      },
-    }[parts[0]]!;
-    return money(data[parts[1]]);
-  });
+  final logoData = company['logoDataUrl'];
+  final safeLogo = logoData is String &&
+      RegExp(r'^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$')
+          .hasMatch(logoData);
+  final logo = safeLogo
+      ? '<img class="company-logo" src="$logoData" alt="${escape(company['name'])} logo" style="display:block;max-width:160px;max-height:80px;object-fit:contain;margin-bottom:12px">'
+      : '';
+  final hasLogoPlaceholder =
+      RegExp(r'\{\{\s*company\.(logo|logoDataUrl)\s*\}\}').hasMatch(source);
+  final content = (hasLogoPlaceholder ? '' : logo) +
+      source.replaceAllMapped(RegExp(r'\{\{([^{}]+)\}\}'), (match) {
+        final token = match[1]!.trim();
+        if (token == 'company.logo') return logo;
+        if (token == 'company.logoDataUrl') {
+          return safeLogo ? escape(logoData) : '';
+        }
+        if (token == 'items') return rows;
+        if (token == 'title') {
+          return const {
+                'Invoices': 'INVOICE',
+                'Quotations': 'QUOTATION',
+                'Receipts': 'PAYMENT RECEIPT',
+                'CreditNotes': 'CREDIT NOTE / RETURN',
+                'Payroll': 'PAYSLIP'
+              }[section] ??
+              section;
+        }
+        if (token == 'endDate') {
+          return escape(
+              record[section == 'Invoices' ? 'dueDate' : 'validUntil']);
+        }
+        final parts = token.split('.');
+        final data = {
+          'record': record,
+          'company': {
+            ...company,
+            'trn': company['trn'] ?? company['taxNumber']
+          },
+          'customer': {
+            ...customer,
+            'trn': customer['trn'] ?? customer['taxNumber']
+          },
+        }[parts[0]]!;
+        return money(data[parts[1]]);
+      });
   // Designs are exported, never executed inside the signed-in application.
   // Block scripts, network requests, forms and embedded pages in the browser export.
   return '<!doctype html><html><head><meta charset="utf-8">'

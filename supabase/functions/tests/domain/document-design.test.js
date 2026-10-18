@@ -13,6 +13,24 @@ test('HTML keeps company CSS and embeds escaped document values and saved totals
   assert.ok(renderDocumentHtml(source, 'Quotations', {}, {}, {}, []).includes('QUOTATION'));
 });
 
+test('all document designs embed logos and saved custom designs can position them', () => {
+  const company={name:'Company & Co',logoDataUrl:'data:image/png;base64,iVBORw=='};
+  const source='{{title}}{{items}}{{record.total}}';
+  for(const section of ['Invoices','Quotations','CreditNotes','Payroll','Receipts']) {
+    const html=renderDocumentHtml(source,section,{total:1},company,{},[]);
+    assert.ok(html.includes('src="data:image/png;base64,iVBORw=="'));
+    assert.ok(html.includes('Company &amp; Co logo'));
+    assert.ok(html.includes('img-src data:'));
+    const placed=renderDocumentHtml('<header>{{company.logo}}</header>'+source,section,{},company,{},[]);
+    assert.equal((placed.match(/class="company-logo"/g)||[]).length,1);
+    assert.ok(placed.includes('<header><img'));
+  }
+  for(const value of ['https://external.test/logo.png','data:image/svg+xml;base64,AAAA','data:image/png;base64,AAAA" onerror="alert(1)']) {
+    const html=renderDocumentHtml(source,'Invoices',{}, {logoDataUrl:value},{},[]);
+    assert.ok(!html.includes('<img'));
+  }
+});
+
 test('payslip design renders only the selected payroll and employee with authoritative net pay', () => {
   const rows={CompanyProfile:[{recordId:'company',name:'Business',currency:'AED'}],
     Employees:[{recordId:'employee',fullName:'Aisha',employeeCode:'EMP-1',department:'Sales'},

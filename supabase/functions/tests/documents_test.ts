@@ -1,6 +1,30 @@
-import {authorizeDocument,canDeleteDocument,deleteDocument} from '../_shared/documents.ts';
+import {authorizeDocument,canDeleteDocument,deleteDocument,embedCompanyLogo,authorizeDocumentDownload} from '../_shared/documents.ts';
 
 function assert(value:unknown) { if(!value)throw new Error('Assertion failed'); }
+
+Deno.test('staff can download the selected logo without gaining access to other settings files',async()=>{
+  const ctx:any={company:{id:'company'},records:{read:async()=>({CompanyProfile:[{recordId:'company',logoDocumentId:'logo'}]})},
+    read:async()=>{throw new Error('Settings forbidden');}};
+  const doc={documentId:'logo',relatedSection:'CompanyProfile',relatedRecordId:'company',mimeType:'image/png'};
+  await authorizeDocumentDownload(ctx,doc);
+  let rejected=false;try{await authorizeDocumentDownload(ctx,{...doc,documentId:'other'});}catch{rejected=true;}
+  assert(rejected);
+});
+
+Deno.test('company logo comes from the verified private profile document',async()=>{
+  let downloaded='';
+  const ctx:any={company:{configuration:{documents:{logo:{relatedSection:'CompanyProfile',relatedRecordId:'company',
+    status:'READY',mimeType:'image/png',path:'company/logo'}}}},db:{storage:{from:()=>({download:async(path:string)=>{
+      downloaded=path;return {data:new Blob([new Uint8Array([137,80,78,71])]),error:null};
+    }})}}};
+  const rows:any={CompanyProfile:[{recordId:'company',logoDocumentId:'logo'}]};
+  await embedCompanyLogo(ctx,rows);
+  assert(downloaded==='company/logo');
+  assert(rows.CompanyProfile[0].logoDataUrl==='data:image/png;base64,iVBORw==');
+  ctx.company.configuration.documents.logo.status='DELETED';
+  let rejected=false;try{await embedCompanyLogo(ctx,rows);}catch{rejected=true;}
+  assert(rejected);
+});
 function fixture(admin=false,user='uploader') {
   const doc:any={documentId:'doc',path:'company/doc',relatedSection:'Tasks',relatedRecordId:'task',status:'READY',uploadedBy:'uploader',uploadedByEmployeeId:'employee'};
   const row:any={recordId:'doc',_row:2,createdBy:'uploader',recordVersion:1};

@@ -2,6 +2,31 @@
 import { challenge, digest } from './domain/crypto.js';
 import { requireThat } from './domain/errors.js';
 import { databaseError } from './workspace.ts';
+import { Buffer } from 'node:buffer';
+
+export async function embedCompanyLogo(ctx:any,rows:any) {
+  const profile=rows.CompanyProfile?.find((r:any)=>r.recordId==='company'&&!r.isDeleted);
+  if(!profile?.logoDocumentId)return;
+  const doc=ctx.company.configuration.documents?.[profile.logoDocumentId];
+  requireThat(doc&&doc.status!=='DELETED'&&doc.relatedSection==='CompanyProfile'&&
+    doc.relatedRecordId==='company'&&['image/png','image/jpeg'].includes(doc.mimeType),
+    409,'LOGO_UNAVAILABLE','The company logo is unavailable. Upload it again in Company profile.');
+  const {data,error}=await ctx.db.storage.from('company-documents').download(doc.path);
+  if(error)databaseError(error);
+  profile.logoDataUrl=`data:${doc.mimeType};base64,${Buffer.from(await data.arrayBuffer()).toString('base64')}`;
+}
+
+export async function authorizeDocumentDownload(ctx:any,doc:any) {
+  // The selected company logo is shared branding for all verified members,
+  // even when they cannot edit or open the company settings section.
+  if(doc.relatedSection==='CompanyProfile'&&doc.relatedRecordId==='company'&&
+    ['image/png','image/jpeg'].includes(doc.mimeType)) {
+    const rows=await ctx.records.read(ctx.company.id,['CompanyProfile']);
+    const profile=rows.CompanyProfile.find((r:any)=>r.recordId==='company'&&!r.isDeleted);
+    if(profile?.logoDocumentId===doc.documentId)return;
+  }
+  await authorizeDocument(ctx,doc.relatedSection,doc.relatedRecordId);
+}
 
 const sections=['Tasks','CompanyProfile','Invoices','CreditNotes','Receipts','Quotations','Income','Expenses','Employees','Payroll','Payslips','Assets'];
 export async function authorizeDocument(ctx:any,section:string,id:string,write=false) {

@@ -34,13 +34,22 @@ table { width:100%; border-collapse:collapse; margin-top:24px } th,td { padding:
 <div class="net">Net pay: {{record.currency}} {{record.total}}</div><footer>Paid date: {{record.paidDate}}<br>Payment reference: {{record.paymentReference}}</footer>`;
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = value => escape(typeof value === 'number' ? value.toFixed(2) : value);
+export function companyLogo(company) {
+  const data=company.logoDataUrl;
+  if(typeof data!=='string'||!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(data))return '';
+  return `<img class="company-logo" src="${data}" alt="${escape(company.name)} logo" style="display:block;max-width:160px;max-height:80px;object-fit:contain;margin-bottom:12px">`;
+}
 export function renderDocumentHtml(source, section, record, company, customer, items) {
   validateDesign(source);
   const rows = items.map(item => section==='Payroll'
     ? `<tr><td>${escape(item.description)}</td><td>${money(item.lineTotal)}</td></tr>`
     : `<tr><td>${escape(item.description)}</td><td>${escape(item.quantity)}</td><td>${money(item.unitPrice)}</td><td>${money(item.discount)}</td><td>${escape(item.taxRate)}</td><td>${money(item.lineTotal)}</td></tr>`).join('');
-  const content = source.replace(/\{\{([^{}]+)\}\}/g, (_, raw) => {
+  const logo=companyLogo(company);
+  const hasLogoPlaceholder=/\{\{\s*company\.(logo|logoDataUrl)\s*\}\}/.test(source);
+  const content = (hasLogoPlaceholder?'':logo) + source.replace(/\{\{([^{}]+)\}\}/g, (_, raw) => {
     const token = raw.trim();
+    if(token==='company.logo')return logo;
+    if(token==='company.logoDataUrl')return logo?escape(company.logoDataUrl):'';
     if (token === 'items') return rows;
     if (token === 'title') return ({Invoices:'INVOICE',Quotations:'QUOTATION',Receipts:'PAYMENT RECEIPT',CreditNotes:'CREDIT NOTE / RETURN',Payroll:'PAYSLIP'})[section];
     if (token === 'endDate') return escape(record[section === 'Invoices' ? 'dueDate' : 'validUntil']);

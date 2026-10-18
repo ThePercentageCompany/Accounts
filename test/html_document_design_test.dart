@@ -12,6 +12,43 @@ void main() {
   const record = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
   const origin = 'https://api.test';
 
+  for (final pair in [
+    ('Credit note', 'CreditNotes'),
+    ('Payslip', 'Payroll'),
+    ('Receipt', 'Receipts')
+  ]) {
+    test('${pair.$1} load, save and preview use the same connected endpoint',
+        () async {
+      final paths = <String>[];
+      final api = SaasApi(
+          origin: 'https://project.supabase.co',
+          client: MockClient((request) async {
+            paths.add('${request.method} ${request.url.path}');
+            if (request.url.path.contains('/record-html/')) {
+              return http.Response('<html>Preview</html>', 200);
+            }
+            return http.Response(
+                jsonEncode({'source': defaultHtmlDocumentDesign, 'version': 1}),
+                200);
+          }));
+      addTearDown(api.close);
+      await api.documentDesign(company, pair.$1);
+      await api.saveDocumentDesign(
+          company, pair.$1, defaultHtmlDocumentDesign, 0);
+      await api.recordHtml(company, pair.$1, record,
+          source: defaultHtmlDocumentDesign);
+      await api.documentDesign(company, pair.$1, employee: true);
+      await api.recordHtml(company, pair.$1, record, employee: true);
+      expect(paths, [
+        'GET /functions/v1/api/v1/companies/$company/document-designs/${pair.$2}',
+        'PUT /functions/v1/api/v1/companies/$company/document-designs/${pair.$2}',
+        'POST /functions/v1/api/v1/companies/$company/record-html/${pair.$2}/$record',
+        'GET /functions/v1/api/v1/employee/companies/$company/document-designs/${pair.$2}',
+        'GET /functions/v1/api/v1/employee/companies/$company/record-html/${pair.$2}/$record',
+      ]);
+    });
+  }
+
   for (final section in ['Receipts', 'CreditNotes', 'Payroll']) {
     test('$section template saves separately and prints the saved design',
         () async {

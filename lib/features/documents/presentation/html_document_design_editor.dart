@@ -74,7 +74,7 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
                   'Edit HTML and CSS. Saved online separately for invoices, quotations, receipts, credit notes / returns and payslips. Authorized employees use the saved design with Print company design / Save as PDF. Designs change presentation only.',
                 ),
                 const SelectableText(
-                  'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}',
+                  'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.logo}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}. The saved company logo is included automatically; use {{company.logo}} to control its position.',
                 ),
                 if (widget.store.section == 'Payroll')
                   const SelectableText(
