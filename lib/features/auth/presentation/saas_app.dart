@@ -8,6 +8,7 @@ import 'admin_login_dialog.dart';
 import 'package:tpc_invoice/core/network/supabase_runtime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'password_reset_dialog.dart';
+import 'package:tpc_invoice/features/auth/domain/password_recovery.dart';
 
 import 'package:tpc_invoice/features/workspace/presentation/business_group_view.dart';
 import 'package:tpc_invoice/core/widgets/appearance_selector.dart';
@@ -35,6 +36,7 @@ class _SaasAppState extends State<SaasApp> {
   StreamSubscription<SessionState>? _sessionSubscription;
   StreamSubscription<AuthState>? _authSubscription;
   bool _passwordRecoveryOpen = false;
+  bool _recoveryPending = false;
   String? _initializationError;
   bool _employee = SaasApi.invitation(Uri.base, Uri.base) != null;
   bool _workspace = false;
@@ -88,7 +90,25 @@ class _SaasAppState extends State<SaasApp> {
       final api = widget.api ?? createWorkspaceApi();
       _authSubscription =
           currentSupabaseClient?.auth.onAuthStateChange.listen((state) {
-        if (state.event == AuthChangeEvent.passwordRecovery) _recoverPassword();
+        if (state.event == AuthChangeEvent.passwordRecovery &&
+            state.session != null) {
+          _recoveryPending = true;
+          unawaited(SharedPreferences.getInstance().then((prefs) =>
+              prefs.setString(
+                  'tpc_password_recovery_user', state.session!.user.id)));
+          if (!_initializing) unawaited(_recoverPassword());
+        }
+      }, onError: (Object error, StackTrace stack) {
+        if (mounted && isPasswordRecoveryLink(Uri.base)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'The password reset link could not be verified. Request a new link from Forgot password.'),
+              duration: Duration(seconds: 12),
+            ));
+          });
+        }
       });
       _api = api;
       final preferences = await SharedPreferences.getInstance();
@@ -96,6 +116,17 @@ class _SaasAppState extends State<SaasApp> {
       final session = SaasSession(api, preferences);
       _session = session;
       _sessionSubscription = session.stream.listen((_) => _sessionChanged());
+      final recoveryUser = preferences.getString('tpc_password_recovery_user');
+      if (recoveryUser != null &&
+          recoveryUser == currentSupabaseClient?.auth.currentUser?.id) {
+        _recoveryPending = true;
+      }
+      if (_recoveryPending) {
+        _initializing = false;
+        setState(() {});
+        unawaited(_recoverPassword());
+        return;
+      }
       // Invitation links must not silently adopt a cached owner/employee.
       if (!_employee) {
         if (await session.restoreCachedSession()) {
@@ -112,6 +143,9 @@ class _SaasAppState extends State<SaasApp> {
       _workspace = session.restoreWorkspace;
       _initializing = false;
       setState(() {});
+      if (_recoveryPending) {
+        unawaited(_recoverPassword());
+      }
       unawaited(_routeTask());
     } catch (_) {
       if (mounted) {
@@ -139,12 +173,24 @@ class _SaasAppState extends State<SaasApp> {
   Future<void> _recoverPassword() async {
     if (!mounted || _passwordRecoveryOpen) return;
     _passwordRecoveryOpen = true;
+    _recoveryPending = false;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     final saved = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => const PasswordResetDialog());
     _passwordRecoveryOpen = false;
-    if (saved == true && mounted) await _session?.restore();
+    if (saved == true && mounted) {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove('tpc_password_recovery_user');
+      await preferences.setString('tpc_saas_session_mode', 'owner');
+      if (!mounted) return;
+      setState(() => _employee = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated successfully.')));
+      await _session?.restore();
+    }
   }
 
   @override

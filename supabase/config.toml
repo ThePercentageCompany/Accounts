@@ -12,7 +12,7 @@ major_version = 17
 [auth]
 enabled = true
 site_url = "https://accounts.thepercentagecompany.com"
-additional_redirect_urls = ["http://localhost:3000", "http://localhost:8080"]
+additional_redirect_urls = ["https://accounts.thepercentagecompany.com/?auth=recovery", "http://localhost:3000", "http://localhost:8080", "http://localhost:3000/?auth=recovery", "http://localhost:8080/?auth=recovery"]
 enable_signup = true
 
 [auth.email]

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:tpc_invoice/features/auth/domain/password_recovery.dart';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -1601,8 +1602,8 @@ class SaasApi implements SessionRepository {
       throw const SaasApiException(
           'CONFIGURATION', 'Supabase Auth is not configured.');
     }
-    await client.auth
-        .resetPasswordForEmail(email.trim(), redirectTo: Uri.base.origin);
+    await client.auth.resetPasswordForEmail(email.trim(),
+        redirectTo: passwordRecoveryRedirect(Uri.base).toString());
   }
 
   Future<String> recordHtml(String companyId, String section, String recordId,

@@ -80,13 +80,17 @@ class _AdminLoginDialogState extends State<AdminLoginDialog> {
     try {
       await widget.api.resetPassword(email.text);
       if (mounted) {
-        setState(
-            () => message = 'Check your email for the password reset link.');
+        setState(() => message =
+            'Check your email, including spam, for the reset link. Open it in this browser to set your new password.');
       }
-    } catch (_) {
+    } catch (failure) {
       if (mounted) {
         setState(() {
-          message = 'Could not send the reset email. Retry.';
+          message = failure is AuthException
+              ? failure.message
+              : failure is SaasApiException
+                  ? failure.message
+                  : 'Could not send the reset email. Check your connection and retry.';
           hasError = true;
         });
       }
