@@ -8,7 +8,11 @@ export const other='00000000-0000-0000-0000-000000000002';
 export async function setup(){
   const db=new PGlite({extensions:{pgcrypto}});
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
-    create schema auth;create schema storage;create schema cron;
+    create schema auth;create schema storage;create schema cron;create schema realtime;
+    create table realtime.messages(topic text,extension text,payload jsonb,event text,private boolean);
+    alter table realtime.messages enable row level security;
+    create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
+    create function realtime.send(jsonb,text,text,boolean) returns void language sql as $$ insert into realtime.messages(payload,event,topic,private,extension) values($1,$2,$3,$4,'broadcast') $$;
     create table auth.users(id uuid primary key,email text,raw_app_meta_data jsonb default '{}');
     create table auth.sessions(id uuid primary key,user_id uuid,created_at timestamptz default now());
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -17,7 +21,7 @@ export async function setup(){
     create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;
     create publication supabase_realtime;
     insert into auth.users(id,email) values('${owner}','admin@example.test'),('${other}','other@example.test');`);
-  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql','202610190001_structured_business.sql']){
+  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql','202610190001_structured_business.sql','202610190002_task_storage_realtime.sql','202610190003_task_topic_isolation.sql']){
     const sql=(await Deno.readTextFile(new URL(`../../migrations/${file}`,import.meta.url))).replace('create extension if not exists pg_cron with schema pg_catalog;','');
     await db.exec(sql);
   }

@@ -25,8 +25,9 @@ const configuredSaasApiOrigin = configuredSupabaseUrl;
 
 class TaskRealtimeUpdate {
   const TaskRealtimeUpdate(
-      {required this.companyId, required this.connected, this.refresh = true});
+      {required this.companyId, required this.connected, this.refresh = true, this.taskId});
   final String companyId;
+  final String? taskId;
   final bool connected, refresh;
 }
 
@@ -109,6 +110,8 @@ class SaasApi implements SessionRepository {
   }
 
   RealtimeChannel? _realtime;
+  RealtimeChannel? _taskRealtime;
+  bool _taskBroadcastConnected = false;
   final _taskUpdates = StreamController<TaskRealtimeUpdate>.broadcast();
   Stream<TaskRealtimeUpdate> get taskUpdates => _taskUpdates.stream;
   bool _taskRealtimeConnected = false;
@@ -1638,11 +1641,15 @@ class SaasApi implements SessionRepository {
           .body;
 
   void _stopRealtime() {
+    _taskBroadcastConnected = false;
     _realtimeGeneration++;
     _taskRealtimeConnected = false;
     final channel = _realtime;
     _realtime = null;
     if (channel != null) _supabase?.removeChannel(channel).ignore();
+    final taskChannel = _taskRealtime;
+    _taskRealtime = null;
+    if (taskChannel != null) _supabase?.removeChannel(taskChannel).ignore();
   }
 
   void _watchRealtime(String companyId) {
@@ -1652,92 +1659,165 @@ class SaasApi implements SessionRepository {
     final generation = _realtimeGeneration;
     bool current() =>
         generation == _realtimeGeneration && _cacheCompany == companyId;
-    void taskUpdate({bool refresh = true}) {
+    void taskUpdate({bool refresh = true, String? taskId}) {
       if (current() && !_taskUpdates.isClosed) {
-        _taskUpdates.add(TaskRealtimeUpdate(
+        _taskUpdates.add(
+          TaskRealtimeUpdate(
             companyId: companyId,
             connected: _taskRealtimeConnected,
-            refresh: refresh));
+            refresh: refresh,
+            taskId: taskId,
+          ),
+        );
       }
     }
 
-    _realtime = client
-        .channel('workspace:$companyId:${client.auth.currentUser!.id}')
-      ..onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'company_changes',
-          filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'company_id',
-              value: companyId),
-          callback: (change) {
+    _taskRealtime =
+        client.channel(
+            'tasks:$companyId:${client.auth.currentUser!.id}',
+            opts: const RealtimeChannelConfig(private: true),
+          )
+          ..onBroadcast(
+            event: 'task_changed',
+            callback: (payload) {
+              if (!current()) return;
+              final event = payload['payload'] is Map
+                  ? payload['payload'] as Map
+                  : payload;
+              final taskId = event['taskId'] as String?;
+              cache.invalidate((path) {
+                final route = Uri.parse(path).path;
+                return route.endsWith('/overview') ||
+                    route.endsWith('/tasks') ||
+                    (taskId != null && route.endsWith('/tasks/$taskId')) ||
+                    const [
+                      'Tasks',
+                      'TaskComments',
+                      'TaskActivity',
+                    ].any((section) => route.endsWith('/records/$section'));
+              });
+              taskUpdate(taskId: taskId);
+            },
+          )
+          ..subscribe((status, error) {
             if (!current()) return;
-            final sections = change.newRecord['sections'] as List? ?? [];
-            if (sections.isEmpty) {
-              cache.invalidateAll();
-            } else {
-              _invalidateMutation('/v1/companies/$companyId/sync', {
-                'operations': [
-                  for (final section in sections)
-                    {'operationId': section, 'table': section},
-                ],
-              }, {
-                'results': [
-                  for (final section in sections)
-                    {'operationId': section, 'status': 'APPLIED'},
-                ],
+            _taskBroadcastConnected =
+                status == RealtimeSubscribeStatus.subscribed;
+            // Rejoin fetches current state to recover changes missed while offline.
+            if (_taskBroadcastConnected) {
+              cache.invalidate((path) {
+                final route = Uri.parse(path).path;
+                return route.contains('/tasks') || route.endsWith('/overview');
               });
             }
-            if (sections.isEmpty ||
-                sections.any((s) => const [
+            taskUpdate();
+          });
+    _realtime =
+        client.channel('workspace:$companyId:${client.auth.currentUser!.id}')
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'company_changes',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'company_id',
+              value: companyId,
+            ),
+            callback: (change) {
+              if (!current()) return;
+              final sections = (change.newRecord['sections'] as List? ?? [])
+                  .where(
+                    (section) =>
+                        !_taskBroadcastConnected ||
+                        !const [
+                          'Tasks',
+                          'TaskComments',
+                          'TaskActivity',
+                        ].contains(section),
+                  )
+                  .toList();
+              if (sections.isEmpty &&
+                  _taskBroadcastConnected &&
+                  (change.newRecord['sections'] as List? ?? []).isNotEmpty) {
+                return;
+              }
+              if (sections.isEmpty) {
+                cache.invalidateAll();
+              } else {
+                _invalidateMutation(
+                  '/v1/companies/$companyId/sync',
+                  {
+                    'operations': [
+                      for (final section in sections)
+                        {'operationId': section, 'table': section},
+                    ],
+                  },
+                  {
+                    'results': [
+                      for (final section in sections)
+                        {'operationId': section, 'status': 'APPLIED'},
+                    ],
+                  },
+                );
+              }
+              if (sections.isEmpty ||
+                  sections.any(
+                    (s) => const [
                       'Tasks',
                       'TaskComments',
                       'TaskActivity',
                       'Employees',
-                      'Projects'
-                    ].contains(s))) {
-              taskUpdate();
-            }
-          })
-      ..onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'company_memberships',
-          filter: PostgresChangeFilter(
+                      'Projects',
+                    ].contains(s),
+                  )) {
+                taskUpdate();
+              }
+            },
+          )
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'company_memberships',
+            filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'user_id',
-              value: client.auth.currentUser!.id),
-          callback: (change) {
-            if (!current() || change.newRecord['company_id'] != companyId) {
-              return;
-            }
-            _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
-            _revalidateContext().catchError((Object error) {
-              if (error is SaasApiException && error.requiresSignIn) {
-                onAccessRevoked?.call();
+              value: client.auth.currentUser!.id,
+            ),
+            callback: (change) {
+              if (!current() || change.newRecord['company_id'] != companyId) {
+                return;
               }
-            }).ignore();
-          })
-      ..onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          filter: PostgresChangeFilter(
+              _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
+              _revalidateContext().catchError((Object error) {
+                if (error is SaasApiException && error.requiresSignIn) {
+                  onAccessRevoked?.call();
+                }
+              }).ignore();
+            },
+          )
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'company_id',
-              value: companyId),
-          callback: (_) {
-            if (current()) {
-              cache.invalidate(
-                  (path) => Uri.parse(path).path.endsWith('/notifications'));
-            }
-          })
-      ..subscribe((status, error) {
-        if (!current()) return;
-        _taskRealtimeConnected = status == RealtimeSubscribeStatus.subscribed;
-        if (_taskRealtimeConnected) cache.invalidateAll();
-        taskUpdate(refresh: _taskRealtimeConnected);
-      });
+              value: companyId,
+            ),
+            callback: (_) {
+              if (current()) {
+                cache.invalidate(
+                  (path) => Uri.parse(path).path.endsWith('/notifications'),
+                );
+              }
+            },
+          )
+          ..subscribe((status, error) {
+            if (!current()) return;
+            _taskRealtimeConnected =
+                status == RealtimeSubscribeStatus.subscribed;
+            if (_taskRealtimeConnected) cache.invalidateAll();
+            taskUpdate(refresh: _taskRealtimeConnected);
+          });
   }
 }

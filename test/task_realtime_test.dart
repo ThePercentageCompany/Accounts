@@ -239,8 +239,15 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'Unsaved reply');
     title = 'Updated remotely';
     comment = 'Remote comment';
+    api.events.add(const TaskRealtimeUpdate(
+        companyId: company, connected: true, taskId: 'another-task'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.text('Remote comment'), findsNothing);
     api.events
-        .add(const TaskRealtimeUpdate(companyId: company, connected: true));
+        .add(const TaskRealtimeUpdate(companyId: company, connected: true,
+            taskId: taskId));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pumpAndSettle();

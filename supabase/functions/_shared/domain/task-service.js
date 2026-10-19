@@ -20,13 +20,14 @@ export class TaskService {
       (!q.priority || TASK_PRIORITIES.includes(q.priority)) && (!q.from || date(q.from)) && (!q.to || date(q.to)) &&
       (!q.from || !q.to || q.from <= q.to) && (!q.sort || ['due', 'priority', 'updated'].includes(q.sort)) && (!q.overdue || q.overdue === 'true'),
       400, 'INVALID_QUERY', 'Invalid task filters or page size.');
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: context.timeZone ?? 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
+    if (this.business.taskQueries) return this.business.taskQueries.list(q, today);
     const all = await this.records(token, companyId, 'Tasks', employee, context);
     let rows = all.filter(r => (!q.overdue || r.status !== 'COMPLETED') && (!q.search || (r.title + ' ' + r.description + ' ' + r.project + ' ' + r.tags).toLowerCase().includes(q.search.toLowerCase())) &&
       ['employeeId', 'status', 'priority', 'project'].every(k => !q[k] || r[k] === q[k]) &&
       (!q.from || r.dueDate >= q.from) && (!q.to || r.dueDate <= q.to));
     rows.sort((a, b) => (q.sort === 'priority' ? TASK_PRIORITIES.indexOf(b.priority) - TASK_PRIORITIES.indexOf(a.priority) :
       q.sort === 'updated' ? Number(b.updatedAt) - Number(a.updatedAt) : String(a.dueDate + a.endTime).localeCompare(String(b.dueDate + b.endTime))) || a.recordId.localeCompare(b.recordId));
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: context.timeZone ?? 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
     const summaryRows = all; // records() already enforces assigned-only or task-manager access.
     const upcoming = {};
     for (const r of summaryRows) if (r.status !== 'COMPLETED' && r.dueDate > today) upcoming[r.dueDate] = (upcoming[r.dueDate] || 0) + 1;
@@ -43,13 +44,15 @@ export class TaskService {
       nextOffset: offset + limit < rows.length ? offset + limit : null };
   }
   async detail(token, companyId, id, employee = false, context = {}) {
-    const tasks = await this.records(token, companyId, 'Tasks', employee, context);
+    const records = table => this.business.taskQueries
+      ? this.business.taskQueries.records(table, id) : this.records(token, companyId, table, employee, context);
+    const tasks = await records('Tasks');
     const task = tasks.find(t => t.recordId === id);
     requireThat(task, 404, 'TASK_NOT_FOUND', 'Task is unavailable.');
-    const comments = await this.records(token, companyId, 'TaskComments', employee, context);
-    const activity = await this.records(token, companyId, 'TaskActivity', employee, context);
+    const comments = await records('TaskComments');
+    const activity = await records('TaskActivity');
     // Revalidate visibility after reading dependent data.
-    requireThat((await this.records(token, companyId, 'Tasks', employee, context)).some(t => t.recordId === id),
+    requireThat((await records('Tasks')).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
     const names = (await this.business.records.readReferences(companyId, ['Employees'])).Employees;
     const author = async row => {
@@ -62,7 +65,7 @@ export class TaskService {
     // the actual actor and time of each generated activity entry.
     const activityAuthor = row => author({ ...row,
       createdBy: row.updatedBy || row.createdBy, createdAt: row.updatedAt || row.createdAt });
-    requireThat((await this.records(token, companyId, 'Tasks', employee, context)).some(t => t.recordId === id),
+    requireThat((await records('Tasks')).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
     return { task: clean(task), comments: await Promise.all(comments.filter(c => c.taskId === id).map(author)),
       activity: await Promise.all(activity.filter(a => a.taskId === id).map(activityAuthor)) };

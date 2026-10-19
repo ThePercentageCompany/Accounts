@@ -25,6 +25,10 @@ function client(pg:any){
     async rpc(name:string,input:any){try{
       let result:any;
       if(name==='load_workspace_operations')result=await pg.query(`select public.load_workspace_operations($1,$2::text[]) as value`,[input.p_company,input.p_keys]);
+      else if(name==='task_records_page') {
+        const rows=await pg.query(`select * from public.task_records_page($1,$2,$3,$4,$5,$6)`,[input.p_company,input.p_section,input.p_after,input.p_limit,input.p_actor??null,input.p_task??null]);
+        return {data:rows.rows,error:null};
+      }
       else if(name==='commit_workspace')result=await pg.query(`select public.commit_workspace($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb) as value`,
         [input.p_company,input.p_actor,input.p_revision,JSON.stringify(input.p_changes),JSON.stringify(input.p_configuration),JSON.stringify(input.p_operations),JSON.stringify(input.p_audit)]);
       else throw new Error(`Unknown RPC ${name}`);

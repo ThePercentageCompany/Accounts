@@ -31,11 +31,14 @@ class _NotificationCenterState extends State<NotificationCenter>
   bool _busy = false;
   String? _error;
   int _generation = 0;
+  String get _path =>
+      widget.api.notificationsPath(widget.companyId, employee: widget.employee);
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.api.cache.addListener(_cacheChanged);
+    widget.api.cache.activate(_path);
     unawaited(_load());
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (WidgetsBinding.instance.lifecycleState == null ||
@@ -52,7 +55,11 @@ class _NotificationCenterState extends State<NotificationCenter>
         oldWidget.companyId != widget.companyId ||
         oldWidget.employee != widget.employee) {
       oldWidget.api.cache.removeListener(_cacheChanged);
+      oldWidget.api.cache.deactivate(oldWidget.api.notificationsPath(
+          oldWidget.companyId,
+          employee: oldWidget.employee));
       widget.api.cache.addListener(_cacheChanged);
+      widget.api.cache.activate(_path);
       _generation++;
       _items = [];
       _error = null;
@@ -210,6 +217,7 @@ class _NotificationCenterState extends State<NotificationCenter>
 
   @override
   void dispose() {
+    widget.api.cache.deactivate(_path);
     widget.api.cache.removeListener(_cacheChanged);
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();

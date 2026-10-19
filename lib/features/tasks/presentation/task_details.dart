@@ -70,6 +70,7 @@ class _TaskDetailsState extends State<TaskDetails> {
     widget.api.cache.addListener(_localChanged);
     _taskSubscription = widget.api.taskUpdates.listen((update) {
       if (update.companyId != widget.companyId || !update.refresh) return;
+      if (update.taskId != null && update.taskId != _task['recordId']) return;
       _realtimeDirty = true;
       _refreshRealtime();
     });

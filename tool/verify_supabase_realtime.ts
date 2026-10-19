@@ -27,8 +27,8 @@ try{
   const employee=(await api(`/v1/companies/${entities[0]}/employees`,'POST',{fullName:'Temporary employee',role:'Staff',employmentStatus:'ACTIVE',expectedVersion:0,allowedSections:['Tasks'],writableSections:[]})).employeeId;
   let received:(value:unknown)=>void=()=>{};
   const event=new Promise(resolve=>{received=resolve;});
-  channel=reader.channel('integration-'+crypto.randomUUID()).on('postgres_changes',{event:'INSERT',schema:'public',table:'company_changes',filter:`company_id=eq.${entities[0]}`},payload=>{
-    if((payload.new.sections as string[]).includes('Tasks'))received(payload.new);
+  channel=reader.channel(`tasks:${entities[0]}:${created.user!.id}`,{config:{private:true}}).on('broadcast',{event:'task_changed'},message=>{
+    if(message.payload.section==='Tasks')received(message.payload);
   });
   await new Promise<void>((resolve,reject)=>{
     const timer=setTimeout(()=>reject(new Error('Realtime subscribe timed out')),30000);
@@ -37,7 +37,11 @@ try{
   await api(`/v1/companies/${entities[0]}/records/Tasks`,'POST',{expectedVersion:0,values:{title:'Live task',employeeId:employee,
     status:'TODO',priority:'MEDIUM',dueDate:new Date().toISOString().slice(0,10),startDate:'',startTime:'',endTime:'',project:'',tags:'',reminder:'NONE',description:''}});
   await Promise.race([event,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Realtime task event timed out')),15000))]);
-  console.log('PASS live country-entity creation and cross-session task Realtime delivery');
+  const tasks=await api(`/v1/companies/${entities[0]}/tasks?limit=10`);
+  if(tasks.total!==1||tasks.records[0].title!=='Live task')throw new Error('Structured task list failed');
+  const detail=await api(`/v1/companies/${entities[0]}/tasks/${tasks.records[0].recordId}`);
+  if(detail.task.title!=='Live task'||detail.activity.length!==1||detail.activity[0].authorName!=='Admin')throw new Error('Structured task detail or activity attribution failed');
+  console.log('PASS live entity isolation, structured task list/detail, actor attribution and private cross-session Broadcast');
 }finally{
   if(channel)await reader.removeChannel(channel);
   for(const id of entities)await api(`/v1/companies/${id}`,'DELETE');

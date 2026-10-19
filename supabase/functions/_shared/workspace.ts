@@ -32,8 +32,10 @@ export class RecordStore {
       const rows: any[] = [];
       let after=0;
       for (;;) {
-        const { data, error } = await this.db.from('business_records').select('ordinal,payload')
-          .eq('company_id',companyId).eq('section',name).gt('ordinal',after).order('ordinal').range(0,999);
+        const { data, error } = ['Tasks','TaskComments','TaskActivity'].includes(name)
+          ? await this.db.rpc('task_records_page',{p_company:companyId,p_section:name,p_after:after,p_limit:1000})
+          : await this.db.from('business_records').select('ordinal,payload')
+            .eq('company_id',companyId).eq('section',name).gt('ordinal',after).order('ordinal').range(0,999);
         if (error) databaseError(error);
         rows.push(...data.map((r: any) => ({ ...r.payload, _row: Number(r.ordinal) })));
         if (data.length < 1000) break;
@@ -127,6 +129,24 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
     return 'Unknown user';
   };
   const business = new (BusinessService as any)({accounts,records,authorizeWrite});
+  business.taskQueries = {
+    list:async (query:any,today:string) => {
+      const {data,error}=await db.rpc('task_list',{p_company:companyId,p_actor:user.id,p_query:query,p_today:today});
+      if(error)databaseError(error);return data;
+    },
+    records:async (table:string,id:string) => {
+      const rows:any[]=[];let after=0;
+      for(;;){
+        const {data,error}=await db.rpc('task_records_page',{p_company:companyId,p_section:table,p_actor:user.id,p_task:id,p_after:after,p_limit:1000});
+        if(error)databaseError(error);
+        rows.push(...data.map((r:any)=>r.payload));
+        if(data.length<1000)break;
+        after=Number(data[data.length-1].ordinal);
+        requireThat(rows.length<50000,503,'REPORT_CAPACITY','This task history needs a narrower range.');
+      }
+      return rows;
+    },
+  };
   const canRead = (section: string) => requireThat(admin || principal.permissions[section],403,'SECTION_FORBIDDEN','Section access is not assigned to you.');
   const read = async (table: string,includeDeleted = false) => {
     const section=SECTION_TABLES[table as keyof typeof SECTION_TABLES];
