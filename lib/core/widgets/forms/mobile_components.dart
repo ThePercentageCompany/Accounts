@@ -219,8 +219,9 @@ class PopupFormFields extends StatelessWidget {
 }
 
 class RecordSummary extends StatelessWidget {
-  const RecordSummary({super.key, required this.record});
+  const RecordSummary({super.key, required this.record, this.statusLabel});
   final Map<String, dynamic> record;
+  final String? statusLabel;
   @override
   Widget build(BuildContext context) {
     final amount = record['total'] ??
@@ -244,8 +245,19 @@ class RecordSummary extends StatelessWidget {
             '${record['currency'] ?? ''} $amount'.trim(),
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
+        if (record.containsKey('journalId')) ...[
+          if (record['accountGroup'] != null) Text('${record['accountGroup']}'),
+          if ((num.tryParse('${record['debit']}') ?? 0) != 0)
+            Text('Debit: ${record['debit']}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          if ((num.tryParse('${record['credit']}') ?? 0) != 0)
+            Text('Credit: ${record['credit']}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
         if (date != null) Text('$date'),
-        if (status != null) StatusChip(value: '$status'),
+        if (record['shareholderName'] != null)
+          Text('Shareholder: ${record['shareholderName']}'),
+        if (status != null) StatusChip(value: '$status', label: statusLabel),
         if (record['ledgerStatus'] != null)
           LedgerStatusChip(value: '${record['ledgerStatus']}'),
         if (record['bankStatus'] != null)

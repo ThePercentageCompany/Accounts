@@ -151,6 +151,13 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
   const read = async (table: string,includeDeleted = false) => {
     const section=SECTION_TABLES[table as keyof typeof SECTION_TABLES];
     requireThat(section,403,'TABLE_FORBIDDEN','This record section is unavailable.');canRead(section);
+    if (table === 'CapitalTransactions') {
+      const transactions = admin ? await business.list('',companyId,table,{includeDeleted})
+        : (await records.read(companyId,[table]))[table].filter((r:any)=>visible(principal,table,r))
+          .map((r:any)=>{const result=projectRecord(principal,table,r);delete result._row;delete result.idempotencyKey;return result;});
+      const shareholders=(await records.read(companyId,['Shareholders'])).Shareholders;
+      return transactions.map((r:any)=>({...r,shareholderName:shareholders.find((s:any)=>s.recordId===r.shareholderId)?.name || 'Unknown shareholder'}));
+    }
     if (admin && table !== 'Employees') return business.list('',companyId,table,{includeDeleted});
     const names=[table,...(CHILDREN[table as keyof typeof CHILDREN] ? [CHILDREN[table as keyof typeof CHILDREN][0]] : [])];
     const rows=await records.read(companyId,names);

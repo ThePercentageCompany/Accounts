@@ -13,6 +13,7 @@ import 'package:tpc_invoice/features/documents/data/document_upload_queue.dart';
 import 'package:tpc_invoice/features/accounting/data/record_write_queue.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/features/documents/data/shared_record_pdf.dart';
+import 'package:tpc_invoice/core/utils/record_order.dart';
 
 const documentSections = [
   'Tasks',
@@ -404,7 +405,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     : ListView(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         children: [
-                          for (final doc in [...documents, ..._localDocuments])
+                          for (final doc in newestRecordsFirst([...documents, ..._localDocuments]))
                             Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 child: ListTile(

@@ -37,6 +37,21 @@ function client(pg:any){
   };
 }
 
+Deno.test('capital transaction reads resolve shareholder names and preserve posting status',async()=>{
+  const {db:pg,company}=await setup();
+  try {
+    const shareholder='s'.repeat(43),transaction='t'.repeat(43);
+    await pg.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      values($1,'Shareholders',$2,1,1,jsonb_build_object('companyId',$1::text,'recordId',$2::text,'name','Aisha'))`,[company,shareholder]);
+    await pg.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      values($1,'CapitalTransactions',$2,1,1,jsonb_build_object('companyId',$1::text,'recordId',$2::text,'shareholderId',$3::text,'status','DRAFT','amount',500))`,[company,transaction,shareholder]);
+    const ctx=await workspace(client(pg),{id:owner},company);
+    const rows=await ctx.read('CapitalTransactions');
+    assert(rows.length===1&&rows[0].shareholderName==='Aisha'&&rows[0].status==='DRAFT');
+    assert(!('_row' in rows[0]));
+  } finally {await pg.close();}
+});
+
 Deno.test('RecordStore cursor traversal crosses pages without skipping sparse ordinals',async()=>{
   const {db:pg,company}=await setup();
   try{

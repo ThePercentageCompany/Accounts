@@ -12,6 +12,7 @@ import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
 import 'package:tpc_invoice/core/pwa/pwa_controls.dart';
 import 'package:tpc_invoice/features/notifications/presentation/notification_center.dart';
 import 'dart:async';
+import 'package:tpc_invoice/core/utils/record_order.dart';
 
 import 'package:tpc_invoice/core/widgets/forms/mobile_components.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
@@ -1115,11 +1116,53 @@ class _RecordsPanel extends StatefulWidget {
 }
 
 class _RecordsPanelState extends State<_RecordsPanel> {
+  String _capitalStatusLabel(String status) => switch (status) {
+        'DRAFT' => 'Pending',
+        'POSTED' => 'Completed',
+        _ => status.toLowerCase().replaceAll('_', ' '),
+      };
   late String table = widget.selectedTable ?? widget.tables.first;
   List<Map<String, dynamic>> rows = [];
   String _search = '';
   final Map<String, Set<String>> _statusFilters = {};
-  List<Map<String, dynamic>> get _visibleRows => rows
+  final Map<String, String> _sortOrders = {};
+  final Map<String, DateTimeRange> _dateFilters = {};
+  static const _sortLabels = {
+    'newest': 'Newest first',
+    'oldest': 'Oldest first',
+    'az': 'Name A–Z',
+    'za': 'Name Z–A',
+    'high': 'Amount: high to low',
+    'low': 'Amount: low to high',
+  };
+  DateTime? _recordDate(Map<String, dynamic> row) {
+    final businessDate = row['issueDate'] ?? row['date'] ?? row['dueDate'];
+    if (businessDate != null && '$businessDate'.isNotEmpty) {
+      return DateTime.tryParse('$businessDate');
+    }
+    final created = row['createdAt'];
+    final millis = num.tryParse('$created');
+    return millis == null ? DateTime.tryParse('$created')
+        : DateTime.fromMillisecondsSinceEpoch(millis.toInt());
+  }
+  Future<void> _chooseDateFilter() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(1900), lastDate: DateTime(2200),
+      initialDateRange: _dateFilters[table],
+      helpText: 'Filter by record date',
+    );
+    if (picked != null && mounted) setState(() => _dateFilters[table] = picked);
+  }
+  List<Map<String, dynamic>> get _visibleRows {
+    final result = newestRecordsFirst(rows
+      .where((row) {
+        final range = _dateFilters[table];
+        if (range == null) return true;
+        final date = _recordDate(row);
+        return date != null && !date.isBefore(range.start) &&
+            date.isBefore(DateTime(range.end.year, range.end.month, range.end.day + 1));
+      })
       .where(
         (row) =>
             (_statusFilters[table]?.isEmpty ?? true) ||
@@ -1130,13 +1173,28 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       .where(
         (row) => [
           _title(row),
+          row['shareholderName'] ?? '',
           row['status'] ?? '',
           row['paymentStatus'] ?? '',
           row['email'] ?? '',
           row['phone'] ?? '',
         ].join(' ').toLowerCase().contains(_search.toLowerCase()),
       )
-      .toList();
+      .toList());
+    final order = _sortOrders[table] ?? 'newest';
+    if (order == 'oldest') return result.reversed.toList();
+    if (order == 'az' || order == 'za') {
+      result.sort((a, b) => order == 'az'
+          ? _title(a).toLowerCase().compareTo(_title(b).toLowerCase())
+          : _title(b).toLowerCase().compareTo(_title(a).toLowerCase()));
+    } else if (order == 'high' || order == 'low') {
+      num amount(Map<String, dynamic> r) => num.tryParse(
+          '${r['total'] ?? r['totalAmount'] ?? r['amount'] ?? r['netSalary'] ?? r['debit'] ?? 0}') ?? 0;
+      result.sort((a, b) => order == 'high'
+          ? amount(b).compareTo(amount(a)) : amount(a).compareTo(amount(b)));
+    }
+    return result;
+  }
   ButtonStyle get _destructiveActionStyle => ButtonStyle(
         foregroundColor: WidgetStatePropertyAll(
           Theme.of(context).colorScheme.error,
@@ -2324,13 +2382,23 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
-  String _title(Map<String, dynamic> row) => const ['Invoices', 'Quotations']
+  String _title(Map<String, dynamic> row) {
+    if (table == 'JournalLines') {
+      final account = '${row['accountName'] ?? ''}'.trim();
+      final accountId = '${row['accountId'] ?? ''}'.trim();
+      final line = '${row['lineNumber'] ?? ''}'.trim();
+      return '${account.isNotEmpty ? account : accountId.isNotEmpty ? accountId : 'Journal entry'}${line.isEmpty ? '' : ' · Line $line'}';
+    }
+    return const ['Invoices', 'Quotations']
               .contains(table) &&
           '${row['number'] ?? ''}'.trim().isEmpty
       ? 'Draft ${table == 'Invoices' ? 'invoice' : 'quotation'} · ${row['issueDate'] ?? ''}'
       : '${row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
+  }
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final visibleRows = _visibleRows;
+    return Column(
         children: [
           if (table == 'CompanyProfile' && !widget.employee)
             ConstrainedBox(
@@ -2400,6 +2468,33 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       ),
                     ),
                   PopupMenuButton<String>(
+                    tooltip: 'Sort records',
+                    onSelected: (value) => setState(() => _sortOrders[table] = value),
+                    itemBuilder: (_) => [
+                      for (final entry in _sortLabels.entries)
+                        CheckedPopupMenuItem(value: entry.key,
+                          checked: (_sortOrders[table] ?? 'newest') == entry.key,
+                          child: Text(entry.value)),
+                    ],
+                    child: Padding(padding: const EdgeInsets.all(12),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.sort, size: 20),
+                        const SizedBox(width: 6),
+                        Text(_sortLabels[_sortOrders[table] ?? 'newest']!),
+                      ])),
+                  ),
+                  IconButton(
+                    tooltip: 'Filter by date range',
+                    onPressed: _chooseDateFilter,
+                    icon: Icon(_dateFilters.containsKey(table)
+                        ? Icons.date_range : Icons.date_range_outlined),
+                  ),
+                  if (_dateFilters.containsKey(table))
+                    InputChip(
+                      label: Text('${_dateFilters[table]!.start.toIso8601String().substring(0, 10)} – ${_dateFilters[table]!.end.toIso8601String().substring(0, 10)}'),
+                      onDeleted: () => setState(() => _dateFilters.remove(table)),
+                    ),
+                  PopupMenuButton<String>(
                     tooltip: 'Filter statuses',
                     icon: Icon(
                       (_statusFilters[table]?.isNotEmpty ?? false)
@@ -2434,8 +2529,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           value: status,
                           checked:
                               _statusFilters[table]?.contains(status) ?? false,
-                          child:
-                              Text(status.toLowerCase().replaceAll('_', ' ')),
+                          child: Text(table == 'CapitalTransactions'
+                              ? _capitalStatusLabel(status)
+                              : status.toLowerCase().replaceAll('_', ' ')),
                         ),
                     ],
                   ),
@@ -2500,7 +2596,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                 ),
               ),
             ),
-          if (!busy && error == null && rows.isNotEmpty && _visibleRows.isEmpty)
+          if (!busy && error == null && rows.isNotEmpty && visibleRows.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
               child: Text('No records match your search.'),
@@ -2535,9 +2631,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                       key: PageStorageKey((widget.companyId, table)),
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: AppSpacing.list(context),
-                      itemCount: _visibleRows.length,
+                      itemCount: visibleRows.length,
                       itemBuilder: (context, index) {
-                        final row = _visibleRows[index];
+                        final row = visibleRows[index];
                         return RecordCard(
                           key:
                               PageStorageKey((table, row['recordId'] ?? index)),
@@ -2565,7 +2661,12 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                           collapsedBackgroundColor: Theme.of(
                             context,
                           ).colorScheme.surface,
-                          subtitle: RecordSummary(record: row),
+                          subtitle: RecordSummary(
+                            record: row,
+                            statusLabel: table == 'CapitalTransactions'
+                                ? _capitalStatusLabel('${row['status']}')
+                                : null,
+                          ),
                           children: [
                             if (table == 'Invoices' && row['status'] != 'DRAFT')
                               const RecordNotice(
@@ -2770,7 +2871,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                               LoadingButton(
                                 onPressed:
                                     busy ? null : () => _postCapital(row),
-                                child: const Text('Post contribution'),
+                                child: const Text('Complete / post contribution'),
                               ),
                             if (_editable &&
                                 table == 'ShareholderLoans' &&
@@ -2871,7 +2972,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                     busy ? null : () => _deleteLocalRecord(row),
                                 child: Text('Delete $_recordLabel'),
                               ),
-                            RecordDetails(record: row),
+                            RecordDetails(record: table == 'CapitalTransactions'
+                                ? {...row, 'status': _capitalStatusLabel('${row['status']}')}
+                                : row),
                             if (table == 'Employees' && widget.writes != null)
                               LoadingButton.outlined(
                                 onPressed: busy
@@ -2898,4 +3001,5 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           ),
         ],
       );
+  }
 }
