@@ -30,12 +30,14 @@ export class RecordStore {
       this.table(name);
       if (this.cache.has(name)) return;
       const rows: any[] = [];
-      for (let offset = 0; ; offset += 1000) {
+      let after=0;
+      for (;;) {
         const { data, error } = await this.db.from('business_records').select('ordinal,payload')
-          .eq('company_id',companyId).eq('section',name).order('ordinal').range(offset,offset+999);
+          .eq('company_id',companyId).eq('section',name).gt('ordinal',after).order('ordinal').range(0,999);
         if (error) databaseError(error);
         rows.push(...data.map((r: any) => ({ ...r.payload, _row: Number(r.ordinal) })));
         if (data.length < 1000) break;
+        after=Number(data[data.length-1].ordinal);
         requireThat(rows.length < 50000, 503, 'REPORT_CAPACITY', 'This report needs a narrower range.');
       }
       this.cache.set(name, rows);

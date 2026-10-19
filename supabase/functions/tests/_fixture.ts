@@ -17,7 +17,7 @@ export async function setup(){
     create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;
     create publication supabase_realtime;
     insert into auth.users(id,email) values('${owner}','admin@example.test'),('${other}','other@example.test');`);
-  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql']){
+  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql','202610190001_structured_business.sql']){
     const sql=(await Deno.readTextFile(new URL(`../../migrations/${file}`,import.meta.url))).replace('create extension if not exists pg_cron with schema pg_catalog;','');
     await db.exec(sql);
   }

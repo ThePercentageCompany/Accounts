@@ -11,6 +11,7 @@ function client(pg:any){
       const query:any={
         select(c='*'){assert(/^[a-z_,*]+$/.test(c));columns=c;return query;},
         eq(k:string,v:any){assert(/^[a-z_]+$/.test(k));args.push(v);filters.push(`${k}=$${args.length}`);return query;},
+        gt(k:string,v:any){assert(/^[a-z_]+$/.test(k));args.push(v);filters.push(`${k}>$${args.length}`);return query;},
         is(k:string,v:any){assert(v===null);filters.push(`${k} is null`);return query;},
         order(k:string){order=`order by ${k}`;return query;},
         range(from:number,to:number){offset=from;limit=to-from+1;return query;},
@@ -31,6 +32,18 @@ function client(pg:any){
     }catch(error){return {data:null,error:{message:String(error)}};}},
   };
 }
+
+Deno.test('RecordStore cursor traversal crosses pages without skipping sparse ordinals',async()=>{
+  const {db:pg,company}=await setup();
+  try{
+    await pg.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      select $1,'Customers',lpad(i::text,43,'x'),i*10,1,jsonb_build_object('recordId',lpad(i::text,43,'x'),'name','Customer '||i) from generate_series(1,2005) i`,[company]);
+    const ctx=await workspace(client(pg),{id:owner},company);
+    const rows=(await ctx.records.read(company,['Customers'])).Customers;
+    assert(rows.length===2005&&rows[0]._row===10&&rows[2004]._row===20050);
+    assert(new Set(rows.map((r:any)=>r.recordId)).size===2005);
+  }finally{await pg.close();}
+});
 
 Deno.test('company HTML designs persist in Postgres across fresh workspace sessions',async()=>{
   const {db:pg,company}=await setup();

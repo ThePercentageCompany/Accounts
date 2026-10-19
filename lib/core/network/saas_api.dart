@@ -1125,6 +1125,22 @@ class SaasApi implements SessionRepository {
   @override
   Future<Map<String, dynamic>> companies() => _json('GET', '/v1/companies');
   Future<Map<String, dynamic>> businessGroups() => _json('GET', '/v1/groups');
+
+  /// Admin-only typed records, bounded to one database page. No offline overlay.
+  Future<Map<String, dynamic>> structuredRecordsPage(
+      String companyId, String section,
+      {int after = 0, int limit = 100}) {
+    if (after < 0 ||
+        limit < 1 ||
+        limit > 500 ||
+        !RegExp(r'^[A-Za-z]+$').hasMatch(section)) {
+      throw const SaasApiException('INVALID_PAGE',
+          'Choose a valid section and page size from 1 to 500.');
+    }
+    return _json('GET',
+        '/v1/companies/${_id(companyId)}/structured-records/$section?after=$after&limit=$limit');
+  }
+
   Future<Map<String, dynamic>> updateEmployeeProfile(String companyId,
           String employeeId, Map<String, Object?> values, String operationId,
           {bool employee = true}) =>

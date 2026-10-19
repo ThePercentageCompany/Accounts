@@ -182,6 +182,17 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       return finish({results});
     }
     const record=/^\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(tail);
+    const structured=/^\/structured-records\/([A-Za-z]+)$/.exec(tail);
+    if(structured&&request.method==='GET') {
+      requireThat(ctx.admin,403,'ADMIN_REQUIRED','Structured records require admin access.');
+      ctx.records.table(structured[1]);
+      const after=Number(url.searchParams.get('after')??0),limit=Number(url.searchParams.get('limit')??100);
+      requireThat(Number.isSafeInteger(after)&&after>=0&&Number.isSafeInteger(limit)&&limit>=1&&limit<=500,
+        400,'INVALID_PAGE','Use a positive cursor and a page size between 1 and 500.');
+      const {data,error}=await db.rpc('structured_record_page',{p_company:companyId,p_section:structured[1],p_after:after,p_limit:limit});
+      if(error)databaseError(error);
+      return json(200,{records:data,nextCursor:data.length===limit?data[data.length-1].ordinal:null});
+    }
     if(record) {
       requireThat(recordsEndpointAllowed(record[1],request.method,!!record[2]),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
       if(request.method==='GET'&&!record[2])return json(200,{records:await ctx.read(record[1],url.searchParams.get('includeDeleted')==='true')});

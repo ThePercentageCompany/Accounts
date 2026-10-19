@@ -25,6 +25,8 @@ Deno.test('country entities have separate books, scoped group access and idempot
     assert((await db.query(`select * from public.companies where group_id=$1`,[group])).rows.length===2);
     const task='t'.repeat(43),employee='e'.repeat(43);
     await db.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      values($1,'Employees',$2,2,1,jsonb_build_object('fullName','India employee','employmentStatus','ACTIVE'))`,[india.companyId,employee]);
+    await db.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
       values($1,'Tasks',$2,2,1,jsonb_build_object('recordId',$2::text,'companyId',$1::text,'employeeId',$3::text,'title','India deadline','status','TODO','reminder','AT_DUE',
       'dueDate',to_char(now() at time zone 'Asia/Kolkata','YYYY-MM-DD'),'endTime',to_char(now() at time zone 'Asia/Kolkata','HH24:MI')))`,[india.companyId,task,employee]);
     await db.exec('select private.queue_task_reminders()');
