@@ -28,6 +28,41 @@ class _PayrollEditorState extends State<PayrollEditor> {
   String? previewError;
   bool calculating = false;
   int revision = 0;
+  int salaryRequest = 0;
+  Map<String, dynamic>? compensation;
+  bool loadingSalary = false;
+  String? salaryError;
+
+  Future<void> loadCompensation() async {
+    final selectedId = employeeId;
+    final request = ++salaryRequest;
+    if (selectedId == null || widget.preview == null) return;
+    setState(() {
+      compensation = null;
+      loadingSalary = true;
+      salaryError = null;
+    });
+    try {
+      final result = await widget.preview!({
+        'employeeId': selectedId,
+        'month': month.text.trim(),
+        'bonus': 0,
+        'deductions': 0,
+      });
+      if (!mounted || request != salaryRequest) return;
+      setState(() {
+        compensation = Map<String, dynamic>.from(result['totals'] as Map);
+      });
+    } catch (_) {
+      if (!mounted || request != salaryRequest) return;
+      setState(() => salaryError = 'Could not refresh employee salary. Retry.');
+    } finally {
+      if (mounted && request == salaryRequest) {
+        setState(() => loadingSalary = false);
+      }
+    }
+  }
+
   void invalidate() {
     if (!mounted) return;
     setState(() {
@@ -45,6 +80,11 @@ class _PayrollEditorState extends State<PayrollEditor> {
     deductions.addListener(invalidate);
     fx.currency.addListener(invalidate);
     fx.rate.addListener(invalidate);
+    if (employeeId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) loadCompensation();
+      });
+    }
   }
 
   Map<String, Object?> values() => {
@@ -161,6 +201,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
                             fx.currency.text = '${selected!['currency']}';
                           }
                           invalidate();
+                          loadCompensation();
                         }
                       : null,
                   validator: (value) =>
@@ -178,7 +219,14 @@ class _PayrollEditorState extends State<PayrollEditor> {
                           'allowances': 'Monthly allowances',
                         }.entries)
                           Text(
-                            '${field.value}: ${employee['currency'] ?? fx.currency.text} ${num.tryParse('${employee[field.key]}')?.toStringAsFixed(2) ?? (field.key == 'allowances' ? '0.00' : 'Not set')}',
+                            '${field.value}: ${employee['currency'] ?? fx.currency.text} ${num.tryParse('${compensation?[field.key] ?? employee[field.key]}')?.toStringAsFixed(2) ?? (loadingSalary ? 'Loading...' : 'Unavailable')}',
+                          ),
+                        if (loadingSalary)
+                          const Text('Refreshing selected employee salary...'),
+                        if (salaryError != null)
+                          TextButton(
+                            onPressed: loadCompensation,
+                            child: Text(salaryError!),
                           ),
                       ],
                     ),

@@ -1451,8 +1451,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               'Employees',
               'Payroll',
               employee: true,
+              force: true,
             )
-          : await widget.api.employees(widget.companyId);
+          : await widget.api.employees(widget.companyId, force: true);
       choices = (response[widget.employee ? 'records' : 'employees'] as List)
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) => item['employmentStatus'] == 'ACTIVE')

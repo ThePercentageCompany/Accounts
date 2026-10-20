@@ -1381,6 +1381,7 @@ class SaasApi implements SessionRepository {
     String table,
     String section, {
     bool employee = false,
+    bool force = false,
   }) async {
     if (!employee) return records(companyId, table);
     if (!RegExp(r'^[A-Za-z]+$').hasMatch(table)) {
@@ -1396,6 +1397,7 @@ class SaasApi implements SessionRepository {
     final result = await _json(
       'GET',
       '/v1/employee/references/$table?section=${Uri.encodeQueryComponent(section)}',
+      force: force,
     );
     return box == null
         ? result
