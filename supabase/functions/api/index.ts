@@ -225,7 +225,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const section=url.searchParams.get('section')??'';
         const editorSections:Record<string,string[]>={CompanyProfile:['Invoices','Quotations','Payroll'],Customers:['Invoices','Quotations'],Projects:['Tasks'],Employees:['Payroll'],Shareholders:['Capital & Equity']};
         requireThat(ctx.admin||reference[1]==='Projects'&&ctx.principal.permissions.Tasks||editorSections[reference[1]].includes(section)&&ctx.principal.writableSections.includes(section),403,'REFERENCE_FORBIDDEN','Editor access is required.');
-        const permitted=({CompanyProfile:['recordId','name','address','email','phone','taxNumber','currency','invoicePrefix','quotationPrefix','logoDocumentId'],Customers:['recordId','name','email','phone','taxNumber','address','preferredCurrency'],Projects:['recordId','name','status'],Employees:['recordId','employeeCode','fullName','employmentStatus'],Shareholders:['recordId','name','status']} as any)[reference[1]];
+        const permitted=({CompanyProfile:['recordId','name','address','email','phone','taxNumber','currency','invoicePrefix','quotationPrefix','logoDocumentId'],Customers:['recordId','name','email','phone','taxNumber','address','preferredCurrency'],Projects:['recordId','name','status'],Employees:['recordId','employeeCode','fullName','employmentStatus','basicSalary','allowances','currency'],Shareholders:['recordId','name','status']} as any)[reference[1]];
       const rows=(await ctx.records.read(companyId!,[reference[1]]))[reference[1]];
       return json(200,{records:rows.filter((r:any)=>!r.isDeleted).map((r:any)=>Object.fromEntries(permitted.map((k:string)=>[k,r[k]??''])))});
     }

@@ -89,7 +89,10 @@ export function snapshotHtml(source, section, recordId, rows) {
   if(section === 'Payroll') {
     items=[['Basic salary','basicSalary'],['Allowances','allowances'],['Overtime','overtimeAmount'],
       ['Bonus','bonus'],['Gross salary','grossSalary'],['Deductions','deductions']]
-      .map(([description,field])=>({description,lineTotal:record[field]??0}));
+      .map(([description,field])=>({description: description +
+        (field === 'bonus' && record.bonusNotes ? `: ${record.bonusNotes}` :
+          field === 'deductions' && record.deductionNotes ? `: ${record.deductionNotes}` : ''),
+        lineTotal:record[field]??0}));
     record={...record,total:record.netSalary,employeeName:customer.fullName,employeeCode:customer.employeeCode,
       department:customer.department,designation:customer.designation,
       currency:record.currency||customer.currency||company.currency};

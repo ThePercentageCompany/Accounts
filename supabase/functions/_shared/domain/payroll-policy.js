@@ -108,6 +108,13 @@ export async function payrollChanges(records, companyId, table, id, action, old,
   }
   requireThat(!old || old.status === 'DRAFT', 409, 'PAYROLL_LOCKED', 'Approved payroll cannot be edited or deleted.');
   if (action === 'delete') return { values, extra: [] };
+  for (const field of ['bonusNotes', 'deductionNotes']) {
+    if (field in values) {
+      requireThat(typeof values[field] === 'string' && values[field].trim().length <= 1000,
+        400, 'INVALID_PAYROLL', 'Payroll notes must be text of at most 1000 characters.');
+      values = { ...values, [field]: values[field].trim() };
+    }
+  }
   const next = { ...old, ...values };
   requireThat(typeof next.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(next.month) &&
     typeof next.employeeId === 'string', 400, 'INVALID_PAYROLL', 'Choose an employee and payroll month.');

@@ -177,6 +177,15 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                             Text(
                                 '${row['currency'] ?? ''} ${amount(row[field.key])}'),
                           ])),
+                    for (final note in const {
+                      'bonusNotes': 'Bonus notes',
+                      'deductionNotes': 'Deduction notes',
+                    }.entries)
+                      if ('${row[note.key] ?? ''}'.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text('${note.value}: ${row[note.key]}'),
+                        ),
                     if (row['status'] == 'PAID')
                       Text(
                           'Paid ${row['paidDate']} · ${row['paymentAccount']}'),

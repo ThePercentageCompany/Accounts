@@ -163,6 +163,8 @@ Future<Uint8List> sharedRecordPdf(
     'voidReason': 'Void reason',
     'reversalDate': 'Reversal date',
     'reversalReason': 'Reversal reason',
+    'bonusNotes': 'Bonus notes',
+    'deductionNotes': 'Deduction notes',
   };
   const amounts = {
     'subtotal': 'Subtotal',

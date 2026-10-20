@@ -36,13 +36,16 @@ test('payslip design renders only the selected payroll and employee with authori
     Employees:[{recordId:'employee',fullName:'Aisha',employeeCode:'EMP-1',department:'Sales'},
       {recordId:'other',fullName:'Another employee'}],
     Payroll:[{recordId:'payroll',employeeId:'employee',month:'2026-10',basicSalary:5000,
-      allowances:500,overtimeAmount:200,bonus:100,grossSalary:5800,deductions:300,netSalary:5500}]};
+      allowances:500,overtimeAmount:200,bonus:100,grossSalary:5800,deductions:300,netSalary:5500,
+      bonusNotes:'Performance <award>',deductionNotes:'Advance repayment'}]};
   assert.equal(companyDesign({},'Payroll').source,defaultPayslipDesign);
   validateDesign(defaultPayslipDesign);
   assert.deepEqual(documentTables('Payroll'),['Payroll','Employees','CompanyProfile']);
   const html=snapshotHtml(defaultPayslipDesign,'Payroll','payroll',rows);
   for(const value of ['PAYSLIP','Aisha','EMP-1','Sales','2026-10','5500.00','5800.00','300.00','AED'])assert.ok(html.includes(value));
   assert.ok(!html.includes('Another employee'));
+  assert.ok(html.includes('Performance &lt;award&gt;'));
+  assert.ok(html.includes('Advance repayment'));
   assert.throws(()=>snapshotHtml(defaultPayslipDesign,'Payroll','missing',rows),e=>e.code==='RECORD_UNAVAILABLE');
 });
 

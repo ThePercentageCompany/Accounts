@@ -43,6 +43,8 @@ class _PayrollEditorState extends State<PayrollEditor> {
     month.addListener(invalidate);
     bonus.addListener(invalidate);
     deductions.addListener(invalidate);
+    fx.currency.addListener(invalidate);
+    fx.rate.addListener(invalidate);
   }
 
   Map<String, Object?> values() => {
@@ -51,6 +53,8 @@ class _PayrollEditorState extends State<PayrollEditor> {
         'employeeId': employeeId!,
         'bonus': double.parse(bonus.text.trim()),
         'deductions': double.parse(deductions.text.trim()),
+        'bonusNotes': bonusNotes.text.trim(),
+        'deductionNotes': deductionNotes.text.trim(),
       };
   Future<void> calculate() async {
     if (!AppFormValidation.validate(form.currentState!) ||
@@ -91,8 +95,18 @@ class _PayrollEditorState extends State<PayrollEditor> {
   late final deductions = TextEditingController(
     text: '${widget.record?['deductions'] ?? 0}',
   );
+  late final bonusNotes = TextEditingController(
+    text: '${widget.record?['bonusNotes'] ?? ''}',
+  );
+  late final deductionNotes = TextEditingController(
+    text: '${widget.record?['deductionNotes'] ?? ''}',
+  );
   @override
   void dispose() {
+    fx.currency.removeListener(invalidate);
+    fx.rate.removeListener(invalidate);
+    bonusNotes.dispose();
+    deductionNotes.dispose();
     month.dispose();
     bonus.dispose();
     deductions.dispose();
@@ -156,8 +170,17 @@ class _PayrollEditorState extends State<PayrollEditor> {
                   for (final employee in widget.employees.where(
                     (row) => row['recordId'] == employeeId,
                   ))
-                    Text(
-                      'Monthly basic salary: ${employee['basicSalary'] == null || employee['basicSalary'] == '' ? 'Not set' : employee['basicSalary']} | Allowances: ${employee['allowances'] == null || employee['allowances'] == '' ? '0' : employee['allowances']}',
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final field in const {
+                          'basicSalary': 'Monthly basic salary',
+                          'allowances': 'Monthly allowances',
+                        }.entries)
+                          Text(
+                            '${field.value}: ${employee['currency'] ?? fx.currency.text} ${num.tryParse('${employee[field.key]}')?.toStringAsFixed(2) ?? (field.key == 'allowances' ? '0.00' : 'Not set')}',
+                          ),
+                      ],
                     ),
                   const Text(
                     'Full monthly compensation. Approved overtime for the selected month is added by the server; salary is not prorated.',
@@ -195,6 +218,24 @@ class _PayrollEditorState extends State<PayrollEditor> {
                   ),
                   decoration: const InputDecoration(labelText: 'Deductions'),
                   validator: amount,
+                ),
+                ValidatedTextField(
+                  controller: bonusNotes,
+                  maxLength: 1000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Bonus notes (optional)',
+                    hintText: 'Reason for the bonus',
+                  ),
+                ),
+                ValidatedTextField(
+                  controller: deductionNotes,
+                  maxLength: 1000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Deduction notes (optional)',
+                    hintText: 'Reason for the deduction',
+                  ),
                 ),
                 if (widget.preview != null) ...[
                   LoadingButton.outlined(

@@ -12,6 +12,25 @@ function fixture() {
 }
 const system = { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKey: 'marker', isDeleted: false, syncStatus: 'SYNCED' };
 
+test('payroll saves separate adjustment notes and validates their size and type', async () => {
+  const f = fixture();
+  const values = { employeeId, month: '2026-09', bonus: 250, deductions: 100,
+    bonusNotes: '  Performance award  ', deductionNotes: 'Salary advance repayment' };
+  const draft = (await payrollChanges(f.records, 'c', 'Payroll', 'p', 'create', null,
+    values, system, 'create')).values;
+  assert.equal(draft.bonusNotes, 'Performance award');
+  assert.equal(draft.deductionNotes, values.deductionNotes);
+  assert.equal(draft.basicSalary, 5000);
+  assert.equal(draft.allowances, 500);
+  const update = await payrollChanges(f.records, 'c', 'Payroll', 'p', 'update', draft,
+    { bonusNotes: '' }, system, 'update');
+  assert.equal(update.values.bonusNotes, '');
+  for (const invalid of [42, null, 'x'.repeat(1001)]) {
+    await assert.rejects(payrollChanges(f.records, 'c', 'Payroll', 'p', 'create', null,
+      { ...values, deductionNotes: invalid }, system, 'invalid'), e => e.code === 'INVALID_PAYROLL');
+  }
+});
+
 test('payroll handles empty legacy allowances and enforces employment dates', async () => {
   const f = fixture(); f.data.Employees[0].allowances = '';
   const values = { employeeId, month: '2026-09', bonus: 0, deductions: 0 };

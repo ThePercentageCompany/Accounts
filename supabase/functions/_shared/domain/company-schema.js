@@ -16,7 +16,7 @@ const FIELDS = {
   ExpenseAttachments: ['expenseId', 'documentId'],
   Attendance: ['employeeId', 'date', 'status', 'hours', 'notes'],
   Overtime: ['employeeId', 'date', 'hours', 'rate', 'approvalStatus', 'approvedBy'],
-  Payroll: ['month', 'employeeId', 'status', 'basicSalary', 'allowances', 'overtimeAmount', 'bonus', 'deductions', 'grossSalary', 'netSalary', 'paidDate', 'paymentAccount', 'paymentReference', 'reversalDate', 'reversalReason'],
+  Payroll: ['month', 'employeeId', 'status', 'basicSalary', 'allowances', 'overtimeAmount', 'bonus', 'deductions', 'bonusNotes', 'deductionNotes', 'grossSalary', 'netSalary', 'paidDate', 'paymentAccount', 'paymentReference', 'reversalDate', 'reversalReason'],
   PayrollItems: ['payrollId', 'kind', 'description', 'quantity', 'rate', 'amount'],
   Payslips: ['payrollId', 'employeeId', 'documentId', 'issuedAt'],
   Assets: ['assetCode', 'name', 'category', 'purchaseDate', 'cost', 'usefulLife', 'residualValue', 'depreciationMethod', 'paymentAccount', 'accumulatedDepreciation', 'netBookValue', 'lastDepreciationDate', 'disposalDate', 'disposalProceeds', 'disposalAccount', 'disposalReason', 'status', 'location', 'assignedEmployeeId', 'serialNumber', 'acquisitionType', 'acquisitionJournalId'],
