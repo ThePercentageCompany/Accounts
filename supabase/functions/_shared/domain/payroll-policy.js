@@ -108,7 +108,7 @@ export async function payrollChanges(records, companyId, table, id, action, old,
   }
   requireThat(!old || old.status === 'DRAFT', 409, 'PAYROLL_LOCKED', 'Approved payroll cannot be edited or deleted.');
   if (action === 'delete') return { values, extra: [] };
-  for (const field of ['bonusNotes', 'deductionNotes']) {
+  for (const field of ['notes', 'bonusNotes', 'deductionNotes']) {
     if (field in values) {
       requireThat(typeof values[field] === 'string' && values[field].trim().length <= 1000,
         400, 'INVALID_PAYROLL', 'Payroll notes must be text of at most 1000 characters.');

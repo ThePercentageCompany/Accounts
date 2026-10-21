@@ -178,6 +178,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                                 '${row['currency'] ?? ''} ${amount(row[field.key])}'),
                           ])),
                     for (final note in const {
+                      'notes': 'Payroll notes',
                       'bonusNotes': 'Bonus notes',
                       'deductionNotes': 'Deduction notes',
                     }.entries)

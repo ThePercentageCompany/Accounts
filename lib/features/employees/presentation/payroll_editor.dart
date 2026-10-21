@@ -95,6 +95,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
         'deductions': double.parse(deductions.text.trim()),
         'bonusNotes': bonusNotes.text.trim(),
         'deductionNotes': deductionNotes.text.trim(),
+        'notes': notes.text.trim(),
       };
   Future<void> calculate() async {
     if (!AppFormValidation.validate(form.currentState!) ||
@@ -141,12 +142,15 @@ class _PayrollEditorState extends State<PayrollEditor> {
   late final deductionNotes = TextEditingController(
     text: '${widget.record?['deductionNotes'] ?? ''}',
   );
+  late final notes =
+      TextEditingController(text: '${widget.record?['notes'] ?? ''}');
   @override
   void dispose() {
     fx.currency.removeListener(invalidate);
     fx.rate.removeListener(invalidate);
     bonusNotes.dispose();
     deductionNotes.dispose();
+    notes.dispose();
     month.dispose();
     bonus.dispose();
     deductions.dispose();
@@ -284,6 +288,13 @@ class _PayrollEditorState extends State<PayrollEditor> {
                     labelText: 'Deduction notes (optional)',
                     hintText: 'Reason for the deduction',
                   ),
+                ),
+                ValidatedTextField(
+                  controller: notes,
+                  maxLength: 1000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                      labelText: 'Payroll notes (optional)'),
                 ),
                 if (widget.preview != null) ...[
                   LoadingButton.outlined(

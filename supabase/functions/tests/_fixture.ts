@@ -21,9 +21,12 @@ export async function setup(){
     create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;
     create publication supabase_realtime;
     insert into auth.users(id,email) values('${owner}','admin@example.test'),('${other}','other@example.test');`);
-  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql','202610190001_structured_business.sql','202610190002_task_storage_realtime.sql','202610190003_task_topic_isolation.sql']){
+  for(const file of ['202610130001_workspace.sql','202610130002_employee_access.sql','202610130003_notifications.sql','202610130004_deletion.sql','202610140001_business_groups.sql','202610140002_group_operations_lifecycle.sql','202610170001_group_deletion.sql','202610190001_structured_business.sql','202610190002_task_storage_realtime.sql','202610190003_task_topic_isolation.sql','202610210001_payroll_notes.sql']){
     const sql=(await Deno.readTextFile(new URL(`../../migrations/${file}`,import.meta.url))).replace('create extension if not exists pg_cron with schema pg_catalog;','');
-    await db.exec(sql);
+    try {await db.exec(sql);} catch(error) {
+      const position=Number((error as {position?:string}).position)||0;
+      throw new Error(`Migration ${file} failed near ${sql.slice(Math.max(0,position-100),position+100)}: ${error instanceof Error ? error.message : error}`,{cause:error});
+    }
   }
   await db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[owner]);
   const result=await db.query<{result:{companyId:string}}>(`select public.create_workspace('Company','company_create_0001') as result`);

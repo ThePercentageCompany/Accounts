@@ -15,10 +15,11 @@ const system = { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKe
 test('payroll saves separate adjustment notes and validates their size and type', async () => {
   const f = fixture();
   const values = { employeeId, month: '2026-09', bonus: 250, deductions: 100,
-    bonusNotes: '  Performance award  ', deductionNotes: 'Salary advance repayment' };
+    notes: '  Monthly payroll  ', bonusNotes: '  Performance award  ', deductionNotes: 'Salary advance repayment' };
   const draft = (await payrollChanges(f.records, 'c', 'Payroll', 'p', 'create', null,
     values, system, 'create')).values;
   assert.equal(draft.bonusNotes, 'Performance award');
+  assert.equal(draft.notes, 'Monthly payroll');
   assert.equal(draft.deductionNotes, values.deductionNotes);
   assert.equal(draft.basicSalary, 5000);
   assert.equal(draft.allowances, 500);

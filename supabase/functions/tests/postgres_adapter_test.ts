@@ -37,6 +37,42 @@ function client(pg:any){
   };
 }
 
+Deno.test('payroll CRUD persists notes through the service and database projections',async()=>{
+  const {db:pg,company}=await setup();
+  try {
+    const employee='e'.repeat(43),db=client(pg),user={id:owner};
+    await pg.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+      values($1,'Employees',$2,2,1,jsonb_build_object('companyId',$1::text,'recordId',$2::text,
+      'employmentStatus','ACTIVE','basicSalary',5000,'allowances',500,'currency','AED'))`,[company,employee]);
+    let ctx=await workspace(db,user,company,['payroll_create_0001']);
+    const created=await ctx.business.mutate('',company,'Payroll',null,'create',{expectedVersion:0,values:{
+      employeeId:employee,month:'2026-10',currency:'AED',exchangeRate:1,bonus:200,deductions:100,
+      notes:'  October salary  ',bonusNotes:'Performance',deductionNotes:'Advance repayment',
+    }},'payroll_create_0001');
+    await ctx.commit();
+    ctx=await workspace(db,user,company);
+    const saved=(await ctx.read('Payroll'))[0];
+    assert(saved.notes==='October salary'&&saved.bonusNotes==='Performance'&&saved.netSalary===5600);
+    const typed=await pg.query<{notes:string,bonus_notes:string,deduction_notes:string}>(
+      `select notes,bonus_notes,deduction_notes from business.payroll where company_id=$1`,[company]);
+    assert(typed.rows[0].notes==='October salary'&&typed.rows[0].deduction_notes==='Advance repayment');
+    ctx=await workspace(db,user,company,['payroll_update_0001']);
+    await ctx.business.mutate('',company,'Payroll',created.recordId,'update',{
+      expectedVersion:1,values:{notes:'Updated salary notes',bonusNotes:''}},'payroll_update_0001');
+    await ctx.commit();
+    ctx=await workspace(db,user,company);
+    const updated=(await ctx.read('Payroll'))[0];
+    assert(updated.notes==='Updated salary notes'&&updated.bonusNotes===''&&updated.deductionNotes==='Advance repayment');
+    ctx=await workspace(db,user,company,['payroll_delete_0001']);
+    await ctx.business.mutate('',company,'Payroll',created.recordId,'delete',{expectedVersion:2},'payroll_delete_0001');
+    await ctx.commit();
+    ctx=await workspace(db,user,company);
+    assert((await ctx.read('Payroll')).length===0);
+    const deleted=await pg.query<{deleted:boolean}>(`select deleted from business.payroll where company_id=$1`,[company]);
+    assert(deleted.rows[0].deleted);
+  } finally {await pg.close();}
+});
+
 Deno.test('capital transaction reads resolve shareholder names and preserve posting status',async()=>{
   const {db:pg,company}=await setup();
   try {
