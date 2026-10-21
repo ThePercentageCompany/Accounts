@@ -56,6 +56,7 @@ class ReadCache extends ChangeNotifier {
     this.retryDelay,
     this.isVisible,
     this.validateContext,
+    this.projectData,
     bool automatic = true,
   })  : store = store ?? createCacheStore(),
         now = now ?? DateTime.now {
@@ -74,6 +75,14 @@ class ReadCache extends ChangeNotifier {
   final Duration? Function(Object)? retryDelay;
   final bool Function()? isVisible;
   final Future<void> Function()? validateContext;
+  final Map<String, dynamic>? Function(
+      String path, Map<String, dynamic>? snapshot)? projectData;
+  final _projected = <String,
+      ({
+    Map<String, dynamic>? source,
+    int revision,
+    Map<String, dynamic>? data
+  })>{};
   late final CacheLifecycle _lifecycle;
   Timer? _timer;
   String? scope, account;
@@ -99,6 +108,7 @@ class ReadCache extends ChangeNotifier {
     scope = null;
     account = null;
     _states.clear();
+    _projected.clear();
     _loads.clear();
     _refreshes.clear();
     _loaders.clear();
@@ -140,7 +150,43 @@ class ReadCache extends ChangeNotifier {
 
   Duration freshness(String path) =>
       path.contains('/reports/') ? reportsFreshness : recordsFreshness;
-  ReadCacheState? state(String path) => _states[normalizedResource(path)];
+
+  /// Confirmed snapshots are kept separate from provisional display values.
+  ReadCacheState? serverState(String path) => _states[normalizedResource(path)];
+  ReadCacheState? state(String path) {
+    final raw = serverState(path);
+    if (projectData == null) {
+      return raw;
+    }
+    if (raw?.error != null &&
+        (isPermissionError?.call(raw!.error!) == true ||
+            isAuthorizationError?.call(raw!.error!) == true)) {
+      return raw;
+    }
+    final key = normalizedResource(path);
+    var projected = _projected[key];
+    if (projected == null ||
+        !identical(projected.source, raw?.data) ||
+        projected.revision != localRevision) {
+      projected = (
+        source: raw?.data,
+        revision: localRevision,
+        data: projectData!(path, raw?.data)
+      );
+      _projected[key] = projected;
+    }
+    if (raw == null && projected.data == null) return null;
+    return ReadCacheState()
+      ..data = projected.data
+      ..syncedAt = raw?.syncedAt
+      ..refreshing = raw?.refreshing ?? false
+      ..offline = raw?.offline ?? false
+      ..stale = raw?.stale ?? true
+      ..error = raw?.error
+      ..failures = raw?.failures ?? 0
+      ..retryAt = raw?.retryAt
+      ..revision = raw?.revision ?? 0;
+  }
 
   /// Outbox overlays are separate from server snapshots. Notify consumers
   /// without invalidating/fetching a server resource after a local-only write.
@@ -223,16 +269,20 @@ class ReadCache extends ChangeNotifier {
       if (victims.isNotEmpty) {
         final victim = victims.first;
         _states.remove(victim);
+        _projected.remove(victim);
         _loaders.remove(victim);
         _paths.remove(victim);
       }
     }
     _loaders[key] = loader;
     _paths[key] = path;
-    if (force) return _refresh(key, loader, force: true);
     final present = _states[key]?.data;
     if (present != null) {
-      _refreshIfStale(key);
+      if (force) {
+        _refresh(key, loader, force: true).ignore();
+      } else {
+        _refreshIfStale(key);
+      }
       return Future.value(_copy(present));
     }
     final pending = _loads[key];
@@ -276,10 +326,15 @@ class ReadCache extends ChangeNotifier {
       }
       if (state.data != null) {
         _notify();
-        _refreshIfStale(key);
+        // A refresh request never delays an available local snapshot.
+        if (force) {
+          _refresh(key, loader, force: true).ignore();
+        } else {
+          _refreshIfStale(key);
+        }
         return _copy(state.data!);
       }
-      return _refresh(key, loader);
+      return _refresh(key, loader, force: force);
     })();
     _loads[key] = future;
     future.then(
@@ -512,6 +567,7 @@ class ReadCache extends ChangeNotifier {
     _timer?.cancel();
     _lifecycle.dispose();
     _states.clear();
+    _projected.clear();
     _loads.clear();
     _refreshes.clear();
     _active.clear();

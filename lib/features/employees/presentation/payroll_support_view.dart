@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tpc_invoice/core/network/saas_api.dart';
@@ -31,15 +32,88 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
   String? _error;
   int _generation = 0;
   final _search = TextEditingController();
+  String get _path => widget.api
+      .recordsPath(widget.companyId, 'Payroll', employee: widget.employee);
+  bool _cacheScheduled = false;
+  Map<String, dynamic>? _rowsSnapshot, _namesSnapshot;
+  int _localRevision = -1;
+  void _cacheChanged() {
+    if (_cacheScheduled) return;
+    _cacheScheduled = true;
+    scheduleMicrotask(() {
+      _cacheScheduled = false;
+      if (!mounted || !widget.active) return;
+      final state = widget.api.cache.state(_path);
+      final data = state?.data;
+      if (data == null) {
+        if (widget.api.cache.scope == null ||
+            state?.error is SaasApiException &&
+                (state!.error as SaasApiException).status == 403) {
+          setState(() {
+            _rows = [];
+            _names = {};
+          });
+        }
+        return;
+      }
+      final namesData = widget.employee
+          ? null
+          : widget.api.cache
+              .state('/v1/companies/${widget.companyId}/employees')
+              ?.data;
+      final rowsChanged = !identical(data, _rowsSnapshot) ||
+          _localRevision != widget.api.cache.localRevision;
+      final namesChanged =
+          namesData != null && !identical(namesData, _namesSnapshot);
+      if (!rowsChanged && !namesChanged) return;
+      _rowsSnapshot = data;
+      _localRevision = widget.api.cache.localRevision;
+      setState(() {
+        if (rowsChanged) {
+          final rows = (data['records'] as List? ?? [])
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .toList()
+            ..sort((a, b) => '${b['month']}'.compareTo('${a['month']}'));
+          _rows = widget.api
+                  .workspaceOutbox(widget.companyId, employee: widget.employee)
+                  ?.overlay('Payroll', rows) ??
+              rows;
+        }
+        if (namesChanged) {
+          _namesSnapshot = namesData;
+          _names = {
+            for (final row in namesData['employees'] as List? ?? [])
+              '${row['recordId']}': '${row['fullName']}'
+          };
+        }
+        _error = null;
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.api.cache.addListener(_cacheChanged);
+    if (widget.active) widget.api.cache.activate(_path);
     _load();
   }
 
   @override
   void didUpdateWidget(covariant PayrollSupportView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final oldPath = oldWidget.api.recordsPath(oldWidget.companyId, 'Payroll',
+        employee: oldWidget.employee);
+    if (oldWidget.api != widget.api ||
+        oldPath != _path ||
+        oldWidget.active != widget.active) {
+      if (oldWidget.active) oldWidget.api.cache.deactivate(oldPath);
+      if (widget.active) widget.api.cache.activate(_path);
+    }
+    if (oldWidget.api != widget.api) {
+      oldWidget.api.cache.removeListener(_cacheChanged);
+      widget.api.cache.addListener(_cacheChanged);
+    }
     if (widget.api != oldWidget.api ||
         widget.companyId != oldWidget.companyId ||
         widget.employee != oldWidget.employee) {
@@ -47,6 +121,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
       _busy = false;
       _rows = [];
       _names = {};
+      _rowsSnapshot = null;
+      _namesSnapshot = null;
       _load();
     } else if ((!oldWidget.active && widget.active) ||
         oldWidget.slips != widget.slips) {
@@ -54,7 +130,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     if (_busy || !widget.active) return;
     final generation = _generation;
     setState(() {
@@ -63,7 +139,15 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
     });
     try {
       final result = await widget.api.records(widget.companyId, 'Payroll',
-          employee: widget.employee, force: true);
+          employee: widget.employee, force: force);
+      if (!mounted || generation != _generation) return;
+      // Publish payroll before looking up display names.
+      setState(() {
+        _rows = (result['records'] as List? ?? [])
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList()
+          ..sort((a, b) => '${b['month']}'.compareTo('${a['month']}'));
+      });
       final names = <String, String>{};
       if (!widget.employee) {
         final employees = await widget.api.employees(widget.companyId);
@@ -72,7 +156,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
         }
       }
       if (!mounted || generation != _generation) return;
-      final rows = (result['records'] as List? ?? [])
+      final latest = widget.api.cache.state(_path)?.data ?? result;
+      final rows = (latest['records'] as List? ?? [])
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
       rows.sort((a, b) => '${b['month']}'.compareTo('${a['month']}'));
@@ -93,6 +178,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
 
   @override
   void dispose() {
+    widget.api.cache.removeListener(_cacheChanged);
+    if (widget.active) widget.api.cache.deactivate(_path);
     _search.dispose();
     super.dispose();
   }
@@ -112,7 +199,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
     final money = NumberFormat('#,##0.00');
     String amount(dynamic value) => money.format(num.tryParse('$value') ?? 0);
     return RefreshIndicator.noSpinner(
-        onRefresh: _load,
+        onRefresh: () => _load(force: true),
         child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: AppSpacing.page(context),
@@ -123,7 +210,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                         style: Theme.of(context).textTheme.headlineSmall)),
                 IconButton(
                     tooltip: 'Refresh payroll',
-                    onPressed: _busy ? null : _load,
+                    onPressed: _busy ? null : () => _load(force: true),
                     icon: const Icon(Icons.refresh))
               ]),
               Text(widget.slips
@@ -137,7 +224,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                       labelText: 'Search employee, month or status',
                       prefixIcon: Icon(Icons.search))),
               const SizedBox(height: 16),
-              if (_busy) const Center(child: AppActivityIndicator()),
+              if (_busy && _rows.isEmpty)
+                const Center(child: AppActivityIndicator()),
               if (_error != null)
                 Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),

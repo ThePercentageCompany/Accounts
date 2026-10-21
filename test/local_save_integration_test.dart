@@ -88,6 +88,27 @@ void main() {
     await controller.close();
   });
 
+  test('a record save changes the shared cache before background sync',
+      () async {
+    final box = api.outbox(owner, company);
+    await box.enqueue('Customers', 'create', {'name': 'Local customer'},
+        expectedVersion: 0);
+
+    final path = api.recordsPath(company, 'Customers');
+    final row = (api.cache.state(path)!.data!['records'] as List).single as Map;
+    expect(row['name'], 'Local customer');
+    expect(row['syncStatus'], 'PENDING');
+    expect(mutations, isEmpty);
+
+    await box.enqueue('Customers', 'update', {'name': 'Updated customer'},
+        recordId: row['recordId'] as String,
+        expectedVersion: row['recordVersion'] as int,
+        base: Map<String, dynamic>.from(row));
+    final updated =
+        (api.cache.state(path)!.data!['records'] as List).single as Map;
+    expect(updated['name'], 'Updated customer');
+  });
+
   test('multiple attachments save locally without waiting for another upload',
       () async {
     final uploads = DocumentUploadQueue(api, preferences, owner, company);

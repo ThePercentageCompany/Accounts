@@ -35,6 +35,26 @@ void main() {
         ]
       };
 
+  test(
+      'reconnection immediately retries network failures with the same operation ID',
+      () async {
+    final ids = <Object?>[];
+    box = create((op) async {
+      ids.add(op['operationId']);
+      if (ids.length == 1) throw const SaasApiException('NETWORK', 'Offline');
+      return ack(op, 'server-id', 1);
+    });
+    await box.enqueue('Customers', 'create', {'name': 'Saved offline'},
+        expectedVersion: 0);
+    await box.sync();
+    expect(box.pending.single['retryAt'] as int,
+        greaterThan(DateTime.now().millisecondsSinceEpoch));
+    await box.resumeSync();
+    expect(ids, hasLength(2));
+    expect(ids[0], ids[1]);
+    expect(box.pending, isEmpty);
+  });
+
   test('saving another record does not wait for an in-flight network request',
       () async {
     final started = Completer<void>(), release = Completer<void>();
@@ -60,6 +80,22 @@ void main() {
     await syncing;
     expect(box.pending, isEmpty);
     expect(sends, 2);
+  });
+
+  test('reconnection keeps server retry delays intact', () async {
+    var sends = 0;
+    box = create((op) async {
+      sends++;
+      throw const SaasApiException('RATE_LIMITED', 'Wait before retrying',
+          status: 429, retryAfter: Duration(minutes: 2));
+    });
+    await box.enqueue('Customers', 'create', {'name': 'Saved'},
+        expectedVersion: 0);
+    await box.sync();
+    final retryAt = box.pending.single['retryAt'];
+    await box.resumeSync();
+    expect(sends, 1);
+    expect(box.pending.single['retryAt'], retryAt);
   });
 
   test('dependent edits resolve temporary IDs and use acknowledged versions',

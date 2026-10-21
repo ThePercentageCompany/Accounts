@@ -25,7 +25,10 @@ const configuredSaasApiOrigin = configuredSupabaseUrl;
 
 class TaskRealtimeUpdate {
   const TaskRealtimeUpdate(
-      {required this.companyId, required this.connected, this.refresh = true, this.taskId});
+      {required this.companyId,
+      required this.connected,
+      this.refresh = true,
+      this.taskId});
   final String companyId;
   final String? taskId;
   final bool connected, refresh;
@@ -180,9 +183,8 @@ class SaasApi implements SessionRepository {
         send: (op) async {
           if (!employee && op['table'] == 'ReportSettings') {
             final settings = Map<String, dynamic>.from(op['values'] as Map);
-            final current = await _json(
-                'GET', '/v1/companies/${_id(company)}/reports/settings',
-                force: true);
+            final current = await _networkJson(
+                'GET', '/v1/companies/${_id(company)}/reports/settings');
             final comparable = {...current}..remove('version');
             final result = current['version'] ==
                         (op['expectedVersion'] as int) + 1 &&
@@ -252,8 +254,11 @@ class SaasApi implements SessionRepository {
             expectedOwnerId: employee ? null : identity,
           );
         },
-        changed: (table) =>
-            cache.localChanged(recordsPath(company, table, employee: employee)),
+        changed: (table) => cache.localChanged(
+          !employee && table == 'Employees'
+              ? '/v1/companies/${_id(company)}/employees'
+              : recordsPath(company, table, employee: employee),
+        ),
       ),
     );
   }
@@ -301,6 +306,7 @@ class SaasApi implements SessionRepository {
   DateTime _verifiedAt = DateTime.now();
   late final ReadCache cache = ReadCache(
     store: _cacheStore,
+    projectData: _localReadData,
     isAuthorizationError: (e) => e is SaasApiException && e.requiresSignIn,
     isOfflineError: (e) => e is SaasApiException && e.code == 'NETWORK',
     isPermissionError: (e) => e is SaasApiException && e.status == 403,
@@ -311,6 +317,37 @@ class SaasApi implements SessionRepository {
     },
     validateContext: _revalidateContext,
   );
+
+  Map<String, dynamic>? _localReadData(
+      String path, Map<String, dynamic>? snapshot) {
+    final company = _cacheCompany;
+    if (company == null || cache.scope == null) return snapshot;
+    final uri = Uri.parse(path);
+    if (uri.hasQuery) return snapshot;
+    String? table;
+    var field = 'records';
+    final match = RegExp(r'/records/([A-Za-z]+)$').firstMatch(uri.path);
+    if (match != null &&
+        path == recordsPath(company, match[1]!, employee: _cacheEmployee)) {
+      table = match[1];
+    } else if (!_cacheEmployee && path == '/v1/companies/$company/employees') {
+      table = 'Employees';
+      field = 'employees';
+    }
+    if (table == null) return snapshot;
+    final box = workspaceOutbox(company, employee: _cacheEmployee);
+    if (box == null) return snapshot;
+    if (snapshot == null && box.localRecords(table).isEmpty) return null;
+    if (snapshot != null && snapshot[field] is! List) return snapshot;
+    return {
+      ...?snapshot,
+      field: box.overlay(
+          table,
+          (snapshot?[field] as List? ?? [])
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .toList()),
+    };
+  }
 
   String _permissions(Map<String, dynamic> employee) => dataFingerprint({
         'role': employee['role'],
@@ -980,7 +1017,7 @@ class SaasApi implements SessionRepository {
     if (box == null) return snapshot;
     return projectFinancialReport(box, snapshot, kind, (table) {
       final rows = cache
-              .state(recordsPath(companyId, table, employee: employee))
+              .serverState(recordsPath(companyId, table, employee: employee))
               ?.data?['records'] as List? ??
           [];
       return box.overlay(table,
@@ -1145,11 +1182,33 @@ class SaasApi implements SessionRepository {
   }
 
   Future<Map<String, dynamic>> updateEmployeeProfile(String companyId,
-          String employeeId, Map<String, Object?> values, String operationId,
-          {bool employee = true}) =>
-      _json('PATCH',
-          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/employees/${_id(employeeId)}',
-          data: values, operationId: operationId);
+      String employeeId, Map<String, Object?> values, String operationId,
+      {bool employee = true, Map<String, dynamic>? baseRecord}) async {
+    final box = workspaceOutbox(companyId, employee: employee);
+    if (box != null) {
+      final edits = Map<String, Object?>.from(values)
+        ..remove('expectedVersion');
+      final employeePath = employee
+          ? recordsPath(companyId, 'Employees', employee: true)
+          : '/v1/companies/${_id(companyId)}/employees';
+      final field = employee ? 'records' : 'employees';
+      final base = baseRecord ??
+          (cache.state(employeePath)?.data?[field] as List? ?? [])
+              .cast<Map>()
+              .where((row) => row['recordId'] == employeeId)
+              .firstOrNull;
+      await box.enqueue('Employees', 'update', edits,
+          recordId: employeeId,
+          expectedVersion: values['expectedVersion'] as int,
+          operationId: operationId,
+          base: base == null ? null : Map<String, dynamic>.from(base));
+      return {'employeeId': employeeId, 'savedLocally': true};
+    }
+    return _json('PATCH',
+        '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/employees/${_id(employeeId)}',
+        data: values, operationId: operationId);
+  }
+
   Future<Map<String, dynamic>> deleteBusinessGroup(String groupId) =>
       _json('DELETE', '/v1/groups/${_id(groupId)}');
   Future<Map<String, dynamic>> entityOverview(String companyId,
@@ -1161,8 +1220,9 @@ class SaasApi implements SessionRepository {
     return box == null
         ? snapshot
         : projectEntity(box, snapshot,
-            syncedAt:
-                cache.state('/v1/companies/$companyId/overview')?.syncedAt);
+            syncedAt: cache
+                .serverState('/v1/companies/$companyId/overview')
+                ?.syncedAt);
   }
 
   Future<Map<String, dynamic>> createBusinessGroup(String name, String key) =>
@@ -1237,7 +1297,7 @@ class SaasApi implements SessionRepository {
     final future =
         _json('GET', '/v1/companies/${_id(companyId)}/employees', force: force);
     if (box != null &&
-        cache.state('/v1/companies/$companyId/employees')?.data == null &&
+        cache.serverState('/v1/companies/$companyId/employees')?.data == null &&
         box.overlay('Employees', []).isNotEmpty) {
       future.ignore();
       return {'employees': box.overlay('Employees', [])};
@@ -1310,7 +1370,7 @@ class SaasApi implements SessionRepository {
       force: force,
     );
     if (box != null &&
-        cache.state(path)?.data == null &&
+        cache.serverState(path)?.data == null &&
         box.localRecords('Tasks').isNotEmpty) {
       pending.ignore();
       return projectTaskPage(
@@ -1339,7 +1399,7 @@ class SaasApi implements SessionRepository {
     return box == null
         ? page
         : projectTaskPage(box, page, filters,
-            syncedAt: cache.state(path)?.syncedAt);
+            syncedAt: cache.serverState(path)?.syncedAt);
   }
 
   OfflineOutbox? workspaceOutbox(String companyId, {bool employee = false}) =>
@@ -1418,6 +1478,23 @@ class SaasApi implements SessionRepository {
           '/v1/${employee ? 'employee/companies' : 'companies'}/${_id(companyId)}/exchange-rate?currency=${Uri.encodeComponent(currency)}&date=${Uri.encodeComponent(date)}',
           force: true);
 
+  /// A rejected operation needs the server version, not a local projection.
+  /// Page navigation never uses this online sync baseline.
+  Future<Map<String, dynamic>> syncBaseline(String companyId, String table,
+      {bool employee = false}) {
+    if (!RegExp(r'^[A-Za-z]+$').hasMatch(table)) {
+      throw const SaasApiException('INVALID_TABLE', 'Invalid record section.');
+    }
+    final base =
+        '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}';
+    final path = table == 'ReportSettings'
+        ? '$base/reports/settings'
+        : table == 'Employees' && !employee
+            ? '$base/employees'
+            : recordsPath(companyId, table, employee: employee);
+    return _networkJson('GET', path);
+  }
+
   Future<Map<String, dynamic>> records(
     String companyId,
     String table, {
@@ -1452,7 +1529,9 @@ class SaasApi implements SessionRepository {
       force: force,
     );
     if (box != null &&
-        cache.state(recordsPath(companyId, table, employee: employee))?.data ==
+        cache
+                .serverState(recordsPath(companyId, table, employee: employee))
+                ?.data ==
             null &&
         box.overlay(table, []).isNotEmpty) {
       future
@@ -1674,152 +1753,148 @@ class SaasApi implements SessionRepository {
       }
     }
 
-    _taskRealtime =
-        client.channel(
-            'tasks:$companyId:${client.auth.currentUser!.id}',
-            opts: const RealtimeChannelConfig(private: true),
-          )
-          ..onBroadcast(
-            event: 'task_changed',
-            callback: (payload) {
-              if (!current()) return;
-              final event = payload['payload'] is Map
-                  ? payload['payload'] as Map
-                  : payload;
-              final taskId = event['taskId'] as String?;
-              cache.invalidate((path) {
-                final route = Uri.parse(path).path;
-                return route.endsWith('/overview') ||
-                    route.endsWith('/tasks') ||
-                    (taskId != null && route.endsWith('/tasks/$taskId')) ||
-                    const [
+    _taskRealtime = client.channel(
+      'tasks:$companyId:${client.auth.currentUser!.id}',
+      opts: const RealtimeChannelConfig(private: true),
+    )
+      ..onBroadcast(
+        event: 'task_changed',
+        callback: (payload) {
+          if (!current()) return;
+          final event =
+              payload['payload'] is Map ? payload['payload'] as Map : payload;
+          final taskId = event['taskId'] as String?;
+          cache.invalidate((path) {
+            final route = Uri.parse(path).path;
+            return route.endsWith('/overview') ||
+                route.endsWith('/tasks') ||
+                (taskId != null && route.endsWith('/tasks/$taskId')) ||
+                const [
+                  'Tasks',
+                  'TaskComments',
+                  'TaskActivity',
+                ].any((section) => route.endsWith('/records/$section'));
+          });
+          taskUpdate(taskId: taskId);
+        },
+      )
+      ..subscribe((status, error) {
+        if (!current()) return;
+        _taskBroadcastConnected = status == RealtimeSubscribeStatus.subscribed;
+        // Rejoin fetches current state to recover changes missed while offline.
+        if (_taskBroadcastConnected) {
+          cache.invalidate((path) {
+            final route = Uri.parse(path).path;
+            return route.contains('/tasks') || route.endsWith('/overview');
+          });
+        }
+        taskUpdate();
+      });
+    _realtime = client
+        .channel('workspace:$companyId:${client.auth.currentUser!.id}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'company_changes',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'company_id',
+          value: companyId,
+        ),
+        callback: (change) {
+          if (!current()) return;
+          final sections = (change.newRecord['sections'] as List? ?? [])
+              .where(
+                (section) =>
+                    !_taskBroadcastConnected ||
+                    !const [
                       'Tasks',
                       'TaskComments',
                       'TaskActivity',
-                    ].any((section) => route.endsWith('/records/$section'));
-              });
-              taskUpdate(taskId: taskId);
-            },
-          )
-          ..subscribe((status, error) {
-            if (!current()) return;
-            _taskBroadcastConnected =
-                status == RealtimeSubscribeStatus.subscribed;
-            // Rejoin fetches current state to recover changes missed while offline.
-            if (_taskBroadcastConnected) {
-              cache.invalidate((path) {
-                final route = Uri.parse(path).path;
-                return route.contains('/tasks') || route.endsWith('/overview');
-              });
-            }
+                    ].contains(section),
+              )
+              .toList();
+          if (sections.isEmpty &&
+              _taskBroadcastConnected &&
+              (change.newRecord['sections'] as List? ?? []).isNotEmpty) {
+            return;
+          }
+          if (sections.isEmpty) {
+            cache.invalidateAll();
+          } else {
+            _invalidateMutation(
+              '/v1/companies/$companyId/sync',
+              {
+                'operations': [
+                  for (final section in sections)
+                    {'operationId': section, 'table': section},
+                ],
+              },
+              {
+                'results': [
+                  for (final section in sections)
+                    {'operationId': section, 'status': 'APPLIED'},
+                ],
+              },
+            );
+          }
+          if (sections.isEmpty ||
+              sections.any(
+                (s) => const [
+                  'Tasks',
+                  'TaskComments',
+                  'TaskActivity',
+                  'Employees',
+                  'Projects',
+                ].contains(s),
+              )) {
             taskUpdate();
-          });
-    _realtime =
-        client.channel('workspace:$companyId:${client.auth.currentUser!.id}')
-          ..onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'company_changes',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'company_id',
-              value: companyId,
-            ),
-            callback: (change) {
-              if (!current()) return;
-              final sections = (change.newRecord['sections'] as List? ?? [])
-                  .where(
-                    (section) =>
-                        !_taskBroadcastConnected ||
-                        !const [
-                          'Tasks',
-                          'TaskComments',
-                          'TaskActivity',
-                        ].contains(section),
-                  )
-                  .toList();
-              if (sections.isEmpty &&
-                  _taskBroadcastConnected &&
-                  (change.newRecord['sections'] as List? ?? []).isNotEmpty) {
-                return;
-              }
-              if (sections.isEmpty) {
-                cache.invalidateAll();
-              } else {
-                _invalidateMutation(
-                  '/v1/companies/$companyId/sync',
-                  {
-                    'operations': [
-                      for (final section in sections)
-                        {'operationId': section, 'table': section},
-                    ],
-                  },
-                  {
-                    'results': [
-                      for (final section in sections)
-                        {'operationId': section, 'status': 'APPLIED'},
-                    ],
-                  },
-                );
-              }
-              if (sections.isEmpty ||
-                  sections.any(
-                    (s) => const [
-                      'Tasks',
-                      'TaskComments',
-                      'TaskActivity',
-                      'Employees',
-                      'Projects',
-                    ].contains(s),
-                  )) {
-                taskUpdate();
-              }
-            },
-          )
-          ..onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'company_memberships',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'user_id',
-              value: client.auth.currentUser!.id,
-            ),
-            callback: (change) {
-              if (!current() || change.newRecord['company_id'] != companyId) {
-                return;
-              }
-              _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
-              _revalidateContext().catchError((Object error) {
-                if (error is SaasApiException && error.requiresSignIn) {
-                  onAccessRevoked?.call();
-                }
-              }).ignore();
-            },
-          )
-          ..onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'notifications',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'company_id',
-              value: companyId,
-            ),
-            callback: (_) {
-              if (current()) {
-                cache.invalidate(
-                  (path) => Uri.parse(path).path.endsWith('/notifications'),
-                );
-              }
-            },
-          )
-          ..subscribe((status, error) {
-            if (!current()) return;
-            _taskRealtimeConnected =
-                status == RealtimeSubscribeStatus.subscribed;
-            if (_taskRealtimeConnected) cache.invalidateAll();
-            taskUpdate(refresh: _taskRealtimeConnected);
-          });
+          }
+        },
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'company_memberships',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'user_id',
+          value: client.auth.currentUser!.id,
+        ),
+        callback: (change) {
+          if (!current() || change.newRecord['company_id'] != companyId) {
+            return;
+          }
+          _verifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
+          _revalidateContext().catchError((Object error) {
+            if (error is SaasApiException && error.requiresSignIn) {
+              onAccessRevoked?.call();
+            }
+          }).ignore();
+        },
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'notifications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'company_id',
+          value: companyId,
+        ),
+        callback: (_) {
+          if (current()) {
+            cache.invalidate(
+              (path) => Uri.parse(path).path.endsWith('/notifications'),
+            );
+          }
+        },
+      )
+      ..subscribe((status, error) {
+        if (!current()) return;
+        _taskRealtimeConnected = status == RealtimeSubscribeStatus.subscribed;
+        if (_taskRealtimeConnected) cache.invalidateAll();
+        taskUpdate(refresh: _taskRealtimeConnected);
+      });
   }
 }

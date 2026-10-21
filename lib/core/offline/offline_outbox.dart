@@ -25,7 +25,7 @@ class OfflineOutbox extends ChangeNotifier {
   })  : clock = clock ?? DateTime.now,
         random = random ?? Random().nextDouble {
     lifecycle = CacheLifecycle(() {
-      if (automatic) sync().ignore();
+      if (automatic) resumeSync().ignore();
     }, (kind, target) {
       if (kind == 'outbox' && target == scope) {
         reload().then((_) async {
@@ -552,6 +552,24 @@ class OfflineOutbox extends ChangeNotifier {
       syncing = false;
       _notify();
     }
+  }
+
+  /// Reconnection restarts network failures immediately; validation failures
+  /// and server Retry-After delays still require their existing handling.
+  Future<void> resumeSync() async {
+    if (_disposed || syncing || authenticationRequired || !isCurrent()) return;
+    await reload();
+    if (pending
+        .any((op) => op['errorCode'] == 'NETWORK' && op['state'] != 'failed')) {
+      await _edit((p) {
+        for (final op in p['operations'] as List) {
+          if (op['errorCode'] == 'NETWORK' && op['state'] != 'failed') {
+            op['retryAt'] = 0;
+          }
+        }
+      });
+    }
+    await sync();
   }
 
   bool _unresolved(Object? value) {

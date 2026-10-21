@@ -5,10 +5,9 @@ returning to the screen. Related views receive a local change notification;
 Supabase synchronization and authoritative validation run in the background.
 Server snapshots remain separate from local projections.
 
-Web uses IndexedDB. Native owner and employee sessions use serialized device
-preferences for durable outbox partitions and cached snapshots. A storage failure
-is reported as an unsuccessful save. Each partition remains scoped to its
-origin, account, role and workspace.
+The PWA uses transactional IndexedDB for durable outbox partitions and cached
+snapshots. A storage failure is reported as an unsuccessful save. Each partition
+remains scoped to its origin, account, role and workspace.
 
 Task lists, calendars, details, dashboard cards, employee section overviews,
 project choices and entity counts consume local changes. Draft document and
@@ -26,10 +25,24 @@ operations are excluded from financial previews.
 
 ## Storage choice and boundaries
 
-The project already depends on [idb_shim](https://pub.dev/packages/idb_shim).
-Using its browser IndexedDB implementation avoids adding a second database
-framework and supports the same transaction tests with its in-memory factory.
-This is structured IndexedDB storage, not a localStorage record cache.
+[IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
+stores both read snapshots and atomic outbox envelopes. A save is acknowledged
+only after the transaction commits. Writes are serialized across store instances
+and tabs coordinate through Web Locks and BroadcastChannel.
+
+Opening a cached section returns saved rows first. Stale snapshots refresh in
+the background. Explicit refresh also returns local rows immediately while
+refreshing in the background. Payroll, document lists, and multi-table section overviews publish
+available cached rows without waiting for unrelated requests. A first visit with
+no saved snapshot still needs a successful online fetch.
+
+Online identity checks and resolving rejected operation versions use explicit
+server reads; cached page reads cannot supply those authoritative sync baselines.
+
+Enqueued writes start syncing immediately in the background. Browser
+online/focus/visibility events restart network-failed operations with their
+original idempotency keys. Reconnection does not bypass validation failures or
+server Retry-After delays. Synchronization requires an open app tab.
 
 * `tpc_read_cache_v2` stores complete read snapshots with account, workspace and
   permission scopes. Existing limits are seven days, 128 entries and 20 MiB.
@@ -108,12 +121,13 @@ deletion blocks when that owner's partition contains queued or uncertain work.
 Other actors' queues cannot be inspected by this client; deleting a workspace
 externally can leave retained work requiring manual export/recovery.
 
-The public app shell uses `offline_worker.js`; it never caches API requests,
+The public app shell uses `tpc-sw.js`; it never caches API requests,
 credentials or record responses. The release preparation script hashes public
 assets into a versioned shell cache. New workers wait for old tabs to close;
 activation removes old shell caches, not IndexedDB. CanvasKit and fonts are
 served locally. Build with `scripts/build-shared-web.sh`, or run
-`node scripts/prepare_offline_web.mjs` after a manual release build.
+`node scripts/prepare_offline_web.mjs` and then `node tool/build_pwa.mjs`
+after a manual release build.
 
 Offline shell access does **not** restore authorization from a cached identity.
 A cold start without a network connection requires reconnecting to verify sign-in

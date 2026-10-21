@@ -29,10 +29,10 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(force: false);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = true}) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -41,7 +41,7 @@ class _ReportConfigurationViewState extends State<ReportConfigurationView> {
       final settings = await widget.api.reportSettings(
         widget.companyId,
         employee: widget.employee,
-        force: true,
+        force: force,
       );
       if (settings['version'] is! int || settings['accounts'] is! List) {
         throw const FormatException(

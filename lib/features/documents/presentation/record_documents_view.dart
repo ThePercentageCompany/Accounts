@@ -57,6 +57,38 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   bool _hasLoaded = false;
   bool _reading = false;
   int _lastLocalCount = 0;
+  String? _watchedPath;
+  String get _path =>
+      '/v1/${widget.employee ? 'employee/' : ''}companies/${widget.companyId}/documents?section=${Uri.encodeQueryComponent(widget.section)}&recordId=${Uri.encodeQueryComponent(_recordId)}';
+  bool _cacheScheduled = false;
+  Map<String, dynamic>? _snapshot;
+  void _cacheChanged() {
+    if (_cacheScheduled) return;
+    _cacheScheduled = true;
+    scheduleMicrotask(() {
+      _cacheScheduled = false;
+      if (!mounted) return;
+      final state = widget.api.cache.state(_path);
+      final data = state?.data;
+      if (data == null) {
+        if (widget.api.cache.scope == null ||
+            state?.error is SaasApiException &&
+                (state!.error as SaasApiException).status == 403) {
+          setState(() => documents = []);
+        }
+        return;
+      }
+      if (identical(data, _snapshot)) return;
+      _snapshot = data;
+      setState(() {
+        _hasLoaded = true;
+        documents = (data['documents'] as List? ?? [])
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+      });
+    });
+  }
+
   String get _recordId =>
       '${widget.uploads?.box?.data['ids'][widget.record['recordId']] ?? widget.record['recordId']}';
   List<Map<String, dynamic>> get _localDocuments =>
@@ -81,7 +113,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
       final acknowledged = count < _lastLocalCount;
       _lastLocalCount = count;
       setState(() {});
-      if (acknowledged) _load().ignore();
+      if (acknowledged) _load(force: true).ignore();
     }
   }
 
@@ -107,12 +139,15 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   void initState() {
     super.initState();
     widget.uploads?.box?.addListener(_localChanged);
+    widget.api.cache.addListener(_cacheChanged);
     _load();
   }
 
   @override
   void dispose() {
     widget.uploads?.box?.removeListener(_localChanged);
+    widget.api.cache.removeListener(_cacheChanged);
+    if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
     super.dispose();
   }
 
@@ -137,13 +172,18 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     }
   }
 
-  Future<void> _read() async {
+  Future<void> _read({bool force = true}) async {
+    if (_watchedPath != _path) {
+      if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
+      _watchedPath = _path;
+      widget.api.cache.activate(_watchedPath!);
+    }
     final result = await widget.api.documents(
       widget.companyId,
       widget.section,
       _recordId,
       employee: widget.employee,
-      force: true,
+      force: force,
     );
     if (mounted) {
       setState(() {
@@ -155,11 +195,11 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     if (_reading) return;
     setState(() => _reading = true);
     try {
-      if (!_recordId.startsWith('local_')) await _read();
+      if (!_recordId.startsWith('local_')) await _read(force: force);
     } catch (e) {
       if (mounted && documents.isEmpty && _localDocuments.isEmpty) {
         setState(() => error =
@@ -405,7 +445,8 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
                     : ListView(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         children: [
-                          for (final doc in newestRecordsFirst([...documents, ..._localDocuments]))
+                          for (final doc in newestRecordsFirst(
+                              [...documents, ..._localDocuments]))
                             Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 child: ListTile(

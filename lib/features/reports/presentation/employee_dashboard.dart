@@ -123,17 +123,76 @@ class _SectionOverviewState extends State<SectionOverview> {
   Timer? _timer;
   int _localRevision = 0;
   bool _localDirty = false;
+  bool _cacheScheduled = false;
+  final _snapshots = <String, Map<String, dynamic>>{};
+  int _generation = 0;
+  String _path(String table, {SectionOverview? source}) {
+    final view = source ?? widget;
+    return !view.employee && table == 'Employees'
+        ? '/v1/companies/${view.companyId}/employees'
+        : view.api.recordsPath(view.companyId, table, employee: view.employee);
+  }
+
+  void _watch(bool active, {SectionOverview? source}) {
+    final view = source ?? widget;
+    for (final table in view.tables) {
+      if (active) {
+        view.api.cache.activate(_path(table, source: view));
+      } else {
+        view.api.cache.deactivate(_path(table, source: view));
+      }
+    }
+  }
+
   void _localChanged() {
-    if (!mounted || _localRevision == widget.api.cache.localRevision) return;
-    _localRevision = widget.api.cache.localRevision;
-    _localDirty = true;
-    if (!_busy) _load();
+    if (!mounted || !widget.active || _cacheScheduled) return;
+    _cacheScheduled = true;
+    scheduleMicrotask(() {
+      _cacheScheduled = false;
+      if (!mounted || !widget.active) return;
+      if (_localRevision != widget.api.cache.localRevision) {
+        _localRevision = widget.api.cache.localRevision;
+        _localDirty = true;
+        if (!_busy) _load();
+      }
+      var changed = false;
+      for (final table in widget.tables) {
+        final state = widget.api.cache.state(_path(table));
+        final data = state?.data;
+        if (data == null) {
+          if ((widget.api.cache.scope == null ||
+                  state?.error is SaasApiException &&
+                      (state!.error as SaasApiException).status == 403) &&
+              _rows.containsKey(table)) {
+            _rows.remove(table);
+            _snapshots.remove(table);
+            changed = true;
+          }
+          continue;
+        }
+        if (identical(data, _snapshots[table])) continue;
+        _snapshots[table] = data;
+        final key =
+            !widget.employee && table == 'Employees' ? 'employees' : 'records';
+        final rows = (data[key] as List? ?? [])
+            .map((r) => Map<String, dynamic>.from(r as Map))
+            .toList();
+        _rows[table] = widget.api
+                .workspaceOutbox(widget.companyId, employee: widget.employee)
+                ?.overlay(table, rows) ??
+            rows;
+        _errors.remove(table);
+        changed = true;
+      }
+      if (changed) setState(() {});
+    });
   }
 
   @override
   void initState() {
     super.initState();
     widget.api.cache.addListener(_localChanged);
+    if (widget.active) _watch(true);
     _load();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (widget.active &&
@@ -146,46 +205,66 @@ class _SectionOverviewState extends State<SectionOverview> {
   @override
   void didUpdateWidget(covariant SectionOverview oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final contextChanged = oldWidget.api != widget.api ||
+        oldWidget.companyId != widget.companyId ||
+        oldWidget.employee != widget.employee ||
+        oldWidget.tables.join(',') != widget.tables.join(',');
+    if (contextChanged || oldWidget.active != widget.active) {
+      if (oldWidget.active) _watch(false, source: oldWidget);
+      if (widget.active) _watch(true);
+    }
     if (oldWidget.api != widget.api) {
       oldWidget.api.cache.removeListener(_localChanged);
       widget.api.cache.addListener(_localChanged);
     }
-    if (!oldWidget.active && widget.active) _load();
+    if (contextChanged) {
+      _generation++;
+      _busy = false;
+      _rows.clear();
+      _errors.clear();
+      _snapshots.clear();
+    }
+    if (contextChanged || !oldWidget.active && widget.active) _load();
   }
 
   @override
   void dispose() {
+    _generation++;
     _timer?.cancel();
+    if (widget.active) _watch(false);
     widget.api.cache.removeListener(_localChanged);
     super.dispose();
   }
 
   Future<void> _load({bool force = false}) async {
     if (_busy || !widget.active) return;
+    final generation = ++_generation;
     _localDirty = false;
     setState(() => _busy = true);
     await Future.wait(widget.tables.map((table) async {
       try {
         final response = !widget.employee && table == 'Employees'
-            ? await widget.api.employees(widget.companyId)
+            ? await widget.api.employees(widget.companyId, force: force)
             : await widget.api.records(widget.companyId, table,
                 employee: widget.employee, force: force);
-        if (!mounted) return;
-        _rows[table] = ((table == 'Employees' && !widget.employee
-                    ? response['employees']
-                    : response['records']) as List? ??
-                [])
-            .map((r) => Map<String, dynamic>.from(r as Map))
-            .toList();
-        _errors.remove(table);
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _rows[table] = ((table == 'Employees' && !widget.employee
+                      ? response['employees']
+                      : response['records']) as List? ??
+                  [])
+              .map((r) => Map<String, dynamic>.from(r as Map))
+              .toList();
+          _errors.remove(table);
+        });
       } catch (_) {
-        if (mounted) {
+        if (mounted && generation == _generation) {
           _errors[table] =
               'Overview unavailable. Open this section to review access or connection details.';
         }
       }
     }));
-    if (mounted) {
+    if (mounted && generation == _generation) {
       setState(() => _busy = false);
       if (_localDirty) _load();
     }

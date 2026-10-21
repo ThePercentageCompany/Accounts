@@ -41,13 +41,8 @@ class _SyncSettingsPanelState extends State<SyncSettingsPanel> {
   Future<void> _edit(Map<String, Object?> op) => _run(() async {
         var version = op['expectedVersion'] as int;
         if (op['action'] != 'create' && op['recordId'] != null) {
-          final response = op['table'] == 'ReportSettings'
-              ? await widget.api.reportSettings(widget.companyId, force: true)
-              : op['table'] == 'Employees'
-                  ? await widget.api.employees(widget.companyId, force: true)
-                  : await widget.api.records(
-                      widget.companyId, op['table'] as String,
-                      employee: widget.employee, force: true);
+          final response = await widget.api.syncBaseline(
+              widget.companyId, op['table'] as String, employee: widget.employee);
           final rows = op['table'] == 'ReportSettings'
               ? [
                   {

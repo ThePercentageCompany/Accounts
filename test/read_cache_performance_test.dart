@@ -4,6 +4,35 @@ import 'package:tpc_invoice/core/cache/cache_store.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
 
 void main() {
+  test('refresh returns persisted data without waiting on network', () async {
+    final store = MemoryCacheStore();
+    final first = ReadCache(store: store, automatic: false);
+    first.configure(scope: 'company-a', account: 'owner-a');
+    await first.read(
+        '/records',
+        () async => {
+              'records': ['saved']
+            });
+    await Future<void>.delayed(Duration.zero);
+    first.dispose();
+    final cache = ReadCache(store: store, automatic: false);
+    addTearDown(cache.dispose);
+    cache.configure(scope: 'company-a', account: 'owner-a');
+    final network = Completer<Map<String, dynamic>>();
+    final saved =
+        await cache.read('/records', () => network.future, force: true);
+    expect(saved['records'], ['saved']);
+    expect(cache.state('/records')!.data!['records'], ['saved']);
+    expect(cache.state('/records')!.refreshing, isTrue);
+    final memory =
+        await cache.read('/records', () => network.future, force: true);
+    expect(memory['records'], ['saved']);
+    network.complete({
+      'records': ['updated']
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(cache.state('/records')!.data!['records'], ['updated']);
+  });
   for (final active in [false, true]) {
     for (final obsoleteFails in [false, true]) {
       test(

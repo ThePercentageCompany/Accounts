@@ -54,7 +54,8 @@ class _EmployeeProfileEditorState extends State<EmployeeProfileEditor> {
               field.key: field.value.text.trim(),
             'expectedVersion': widget.record['recordVersion'],
           },
-          operationId);
+          operationId,
+          baseRecord: widget.record);
       if (mounted) Navigator.pop(context, true);
     } catch (failure) {
       if (mounted) {
