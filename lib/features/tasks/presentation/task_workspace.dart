@@ -167,8 +167,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   }
 
   void _cacheChanged() {
-    if (_localRevision != widget.api.cache.localRevision) {
-      _localRevision = widget.api.cache.localRevision;
+    final revision = widget.api.cache.localRevisionFor(
+        widget.api.tasksPath(widget.companyId, employee: _employee));
+    if (_localRevision != revision) {
+      _localRevision = revision;
       if (mounted) {
         setState(() {
           _tasks = _visibleTasks(_serverTasks);

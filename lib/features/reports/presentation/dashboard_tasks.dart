@@ -41,8 +41,10 @@ class _DashboardTasksState extends State<DashboardTasks> {
   int _localRevision = 0;
 
   void _localChanged() {
-    if (_localRevision == widget.api.cache.localRevision) return;
-    _localRevision = widget.api.cache.localRevision;
+    final revision = widget.api.cache.localRevisionFor(
+        widget.api.tasksPath(widget.companyId, employee: widget.employee));
+    if (_localRevision == revision) return;
+    _localRevision = revision;
     _realtimeDirty = true;
     _scheduleRealtimeRefresh();
   }

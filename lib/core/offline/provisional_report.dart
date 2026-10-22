@@ -1,25 +1,19 @@
 import 'offline_store.dart';
 import 'offline_outbox.dart';
+import 'fixed_decimal.dart';
 
-BigInt _minor(Object? value) {
-  final text = '${value ?? 0}';
-  final negative = text.startsWith('-');
-  final parts = text.replaceFirst('-', '').split('.');
-  final result = BigInt.parse(parts.first) * BigInt.from(100) +
-      BigInt.parse(
-          (parts.length > 1 ? parts[1] : '').padRight(2, '0').substring(0, 2));
-  return negative ? -result : result;
-}
+BigInt _minor(Object? value) => decimalUnits(value);
 
 String _money(BigInt value) =>
     '${value.isNegative ? '-' : ''}${value.abs() ~/ BigInt.from(100)}.${(value.abs() % BigInt.from(100)).toString().padLeft(2, '0')}';
 
 /// A separate view over confirmed reports. Never persists estimates as ledger rows.
 Map<String, dynamic> projectFinancialReport(
-    OfflineOutbox box,
-    Map<String, dynamic> snapshot,
-    String kind,
-    List<Map<String, dynamic>> Function(String table) records) {
+  OfflineOutbox box,
+  Map<String, dynamic> snapshot,
+  String kind,
+  List<Map<String, dynamic>> Function(String table) records,
+) {
   final report = copyJson(snapshot);
   final lines = <Map<String, dynamic>>[];
   final unresolved = <String>[];
@@ -54,12 +48,13 @@ Map<String, dynamic> projectFinancialReport(
   };
   String cash(Object? value, {bool legacy = false}) =>
       '${value ?? ''}'.toLowerCase() == 'cash'
-          ? (legacy ? 'cash_in_hand' : 'cash')
-          : (legacy ? 'bank_account' : 'bank');
+      ? (legacy ? 'cash_in_hand' : 'cash')
+      : (legacy ? 'bank_account' : 'bank');
   for (final op in box.pending) {
     if (op['state'] == 'failed') continue;
     final table = '${op['table']}', action = '${op['action']}';
-    final journalPosting = table == 'Journals' &&
+    final journalPosting =
+        table == 'Journals' &&
         action == 'update' &&
         (op['values'] as Map?)?['status'] == 'POSTED';
     if ([
@@ -69,9 +64,17 @@ Map<String, dynamic> projectFinancialReport(
           'send',
           'convert',
           'upload',
-          'transferMatch'
+          'transferMatch',
         ].contains(action) &&
         !journalPosting) {
+      continue;
+    }
+    if (op['submitted'] == true) {
+      // A response can be lost after the server commits. A refreshed statement
+      // may already include this command, and section snapshots cannot prove
+      // whether it does. Retain the command and pending indicator without
+      // adding its estimate twice to an authoritative balance.
+      unresolved.add('${op['operationId']}');
       continue;
     }
     final row = source(op);
@@ -79,12 +82,8 @@ Map<String, dynamic> projectFinancialReport(
     final next = {...row, ...values};
     final start = lines.length;
     var journalNumber = 0;
-    final rate = num.tryParse('${row['exchangeRate'] ?? 1}') ?? 1;
-    BigInt amount(Object? value) {
-      final scaled = BigInt.from((rate * 100000000).round());
-      return (_minor(value) * scaled + BigInt.from(50000000)) ~/
-          BigInt.from(100000000);
-    }
+    final rate = row['exchangeRate'] ?? 1;
+    BigInt amount(Object? value) => convertMinor(value, rate);
 
     void line(String date, String id, BigInt net) {
       final account = accounts[id];
@@ -99,7 +98,7 @@ Map<String, dynamic> projectFinancialReport(
         'journalId': 'local_${op['operationId']}_$journalNumber',
         'sourceType': table,
         'sourceId': op['recordId'] ?? op['localId'],
-        'description': next['description'] ?? 'Pending $table $action'
+        'description': next['description'] ?? 'Pending $table $action',
       });
     }
 
@@ -109,204 +108,272 @@ Map<String, dynamic> projectFinancialReport(
       line(date, credit, -value);
     }
 
-    if (row.isNotEmpty && journalPosting) {
-      final journalLines = records('JournalLines')
-          .where((line) => line['journalId'] == row['recordId'])
-          .toList();
-      if (journalLines.length >= 2) {
-        for (final entry in journalLines) {
-          lines.add({
-            ...entry,
-            'date': next['date'],
-            'net': _minor(entry['debit']) - _minor(entry['credit']),
-            'operationId': op['operationId'],
-            'journalId': 'local_${op['operationId']}',
-            'sourceType': next['sourceType'] ?? 'Manual',
-            'sourceId': next['sourceId'] ?? row['recordId'],
-            'description': next['description'] ?? 'Pending journal'
-          });
-        }
-      }
-    } else if (row.isNotEmpty &&
-        ['Income', 'Expenses'].contains(table) &&
-        action == 'post') {
-      final income = table == 'Income', date = '${row['date'] ?? ''}';
-      final control = income ? 'accounts_receivable' : 'accounts_payable';
-      final total = amount(row['total']), tax = amount(row['taxAmount']);
-      line(date, control, income ? total : -total);
-      line(date, income ? 'other_income' : 'operating_expense',
-          income ? -(total - tax) : total - tax);
-      line(date, income ? 'output_vat_payable' : 'input_vat',
-          income ? -tax : tax);
-      if (row['paymentStatus'] == 'PAID') {
-        pair(
-            '${row['paidDate'] ?? ''}',
-            income ? cash(row['account'], legacy: true) : control,
-            income ? control : cash(row['account'], legacy: true),
-            total);
-      }
-    } else if (row.isNotEmpty &&
-        ['Income', 'Expenses'].contains(table) &&
-        action == 'pay' &&
-        (next['paymentExchangeRate'] ?? row['exchangeRate'] ?? 1) ==
-            (row['exchangeRate'] ?? 1)) {
-      final income = table == 'Income';
-      pair(
-          '${next['paidDate'] ?? ''}',
-          income ? cash(next['account'], legacy: true) : 'accounts_payable',
-          income ? 'accounts_receivable' : cash(next['account'], legacy: true),
-          amount(row['total']));
-    } else if (row.isNotEmpty && table == 'Invoices' && action == 'issue') {
-      final date = '${row['issueDate'] ?? ''}',
-          total = amount(row['total']),
-          tax = amount(row['taxAmount']);
-      line(date, 'accounts_receivable', total);
-      line(date, 'service_consulting_revenue', -(total - tax));
-      line(date, 'output_vat_payable', -tax);
-    } else if (row.isNotEmpty &&
-        table == 'MoneyTransfers' &&
-        action == 'transferPost') {
-      pair('${row['date'] ?? ''}', cash(row['toAccount'], legacy: true),
-          cash(row['fromAccount'], legacy: true), _minor(row['amount']));
-    } else if (row.isNotEmpty && table == 'Assets' && action == 'capitalize') {
-      pair('${row['purchaseDate'] ?? ''}', 'fixed_assets',
-          cash(row['paymentAccount']), _minor(row['cost']));
-    } else if (row.isNotEmpty &&
-        table == 'CapitalTransactions' &&
-        action == 'capitalPost') {
-      pair('${row['date'] ?? ''}', cash(row['destinationAccount']),
-          'shareholder_equity', _minor(row['amount']));
-    } else if (row.isNotEmpty &&
-        table == 'ShareholderLoans' &&
-        action == 'loanPost') {
-      pair('${row['date'] ?? ''}', cash(row['paymentAccount']),
-          'shareholder_loan', _minor(row['principal']));
-    } else if (row.isNotEmpty &&
-        table == 'Assets' &&
-        action == 'depreciate' &&
-        row['usefulLife'] is num &&
-        (row['usefulLife'] as num) > 0) {
-      final cost = _minor(row['cost']),
-          residual = _minor(row['residualValue']),
-          accumulated = _minor(row['accumulatedDepreciation']);
-      final life = BigInt.from(row['usefulLife'] as num);
-      final monthly = (cost - residual + life ~/ BigInt.two) ~/ life;
-      final remaining = cost - residual - accumulated;
-      if (remaining > BigInt.zero) {
-        pair(
-            '${next['lastDepreciationDate'] ?? ''}',
-            'depreciation_expense',
-            'accumulated_depreciation',
-            monthly < remaining ? monthly : remaining);
-      }
-    } else if (row.isNotEmpty &&
-        table == 'Assets' &&
-        action == 'assetDispose') {
-      final date = '${next['disposalDate'] ?? ''}',
-          cost = _minor(row['cost']),
-          accumulated = _minor(row['accumulatedDepreciation']),
-          proceeds = _minor(next['disposalProceeds']);
-      final gain = proceeds - (cost - accumulated);
-      line(date, cash(next['disposalAccount']), proceeds);
-      line(date, 'accumulated_depreciation', accumulated);
-      line(date, 'fixed_assets', -cost);
-      line(
-          date,
-          gain.isNegative ? 'loss_on_asset_disposal' : 'gain_on_asset_disposal',
-          -gain);
-    } else if (row.isNotEmpty &&
-        table == 'ShareholderLoans' &&
-        action == 'loanRepay') {
-      pair('${next['lastRepaymentDate'] ?? ''}', 'shareholder_loan',
-          cash(next['paymentAccount']), _minor(row['outstandingBalance']));
-    } else if (row.isNotEmpty &&
-        table == 'Payroll' &&
-        action == 'payrollPay' &&
-        (next['paymentExchangeRate'] ?? row['exchangeRate'] ?? 1) ==
-            (row['exchangeRate'] ?? 1)) {
-      pair('${next['paidDate'] ?? ''}', 'salary_payable',
-          cash(next['paymentAccount']), amount(row['netSalary']));
-    } else if (row.isNotEmpty &&
-        table == 'MoneyTransfers' &&
-        action == 'transferReverse') {
-      pair(
-          '${next['reversalDate'] ?? ''}',
-          cash(row['fromAccount'], legacy: true),
-          cash(row['toAccount'], legacy: true),
-          _minor(row['amount']));
-    } else if (table == 'Receipts' &&
-        action == 'receive' &&
-        (next['exchangeRate'] ?? 1) == 1 &&
-        (next['paymentExchangeRate'] ?? 1) == 1 &&
-        records('Invoices').any((invoice) =>
-            invoice['recordId'] == next['invoiceId'] &&
-            (invoice['exchangeRate'] ?? 1) == 1)) {
-      pair('${next['paymentDate'] ?? ''}', cash(next['paymentAccount']),
-          'accounts_receivable', _minor(next['amount']));
-    } else if (row.isNotEmpty && table == 'Payroll' && action == 'approve') {
-      final month = DateTime.tryParse('${row['month']}-01');
-      if (month != null) {
-        final date = DateTime(month.year, month.month + 1, 0)
-            .toIso8601String()
-            .substring(0, 10);
-        line(date, 'salary_expense', amount(row['grossSalary']));
-        line(date, 'salary_payable', -amount(row['netSalary']));
-        line(date, 'payroll_deductions_payable', -amount(row['deductions']));
-      }
-    } else if (row.isNotEmpty &&
-        ['reverse', 'invoiceVoid', 'payrollReverse', 'receiptReverse']
-            .contains(action)) {
-      final types = action == 'invoiceVoid'
-          ? ['Invoice']
-          : action == 'receiptReverse'
-              ? ['Receipt']
-              : action == 'payrollReverse'
-                  ? ['Payroll', if (row['status'] == 'PAID') 'PayrollPayment']
-                  : [
-                      table,
-                      if (row['paymentStatus'] == 'PAID') '${table}Payment'
-                    ];
-      final originals = records('Journals')
-          .where((journal) =>
-              journal['sourceId'] == row['recordId'] &&
-              types.contains(journal['sourceType']) &&
-              journal['status'] == 'POSTED')
-          .toList();
-      final date =
-          '${next[action == 'invoiceVoid' ? 'voidDate' : action == 'reverse' ? 'date' : 'reversalDate'] ?? ''}';
-      if (originals.length == types.length &&
-          types.every((type) =>
-              originals
-                  .where((journal) => journal['sourceType'] == type)
-                  .length ==
-              1)) {
-        for (final original in originals) {
-          final originalLines = records('JournalLines')
-              .where((line) => line['journalId'] == original['recordId'])
-              .toList();
-          if (originalLines.length < 2) {
-            lines.removeRange(start, lines.length);
-            break;
-          }
-          for (final originalLine in originalLines) {
+    try {
+      if (row.isNotEmpty && journalPosting) {
+        final journalLines = records(
+          'JournalLines',
+        ).where((line) => line['journalId'] == row['recordId']).toList();
+        if (journalLines.length >= 2) {
+          for (final entry in journalLines) {
             lines.add({
-              ...originalLine,
-              'date': date,
-              'net': _minor(originalLine['credit']) -
-                  _minor(originalLine['debit']),
+              ...entry,
+              'date': next['date'],
+              'net': _minor(entry['debit']) - _minor(entry['credit']),
               'operationId': op['operationId'],
-              'sourceType': table,
-              'journalId': 'local_${op['operationId']}_${original['recordId']}',
-              'sourceId': row['recordId'],
-              'description': 'Pending reversal'
+              'journalId': 'local_${op['operationId']}',
+              'sourceType': next['sourceType'] ?? 'Manual',
+              'sourceId': next['sourceId'] ?? row['recordId'],
+              'description': next['description'] ?? 'Pending journal',
             });
           }
         }
+      } else if (row.isNotEmpty &&
+          ['Income', 'Expenses'].contains(table) &&
+          action == 'post') {
+        final income = table == 'Income', date = '${row['date'] ?? ''}';
+        final control = income ? 'accounts_receivable' : 'accounts_payable';
+        final total = amount(row['total']), tax = amount(row['taxAmount']);
+        line(date, control, income ? total : -total);
+        line(
+          date,
+          income ? 'other_income' : 'operating_expense',
+          income ? -(total - tax) : total - tax,
+        );
+        line(
+          date,
+          income ? 'output_vat_payable' : 'input_vat',
+          income ? -tax : tax,
+        );
+        if (row['paymentStatus'] == 'PAID') {
+          pair(
+            '${row['paidDate'] ?? ''}',
+            income ? cash(row['account'], legacy: true) : control,
+            income ? control : cash(row['account'], legacy: true),
+            total,
+          );
+        }
+      } else if (row.isNotEmpty &&
+          ['Income', 'Expenses'].contains(table) &&
+          action == 'pay' &&
+          (next['paymentExchangeRate'] ?? row['exchangeRate'] ?? 1) ==
+              (row['exchangeRate'] ?? 1)) {
+        final income = table == 'Income';
+        pair(
+          '${next['paidDate'] ?? ''}',
+          income ? cash(next['account'], legacy: true) : 'accounts_payable',
+          income ? 'accounts_receivable' : cash(next['account'], legacy: true),
+          amount(row['total']),
+        );
+      } else if (row.isNotEmpty && table == 'Invoices' && action == 'issue') {
+        final date = '${row['issueDate'] ?? ''}',
+            total = amount(row['total']),
+            tax = amount(row['taxAmount']);
+        line(date, 'accounts_receivable', total);
+        line(date, 'service_consulting_revenue', -(total - tax));
+        line(date, 'output_vat_payable', -tax);
+      } else if (row.isNotEmpty &&
+          table == 'MoneyTransfers' &&
+          action == 'transferPost') {
+        pair(
+          '${row['date'] ?? ''}',
+          cash(row['toAccount'], legacy: true),
+          cash(row['fromAccount'], legacy: true),
+          _minor(row['amount']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'Assets' &&
+          action == 'capitalize') {
+        pair(
+          '${row['purchaseDate'] ?? ''}',
+          'fixed_assets',
+          cash(row['paymentAccount']),
+          _minor(row['cost']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'CapitalTransactions' &&
+          action == 'capitalPost') {
+        pair(
+          '${row['date'] ?? ''}',
+          cash(row['destinationAccount']),
+          'shareholder_equity',
+          _minor(row['amount']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'ShareholderLoans' &&
+          action == 'loanPost') {
+        pair(
+          '${row['date'] ?? ''}',
+          cash(row['paymentAccount']),
+          'shareholder_loan',
+          _minor(row['principal']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'Assets' &&
+          action == 'depreciate' &&
+          row['usefulLife'] is num &&
+          (row['usefulLife'] as num) > 0) {
+        final cost = _minor(row['cost']),
+            residual = _minor(row['residualValue']),
+            accumulated = _minor(row['accumulatedDepreciation']);
+        final life = BigInt.from(row['usefulLife'] as num);
+        final monthly = (cost - residual + life ~/ BigInt.two) ~/ life;
+        final remaining = cost - residual - accumulated;
+        if (remaining > BigInt.zero) {
+          pair(
+            '${next['lastDepreciationDate'] ?? ''}',
+            'depreciation_expense',
+            'accumulated_depreciation',
+            monthly < remaining ? monthly : remaining,
+          );
+        }
+      } else if (row.isNotEmpty &&
+          table == 'Assets' &&
+          action == 'assetDispose') {
+        final date = '${next['disposalDate'] ?? ''}',
+            cost = _minor(row['cost']),
+            accumulated = _minor(row['accumulatedDepreciation']),
+            proceeds = _minor(next['disposalProceeds']);
+        final gain = proceeds - (cost - accumulated);
+        line(date, cash(next['disposalAccount']), proceeds);
+        line(date, 'accumulated_depreciation', accumulated);
+        line(date, 'fixed_assets', -cost);
+        line(
+          date,
+          gain.isNegative ? 'loss_on_asset_disposal' : 'gain_on_asset_disposal',
+          -gain,
+        );
+      } else if (row.isNotEmpty &&
+          table == 'ShareholderLoans' &&
+          action == 'loanRepay') {
+        pair(
+          '${next['lastRepaymentDate'] ?? ''}',
+          'shareholder_loan',
+          cash(next['paymentAccount']),
+          _minor(row['outstandingBalance']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'Payroll' &&
+          action == 'payrollPay' &&
+          (next['paymentExchangeRate'] ?? row['exchangeRate'] ?? 1) ==
+              (row['exchangeRate'] ?? 1)) {
+        pair(
+          '${next['paidDate'] ?? ''}',
+          'salary_payable',
+          cash(next['paymentAccount']),
+          amount(row['netSalary']),
+        );
+      } else if (row.isNotEmpty &&
+          table == 'MoneyTransfers' &&
+          action == 'transferReverse') {
+        pair(
+          '${next['reversalDate'] ?? ''}',
+          cash(row['fromAccount'], legacy: true),
+          cash(row['toAccount'], legacy: true),
+          _minor(row['amount']),
+        );
+      } else if (table == 'Receipts' &&
+          action == 'receive' &&
+          (next['exchangeRate'] ?? 1) == 1 &&
+          (next['paymentExchangeRate'] ?? 1) == 1 &&
+          records('Invoices').any(
+            (invoice) =>
+                invoice['recordId'] == next['invoiceId'] &&
+                (invoice['exchangeRate'] ?? 1) == 1,
+          )) {
+        pair(
+          '${next['paymentDate'] ?? ''}',
+          cash(next['paymentAccount']),
+          'accounts_receivable',
+          _minor(next['amount']),
+        );
+      } else if (row.isNotEmpty && table == 'Payroll' && action == 'approve') {
+        final month = DateTime.tryParse('${row['month']}-01');
+        if (month != null) {
+          final date = DateTime(
+            month.year,
+            month.month + 1,
+            0,
+          ).toIso8601String().substring(0, 10);
+          line(date, 'salary_expense', amount(row['grossSalary']));
+          line(date, 'salary_payable', -amount(row['netSalary']));
+          line(date, 'payroll_deductions_payable', -amount(row['deductions']));
+        }
+      } else if (row.isNotEmpty &&
+          [
+            'reverse',
+            'invoiceVoid',
+            'payrollReverse',
+            'receiptReverse',
+          ].contains(action)) {
+        final types = action == 'invoiceVoid'
+            ? ['Invoice']
+            : action == 'receiptReverse'
+            ? ['Receipt']
+            : action == 'payrollReverse'
+            ? ['Payroll', if (row['status'] == 'PAID') 'PayrollPayment']
+            : [table, if (row['paymentStatus'] == 'PAID') '${table}Payment'];
+        final originals = records('Journals')
+            .where(
+              (journal) =>
+                  journal['sourceId'] == row['recordId'] &&
+                  types.contains(journal['sourceType']) &&
+                  journal['status'] == 'POSTED',
+            )
+            .toList();
+        final date =
+            '${next[action == 'invoiceVoid'
+                    ? 'voidDate'
+                    : action == 'reverse'
+                    ? 'date'
+                    : 'reversalDate'] ?? ''}';
+        if (originals.length == types.length &&
+            types.every(
+              (type) =>
+                  originals
+                      .where((journal) => journal['sourceType'] == type)
+                      .length ==
+                  1,
+            )) {
+          for (final original in originals) {
+            final originalLines = records('JournalLines')
+                .where((line) => line['journalId'] == original['recordId'])
+                .toList();
+            if (originalLines.length < 2) {
+              lines.removeRange(start, lines.length);
+              break;
+            }
+            for (final originalLine in originalLines) {
+              lines.add({
+                ...originalLine,
+                'date': date,
+                'net':
+                    _minor(originalLine['credit']) -
+                    _minor(originalLine['debit']),
+                'operationId': op['operationId'],
+                'sourceType': table,
+                'journalId':
+                    'local_${op['operationId']}_${original['recordId']}',
+                'sourceId': row['recordId'],
+                'description': 'Pending reversal',
+              });
+            }
+          }
+        }
       }
+    } on FormatException {
+      // An invalid local draft/rate remains in the outbox for correction. Never
+      // guess its financial effect or prevent confirmed reports from opening.
+      lines.removeRange(start, lines.length);
+      unresolved.add('${op['operationId']}');
+      continue;
     }
     if (lines.length == start ||
-        lines.skip(start).fold(
-                BigInt.zero, (sum, line) => sum + (line['net'] as BigInt)) !=
+        lines
+                .skip(start)
+                .fold(
+                  BigInt.zero,
+                  (sum, line) => sum + (line['net'] as BigInt),
+                ) !=
             BigInt.zero) {
       lines.removeRange(start, lines.length);
       unresolved.add('${op['operationId']}');
@@ -331,9 +398,11 @@ Map<String, dynamic> projectFinancialReport(
       final delta = _minor(current) - _minor(old), base = _minor(old).abs();
       final percent = base == BigInt.zero
           ? (delta == BigInt.zero ? '0.00' : null)
-          : _money((delta.abs() * BigInt.from(10000) + base ~/ BigInt.two) ~/
-              base *
-              (delta.isNegative ? -BigInt.one : BigInt.one));
+          : _money(
+              (delta.abs() * BigInt.from(10000) + base ~/ BigInt.two) ~/
+                  base *
+                  (delta.isNegative ? -BigInt.one : BigInt.one),
+            );
       return {'previous': old, 'amount': _money(delta), 'percent': percent};
     }
 
@@ -351,26 +420,32 @@ Map<String, dynamic> projectFinancialReport(
           row['closing'] ??
           _money(_minor(row['debit']) - _minor(row['credit']));
       account['comparison'] = variance(
-          value(account as Map), old == null ? '0.00' : value(old as Map));
+        value(account as Map),
+        old == null ? '0.00' : value(old as Map),
+      );
     }
   }
   report['provisional'] = true;
+  report['projectedOperations'] = projected.length;
   report['pendingOperations'] = projected.length + unresolved.length;
   report['pendingCalculation'] = unresolved.length;
   report['metadata'] = {
     ...Map<String, dynamic>.from(report['metadata'] as Map? ?? {}),
-    'accountingBasis': 'Provisional · includes local changes pending sync'
+    'accountingBasis': 'Provisional · includes local changes pending sync',
   };
   return report;
 }
 
-void _apply(Map<String, dynamic> report, String kind,
-    List<Map<String, dynamic>> lines) {
+void _apply(
+  Map<String, dynamic> report,
+  String kind,
+  List<Map<String, dynamic>> lines,
+) {
   final asOf = '${report['asOf'] ?? '9999-12-31'}',
       from = '${report['from'] ?? ''}';
   final accounts = [
     for (final row in report['accounts'] as List? ?? [])
-      Map<String, dynamic>.from(row as Map)
+      Map<String, dynamic>.from(row as Map),
   ];
   void add(Map target, String key, BigInt value) =>
       target[key] = _money(_minor(target[key]) + value);
@@ -403,10 +478,11 @@ void _apply(Map<String, dynamic> report, String kind,
     if (earning) {
       change('accumulatedEarnings', -net);
       change(
-          date.compareTo(fiscalStart) >= 0
-              ? 'currentYearEarnings'
-              : 'priorYearUnclosedEarnings',
-          -net);
+        date.compareTo(fiscalStart) >= 0
+            ? 'currentYearEarnings'
+            : 'priorYearUnclosedEarnings',
+        -net,
+      );
     }
     if (group == 'Equity') change('postedEquity', -net);
     final cashKey = const {
@@ -415,7 +491,7 @@ void _apply(Map<String, dynamic> report, String kind,
       'bank': 'bank',
       'bank_account': 'bank',
       'accounts_receivable': 'receivables',
-      'accounts_payable': 'payables'
+      'accounts_payable': 'payables',
     }[id];
     if (cashKey != null) change(cashKey, group == 'Liability' ? -net : net);
     if (inPeriod && income) {
@@ -452,15 +528,18 @@ void _apply(Map<String, dynamic> report, String kind,
         'normalSide': group == 'Asset' || expense ? 'Debit' : 'Credit',
         if (['balance-sheet', 'profit-and-loss'].contains(kind))
           'amount': '0.00',
-        if (kind == 'general-ledger') 'entries': <dynamic>[]
+        if (kind == 'general-ledger') 'entries': <dynamic>[],
       };
       accounts.add(account);
     }
     if (account.containsKey('amount')) {
       add(account, 'amount', group == 'Asset' || expense ? net : -net);
     } else if (kind == 'general-ledger') {
-      add(account, inPeriod ? (net.isNegative ? 'credit' : 'debit') : 'opening',
-          inPeriod ? net.abs() : net);
+      add(
+        account,
+        inPeriod ? (net.isNegative ? 'credit' : 'debit') : 'opening',
+        inPeriod ? net.abs() : net,
+      );
       add(account, 'closing', net);
       if (inPeriod) {
         (account['entries'] as List).add({
@@ -470,7 +549,7 @@ void _apply(Map<String, dynamic> report, String kind,
           'credit': _money(net.isNegative ? -net : BigInt.zero),
           'journalId': line['journalId'],
           'number': 'Pending sync',
-          'balance': account['closing']
+          'balance': account['closing'],
         });
       }
     } else {
@@ -480,16 +559,22 @@ void _apply(Map<String, dynamic> report, String kind,
       account['credit'] = _money(closing.isNegative ? -closing : BigInt.zero);
       if (from.isNotEmpty) {
         if (inPeriod) {
-          add(account, net.isNegative ? 'periodCredit' : 'periodDebit',
-              net.abs());
+          add(
+            account,
+            net.isNegative ? 'periodCredit' : 'periodDebit',
+            net.abs(),
+          );
         } else {
-          final opening = _minor(account['openingDebit']) -
+          final opening =
+              _minor(account['openingDebit']) -
               _minor(account['openingCredit']) +
               net;
-          account['openingDebit'] =
-              _money(opening.isNegative ? BigInt.zero : opening);
-          account['openingCredit'] =
-              _money(opening.isNegative ? -opening : BigInt.zero);
+          account['openingDebit'] = _money(
+            opening.isNegative ? BigInt.zero : opening,
+          );
+          account['openingCredit'] = _money(
+            opening.isNegative ? -opening : BigInt.zero,
+          );
         }
       }
     }
@@ -497,10 +582,11 @@ void _apply(Map<String, dynamic> report, String kind,
   if (kind == 'balance-sheet') {
     for (final entry in {
       '__current_earnings': 'currentYearEarnings',
-      '__prior_earnings': 'priorYearUnclosedEarnings'
+      '__prior_earnings': 'priorYearUnclosedEarnings',
     }.entries) {
-      final row =
-          accounts.where((row) => row['accountId'] == entry.key).firstOrNull;
+      final row = accounts
+          .where((row) => row['accountId'] == entry.key)
+          .firstOrNull;
       if (row != null) add(row, 'amount', changes[entry.value] ?? BigInt.zero);
     }
   }
@@ -512,22 +598,25 @@ void _apply(Map<String, dynamic> report, String kind,
   for (final entry in changes.entries) {
     if (report.containsKey(entry.key)) add(report, entry.key, entry.value);
   }
-  final profit = (changes['totalIncome'] ?? BigInt.zero) -
+  final profit =
+      (changes['totalIncome'] ?? BigInt.zero) -
       (changes['totalExpenses'] ?? BigInt.zero);
   if (report.containsKey('netProfit')) add(report, 'netProfit', profit);
   if (report.containsKey('totalLiabilitiesAndEquity')) {
     add(
-        report,
-        'totalLiabilitiesAndEquity',
-        (changes['totalLiabilities'] ?? BigInt.zero) +
-            (changes['totalEquity'] ?? BigInt.zero));
+      report,
+      'totalLiabilitiesAndEquity',
+      (changes['totalLiabilities'] ?? BigInt.zero) +
+          (changes['totalEquity'] ?? BigInt.zero),
+    );
   }
   if (kind == 'general-ledger') {
     for (final account in accounts) {
       final entries = (account['entries'] as List? ?? []);
-      entries.sort((a, b) =>
-          '${a['date']}${a['journalId']}${a['lineNumber'] ?? 0}'.compareTo(
-              '${b['date']}${b['journalId']}${b['lineNumber'] ?? 0}'));
+      entries.sort(
+        (a, b) => '${a['date']}${a['journalId']}${a['lineNumber'] ?? 0}'
+            .compareTo('${b['date']}${b['journalId']}${b['lineNumber'] ?? 0}'),
+      );
       var running = _minor(account['opening']);
       for (final entry in entries) {
         running += _minor(entry['debit']) - _minor(entry['credit']);
@@ -536,20 +625,23 @@ void _apply(Map<String, dynamic> report, String kind,
     }
   }
   if (kind == 'profit-and-loss') {
-    final classified =
-        accounts.every((row) => '${row['reportingRole'] ?? ''}'.isNotEmpty);
+    final classified = accounts.every(
+      (row) => '${row['reportingRole'] ?? ''}'.isNotEmpty,
+    );
     report['classificationComplete'] = classified;
     if (classified) {
-      BigInt role(String role) =>
-          accounts.where((row) => row['reportingRole'] == role).fold(
-              BigInt.zero,
-              (sum, row) =>
-                  sum +
-                  _minor(row['amount']) *
-                      (row['accountGroup'] == 'Income' &&
-                              ['sales-returns', 'discounts'].contains(role)
-                          ? -BigInt.one
-                          : BigInt.one));
+      BigInt role(String role) => accounts
+          .where((row) => row['reportingRole'] == role)
+          .fold(
+            BigInt.zero,
+            (sum, row) =>
+                sum +
+                _minor(row['amount']) *
+                    (row['accountGroup'] == 'Income' &&
+                            ['sales-returns', 'discounts'].contains(role)
+                        ? -BigInt.one
+                        : BigInt.one),
+          );
       final revenue =
           role('revenue') - role('sales-returns') - role('discounts');
       final gross = revenue - role('cogs'),
@@ -557,21 +649,23 @@ void _apply(Map<String, dynamic> report, String kind,
       report.addAll({
         'netRevenue': _money(revenue),
         'grossProfit': _money(gross),
-        'operatingProfit': _money(operating)
+        'operatingProfit': _money(operating),
       });
       for (final entry in {
         'grossMargin': gross,
         'operatingMargin': operating,
-        'netMargin': _minor(report['netProfit'])
+        'netMargin': _minor(report['netProfit']),
       }.entries) {
         final numerator = entry.value * BigInt.from(10000);
         report[entry.key] = revenue == BigInt.zero
             ? null
-            : _money(((numerator.abs() + revenue.abs() ~/ BigInt.two) ~/
-                    revenue.abs()) *
-                (numerator.isNegative != revenue.isNegative
-                    ? -BigInt.one
-                    : BigInt.one));
+            : _money(
+                ((numerator.abs() + revenue.abs() ~/ BigInt.two) ~/
+                        revenue.abs()) *
+                    (numerator.isNegative != revenue.isNegative
+                        ? -BigInt.one
+                        : BigInt.one),
+              );
       }
     } else {
       for (final key in [
@@ -580,7 +674,7 @@ void _apply(Map<String, dynamic> report, String kind,
         'operatingProfit',
         'grossMargin',
         'operatingMargin',
-        'netMargin'
+        'netMargin',
       ]) {
         report[key] = null;
       }
@@ -595,16 +689,19 @@ void _apply(Map<String, dynamic> report, String kind,
       for (final section in accounts.map((row) => '${row['section']}').toSet())
         {
           'name': section,
-          'amount': _money(accounts
-              .where((row) => '${row['section']}' == section)
-              .fold(
+          'amount': _money(
+            accounts
+                .where((row) => '${row['section']}' == section)
+                .fold(
                   BigInt.zero,
                   (sum, row) =>
                       sum +
                       (row.containsKey('amount')
                           ? _minor(row['amount'])
-                          : _minor(row['debit']) - _minor(row['credit']))))
-        }
+                          : _minor(row['debit']) - _minor(row['credit'])),
+                ),
+          ),
+        },
     ];
   }
   if (kind == 'trial-balance') {
@@ -614,12 +711,13 @@ void _apply(Map<String, dynamic> report, String kind,
       'openingDebit',
       'openingCredit',
       'periodDebit',
-      'periodCredit'
+      'periodCredit',
     ]) {
       final key = 'total${field[0].toUpperCase()}${field.substring(1)}';
       if (report.containsKey(key)) {
         report[key] = _money(
-            accounts.fold(BigInt.zero, (sum, row) => sum + _minor(row[field])));
+          accounts.fold(BigInt.zero, (sum, row) => sum + _minor(row[field])),
+        );
       }
     }
   }
@@ -631,7 +729,7 @@ void _apply(Map<String, dynamic> report, String kind,
         'asOf': trend['asOf'],
         'totalIncome': '0.00',
         'totalExpenses': '0.00',
-        'netProfit': '0.00'
+        'netProfit': '0.00',
       };
       _apply(delta, 'dashboard', lines);
       add(trend, 'income', _minor(delta['totalIncome']));

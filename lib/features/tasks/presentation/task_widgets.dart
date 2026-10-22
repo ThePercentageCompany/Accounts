@@ -69,11 +69,11 @@ class TaskCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall)),
                       const SizedBox(height: 10),
-                      if (task['syncStatus'] == 'FAILED')
+                      if (task['syncStatus'] == 'FAILED' || task['syncStatus'] == 'PENDING')
                         Text(
-                            task['syncStatus'] == 'FAILED'
+                            task['_syncLabel'] as String? ?? (task['syncStatus'] == 'FAILED'
                                 ? 'Sync needs attention'
-                                : 'Saved on this device · Waiting to sync',
+                                : 'Saved on this device · Waiting to sync'),
                             style: TextStyle(
                                 color: Theme.of(context).colorScheme.primary,
                                 fontSize: 12)),

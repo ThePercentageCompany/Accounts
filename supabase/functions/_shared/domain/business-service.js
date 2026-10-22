@@ -92,6 +92,7 @@ export class BusinessService {
       } catch (error) {
         results.push({ operationId: op.operationId, status: 'FAILED',
           error: { code: error instanceof ApiError ? error.code : 'SERVICE_UNAVAILABLE',
+            status: error instanceof ApiError ? error.status : 503,
             message: error instanceof ApiError ? error.message : 'Retry with the same operation IDs.' } });
         stopped = true;
       }

@@ -23,6 +23,15 @@ counted as requiring online calculation; their totals are not guessed. Draft
 saves alone do not post transactions or change posted report totals. Failed
 operations are excluded from financial previews.
 
+Submitted posting commands also require authoritative calculation. A response
+can be lost after commit, while a realtime-refreshed statement already includes
+the posting. Without a report-level operation receipt, adding its estimate to
+that snapshot could count it twice. Such commands retain their original queue
+identity and pending indicator, but do not add speculative statement amounts.
+Unsubmitted permitted commands can still project balanced, labelled previews.
+Journal posting requests retain `DRAFT` in the local record until acknowledged;
+only the queued command contains the requested `POSTED` transition.
+
 ## Storage choice and boundaries
 
 [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
@@ -102,7 +111,10 @@ operation. Temporary IDs and dependent payload references reconcile atomically.
 An uncertain outcome remains pending, even if the server may have completed it.
 
 Customers and document drafts use expectedVersion. Conflicts/validation failures
-stop the ordered queue and retain the rejected edit. “Review rejected change”
+block dependent edits and retain the rejected edit; independent records continue.
+Transient record-specific failures also allow unrelated ready commands to run,
+while authentication, network loss and rate limiting pause the pass. Each
+operation is attempted at most once per pass. “Review rejected change”
 fetches the current server record, displays both versions and offers explicit
 correction using the current revision and a new operation ID. There is no silent
 overwrite or automatic retry of a definitely rejected local edit. Dependent
@@ -110,6 +122,19 @@ changes prevent unsafe discard. “Export pending changes” exposes JSON for
 copying before manual recovery. Correction history retains the last 50 rejected
 operations. Online-only entities retain their existing server validation and
 explicit recovery flows.
+
+The sync editor compares the saved values with the latest authorized server
+record before correction. Version conflicts cannot be blindly retried from the
+settings panel. A correction uses a new immutable command ID and the reviewed
+server revision, so a second concurrent edit produces another conflict.
+
+`WorkspaceDependencies` supplies shared local/server invalidation rules.
+Per-resource local revisions retain unrelated cached projections. Task views and
+financial report views use these revisions to avoid recomputing unrelated data.
+Workspace realtime events are deduplicated by event ID and coalesced in bounded
+120 ms batches. Out-of-order events for different sections are retained rather
+than discarded using a global revision watermark. Pending batches are cancelled
+when the workspace subscription is replaced.
 
 ## Authentication, logout and upgrades
 
@@ -128,6 +153,29 @@ activation removes old shell caches, not IndexedDB. CanvasKit and fonts are
 served locally. Build with `scripts/build-shared-web.sh`, or run
 `node scripts/prepare_offline_web.mjs` and then `node tool/build_pwa.mjs`
 after a manual release build.
+
+### Vercel hosting
+
+Use the repository's `vercel.json`: build command `bash vercel-build.sh`,
+output directory `build/web`. The build entrypoint calls
+`scripts/build-shared-web.sh`, which supplies the backend configuration and
+generates the custom worker's versioned resource manifest. Do not replace this
+pipeline with `--pwa-strategy offline-first`; offline support is provided by
+`tpc-sw.js`, independently of Flutter's legacy generated worker.
+
+The existing catch-all rewrite serves `index.html` for online deep links while
+preserving the `/health` backend rewrite. Offline navigation uses the installed
+worker's cached `index.html` and requires a previously successful shell install;
+a hosting rewrite cannot handle a request without a network connection.
+Worker scripts explicitly use `public, max-age=0, must-revalidate` so browsers
+and shared caches revalidate them online. Registration also uses
+`updateViaCache: 'none'`. These HTTP headers do not disable the worker's explicit
+Cache Storage app-shell cache.
+
+Keep `.html` URLs enabled: the update recovery flow explicitly uses
+`update.html`, so `cleanUrls` is unnecessary for SPA routing. Repository settings
+are ready for the next deployment; dashboard overrides and live response headers
+must be checked separately when deploying.
 
 Offline shell access does **not** restore authorization from a cached identity.
 A cold start without a network connection requires reconnecting to verify sign-in

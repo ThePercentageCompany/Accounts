@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 import { workspace,databaseError } from '../_shared/workspace.ts';
+import { recordSyncAnchor,recordDelta } from '../_shared/record-sync.ts';
 import { saveEmployee,employeeAccess } from '../_shared/employees.ts';
 import { authorizeDocument,uploadDocument,publicDocument,deleteDocument,canDeleteDocument,embedCompanyLogo,authorizeDocumentDownload } from '../_shared/documents.ts';
 import { ApiError,requireThat } from '../_shared/domain/errors.js';
@@ -177,9 +178,14 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
             result=await ctx.business.mutate('',companyId!,op.table,op.recordId??null,op.action,{expectedVersion:op.expectedVersion,...(noValues?{}:{values:op.values})},op.operationId);
           }
           results.push({operationId:op.operationId,status:'APPLIED',...result});
-        }catch(e){if(!(e instanceof ApiError))throw e;results.push({operationId:op.operationId,status:'FAILED',error:{code:e.code,message:e.message}});stopped=true;}
+        }catch(e){if(!(e instanceof ApiError))throw e;results.push({operationId:op.operationId,status:'FAILED',error:{code:e.code,message:e.message,status:e.status}});stopped=true;}
       }
       return finish({results});
+    }
+    const delta=/^\/record-changes\/([A-Za-z]+)$/.exec(tail);
+    if(delta&&request.method==='GET') {
+      requireThat(recordsEndpointAllowed(delta[1],'GET',false),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
+      return json(200,await recordDelta(ctx,delta[1],url.searchParams));
     }
     const record=/^\/records\/([A-Za-z]+)(?:\/([A-Za-z0-9_-]{43}|company))?$/.exec(tail);
     const structured=/^\/structured-records\/([A-Za-z]+)$/.exec(tail);
@@ -195,7 +201,10 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     }
     if(record) {
       requireThat(recordsEndpointAllowed(record[1],request.method,!!record[2]),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
-      if(request.method==='GET'&&!record[2])return json(200,{records:await ctx.read(record[1],url.searchParams.get('includeDeleted')==='true')});
+      if(request.method==='GET'&&!record[2]) {
+        const anchor=await recordSyncAnchor(ctx);
+        return json(200,{records:await ctx.read(record[1],url.searchParams.get('includeDeleted')==='true'),...anchor});
+      }
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];
       if(action)return finish(await ctx.business.mutate('',companyId!,record[1],record[2]??null,action,input,keyOf(request)),action==='create'?201:200);
     }

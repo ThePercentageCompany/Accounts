@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'document_endpoint.dart';
+import 'workspace_change_buffer.dart';
 import 'package:tpc_invoice/features/auth/domain/password_recovery.dart';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
@@ -17,6 +18,9 @@ import 'package:tpc_invoice/core/offline/entity_projection.dart';
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 import 'package:tpc_invoice/core/cache/cache_store.dart';
 import 'package:tpc_invoice/core/cache/read_cache.dart';
+import 'package:tpc_invoice/core/cache/record_delta.dart';
+import 'package:tpc_invoice/core/cache/record_index.dart';
+import 'package:tpc_invoice/core/cache/workspace_dependencies.dart';
 
 import 'package:tpc_invoice/core/network/api_transport_stub.dart'
     if (dart.library.js_interop) 'package:tpc_invoice/core/network/api_transport_web.dart';
@@ -113,6 +117,7 @@ class SaasApi implements SessionRepository {
   }
 
   RealtimeChannel? _realtime;
+  WorkspaceChangeBuffer? _workspaceChanges;
   RealtimeChannel? _taskRealtime;
   bool _taskBroadcastConnected = false;
   final _taskUpdates = StreamController<TaskRealtimeUpdate>.broadcast();
@@ -307,6 +312,7 @@ class SaasApi implements SessionRepository {
   late final ReadCache cache = ReadCache(
     store: _cacheStore,
     projectData: _localReadData,
+    isLocalDependency: WorkspaceDependencies.localAffects,
     isAuthorizationError: (e) => e is SaasApiException && e.requiresSignIn,
     isOfflineError: (e) => e is SaasApiException && e.code == 'NETWORK',
     isPermissionError: (e) => e is SaasApiException && e.status == 403,
@@ -505,46 +511,8 @@ class SaasApi implements SessionRepository {
       tables.add('Employees');
     }
     if (tables.isEmpty) return;
-    final affected = {...tables};
-    final financial = tables.any(
-      (t) => ![
-        'Customers',
-        'Projects',
-        'Employees',
-        'CompanyProfile',
-        'Tasks',
-        'TaskComments',
-        'TaskActivity',
-      ].contains(t),
-    );
-    if (tables.contains('Tasks')) affected.add('TaskActivity');
-    if (financial) affected.addAll(['Journals', 'JournalLines']);
-    if (tables.any(
-      (t) => ['Invoices', 'InvoiceItems', 'Receipts'].contains(t),
-    )) {
-      affected.addAll([
-        'Invoices',
-        'InvoiceItems',
-        'Receipts',
-        'ReceiptAllocations',
-        'CreditNotes',
-        'CreditNoteItems',
-      ]);
-    }
-    if (tables.any((t) => ['Quotations', 'QuotationItems'].contains(t))) {
-      affected.addAll([
-        'Quotations',
-        'QuotationItems',
-        'Invoices',
-        'InvoiceItems',
-      ]);
-    }
-    if (tables.contains('Payroll')) {
-      affected.addAll(['PayrollItems', 'Payslips']);
-    }
-    if (tables.contains('CapitalTransactions')) {
-      affected.addAll(['CapitalAccounts', 'ShareholderEquity', 'Shareholders']);
-    }
+    final affected = WorkspaceDependencies.affected(tables);
+    final financial = WorkspaceDependencies.financial(tables);
     cache.invalidate(
       (p) =>
           p.endsWith('/overview') ||
@@ -765,7 +733,7 @@ class SaasApi implements SessionRepository {
     bool force = false,
   }) async {
     if (method == 'GET' && _cacheable(path)) {
-      final result = await cache.read(path, () => _networkJson(method, path),
+      final result = await cache.read(path, () => _readRecordChanges(path),
           force: force);
       final kind = Uri.parse(path).path.split('/').last;
       if (_cacheCompany != null &&
@@ -796,6 +764,49 @@ class SaasApi implements SessionRepository {
       _invalidateMutation(path, data, result);
     }
     return result;
+  }
+
+  Future<Map<String, dynamic>> _readRecordChanges(String path) async {
+    final uri = Uri.parse(path);
+    final match = RegExp(r'^(.*)/records/([A-Za-z]+)$').firstMatch(uri.path);
+    final snapshot = cache.serverState(path)?.data;
+    if (!uri.hasQuery && match != null && snapshot != null) {
+      try {
+        final merged = await fetchRecordDelta(snapshot, (after, through, scope) {
+          final query = Uri(queryParameters: {
+            'after': after, 'scope': scope, if (through != null) 'through': through,
+          }).query;
+          return _networkJson('GET', '${match[1]}/record-changes/${match[2]}?$query');
+        });
+        if (merged != null) return merged;
+      } on SaasApiException catch (error) {
+        // Compatibility during an API rollout. Auth/network failures must never
+        // be converted into a successful refresh or a cursor advancement.
+        if (error.status != 404) rethrow;
+      }
+    }
+    return _networkJson('GET', path);
+  }
+
+  Future<Set<String>?> indexedRecordSearch(String company, String table, String search,
+      {bool employee = false}) async {
+    final currentScope = cache.scope;
+    final store = cache.store;
+    if (currentScope == null || _cacheCompany != company || _cacheEmployee != employee ||
+        store is! RecordIndexQueries) { return null; }
+    final box = workspaceOutbox(company, employee: employee);
+    if (box != null && box.pending.any((op) => op['table'] == table)) return null;
+    final path = recordsPath(company,table,employee:employee);
+    final syncedAt = cache.serverState(path)?.syncedAt;
+    if (syncedAt == null) return null;
+    final key = jsonEncode([currentScope,normalizedResource(path)]);
+    try {
+      final ids = await (store as RecordIndexQueries).searchRecordIds(key,search,expectedSyncedAt:syncedAt.millisecondsSinceEpoch);
+      return cache.scope == currentScope && cache.serverState(path)?.syncedAt == syncedAt ? ids : null;
+    } catch (_) {
+      // Index/storage failure falls back to the current reactive in-memory query.
+      return null;
+    }
   }
 
   Future<Map<String, dynamic>> _networkJson(
@@ -1722,6 +1733,8 @@ class SaasApi implements SessionRepository {
           .body;
 
   void _stopRealtime() {
+    _workspaceChanges?.dispose();
+    _workspaceChanges = null;
     _taskBroadcastConnected = false;
     _realtimeGeneration++;
     _taskRealtimeConnected = false;
@@ -1752,6 +1765,35 @@ class SaasApi implements SessionRepository {
         );
       }
     }
+
+    _workspaceChanges = WorkspaceChangeBuffer((changedSections) {
+      if (!current()) return;
+      final sections = changedSections.where((section) =>
+          !_taskBroadcastConnected ||
+          !const ['Tasks', 'TaskComments', 'TaskActivity'].contains(section))
+          .toList();
+      if (sections.isEmpty && changedSections.isNotEmpty) return;
+      if (sections.isEmpty) {
+        cache.invalidateAll();
+      } else {
+        _invalidateMutation('/v1/companies/$companyId/sync', {
+          'operations': [
+            for (final section in sections)
+              {'operationId': section, 'table': section},
+          ],
+        }, {
+          'results': [
+            for (final section in sections)
+              {'operationId': section, 'status': 'APPLIED'},
+          ],
+        });
+      }
+      if (sections.isEmpty || sections.any((section) => const [
+            'Tasks', 'TaskComments', 'TaskActivity', 'Employees', 'Projects'
+          ].contains(section))) {
+        taskUpdate();
+      }
+    });
 
     _taskRealtime = client.channel(
       'tasks:$companyId:${client.auth.currentUser!.id}',
@@ -1803,53 +1845,7 @@ class SaasApi implements SessionRepository {
         ),
         callback: (change) {
           if (!current()) return;
-          final sections = (change.newRecord['sections'] as List? ?? [])
-              .where(
-                (section) =>
-                    !_taskBroadcastConnected ||
-                    !const [
-                      'Tasks',
-                      'TaskComments',
-                      'TaskActivity',
-                    ].contains(section),
-              )
-              .toList();
-          if (sections.isEmpty &&
-              _taskBroadcastConnected &&
-              (change.newRecord['sections'] as List? ?? []).isNotEmpty) {
-            return;
-          }
-          if (sections.isEmpty) {
-            cache.invalidateAll();
-          } else {
-            _invalidateMutation(
-              '/v1/companies/$companyId/sync',
-              {
-                'operations': [
-                  for (final section in sections)
-                    {'operationId': section, 'table': section},
-                ],
-              },
-              {
-                'results': [
-                  for (final section in sections)
-                    {'operationId': section, 'status': 'APPLIED'},
-                ],
-              },
-            );
-          }
-          if (sections.isEmpty ||
-              sections.any(
-                (s) => const [
-                  'Tasks',
-                  'TaskComments',
-                  'TaskActivity',
-                  'Employees',
-                  'Projects',
-                ].contains(s),
-              )) {
-            taskUpdate();
-          }
+          _workspaceChanges?.add(change.newRecord);
         },
       )
       ..onPostgresChanges(

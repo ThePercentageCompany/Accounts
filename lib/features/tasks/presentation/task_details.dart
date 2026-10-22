@@ -43,8 +43,10 @@ class _TaskDetailsState extends State<TaskDetails> {
   bool _fetching = false, _realtimeDirty = false;
   int _localRevision = 0;
   void _localChanged() {
-    if (!mounted || _localRevision == widget.api.cache.localRevision) return;
-    _localRevision = widget.api.cache.localRevision;
+    final revision = widget.api.cache.localRevisionFor(
+        widget.api.tasksPath(widget.companyId, employee: widget.employee));
+    if (!mounted || _localRevision == revision) return;
+    _localRevision = revision;
     final box =
         widget.api.workspaceOutbox(widget.companyId, employee: widget.employee);
     if (box == null) return;

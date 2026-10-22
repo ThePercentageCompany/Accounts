@@ -1124,6 +1124,22 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   late String table = widget.selectedTable ?? widget.tables.first;
   List<Map<String, dynamic>> rows = [];
   String _search = '';
+  Timer? _indexedSearchTimer;
+  Object? _indexedSearchKey;
+  Set<String>? _indexedSearchIds;
+  Object get _searchKey => (table,_search,widget.api.cache.scope,
+    widget.api.cache.serverState(_path)?.syncedAt,widget.api.cache.localRevisionFor(_path));
+  void _searchIndex() {
+    _indexedSearchTimer?.cancel();
+    if (_search.length < 3) return;
+    final key = _searchKey, requestedTable = table, search = _search;
+    _indexedSearchTimer = Timer(const Duration(milliseconds:200), () async {
+      final ids = await widget.api.indexedRecordSearch(widget.companyId,requestedTable,search,employee:widget.employee);
+      if (mounted && key == _searchKey && ids != null) {
+        setState(() { _indexedSearchKey=key; _indexedSearchIds=ids; });
+      }
+    });
+  }
   final Map<String, Set<String>> _statusFilters = {};
   final Map<String, String> _sortOrders = {};
   final Map<String, DateTimeRange> _dateFilters = {};
@@ -1156,6 +1172,8 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   }
   List<Map<String, dynamic>> get _visibleRows {
     final result = newestRecordsFirst(rows
+      .where((row) => _indexedSearchKey != _searchKey || _indexedSearchIds == null ||
+          _indexedSearchIds!.contains('${row['recordId']}'))
       .where((row) {
         final range = _dateFilters[table];
         if (range == null) return true;
@@ -2320,6 +2338,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   @override
   void dispose() {
     _request++;
+    _indexedSearchTimer?.cancel();
     widget.api.cache.removeListener(_cacheChanged);
     widget.writes?.outbox?.removeListener(_cacheChanged);
     if (_watchedPath != null) widget.api.cache.deactivate(_watchedPath!);
@@ -2575,7 +2594,10 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                         icon: const Icon(Icons.close, size: 18),
                       ),
               ),
-              onChanged: (value) => setState(() => _search = value),
+              onChanged: (value) {
+                setState(() => _search = value);
+                _searchIndex();
+              },
             ),
           ),
           if (table == 'Shareholders' && _hasData)

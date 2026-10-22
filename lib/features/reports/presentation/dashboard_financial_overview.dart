@@ -64,7 +64,12 @@ class _DashboardFinancialOverviewState
     scheduleMicrotask(() {
       _scheduled = false;
       if (!mounted) return;
-      final raw = widget.api.cache.state(_path)?.data;
+      final state = widget.api.cache.state(_path);
+      final signature = (state?.data, state?.refreshing, state?.error,
+          state?.offline, state?.stale, widget.api.cache.localRevisionFor(_path));
+      if (_cacheSignature == signature) return;
+      _cacheSignature = signature;
+      final raw = state?.data;
       if (raw != null) {
         setState(() => _data = widget.api.localFinancialReport(
             widget.companyId, raw, 'dashboard',
@@ -72,6 +77,7 @@ class _DashboardFinancialOverviewState
       }
     });
   }
+  Object? _cacheSignature;
 
   Future<void> _load({bool force = false}) async {
     _watch();

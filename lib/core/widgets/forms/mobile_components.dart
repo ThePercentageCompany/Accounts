@@ -258,6 +258,9 @@ class RecordSummary extends StatelessWidget {
         if (record['shareholderName'] != null)
           Text('Shareholder: ${record['shareholderName']}'),
         if (status != null) StatusChip(value: '$status', label: statusLabel),
+        if (record['_syncLabel'] != null)
+          StatusChip(value: '${record['syncStatus']}', label: '${record['_syncLabel']}',
+              icon: record['_syncLabel'] == 'Syncing' ? Icons.sync : Icons.cloud_upload_outlined),
         if (record['ledgerStatus'] != null)
           LedgerStatusChip(value: '${record['ledgerStatus']}'),
         if (record['bankStatus'] != null)

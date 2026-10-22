@@ -1,13 +1,9 @@
+import 'fixed_decimal.dart';
+
 /// Derived display fields only. The immutable request still goes to the server
 /// with its original values for validation and authoritative calculation.
 Map<String, dynamic> localDerivedValues(String table, Map row) {
-  BigInt minor(Object? value) {
-    final parts = '${value ?? 0}'.split('.');
-    return BigInt.parse(parts.first) * BigInt.from(100) +
-        BigInt.parse((parts.length > 1 ? parts[1] : '')
-            .padRight(2, '0')
-            .substring(0, 2));
-  }
+  BigInt minor(Object? value) => decimalUnits(value);
 
   double money(BigInt value) => value.toDouble() / 100;
   try {
@@ -20,13 +16,15 @@ Map<String, dynamic> localDerivedValues(String table, Map row) {
     if (['Invoices', 'Quotations'].contains(table) && row['items'] is List) {
       var subtotal = BigInt.zero, discount = BigInt.zero, tax = BigInt.zero;
       for (final line in row['items'] as List) {
-        final gross = (minor(line['quantity']) * minor(line['unitPrice']) +
+        final gross =
+            (minor(line['quantity']) * minor(line['unitPrice']) +
                 BigInt.from(50)) ~/
             BigInt.from(100);
         final reduction = minor(line['discount']);
         subtotal += gross;
         discount += reduction;
-        tax += ((gross - reduction) * minor(line['taxRate']) +
+        tax +=
+            ((gross - reduction) * minor(line['taxRate']) +
                 BigInt.from(5000)) ~/
             BigInt.from(10000);
       }
@@ -37,7 +35,7 @@ Map<String, dynamic> localDerivedValues(String table, Map row) {
         'taxAmount': money(tax),
         'total': money(total),
         if (table == 'Invoices') 'paidAmount': 0,
-        if (table == 'Invoices') 'balance': money(total)
+        if (table == 'Invoices') 'balance': money(total),
       };
     }
   } on FormatException {

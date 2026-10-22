@@ -178,10 +178,20 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
     if (_watchedPath != null) widget.api.cache.activate(_watchedPath!);
   }
 
+  Object? _cacheSignature;
+  bool _cacheUpdateScheduled = false;
   void _cacheChanged() {
+    if (_cacheUpdateScheduled) return;
+    _cacheUpdateScheduled = true;
     scheduleMicrotask(() {
+      _cacheUpdateScheduled = false;
       if (!mounted) return;
-      final data = widget.api.cache.state(_path)?.data;
+      final state = widget.api.cache.state(_path);
+      final signature = (state?.data, state?.refreshing, state?.error,
+          state?.offline, state?.stale, widget.api.cache.localRevisionFor(_path));
+      if (_cacheSignature == signature) return;
+      _cacheSignature = signature;
+      final data = state?.data;
       if (widget.api.cache.scope != null || _displayed != null) {
         setState(() {
           _displayed = data == null
@@ -1286,7 +1296,7 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
                           child: Text((data['pendingCalculation'] as num? ??
                                       0) >
                                   0
-                              ? 'Provisional totals · changes pending sync. ${data['pendingCalculation']} operation(s) require online calculation.'
+                              ? '${(data['projectedOperations'] as num? ?? 0) > 0 ? 'Provisional totals' : 'Latest confirmed snapshot'} · ${data['pendingCalculation']} operation(s) awaiting server calculation.'
                               : 'Provisional totals · includes locally saved changes pending sync.'),
                         ),
                       SizedBox(

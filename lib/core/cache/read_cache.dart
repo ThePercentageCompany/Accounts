@@ -57,6 +57,7 @@ class ReadCache extends ChangeNotifier {
     this.isVisible,
     this.validateContext,
     this.projectData,
+    this.isLocalDependency,
     bool automatic = true,
   })  : store = store ?? createCacheStore(),
         now = now ?? DateTime.now {
@@ -77,6 +78,8 @@ class ReadCache extends ChangeNotifier {
   final Future<void> Function()? validateContext;
   final Map<String, dynamic>? Function(
       String path, Map<String, dynamic>? snapshot)? projectData;
+  final bool Function(String source, String resource)? isLocalDependency;
+  final _localChanges = <String, int>{};
   final _projected = <String,
       ({
     Map<String, dynamic>? source,
@@ -109,6 +112,7 @@ class ReadCache extends ChangeNotifier {
     account = null;
     _states.clear();
     _projected.clear();
+    _localChanges.clear();
     _loads.clear();
     _refreshes.clear();
     _loaders.clear();
@@ -167,10 +171,10 @@ class ReadCache extends ChangeNotifier {
     var projected = _projected[key];
     if (projected == null ||
         !identical(projected.source, raw?.data) ||
-        projected.revision != localRevision) {
+        projected.revision != localRevisionFor(path)) {
       projected = (
         source: raw?.data,
-        revision: localRevision,
+        revision: localRevisionFor(path),
         data: projectData!(path, raw?.data)
       );
       _projected[key] = projected;
@@ -191,8 +195,19 @@ class ReadCache extends ChangeNotifier {
   /// Outbox overlays are separate from server snapshots. Notify consumers
   /// without invalidating/fetching a server resource after a local-only write.
   int localRevision = 0;
+  int localRevisionFor(String resource) {
+    if (isLocalDependency == null) return localRevision;
+    var revision = 0;
+    for (final change in _localChanges.entries) {
+      if (change.value > revision && isLocalDependency!(change.key, resource)) {
+        revision = change.value;
+      }
+    }
+    return revision;
+  }
   void localChanged(String path) {
     localRevision++;
+    _localChanges[path] = localRevision;
     _notify();
   }
 

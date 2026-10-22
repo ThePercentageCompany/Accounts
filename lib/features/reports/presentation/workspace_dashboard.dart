@@ -112,9 +112,11 @@ class WorkspaceDashboard extends StatelessWidget {
                     color: colors.primary))
         ]),
         if (data['provisional'] == true)
-          const Padding(
+          Padding(
               padding: EdgeInsets.only(top: 8),
-              child: Text('Provisional · includes local changes pending sync')),
+              child: Text((data['pendingCalculation'] as num? ?? 0) > 0
+                  ? 'Pending financial changes · ${data['pendingCalculation']} operation(s) awaiting server calculation.'
+                  : 'Provisional · includes local changes pending sync')),
         const SizedBox(height: 16),
         Wrap(spacing: 12, runSpacing: 12, children: [
           metric('totalIncome', 'Period income', 'profit-and-loss',
