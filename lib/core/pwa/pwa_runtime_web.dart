@@ -21,6 +21,14 @@ external JSPromise<JSString> _subscription();
 external JSPromise<JSAny?> _unsubscribe();
 @JS('tpcPwa.clearTask')
 external void _clearTask();
+@JS('tpcNotifications.enableSound')
+external JSPromise<JSAny?> _enableSound();
+@JS('tpcNotifications.play')
+external JSPromise<JSAny?> _playSound(JSString sound, JSNumber volume, JSString id);
+@JS('tpcNotifications.register')
+external JSPromise<JSString> _registerPush(JSString config, JSString vapid, JSBoolean request);
+@JS('tpcNotifications.disable')
+external JSPromise<JSAny?> _disablePush();
 
 class PwaRuntime extends ChangeNotifier {
   PwaRuntime() {
@@ -62,6 +70,16 @@ class PwaRuntime extends ChangeNotifier {
   Future<void> unsubscribe() async {
     await _unsubscribe().toDart;
   }
+  Future<void> enableSound() async { await _enableSound().toDart; }
+  Future<void> playSound(String sound, double volume, String id) async {
+    await _playSound(sound.toJS, volume.toJS, id.toJS).toDart;
+  }
+  Future<Map<String, dynamic>?> registerTaskPush(Map<String, dynamic> config, String vapid,
+      {bool requestPermission = false}) async {
+    final raw = jsonDecode((await _registerPush(jsonEncode(config).toJS, vapid.toJS, requestPermission.toJS).toDart).toDart);
+    return raw == null ? null : Map<String, dynamic>.from(raw as Map);
+  }
+  Future<void> disableTaskPush() async { await _disablePush().toDart; }
 
   void clearTask() => _clearTask();
   @override

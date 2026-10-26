@@ -14,7 +14,8 @@ class WorkspaceDashboard extends StatelessWidget {
   final Map<String, dynamic> data;
   final ReportFormat format;
   final ValueChanged<String>? onReportSelected;
-  String amount(String key) => format.money(data[key]);
+  String amount(String key) => format.money(key == 'availableFunds' && data[key] == null
+      ? (value('cash') + value('bank')).toStringAsFixed(2) : data[key]);
   double value(String key) => double.tryParse('${data[key]}') ?? double.nan;
   VoidCallback? report(String kind) =>
       onReportSelected == null ? null : () => onReportSelected!(kind);
@@ -125,8 +126,8 @@ class WorkspaceDashboard extends StatelessWidget {
               Icons.south_east, 1),
           metric('netProfit', 'Net profit / loss', 'profit-and-loss',
               Icons.show_chart, 2),
-          metric('receivables', 'Receivables', 'balance-sheet',
-              Icons.receipt_long_outlined, 3),
+          metric('availableFunds', 'Available funds', 'general-ledger',
+              Icons.account_balance_wallet_outlined, 3),
         ]),
         const SizedBox(height: 16),
         if (data['trends'] is List) ...[
@@ -158,7 +159,7 @@ class WorkspaceDashboard extends StatelessWidget {
               ])),
           OverviewPanel(
               title: 'Available funds',
-              subtitle: 'Cash and bank balances at the end date',
+              subtitle: 'Cash + bank after paid receipts and payments',
               child: OverviewDonut(
                   data: [
                     datum('cash', 'Cash', 'general-ledger'),
@@ -166,9 +167,7 @@ class WorkspaceDashboard extends StatelessWidget {
                   ],
                   centerLabel: 'Cash & bank',
                   totalLabel: value('cash').isFinite && value('bank').isFinite
-                      ? format.money(
-                          (value('cash') + value('bank')).toStringAsFixed(2))
-                      : null)),
+                      ? amount('availableFunds') : null)),
         ),
         const SizedBox(height: 12),
         pair(
@@ -188,6 +187,18 @@ class WorkspaceDashboard extends StatelessWidget {
                 datum('payables', 'Payables', 'balance-sheet')
               ])),
         ),
+        if (data.containsKey('payrollLiabilities')) ...[
+          const SizedBox(height: 12),
+          OverviewPanel(
+              title: 'Liabilities still owed',
+              subtitle: 'Posted unpaid balances; draft entries are excluded',
+              child: OverviewBars(data: [
+                datum('payables', 'Suppliers / expenses', 'balance-sheet'),
+                datum('payrollLiabilities', 'Payroll / withholding', 'balance-sheet'),
+                datum('loanLiabilities', 'Loans', 'balance-sheet'),
+                datum('otherLiabilities', 'Other liabilities', 'balance-sheet'),
+              ])),
+        ],
         const SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final entry in const {

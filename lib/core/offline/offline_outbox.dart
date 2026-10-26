@@ -132,6 +132,7 @@ class OfflineOutbox extends ChangeNotifier {
                 'Assets',
                 'CapitalTransactions',
                 'ShareholderLoans',
+                'CompanyLoans',
                 'MoneyTransfers',
                 'Journals',
               ].contains(table) &&
@@ -273,6 +274,7 @@ class OfflineOutbox extends ChangeNotifier {
                 'Assets',
                 'CapitalTransactions',
                 'ShareholderLoans',
+                'CompanyLoans',
                 'MoneyTransfers',
                 'Journals',
               ].contains(table))

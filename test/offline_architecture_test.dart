@@ -77,6 +77,56 @@ void main() {
   tearDown(() => box.dispose());
 
   test(
+      'company loan pending receipts and repayments project funds, liabilities and interest',
+      () async {
+    final loan = <String, dynamic>{
+      'recordId': 'loan',
+      'status': 'ACTIVE',
+      'date': '2026-10-01',
+      'principal': 1000,
+      'outstandingBalance': 1000,
+      'paymentAccount': 'Bank'
+    };
+    final snapshot = <String, dynamic>{
+      'from': '2026-10-01',
+      'asOf': '2026-10-31',
+      'cash': '0.00',
+      'bank': '1000.00',
+      'totalAssets': '1000.00',
+      'totalLiabilities': '1000.00',
+      'totalEquity': '0.00',
+      'totalIncome': '0.00',
+      'totalExpenses': '0.00',
+      'netProfit': '0.00'
+    };
+    expect(OfflineOutbox.supports('CompanyLoans', 'create'), isTrue);
+    expect(OfflineOutbox.supports('CompanyLoans', 'update', loan), isFalse);
+    await box.enqueue(
+        'CompanyLoans',
+        'loanRepay',
+        {
+          'lastRepaymentDate': '2026-10-10',
+          'principalPayment': 200,
+          'interestPayment': 5.25,
+          'paymentAccount': 'Bank',
+        },
+        recordId: 'loan',
+        expectedVersion: 2,
+        base: loan);
+    final projected = projectFinancialReport(box, snapshot, 'dashboard',
+        (table) => table == 'CompanyLoans' ? box.overlay(table, [loan]) : []);
+    expect(projected['bank'], '794.75');
+    expect(projected['availableFunds'], '794.75');
+    expect(projected['totalLiabilities'], '800.00');
+    expect(projected['totalExpenses'], '5.25');
+    expect(projected['netProfit'], '-5.25');
+    expect(projected['provisional'], isTrue);
+    expect(snapshot['bank'], '1000.00');
+  });
+
+
+
+  test(
     'local record and operation commit before any network request',
     () async {
       await box.enqueue('Customers', 'create', {

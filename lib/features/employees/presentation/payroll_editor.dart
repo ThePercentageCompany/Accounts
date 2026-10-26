@@ -93,6 +93,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
         'employeeId': employeeId!,
         'bonus': double.parse(bonus.text.trim()),
         'deductions': double.parse(deductions.text.trim()),
+        'deductionType': deductionType,
         'bonusNotes': bonusNotes.text.trim(),
         'deductionNotes': deductionNotes.text.trim(),
         'notes': notes.text.trim(),
@@ -136,6 +137,7 @@ class _PayrollEditorState extends State<PayrollEditor> {
   late final deductions = TextEditingController(
     text: '${widget.record?['deductions'] ?? 0}',
   );
+  late String deductionType = '${widget.record?['deductionType'] ?? (widget.record == null ? 'SALARY_REDUCTION' : 'WITHHOLDING')}';
   late final bonusNotes = TextEditingController(
     text: '${widget.record?['bonusNotes'] ?? ''}',
   );
@@ -271,6 +273,19 @@ class _PayrollEditorState extends State<PayrollEditor> {
                   decoration: const InputDecoration(labelText: 'Deductions'),
                   validator: amount,
                 ),
+                DropdownButtonFormField<String>(
+                  initialValue: deductionType,
+                  decoration: const InputDecoration(labelText: 'Deduction treatment'),
+                  items: const [
+                    DropdownMenuItem(value: 'SALARY_REDUCTION', child: Text('Salary reduction (days not worked)')),
+                    DropdownMenuItem(value: 'WITHHOLDING', child: Text('Withheld amount still payable')),
+                  ],
+                  onChanged: (value) {
+                    deductionType = value!;
+                    invalidate();
+                  },
+                ),
+                const Text('Salary reductions lower salary expense. Withholding remains a liability until remitted.'),
                 ValidatedTextField(
                   controller: bonusNotes,
                   maxLength: 1000,

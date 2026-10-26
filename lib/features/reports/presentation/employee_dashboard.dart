@@ -17,7 +17,7 @@ const employeeOverviewTables = <String, List<String>>{
   'Employees': ['Employees'],
   'Projects': ['Projects'],
   'Fixed Assets': ['Assets'],
-  'Cash & Bank': ['MoneyTransfers'],
+  'Cash & Bank': ['MoneyTransfers', 'CompanyLoans'],
   'Capital & Equity': [
     'Shareholders',
     'CapitalTransactions',

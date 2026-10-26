@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { payrollChanges, previewPayroll } from '../../_shared/domain/payroll-policy.js';
+import { dashboard } from '../../_shared/domain/ledger-report.js';
 
 const employeeId = 'e'.repeat(43);
 function fixture() {
@@ -66,6 +67,30 @@ test('compensation edits require draft refresh before approval and preserve post
   await assert.rejects(payrollChanges(f.records, 'c', 'Payroll', 'p', 'update', approved, values, system, 'update'),
     e => e.code === 'PAYROLL_LOCKED');
   assert.equal(approved.basicSalary, 6000);
+});
+
+test('salary reductions create only earned expense and net salary payable; payment clears the liability', async () => {
+  const f = fixture();
+  const old = { companyId: 'c', recordId: 'p', month: '2026-09', employeeId, status: 'DRAFT',
+    basicSalary: 5000, allowances: 500, overtimeAmount: 100, bonus: 250, deductions: 100,
+    grossSalary: 5850, netSalary: 5750, deductionType: 'SALARY_REDUCTION' };
+  const approval = await payrollChanges(f.records, 'c', 'Payroll', 'p', 'approve', old, {}, system, 'reduction-approve');
+  for (const change of approval.extra) f.data[change.table].push(change.values);
+  let report = dashboard('c', '2026-09-01', '2026-10-31', f.data);
+  assert.equal(report.totalExpenses, '5750.00');
+  assert.equal(report.payrollLiabilities, '5750.00');
+  assert.equal(report.availableFunds, '0.00');
+  assert.equal(approval.extra.some(c => c.values.accountId === 'payroll_deductions_payable'), false);
+  const approved = { ...old, ...approval.values };
+  await assert.rejects(payrollChanges(f.records, 'c', 'Payroll', 'p', 'payrollPay', approved,
+    { paidDate: '2026-09-01', paymentAccount: 'Cash' }, system, 'early'), e => e.code === 'INVALID_PAYROLL');
+  const payment = await payrollChanges(f.records, 'c', 'Payroll', 'p', 'payrollPay', approved,
+    { paidDate: '2026-10-01', paymentAccount: 'Cash' }, system, 'reduction-pay');
+  for (const change of payment.extra) f.data[change.table].push(change.values);
+  report = dashboard('c', '2026-09-01', '2026-10-31', f.data);
+  assert.equal(report.totalExpenses, '5750.00');
+  assert.equal(report.totalLiabilities, '0.00');
+  assert.equal(report.availableFunds, '-5750.00');
 });
 
 test('approval accrues gross payroll and liabilities in a balanced journal', async () => {

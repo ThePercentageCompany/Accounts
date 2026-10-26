@@ -83,6 +83,18 @@ export function balanceSheet(companyId, asOf, data) {
     totalEquity: money(totalEquity), totalLiabilitiesAndEquity: money(liabilities + totalEquity), balanced: true };
 }
 
+export function liabilityBreakdown(accounts) {
+  const totals = { payables: 0n, payrollLiabilities: 0n, loanLiabilities: 0n, otherLiabilities: 0n };
+  for (const account of accounts.filter(a => a.accountGroup === 'Liability')) {
+    const category = ['salary_payable', 'payroll_deductions_payable'].includes(account.accountId) ? 'payrollLiabilities'
+      : ['company_loan', 'shareholder_loan'].includes(account.accountId) || ['short-term-debt', 'long-term-debt'].includes(account.reportingRole) ? 'loanLiabilities'
+      : account.reportingRole === 'payables' || (!account.reportingRole && account.accountId === 'accounts_payable') ? 'payables'
+      : 'otherLiabilities';
+    totals[category] += BigInt(account.amount.replace('.', ''));
+  }
+  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, money(value)]));
+}
+
 export function dashboard(companyId, from, asOf, data) {
   const profit = profitAndLoss(companyId, from, asOf, data);
   const balance = balanceSheet(companyId, asOf, data);
@@ -92,7 +104,8 @@ export function dashboard(companyId, from, asOf, data) {
     totalExpenses: profit.totalExpenses, netProfit: profit.netProfit, totalAssets: balance.totalAssets,
     totalLiabilities: balance.totalLiabilities, totalEquity: balance.totalEquity,
     cash: amount('cash', 'cash_in_hand'), bank: amount('bank', 'bank_account'), receivables: amount('accounts_receivable'),
-    payables: amount('accounts_payable'), balanced: balance.balanced };
+    availableFunds: amount('cash', 'cash_in_hand', 'bank', 'bank_account'),
+    ...liabilityBreakdown(balance.accounts), balanced: balance.balanced };
 }
 
 // Validate the full ledger through the cutoff before exposing any detail.

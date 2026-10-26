@@ -27,3 +27,7 @@ file_size_limit = "6MiB"
 verify_jwt = false
 # JWTs are verified using Supabase Auth inside the function. Public health and
 # invitation/password exchange routes must also reach the handler.
+
+[functions.task-push-worker]
+verify_jwt = false
+# A dedicated constant-time checked worker secret protects this endpoint.

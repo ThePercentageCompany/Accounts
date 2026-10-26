@@ -1,4 +1,4 @@
-import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger } from './ledger-report.js';
+import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger, liabilityBreakdown } from './ledger-report.js';
 import { reportConfiguration } from './report-configuration.js';
 import { requireThat } from './errors.js';
 import { validLedgerDate } from './financial-period-policy.js';
@@ -111,6 +111,8 @@ function calculate(companyId, kind, from, asOf, rows, config) {
       result[key] = money(balances.filter(a => a.reportingRole === role || (!a.reportingRole && aliases.includes(a.accountId)))
         .reduce((n, a) => n + cents(a.amount), 0n));
     }
+    result.availableFunds = money(cents(result.cash) + cents(result.bank));
+    Object.assign(result, liabilityBreakdown(balances));
     const profit = detailedProfit(classified(profitAndLoss(companyId, from, asOf, rows), config, 'profit-and-loss'));
     result.grossProfit = profit.grossProfit ?? null;
     result.netRevenue = profit.netRevenue ?? null;

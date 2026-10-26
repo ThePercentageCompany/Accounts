@@ -9,7 +9,7 @@ function walk(dir, prefix = '') {
     const relative = prefix + name;
     const file = path.join(dir, name);
     if (fs.statSync(file).isDirectory()) walk(file, relative + '/');
-    else if (['index.html', 'flutter_bootstrap.js', 'flutter.js', 'main.dart.js', 'manifest.json', 'favicon.png'].includes(relative) ||
+    else if (['notifications.js', 'firebase-config.js', 'firebase-messaging-sw.js', 'index.html', 'flutter_bootstrap.js', 'flutter.js', 'main.dart.js', 'manifest.json', 'favicon.png'].includes(relative) ||
       ['assets/', 'canvaskit/', 'icons/'].some(p => relative.startsWith(p))) files.push(relative);
   }
 }

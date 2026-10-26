@@ -60,6 +60,23 @@ test('dashboard reconciles period profit with cumulative assets and equity', () 
   assert.throws(() => dashboard('c', '2026-09-28', '2026-09-30', f));
 });
 
+test('available funds and liability categories reconcile without subtracting unpaid balances from cash', () => {
+  const f = { Journals: [{ recordId: 'j', companyId: 'c', status: 'POSTED', date: '2026-10-01', totalDebit: 1000, totalCredit: 1000 }],
+    JournalLines: [['cash', 'Asset', 1000, 0], ['accounts_payable', 'Liability', 0, 100],
+      ['salary_payable', 'Liability', 0, 200], ['payroll_deductions_payable', 'Liability', 0, 50],
+      ['company_loan', 'Liability', 0, 300], ['tax_payable', 'Liability', 0, 350]].map(([accountId, accountGroup, debit, credit], i) =>
+      ({ companyId: 'c', journalId: 'j', lineNumber: i + 1, accountId, accountName: accountId, accountGroup, debit, credit })) };
+  for (const report of [dashboard('c', '2026-10-01', '2026-10-27', f),
+    financialReport('c', 'dashboard', '2026-10-01', '2026-10-27', f, {})]) {
+    assert.equal(report.availableFunds, '1000.00');
+    assert.equal(report.totalLiabilities, '1000.00');
+    assert.equal(report.payables, '100.00');
+    assert.equal(report.payrollLiabilities, '250.00');
+    assert.equal(report.loanLiabilities, '300.00');
+    assert.equal(report.otherLiabilities, '350.00');
+  }
+});
+
 test('general ledger carries opening balances, signed reversals and exact closing balances', () => {
   const f = fixture();
   f.Journals.push({ ...f.Journals[0], recordId: 'reverse', date: '2026-10-01' });

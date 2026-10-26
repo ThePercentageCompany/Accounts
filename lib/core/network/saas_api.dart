@@ -1130,6 +1130,11 @@ class SaasApi implements SessionRepository {
     );
   }
 
+  Future<Map<String, dynamic>> companyLoanHistory(
+          String companyId, String recordId, {bool employee = false}) =>
+      _json('GET',
+          '/v1/${employee ? 'employee/' : ''}companies/${_id(companyId)}/records/CompanyLoans/${_id(recordId)}/history',
+          force: true);
   Future<Map<String, dynamic>> documents(
     String companyId,
     String section,

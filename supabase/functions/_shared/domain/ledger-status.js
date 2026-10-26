@@ -8,6 +8,7 @@ const sources = {
   Assets: ['AssetAcquisition'],
   CapitalTransactions: ['CapitalContribution'],
   ShareholderLoans: ['ShareholderLoanReceipt'],
+  CompanyLoans: ['CompanyLoanReceipt'],
   MoneyTransfers: ['MoneyTransfer'],
 };
 const reversals = {

@@ -23,7 +23,7 @@
   };
   const task = data => {
     if (!/^[A-Za-z0-9_-]{43}$/.test(data.companyId) || !/^[A-Za-z0-9_-]{43}$/.test(data.taskId)) return;
-    location.hash = `task=${data.companyId}:${data.taskId}`;
+    location.hash = `task=${data.companyId}:${data.taskId}${data.notificationId ? `:${data.notificationId}` : ''}`;
     window.dispatchEvent(new Event('tpc-pwa-change'));
   };
   window.addEventListener('beforeinstallprompt', event => {
@@ -43,8 +43,13 @@
       updateState: updateRequested ? 'applying' : registration?.waiting ? 'ready' : updateState,
       pushSupported: 'PushManager' in window && 'Notification' in window && !!registration,
       pushSubscribed, notificationVersion,
+      pushEnabled: window.tpcNotifications?.enabled() === true,
+      soundEnabled: window.tpcNotifications?.soundEnabled() === true,
+      installationId: window.tpcNotifications?.installation() || '',
       permission: 'Notification' in window ? Notification.permission : 'unsupported',
       taskLink: location.hash.startsWith('#task=') ? location.hash.slice(6) : ''}),
+    readyRegistration: async () => { await navigator.serviceWorker.ready; if (!registration) throw Error('App worker is not ready. Reload and try again.'); return registration; },
+    notificationReceived: () => {notificationVersion++; emit();},
     install: async () => {
       if (!installPrompt) return false;
       await installPrompt.prompt();

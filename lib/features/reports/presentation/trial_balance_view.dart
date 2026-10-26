@@ -826,7 +826,9 @@ class _TrialBalanceViewState extends State<TrialBalanceView> {
 
   Future<void> _source(Map<String, dynamic> entry) async {
     final type = '${entry['sourceType']}',
-        table = type.startsWith('Invoice')
+        table = type.startsWith('CompanyLoan')
+            ? 'CompanyLoans'
+            : type.startsWith('Invoice')
             ? 'Invoices'
             : type.startsWith('Receipt')
                 ? 'Receipts'

@@ -10,6 +10,7 @@ import { validateBusinessValues } from './business-values.js';
 import { validateJournal } from './journal-policy.js';
 import { cashEntryValues, assertCashEntryEditable } from './cash-entry-policy.js';
 import { financialPeriodValues } from './financial-period-policy.js';
+import { companyLoanChanges } from './company-loan-policy.js';
 import { cashLedgerChanges, reverseCashChanges } from './cash-ledger.js';
 import { financialReport } from './financial-report.js';
 import { reportConfiguration, validateReportConfiguration } from './report-configuration.js';
@@ -201,7 +202,7 @@ export class BusinessService {
     requireThat(!['approve', 'payrollPay', 'payrollReverse'].includes(action) || tableName === 'Payroll', 400, 'INVALID_RECORD', 'Only payroll supports this action.');
     requireThat(!['capitalize', 'depreciate', 'assetDispose'].includes(action) || tableName === 'Assets', 400, 'INVALID_RECORD', 'Only assets support this action.');
     requireThat(action !== 'capitalPost' || tableName === 'CapitalTransactions', 400, 'INVALID_RECORD', 'Only capital contributions support this action.');
-    requireThat(!['loanPost', 'loanRepay'].includes(action) || tableName === 'ShareholderLoans', 400, 'INVALID_RECORD', 'Only shareholder loans support this action.');
+    requireThat(!['loanPost', 'loanRepay'].includes(action) || ['ShareholderLoans', 'CompanyLoans'].includes(tableName), 400, 'INVALID_RECORD', 'Only loan records support this action.');
     requireThat(!['transferPost', 'transferReverse', 'transferMatch'].includes(action) || tableName === 'MoneyTransfers', 400, 'INVALID_TRANSFER', 'Only money transfers support this action.');
     const values = ['delete', 'post', 'issue', 'send', 'convert', 'approve', 'capitalize', 'capitalPost', 'loanPost', 'transferPost'].includes(action) ? {} : action === 'receive' ? receiptInput(input.values) : action === 'invoiceReturn' ? returnInput(input.values) : this.values(tableName, input.values);
     if (Object.hasOwn(values, 'items')) {
@@ -307,6 +308,8 @@ export class BusinessService {
         writeValues = asset.values;
         const capital = await capitalChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
         writeValues = capital.values;
+        const companyLoan = await companyLoanChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
+        writeValues = companyLoan.values;
         const transfer = await transferChanges(this.records, companyId, tableName, op.recordId, action, old, writeValues, system, opKey);
         writeValues = transfer.values;
         if (FX_TABLES.includes(tableName) && action !== 'delete') {
@@ -326,7 +329,7 @@ export class BusinessService {
           tableName === 'Invoices' ? 'InvoiceItems' : 'QuotationItems');
         const writes = [{ table: tableName, row, values: { ...system, ...writeValues } },
           ...(ledger || [...invoice.extra, ...receipt.extra, ...quotation.extra,
-            ...payroll.extra, ...asset.extra, ...capital.extra, ...transfer.extra, ...taskExtra])];
+            ...payroll.extra, ...asset.extra, ...capital.extra, ...companyLoan.extra, ...transfer.extra, ...taskExtra])];
         if (['issue', 'approve', 'receive', 'post', 'pay', 'payrollPay', 'invoiceReturn'].includes(action)) {
           let controlRate;
           const controlAmounts = {};

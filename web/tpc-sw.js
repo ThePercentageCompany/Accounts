@@ -34,29 +34,17 @@ self.addEventListener('fetch', event => {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(new URL(path, scope))).then(result => result || fetch(event.request)));
   }
 });
-self.addEventListener('push', event => event.waitUntil((async () => {
-  let data; try {data = event.data.json();} catch (_) {data = {};}
-  await self.registration.showNotification(data.title || 'TPC Accounts', {
-    body: data.body || 'You have a workspace update.',
-    icon: new URL('icons/Icon-192.png', scope).href,
-    badge: new URL('icons/Icon-192.png', scope).href,
-    tag: data.id, data: {companyId: data.companyId, taskId: data.taskId},
-  });
-  for (const client of await self.clients.matchAll({type: 'window', includeUncontrolled: true})) {
-    if (new URL(client.url).origin === scope.origin && new URL(client.url).pathname.startsWith(scope.pathname)) client.postMessage({type: 'NOTIFICATION_RECEIVED', companyId: data.companyId});
-  }
-})()));
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil((async () => {
-    const {companyId, taskId} = event.notification.data || {};
+    const {companyId, taskId, notificationId} = event.notification.data || {};
     if (!/^[A-Za-z0-9_-]{43}$/.test(companyId) || !/^[A-Za-z0-9_-]{43}$/.test(taskId)) return;
     for (const client of await self.clients.matchAll({type:'window', includeUncontrolled:true})) {
       if (new URL(client.url).origin === scope.origin && new URL(client.url).pathname.startsWith(scope.pathname)) {
-        client.postMessage({type:'OPEN_TASK', companyId, taskId}); await client.focus(); return;
+        client.postMessage({type:'OPEN_TASK', companyId, taskId, notificationId}); await client.focus(); return;
       }
     }
-    await self.clients.openWindow(new URL(`#task=${companyId}:${taskId}`, scope).href);
+    await self.clients.openWindow(new URL(`#task=${companyId}:${taskId}${notificationId ? `:${notificationId}` : ''}`, scope).href);
   })());
 });
 
@@ -134,3 +122,6 @@ async function backgroundSync() {
     }
   } finally {db.close();}
 }
+
+// Existing click/fetch/sync listeners are registered before the Firebase SDK.
+importScripts('firebase-messaging-sw.js');

@@ -255,6 +255,11 @@ class RecordSummary extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
         if (date != null) Text('$date'),
+        if (record['lenderName'] != null) ...[
+          Text('Principal: ${record['principal']}'),
+          Text('Outstanding: ${record['outstandingBalance']}'),
+          Text('Interest paid: ${record['interestPaid'] ?? 0}'),
+        ],
         if (record['shareholderName'] != null)
           Text('Shareholder: ${record['shareholderName']}'),
         if (status != null) StatusChip(value: '$status', label: statusLabel),
@@ -536,6 +541,11 @@ class RecordDetails extends StatelessWidget {
     'refundAmount',
     'principal',
     'outstandingBalance',
+    'repaidAmount',
+    'interestPaid',
+    'principalPayment',
+    'interestPayment',
+    'installmentAmount',
     'agreedCapital',
     'accumulatedDepreciation',
     'netBookValue',

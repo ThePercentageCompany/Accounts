@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "776800341034",
+    "project_id": "tpc-accounts",
+    "storage_bucket": "tpc-accounts.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776800341034:android:41a49a9e78cc0795318753",
+        "android_client_info": {
+          "package_name": "com.thepercentage.tpc_invoice"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWZAW5R-QpHCyiaEfo3y39lqoYkYFNGdk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

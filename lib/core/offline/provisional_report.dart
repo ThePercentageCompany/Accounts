@@ -38,6 +38,8 @@ Map<String, dynamic> projectFinancialReport(
     'fixed_assets': ('Fixed Assets', 'Asset'),
     'shareholder_equity': ('Shareholder Equity', 'Equity'),
     'shareholder_loan': ('Shareholder Loan', 'Liability'),
+    'company_loan': ('Company Loans', 'Liability'),
+    'loan_interest_expense': ('Loan Interest Expense', 'Expense'),
     'salary_expense': ('Salary Expense', 'Expense'),
     'salary_payable': ('Salary Payable', 'Liability'),
     'payroll_deductions_payable': ('Payroll Deductions Payable', 'Liability'),
@@ -164,6 +166,12 @@ Map<String, dynamic> projectFinancialReport(
           income ? 'accounts_receivable' : cash(next['account'], legacy: true),
           amount(row['total']),
         );
+      } else if (row.isNotEmpty && table == 'CompanyLoans' && action == 'loanPost') {
+        pair('${row['date'] ?? ''}', cash(row['paymentAccount']), 'company_loan', _minor(row['principal']));
+      } else if (row.isNotEmpty && table == 'CompanyLoans' && action == 'loanRepay') {
+        final date = '${next['lastRepaymentDate'] ?? ''}';
+        pair(date, 'company_loan', cash(next['paymentAccount']), _minor(values['principalPayment']));
+        pair(date, 'loan_interest_expense', cash(next['paymentAccount']), _minor(values['interestPayment']));
       } else if (row.isNotEmpty && table == 'Invoices' && action == 'issue') {
         final date = '${row['issueDate'] ?? ''}',
             total = amount(row['total']),
@@ -294,9 +302,10 @@ Map<String, dynamic> projectFinancialReport(
             month.month + 1,
             0,
           ).toIso8601String().substring(0, 10);
-          line(date, 'salary_expense', amount(row['grossSalary']));
+          final reduction = row['deductionType'] == 'SALARY_REDUCTION';
+          line(date, 'salary_expense', amount(reduction ? row['netSalary'] : row['grossSalary']));
           line(date, 'salary_payable', -amount(row['netSalary']));
-          line(date, 'payroll_deductions_payable', -amount(row['deductions']));
+          if (!reduction) line(date, 'payroll_deductions_payable', -amount(row['deductions']));
         }
       } else if (row.isNotEmpty &&
           [
@@ -507,6 +516,11 @@ void _apply(
     if (group == 'Liability') {
       changes['totalLiabilities'] =
           (changes['totalLiabilities'] ?? BigInt.zero) - net;
+      final category = const ['salary_payable', 'payroll_deductions_payable'].contains(id)
+          ? 'payrollLiabilities'
+          : const ['company_loan', 'shareholder_loan'].contains(id)
+              ? 'loanLiabilities' : id == 'accounts_payable' ? null : 'otherLiabilities';
+      if (category != null) change(category, -net);
     }
     if (group == 'Equity' || income || expense) {
       changes['totalEquity'] = (changes['totalEquity'] ?? BigInt.zero) - net;
@@ -597,6 +611,9 @@ void _apply(
   }
   for (final entry in changes.entries) {
     if (report.containsKey(entry.key)) add(report, entry.key, entry.value);
+  }
+  if (kind == 'dashboard' && report.containsKey('cash') && report.containsKey('bank')) {
+    report['availableFunds'] = _money(_minor(report['cash']) + _minor(report['bank']));
   }
   final profit =
       (changes['totalIncome'] ?? BigInt.zero) -

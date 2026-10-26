@@ -42,7 +42,7 @@ class _TaskEditorState extends State<TaskEditor> {
   late String _employeeId = widget.task?['employeeId']?.toString() ?? '';
   late String _priority = widget.task?['priority']?.toString() ?? 'MEDIUM';
   late String _status = widget.task?['status']?.toString() ?? 'TODO';
-  late String _reminder = widget.task?['reminder']?.toString() ?? 'NONE';
+  late String _reminder = widget.task?['reminder']?.toString() ?? '1_DAY';
   late List<Map<String, dynamic>> _assignees = widget.assignees;
   bool _busy = false, _loading = false;
   String? _error;

@@ -1,3 +1,5 @@
+import { notificationRequest } from '../_shared/notifications.ts';
+import { notificationInput } from '../_shared/domain/notification-policy.js';
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 import { workspace,databaseError } from '../_shared/workspace.ts';
@@ -39,7 +41,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS'}});
     const url=new URL(request.url),path=url.pathname.replace(/^.*?\/api(?=\/|$)/,'');
     if(request.method==='GET'&&['/health','/healthz'].includes(path))return json(200,{status:'ok',phase:4,
-      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','extended-document-designs','embedded-company-logo','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','task-management','task-calendar','task-attachments']});
+      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','extended-document-designs','embedded-company-logo','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','company-loans','task-management','task-calendar','task-attachments']});
     const raw=request.method==='GET'?'':await request.text();
     requireThat(new TextEncoder().encode(raw).length<=9*1024*1024,413,'BODY_TOO_LARGE','Request is too large.');
     let input:any={};if(raw){try{input=JSON.parse(raw);}catch{throw new ApiError(400,'INVALID_JSON','Use valid JSON.');}}
@@ -71,6 +73,11 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     const claims=JSON.parse(atob(token!.split('.')[1].replaceAll('-','+').replaceAll('_','/')));
     if(claims.session_id) {
       const {data,error}=await db.rpc('auth_session_created_at',{p_user:user.id,p_session:claims.session_id});if(error)databaseError(error);user.sessionCreatedAt=data;
+    }
+    if(path==='/v1/push-installation'&&request.method==='DELETE') {
+      notificationInput('unregister',input);
+      const {error}=await db.rpc('deactivate_push_installation',{p_actor:user.id,p_installation:input.installationId});if(error)databaseError(error);
+      return json(200,{unregistered:true});
     }
     if(path==='/v1/me') {
       requireThat(user.app_metadata?.kind!=='employee',401,'UNAUTHORIZED','Use employee login for this account.');
@@ -157,6 +164,17 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       requireThat(ctx.admin,403,'ADMIN_REQUIRED','Only company admins can manage access.');
       return json(200,await employeeAccess(db,user,companyId!,access[1],access[2],keyOf(request),appOrigin));
     }
+    const loanHistory=/^\/records\/CompanyLoans\/([A-Za-z0-9_-]{43})\/history$/.exec(tail);
+    if(loanHistory&&request.method==='GET') {
+      requireThat((await ctx.read('CompanyLoans')).some((r:any)=>r.recordId===loanHistory[1]),403,'RECORD_FORBIDDEN','Loan is unavailable.');
+      const data=await ctx.records.read(companyId!,['Journals','JournalLines']);
+      const journals=data.Journals.filter((j:any)=>j.sourceId===loanHistory[1]&&['CompanyLoanReceipt','CompanyLoanRepayment'].includes(j.sourceType)&&!j.isDeleted);
+      return json(200,{journals:journals.sort((a:any,b:any)=>a.date.localeCompare(b.date)||a.recordId.localeCompare(b.recordId)).map((j:any)=>({...j,
+        lines:data.JournalLines.filter((l:any)=>l.journalId===j.recordId&&!l.isDeleted)}))});
+    }
+    const loan=/^\/records\/CompanyLoans\/([A-Za-z0-9_-]{43})\/(post|repay)$/.exec(tail);
+    if(loan&&request.method==='POST')return finish(await ctx.business.mutate('',companyId!,'CompanyLoans',loan[1],
+      loan[2]==='post'?'loanPost':'loanRepay',input,keyOf(request)));
     const transfer=/^\/records\/MoneyTransfers\/([A-Za-z0-9_-]{43})\/(post|reverse|match)$/.exec(tail);
     if(transfer&&request.method==='POST')return finish(await ctx.business.mutate('',companyId!,'MoneyTransfers',transfer[1],
       ({post:'transferPost',reverse:'transferReverse',match:'transferMatch'} as any)[transfer[2]],input,keyOf(request)));
@@ -275,19 +293,15 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       return json(200,{documents:await Promise.all(descriptors.filter(d=>d.status!=='DELETED'&&d.relatedSection===section&&d.relatedRecordId===recordId)
         .map(async d=>({...publicDocument(d),canDelete:await canDeleteDocument(ctx,d)})))});
     }
-    if(tail==='/notifications'&&request.method==='GET') {
-      if(ctx.admin)return json(200,{notifications:[],unread:0,pushAvailable:false,nativePushAvailable:false,pushEndpoints:[],pushDevices:[],subscriptionCount:0});
-      const ids=(await ctx.read('Tasks')).map((t:any)=>t.recordId);
-      const {data,error}=await db.from('notifications').select('*').eq('company_id',companyId).eq('employee_id',ctx.member.employee_id).in('task_id',ids).order('created_at',{ascending:false}).limit(100);if(error)databaseError(error);
-      const notifications=data.map((n:any)=>({id:n.id,companyId,taskId:n.task_id,type:n.type,title:n.title,body:n.body,createdAt:Date.parse(n.created_at),readAt:n.read_at?Date.parse(n.read_at):null}));
-      return json(200,{notifications,unread:notifications.filter((n:any)=>!n.readAt).length,pushAvailable:false,nativePushAvailable:false,pushEndpoints:[],pushDevices:[],subscriptionCount:0});
+    if(tail==='/notifications'&&request.method==='GET')return json(200,await notificationRequest(ctx,'list',Object.fromEntries(url.searchParams)));
+    if(tail==='/notifications/read'&&request.method==='POST')return json(200,await notificationRequest(ctx,'read',input));
+    if(tail==='/notifications/settings') {
+      if(request.method==='GET')return json(200,await notificationRequest(ctx,'list',{limit:1}));
+      if(request.method==='PUT')return json(200,await notificationRequest(ctx,'settings',input));
     }
-    if(tail==='/notifications/read'&&request.method==='POST') {
-      requireThat(input.id==='all'||/^[A-Za-z0-9_-]{43}$/.test(input.id??''),400,'INVALID_NOTIFICATION','Choose a notification.');
-      const ids=(await ctx.read('Tasks')).map((t:any)=>t.recordId);
-      let update=db.from('notifications').update({read_at:input.read?new Date().toISOString():null}).eq('company_id',companyId).eq('employee_id',ctx.member.employee_id).in('task_id',ids);
-      if(input.id!=='all')update=update.eq('id',input.id);const {error}=await update;if(error)databaseError(error);return json(200,{saved:true});
-    }
+    if(tail==='/notifications/preferences'&&request.method==='PUT')return json(200,await notificationRequest(ctx,'preferences',input));
+    if(tail==='/notifications/subscription'&&['POST','DELETE'].includes(request.method))
+      return json(200,await notificationRequest(ctx,request.method==='POST'?'register':'unregister',input));
     if(tail==='/exchange-rate') {
       requireThat(ctx.admin||['Settings','Invoices','Quotations','Payroll','Income & Expenses'].some(s=>ctx.principal.permissions[s]),403,'SECTION_FORBIDDEN','Financial record access is required.');
       const currency=url.searchParams.get('currency'),date=url.searchParams.get('date');

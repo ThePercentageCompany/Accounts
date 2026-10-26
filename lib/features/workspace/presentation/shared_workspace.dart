@@ -1,6 +1,7 @@
 import 'package:tpc_invoice/features/documents/data/html_document_design.dart';
 import 'package:tpc_invoice/features/employees/presentation/employee_profile_editor.dart';
 import 'package:tpc_invoice/features/accounting/presentation/transfer_editor.dart';
+import 'package:tpc_invoice/features/accounting/presentation/company_loan_editor.dart';
 import 'package:tpc_invoice/features/employees/presentation/payroll_support_view.dart';
 import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dart';
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
@@ -54,7 +55,7 @@ const workspaceTables = <String, List<String>>{
   'Quotations': ['Quotations'],
   'Customers': ['Customers'],
   'Projects': ['Projects'],
-  'Cash & Bank': ['MoneyTransfers'],
+  'Cash & Bank': ['MoneyTransfers', 'CompanyLoans'],
   'Income & Expenses': ['Income', 'Expenses'],
   'Payroll': ['Payroll', 'PayrollItems', 'Payslips'],
   'Fixed Assets': ['Assets'],
@@ -68,6 +69,7 @@ const workspaceTables = <String, List<String>>{
 };
 
 const tableTitles = {
+  'CompanyLoans': 'Company loans',
   'MoneyTransfers': 'Cash / Bank transfers',
   'CreditNotes': 'Credit notes / returns',
   'ReceiptAllocations': 'Payment allocations',
@@ -1296,8 +1298,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
         'MoneyTransfers',
         'CapitalTransactions',
         'ShareholderLoans',
+        'CompanyLoans',
       ].contains(table);
-  String get _recordLabel => table == 'MoneyTransfers'
+  String get _recordLabel => table == 'CompanyLoans'
+      ? 'company loan'
+      : table == 'MoneyTransfers'
       ? 'cash / bank transfer'
       : table == 'CompanyProfile'
           ? 'company profile'
@@ -1515,7 +1520,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     final values = await showDialog<Map<String, Object?>>(
       context: context,
       barrierDismissible: !const ['Invoices', 'Quotations'].contains(table),
-      builder: (_) => table == 'MoneyTransfers'
+      builder: (_) => table == 'CompanyLoans'
+          ? CompanyLoanEditor(record: record)
+          : table == 'MoneyTransfers'
           ? TransferEditor(record: record)
           : table == 'CompanyProfile'
               ? CompanyProfileEditor(record: record!)
@@ -2125,14 +2132,69 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     }
   }
 
+  Future<void> _loanHistory(Map<String, dynamic> record) async {
+    final future = widget.api.companyLoanHistory(
+        widget.companyId, '${record['recordId']}',
+        employee: widget.employee);
+    await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text('Loan history · ${record['lenderName']}'),
+              content: SizedBox(
+                  width: 620,
+                  height: 420,
+                  child: FutureBuilder<Map<String, dynamic>>(
+                      future: future,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Text(snapshot.error is SaasApiException
+                              ? (snapshot.error as SaasApiException).message
+                              : 'Unable to load loan history.');
+                        }
+                        if (!snapshot.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        final journals =
+                            snapshot.data!['journals'] as List? ?? [];
+                        if (journals.isEmpty) {
+                          return const Text('No posted loan movements.');
+                        }
+                        return ListView(children: [
+                          for (final journal in journals)
+                            Card(
+                                child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                              '${journal['date']} · ${journal['description']}'),
+                                          const SizedBox(height: 8),
+                                          for (final line
+                                              in journal['lines'] as List)
+                                            Text(
+                                                '${line['accountName']} — Debit ${line['debit']} / Credit ${line['credit']}'),
+                                        ]))),
+                        ]);
+                      })),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'))
+              ],
+            ));
+  }
+
   Future<void> _loanAction(Map<String, dynamic> record, String action) async {
     Map<String, Object?> values = {};
     if (action == 'loanRepay') {
       final result = await showDialog<Map<String, Object?>>(
         context: context,
-        builder: (_) => ShareholderLoanRepaymentEditor(
-          amount: record['outstandingBalance'],
-        ),
+        builder: (_) => table == 'CompanyLoans'
+            ? CompanyLoanEditor(record: record, repayment: true)
+            : ShareholderLoanRepaymentEditor(amount: record['outstandingBalance']),
       );
       if (result == null || !mounted) return;
       values = result;
@@ -2140,9 +2202,9 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Post shareholder loan?'),
+          title: const Text('Post loan receipt?'),
           content: const Text(
-            'The server will debit Cash or Bank and credit Shareholder Loan liability. The loan details will then be locked.',
+            'This increases Cash or Bank and the loan liability. The loan details will then be locked.',
           ),
           actions: [
             LoadingButton.text(
@@ -2164,7 +2226,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
     });
     try {
       await widget.writes!.enqueue(
-        'ShareholderLoans',
+        table,
         action,
         values,
         recordId: record['recordId'] as String,
@@ -2178,7 +2240,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
       if (mounted) {
         setState(
           () => error =
-              'Unable to confirm shareholder loan action. Retry the pending request.',
+              'Unable to confirm loan action. Retry the pending request.',
         );
       }
     } finally {
@@ -2412,7 +2474,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               .contains(table) &&
           '${row['number'] ?? ''}'.trim().isEmpty
       ? 'Draft ${table == 'Invoices' ? 'invoice' : 'quotation'} · ${row['issueDate'] ?? ''}'
-      : '${row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
+      : '${row['lenderName'] ?? row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
   }
   @override
   Widget build(BuildContext context) {
@@ -2896,7 +2958,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 child: const Text('Complete / post contribution'),
                               ),
                             if (_editable &&
-                                table == 'ShareholderLoans' &&
+                                const ['ShareholderLoans', 'CompanyLoans'].contains(table) &&
                                 row['status'] == 'DRAFT')
                               LoadingButton(
                                 onPressed: busy || row['_pendingAction'] != null
@@ -2905,13 +2967,18 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                 child: const Text('Post loan'),
                               ),
                             if (_editable &&
-                                table == 'ShareholderLoans' &&
+                                const ['ShareholderLoans', 'CompanyLoans'].contains(table) &&
                                 row['status'] == 'ACTIVE')
                               LoadingButton(
                                 onPressed: busy || row['_pendingAction'] != null
                                     ? null
                                     : () => _loanAction(row, 'loanRepay'),
-                                child: const Text('Repay loan in full'),
+                                child: Text(table == 'CompanyLoans' ? 'Record repayment / interest' : 'Repay loan in full'),
+                              ),
+                            if (table == 'CompanyLoans' && row['status'] != 'DRAFT')
+                              LoadingButton.outlined(
+                                onPressed: busy ? null : () => _loanHistory(row),
+                                child: const Text('Receipt / repayment history'),
                               ),
                             if (_editable &&
                                 table == 'Receipts' &&
@@ -2978,7 +3045,7 @@ class _RecordsPanelState extends State<_RecordsPanel> {
                                     row['status'] == 'DRAFT') &&
                                 (table != 'CapitalTransactions' ||
                                     row['status'] == 'DRAFT') &&
-                                (table != 'ShareholderLoans' ||
+                                (!const ['ShareholderLoans', 'CompanyLoans'].contains(table) ||
                                     row['status'] == 'DRAFT') &&
                                 table != 'Receipts')
                               LoadingButton.outlined(

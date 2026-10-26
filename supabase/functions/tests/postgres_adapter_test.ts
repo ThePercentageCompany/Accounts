@@ -37,6 +37,40 @@ function client(pg:any){
   };
 }
 
+Deno.test('company loans persist atomic receipt and partial repayment journals with idempotent retries',async()=>{
+  const {db:pg,company}=await setup();
+  const db=client(pg),user={id:owner};
+  try {
+    let ctx=await workspace(db,user,company,['company_loan_create_01']);
+    const created=await ctx.business.mutate('',company,'CompanyLoans',null,'create',{expectedVersion:0,values:{
+      lenderName:'Bank lender',lenderType:'BANK',date:'2026-10-01',principal:1000,interestRate:6,
+      installmentAmount:200,dueDate:'2027-10-01',paymentAccount:'Bank',reference:'LN1',notes:'',
+    }},'company_loan_create_01');
+    await ctx.commit();
+    ctx=await workspace(db,user,company,['company_loan_post_01']);
+    await ctx.business.mutate('',company,'CompanyLoans',created.recordId,'loanPost',{expectedVersion:1},'company_loan_post_01');
+    await ctx.commit();
+    const payment={expectedVersion:2,values:{lastRepaymentDate:'2026-10-10',principalPayment:200,interestPayment:5.25,paymentAccount:'Bank',paymentReference:'P1'}};
+    ctx=await workspace(db,user,company,['company_loan_pay_01']);
+    await ctx.business.mutate('',company,'CompanyLoans',created.recordId,'loanRepay',payment,'company_loan_pay_01');
+    await ctx.commit();
+    ctx=await workspace(db,user,company,['company_loan_pay_01']);
+    await ctx.business.mutate('',company,'CompanyLoans',created.recordId,'loanRepay',payment,'company_loan_pay_01');
+    await ctx.commit();
+    ctx=await workspace(db,user,company);
+    const saved=(await ctx.read('CompanyLoans'))[0];
+    assert(saved.outstandingBalance===800&&saved.repaidAmount===200&&saved.interestPaid===5.25&&saved.recordVersion===3);
+    const report=await ctx.business.financialReport('',company,'dashboard','2026-10-01','2026-10-31');
+    assert(report.bank==='794.75'&&report.totalLiabilities==='800.00'&&report.totalExpenses==='5.25'&&report.totalIncome==='0.00');
+    const typed=await pg.query<{outstanding_balance:string,interest_paid:string}>(`select outstanding_balance::text,interest_paid::text from business.company_loans where company_id=$1`,[company]);
+    assert(typed.rows[0].outstanding_balance==='800'&&typed.rows[0].interest_paid==='5.25');
+    const journals=await ctx.records.read(company,['Journals']);
+    assert(journals.Journals.filter((j:any)=>j.sourceId===created.recordId).length===2);
+    await pg.exec('set role authenticated');
+    let denied=false;try{await pg.query('select * from business.company_loans');}catch{denied=true;}assert(denied);
+  } finally {await pg.close();}
+});
+
 Deno.test('payroll CRUD persists notes through the service and database projections',async()=>{
   const {db:pg,company}=await setup();
   try {
@@ -47,22 +81,22 @@ Deno.test('payroll CRUD persists notes through the service and database projecti
     let ctx=await workspace(db,user,company,['payroll_create_0001']);
     const created=await ctx.business.mutate('',company,'Payroll',null,'create',{expectedVersion:0,values:{
       employeeId:employee,month:'2026-10',currency:'AED',exchangeRate:1,bonus:200,deductions:100,
-      notes:'  October salary  ',bonusNotes:'Performance',deductionNotes:'Advance repayment',
+      notes:'  October salary  ',bonusNotes:'Performance',deductionNotes:'Days not worked',deductionType:'SALARY_REDUCTION',
     }},'payroll_create_0001');
     await ctx.commit();
     ctx=await workspace(db,user,company);
     const saved=(await ctx.read('Payroll'))[0];
     assert(saved.notes==='October salary'&&saved.bonusNotes==='Performance'&&saved.netSalary===5600);
-    const typed=await pg.query<{notes:string,bonus_notes:string,deduction_notes:string}>(
-      `select notes,bonus_notes,deduction_notes from business.payroll where company_id=$1`,[company]);
-    assert(typed.rows[0].notes==='October salary'&&typed.rows[0].deduction_notes==='Advance repayment');
+    const typed=await pg.query<{notes:string,bonus_notes:string,deduction_notes:string,deduction_type:string}>(
+      `select notes,bonus_notes,deduction_notes,deduction_type from business.payroll where company_id=$1`,[company]);
+    assert(typed.rows[0].notes==='October salary'&&typed.rows[0].deduction_notes==='Days not worked'&&typed.rows[0].deduction_type==='SALARY_REDUCTION');
     ctx=await workspace(db,user,company,['payroll_update_0001']);
     await ctx.business.mutate('',company,'Payroll',created.recordId,'update',{
       expectedVersion:1,values:{notes:'Updated salary notes',bonusNotes:''}},'payroll_update_0001');
     await ctx.commit();
     ctx=await workspace(db,user,company);
     const updated=(await ctx.read('Payroll'))[0];
-    assert(updated.notes==='Updated salary notes'&&updated.bonusNotes===''&&updated.deductionNotes==='Advance repayment');
+    assert(updated.notes==='Updated salary notes'&&updated.bonusNotes===''&&updated.deductionNotes==='Days not worked'&&updated.deductionType==='SALARY_REDUCTION');
     ctx=await workspace(db,user,company,['payroll_delete_0001']);
     await ctx.business.mutate('',company,'Payroll',created.recordId,'delete',{expectedVersion:2},'payroll_delete_0001');
     await ctx.commit();

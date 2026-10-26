@@ -9,7 +9,7 @@ export function recordsEndpointAllowed(table, method, hasRecordId = false) {
   return !['DocumentRegistry', 'NumberSequences'].includes(table);
 }
 export const SECTION_TABLES = {
-  MoneyTransfers: 'Cash & Bank',
+  MoneyTransfers: 'Cash & Bank', CompanyLoans: 'Cash & Bank',
   Projects: 'Projects', Tasks: 'Tasks', TaskComments: 'Tasks', TaskActivity: 'Tasks',
   CreditNotes: 'Invoices', CreditNoteItems: 'Invoices',
   CompanyProfile: 'Settings', Customers: 'Customers', ProductsServices: 'Invoices', Invoices: 'Invoices', InvoiceItems: 'Invoices',

@@ -7,6 +7,9 @@ Map<String, dynamic> localDerivedValues(String table, Map row) {
 
   double money(BigInt value) => value.toDouble() / 100;
   try {
+    if (table == 'CompanyLoans' && (row['status'] == null || row['status'] == 'DRAFT')) {
+      return {'repaidAmount': 0, 'interestPaid': 0, 'outstandingBalance': row['principal'] ?? 0};
+    }
     if (['Income', 'Expenses'].contains(table)) {
       if (!row.containsKey('amount')) return {};
       final amount = minor(row['amount']), rate = minor(row['taxRate']);

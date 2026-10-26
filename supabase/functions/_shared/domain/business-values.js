@@ -1,8 +1,8 @@
 import { requireThat } from './errors.js';
 
-const NUMBERS = new Set(('baseAmount exchangeRate paymentExchangeRate unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
+const NUMBERS = new Set(('baseAmount exchangeRate paymentExchangeRate unitPrice taxRate subtotal discount taxAmount total paidAmount balance lineNumber quantity lineTotal amount hours rate basicSalary allowances overtimeAmount bonus deductions grossSalary netSalary cost usefulLife residualValue accumulatedDepreciation netBookValue disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate installmentAmount interestPaid principalPayment interestPayment repaidAmount outstandingBalance totalDebit totalCredit debit credit').split(' '));
 const DATES = new Set(('rateDate issueDate dueDate paymentDate reversalDate validUntil date paidDate purchaseDate lastDepreciationDate disposalDate lastRepaymentDate investmentDate effectiveDate startDate endDate').split(' '));
-const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hours rate basicSalary allowances overtimeAmount bonus deductions cost usefulLife residualValue accumulatedDepreciation disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate repaidAmount debit credit').split(' '));
+const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hours rate basicSalary allowances overtimeAmount bonus deductions cost usefulLife residualValue accumulatedDepreciation disposalProceeds agreedCapital ownershipPercentage percentage principal interestRate installmentAmount interestPaid principalPayment interestPayment repaidAmount debit credit').split(' '));
 
 export function validateBusinessValues(values) {
   for (const [key, value] of Object.entries(values)) {

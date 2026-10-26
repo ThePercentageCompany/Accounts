@@ -12,7 +12,7 @@ String recordDisplayTitle(String table, Map row) {
   if (['Invoices', 'Quotations'].contains(table) && '${row['number'] ?? ''}'.trim().isEmpty) {
     return 'Draft ${table == 'Invoices' ? 'invoice' : 'quotation'} · ${row['issueDate'] ?? ''}';
   }
-  return '${row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
+  return '${row['lenderName'] ?? row['name'] ?? row['fullName'] ?? row['number'] ?? row['description'] ?? row['date'] ?? row['month'] ?? 'Record'}';
 }
 
 String recordSearchText(String table, Map row) => [recordDisplayTitle(table, row),
@@ -54,7 +54,7 @@ class IndexedRecordCache implements CacheStore, RecordIndexQueries {
     _writes = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
     return next;
   }
-  KeyRange _range(String key) => KeyRange.bound([key], [key, <Object>[]]);
+  KeyRange _range(String key) => KeyRange.bound([key, ''], [key, <Object>[]]);
   // This hash only narrows the search index. Exact collection comparison below
   // enforces isolation even if two buckets collide; it is not an access token.
   String _bucket(String key) {

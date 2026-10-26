@@ -91,6 +91,8 @@ export async function payrollChanges(records, companyId, table, id, action, old,
     await assertOpenLedgerDate(records, companyId, values.paidDate);
     const data = await records.read(companyId, ['Journals', 'JournalLines']);
     const amount = minor(old.netSalary), journalId = challenge(`${companyId}:${operation}:payroll-payment`);
+    requireThat(amount > 0n && values.paidDate >= monthEnd(old.month), 400, 'INVALID_PAYROLL',
+      'Payment requires positive net salary and cannot precede the payroll accrual date.');
     const journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
     const accountId = values.paymentAccount === 'Cash' ? 'cash' : 'bank';
     return { values: { paidDate: values.paidDate, paymentAccount: values.paymentAccount,
@@ -116,6 +118,8 @@ export async function payrollChanges(records, companyId, table, id, action, old,
     }
   }
   const next = { ...old, ...values };
+  requireThat(!next.deductionType || ['SALARY_REDUCTION', 'WITHHOLDING'].includes(next.deductionType),
+    400, 'INVALID_PAYROLL', 'Choose salary reduction or withholding for payroll deductions.');
   requireThat(typeof next.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(next.month) &&
     typeof next.employeeId === 'string', 400, 'INVALID_PAYROLL', 'Choose an employee and payroll month.');
   requireThat(!Object.keys(values).some(key => ['status', 'basicSalary', 'allowances', 'overtimeAmount', 'grossSalary', 'netSalary',
@@ -131,19 +135,24 @@ export async function payrollChanges(records, companyId, table, id, action, old,
     409, 'PAYROLL_TOTAL_MISMATCH', 'Refresh payroll totals before approval.');
     const date = monthEnd(old.month); await assertOpenLedgerDate(records, companyId, date);
     const ledger = await records.read(companyId, ['Journals', 'JournalLines']);
-    const gross = minor(totals.grossSalary), net = minor(totals.netSalary), deductions = minor(totals.deductions);
+    const net = minor(totals.netSalary), deductions = minor(totals.deductions);
+    // Legacy postings retain their withholding treatment. Explicit salary
+    // reductions (unworked days, unpaid leave) create no third-party liability.
+    const withheld = next.deductionType === 'SALARY_REDUCTION' ? 0n : deductions;
+    const expense = net + withheld;
+    requireThat(expense > 0n, 400, 'INVALID_PAYROLL', 'No payroll expense remains after salary reductions.');
     const journalId = challenge(`${companyId}:${operation}:payroll-approval`), journalSystem = {
       ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
     const lines = [
-      { accountId: 'salary_expense', accountName: 'Salary Expense', accountGroup: 'Expense', debit: money(gross), credit: 0 },
-      { accountId: 'salary_payable', accountName: 'Salary Payable', accountGroup: 'Liability', debit: 0, credit: money(net) },
-      ...(deductions > 0n ? [{ accountId: 'payroll_deductions_payable', accountName: 'Payroll Deductions Payable',
-        accountGroup: 'Liability', debit: 0, credit: money(deductions) }] : []),
+      ...(expense > 0n ? [{ accountId: 'salary_expense', accountName: 'Salary Expense', accountGroup: 'Expense', debit: money(expense), credit: 0 }] : []),
+      ...(net > 0n ? [{ accountId: 'salary_payable', accountName: 'Salary Payable', accountGroup: 'Liability', debit: 0, credit: money(net) }] : []),
+      ...(withheld > 0n ? [{ accountId: 'payroll_deductions_payable', accountName: 'Payroll Deductions Payable',
+        accountGroup: 'Liability', debit: 0, credit: money(withheld) }] : []),
     ];
     return { values: { ...totals, status: 'APPROVED' }, extra: [
       { table: 'Journals', row: nextRow(ledger.Journals), values: { ...journalSystem, recordId: journalId,
         number: `AUTO-${journalId}`, date, description: `Payroll ${old.month}`, sourceType: 'Payroll', sourceId: id,
-        totalDebit: money(gross), totalCredit: money(gross), status: 'POSTED' } },
+        totalDebit: money(expense), totalCredit: money(expense), status: 'POSTED' } },
       ...lines.map((line, index) => ({ table: 'JournalLines', row: nextRow(ledger.JournalLines) + index,
         values: { ...journalSystem, recordId: challenge(`${journalId}:${index}`), journalId, lineNumber: index + 1, ...line } })),
     ] };

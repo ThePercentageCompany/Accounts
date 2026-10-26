@@ -58,3 +58,7 @@ Existing posted records retain their original ledger scale. This release does no
 The Cash & Bank module records cash deposits and withdrawals as balanced internal
 transfers, with draft/post/reverse workflows and manual bank statement matching.
 See [module and API documentation](docs/MONEY_TRANSFERS.md).
+
+## Company loans
+
+Cash & Bank ? Company loans supports company borrowing from banks, private institutions and individuals, with partial principal repayments, interest payments and accounting reports. See [module and API documentation](docs/COMPANY_LOANS.md).

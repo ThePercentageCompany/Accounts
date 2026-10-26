@@ -18,7 +18,7 @@ export async function recordSyncAnchor(ctx:any) {
 }
 
 export async function recordDelta(ctx:any,table:string,query:URLSearchParams) {
-  ctx.records.table(table);ctx.canRead(SECTION_TABLES[table]);
+  ctx.records.table(table);ctx.canRead((SECTION_TABLES as Record<string,string>)[table]);
   const after=query.get('after')??'',through=query.get('through');
   const cursor=(value:string)=>/^\d{1,19}$/.test(value)&&BigInt(value)<=9223372036854775807n;
   requireThat(cursor(after)&&(!through||cursor(through)),400,'INVALID_CURSOR','Use a valid server cursor.');
