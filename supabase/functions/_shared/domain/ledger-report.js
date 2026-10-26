@@ -86,11 +86,12 @@ export function balanceSheet(companyId, asOf, data) {
 export function dashboard(companyId, from, asOf, data) {
   const profit = profitAndLoss(companyId, from, asOf, data);
   const balance = balanceSheet(companyId, asOf, data);
-  const amount = id => balance.accounts.find(a => a.accountId === id)?.amount ?? '0.00';
+  const amount = (...ids) => money(balance.accounts.filter(a => ids.includes(a.accountId))
+    .reduce((sum, a) => sum + BigInt(a.amount.replace('.', '')), 0n));
   return { from, asOf, journalCount: balance.journalCount, totalIncome: profit.totalIncome,
     totalExpenses: profit.totalExpenses, netProfit: profit.netProfit, totalAssets: balance.totalAssets,
     totalLiabilities: balance.totalLiabilities, totalEquity: balance.totalEquity,
-    cash: amount('cash_in_hand'), bank: amount('bank_account'), receivables: amount('accounts_receivable'),
+    cash: amount('cash', 'cash_in_hand'), bank: amount('bank', 'bank_account'), receivables: amount('accounts_receivable'),
     payables: amount('accounts_payable'), balanced: balance.balanced };
 }
 

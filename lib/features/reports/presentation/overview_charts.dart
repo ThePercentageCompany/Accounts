@@ -153,9 +153,21 @@ class OverviewDonut extends StatelessWidget {
   final String? totalLabel;
   @override
   Widget build(BuildContext context) {
-    if (data.any((point) => !point.value.isFinite || point.value < 0)) {
+    if (data.any((point) => !point.value.isFinite)) {
       return const Text(
           'Composition is unavailable for negative or missing balances. See the exact amounts in the overview.');
+    }
+    // A negative cash/bank balance cannot be a donut slice. Keep the signed
+    // amounts and net total visible, including overdrafts and net deficits.
+    if (data.any((point) => point.value < 0)) {
+      final total = data.fold<double>(0, (sum, point) => sum + point.value);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(totalLabel ?? total.toStringAsFixed(2),
+            style: Theme.of(context).textTheme.titleLarge),
+        Text(centerLabel),
+        const SizedBox(height: 16),
+        OverviewBars(data: data),
+      ]);
     }
     final total = data.fold<double>(0, (sum, point) => sum + point.value);
     final ring = SizedBox(

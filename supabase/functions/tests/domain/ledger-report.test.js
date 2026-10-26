@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { trialBalance, profitAndLoss, balanceSheet, dashboard, generalLedger } from '../../_shared/domain/ledger-report.js';
+import { financialReport } from '../../_shared/domain/financial-report.js';
 
 function fixture() {
   return { Journals: [{ recordId: 'j', companyId: 'c', status: 'POSTED', date: '2026-09-27', totalDebit: 0.3, totalCredit: 0.3 }],
@@ -10,6 +11,43 @@ function fixture() {
       { companyId: 'c', journalId: 'j', lineNumber: 3, accountId: 'income', accountName: 'Income', accountGroup: 'Income', debit: 0, credit: 0.2 },
     ] };
 }
+
+test('available funds include both cash/bank formats and all paid movements without counting unpaid income twice', () => {
+  const data = { Journals: [], JournalLines: [] };
+  const groups = { cash: 'Asset', cash_in_hand: 'Asset', bank: 'Asset', bank_account: 'Asset',
+    capital: 'Equity', income: 'Income', expense: 'Expense', accounts_receivable: 'Asset', accounts_payable: 'Liability' };
+  function post(date, debit, credit, amount) {
+    const id = String(data.Journals.length);
+    data.Journals.push({ recordId: id, companyId: 'c', status: 'POSTED', date, totalDebit: amount, totalCredit: amount });
+    for (const [index, accountId] of [debit, credit].entries()) data.JournalLines.push({
+      companyId: 'c', journalId: id, lineNumber: index + 1, accountId, accountName: accountId,
+      accountGroup: groups[accountId], debit: index === 0 ? amount : 0, credit: index === 1 ? amount : 0,
+    });
+  }
+  post('2025-12-31', 'cash', 'capital', 100);
+  post('2026-09-01', 'bank', 'capital', 200);
+  post('2026-09-02', 'cash_in_hand', 'income', 50);
+  post('2026-09-03', 'bank_account', 'income', 80);
+  post('2026-09-04', 'expense', 'cash_in_hand', 70);
+  post('2026-09-05', 'expense', 'bank', 30);
+  post('2026-09-06', 'accounts_receivable', 'income', 40);
+  post('2026-09-07', 'expense', 'accounts_payable', 10);
+  post('2026-10-01', 'cash', 'accounts_receivable', 40);
+  for (const result of [dashboard('c', '2026-09-01', '2026-09-30', data),
+    financialReport('c', 'dashboard', '2026-09-01', '2026-09-30', data, {})]) {
+    assert.equal(result.cash, '80.00');
+    assert.equal(result.bank, '250.00');
+    assert.equal(result.totalIncome, '170.00');
+    assert.equal(result.totalExpenses, '110.00');
+    assert.equal(result.netProfit, '60.00');
+    assert.equal(result.receivables, '40.00');
+    assert.equal(result.payables, '10.00');
+  }
+  const later = dashboard('c', '2026-10-01', '2026-10-31', data);
+  assert.equal(later.cash, '120.00');
+  assert.equal(later.totalIncome, '0.00');
+  assert.equal(later.receivables, '0.00');
+});
 
 test('dashboard reconciles period profit with cumulative assets and equity', () => {
   const f = fixture(); f.JournalLines[0].accountId = 'cash_in_hand';
