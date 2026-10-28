@@ -199,6 +199,41 @@ class _TaskDetailsState extends State<TaskDetails> {
     }
   }
 
+  Future<void> _copyDetails() async {
+    final details = StringBuffer();
+    void add(String label, dynamic value) {
+      final text = '${value ?? ''}'.trim();
+      if (text.isNotEmpty) details.writeln('$label: $text');
+    }
+
+    add('Task', _task['title']);
+    add('Status', taskLabel('${_task['status'] ?? ''}'));
+    add('Priority', taskLabel('${_task['priority'] ?? ''}'));
+    add('Assigned to', _task['assigneeName']);
+    add('Project', _task['project']);
+    add(
+        'Tags',
+        '${_task['tags'] ?? ''}'
+            .split(',')
+            .map((tag) => tag.trim())
+            .where((tag) => tag.isNotEmpty)
+            .join(', '));
+    add('Starts', '${_task['startDate'] ?? ''} ${_task['startTime'] ?? ''}');
+    add('Due', '${_task['dueDate'] ?? ''} ${_task['endTime'] ?? ''}');
+    add('Description', _task['description']);
+
+    try {
+      await Clipboard.setData(ClipboardData(text: details.toString().trim()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Task details copied')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to copy task details')));
+    }
+  }
+
   Future<void> _deleteTask() async {
     final confirmed = await showDialog<bool>(
         context: context,
@@ -363,6 +398,10 @@ class _TaskDetailsState extends State<TaskDetails> {
                 icon: const Icon(Icons.close)),
             title: const Text('Task details'),
             actions: [
+              IconButton(
+                  tooltip: 'Copy task details',
+                  onPressed: _copyDetails,
+                  icon: const Icon(Icons.copy_outlined, size: 20)),
               if (widget.manage)
                 IconButton(
                     tooltip: 'Edit / reassign',
