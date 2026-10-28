@@ -25,6 +25,7 @@ Deno.test('task database pages filter assignments, preserve summaries and restri
   assert(page.total===125&&page.records.length===20&&page.nextOffset===120&&page.summary.todo===125);
   assert(page.records[0].updatedAt===25&&!('idempotencyKey' in page.records[0]));
   page=await list(other);assert(page.total===1&&page.records[0].recordId===task&&page.summary.todo===1);
+  assert(page.records[0].taskNumber===1,'Task list includes the permanent tracking number');
   assert((await list(owner,{search:'Task 125'})).total===1);
   assert((await list(owner,{status:'COMPLETED'})).total===0);
   const children=async(actor:string)=>(await db.query(`select * from public.task_records_page($1,'TaskComments',0,1000,$2,$3)`,[company,actor,task])).rows;
@@ -35,6 +36,19 @@ Deno.test('task database pages filter assignments, preserve summaries and restri
   assert((await list(other)).total===125&&(await children(other)).length===1);
   await db.query(`update public.company_memberships set status='REVOKED' where company_id=$1 and user_id=$2`,[company,other]);
   assert((await list(other)).total===0);
+ }finally{await db.close();}
+});
+
+Deno.test('task tracking numbers are server-owned, stable and retained after deletion',async()=>{
+ const {db,company}=await setup();
+ try{
+  await seed(db,company);
+  const number=async()=>(await db.query<{payload:any}>(`select payload from public.task_records_page($1,'Tasks',0,1000,null,$2)`,[company,task])).rows[0].payload.taskNumber;
+  assert(await number()===1);
+  await db.query(`update public.business_records set payload=payload||'{"taskNumber":999,"title":"Renamed"}'::jsonb,version=2 where company_id=$1 and section='Tasks' and record_id=$2`,[company,task]);
+  assert(await number()===1,'Editing cannot change the tracking number');
+  await db.query(`update public.business_records set payload=payload||'{"isDeleted":true}'::jsonb,deleted=true,version=3 where company_id=$1 and section='Tasks' and record_id=$2`,[company,task]);
+  assert(await number()===1,'Deleted tasks keep their number');
  }finally{await db.close();}
 });
 

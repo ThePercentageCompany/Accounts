@@ -291,6 +291,9 @@ export class BusinessService {
           updatedAt: now, updatedBy: actor, recordVersion: op.resultVersion, syncStatus: 'SYNCED',
           isDeleted: action === 'delete', idempotencyKey: marker };
         const row = old?._row || Math.max(1, ...rows.map(item => item._row)) + 1;
+        // Ordinals are allocated under the workspace revision lock and retained
+        // after deletion, so task tracking numbers are never reused.
+        if (tableName === 'Tasks') system.taskNumber = row;
         writeValues = await currencyValues(this.records, companyId, tableName, action, old, writeValues);
         if (values.paymentExchangeRate != null) {
           validRate(values.paymentExchangeRate);

@@ -199,39 +199,24 @@ class _TaskDetailsState extends State<TaskDetails> {
     }
   }
 
-  Future<void> _copyDetails() async {
-    final details = StringBuffer();
-    void add(String label, dynamic value) {
-      final text = '${value ?? ''}'.trim();
-      if (text.isNotEmpty) details.writeln('$label: $text');
-    }
-
-    add('Task', _task['title']);
-    add('Status', taskLabel('${_task['status'] ?? ''}'));
-    add('Priority', taskLabel('${_task['priority'] ?? ''}'));
-    add('Assigned to', _task['assigneeName']);
-    add('Project', _task['project']);
-    add(
-        'Tags',
-        '${_task['tags'] ?? ''}'
-            .split(',')
-            .map((tag) => tag.trim())
-            .where((tag) => tag.isNotEmpty)
-            .join(', '));
-    add('Starts', '${_task['startDate'] ?? ''} ${_task['startTime'] ?? ''}');
-    add('Due', '${_task['dueDate'] ?? ''} ${_task['endTime'] ?? ''}');
-    add('Description', _task['description']);
-
+  Future<void> _copyText(String text, String label) async {
     try {
-      await Clipboard.setData(ClipboardData(text: details.toString().trim()));
+      await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Task details copied')));
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('$label copied')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to copy task details')));
+          SnackBar(content: Text('Unable to copy ${label.toLowerCase()}')));
     }
+  }
+
+  Future<void> _shareLink() async {
+    final link = Uri.base.replace(
+        query: '', fragment: 'task=${widget.companyId}:${_task['recordId']}');
+    await _copyText(link.toString(), 'Task link');
   }
 
   Future<void> _deleteTask() async {
@@ -310,8 +295,23 @@ class _TaskDetailsState extends State<TaskDetails> {
           if ('${_task['tags'] ?? ''}'.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final tag in '${_task['tags']}'.split(','))
-                Chip(label: Text(tag.trim()))
+              for (final tag in '${_task['tags']}'
+                  .split(',')
+                  .map((tag) => tag.trim())
+                  .where((tag) => tag.isNotEmpty))
+                Chip(
+                    label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: Text(tag)),
+                  const SizedBox(width: 4),
+                  IconButton(
+                      tooltip: 'Copy tag',
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.all(4),
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: () => _copyText(tag, 'Tag'),
+                      icon: const Icon(CupertinoIcons.doc_on_doc, size: 16))
+                ]))
             ])
           ],
           const SizedBox(height: 16),
@@ -335,7 +335,17 @@ class _TaskDetailsState extends State<TaskDetails> {
         ]);
     Widget content() =>
         Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Description', style: Theme.of(context).textTheme.titleMedium),
+          Row(children: [
+            Text('Description', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(width: 4),
+            IconButton(
+                tooltip: 'Copy description',
+                visualDensity: VisualDensity.compact,
+                onPressed: '${_task['description'] ?? ''}'.trim().isEmpty
+                    ? null
+                    : () => _copyText('${_task['description']}', 'Description'),
+                icon: const Icon(CupertinoIcons.doc_on_doc, size: 18))
+          ]),
           const SizedBox(height: 8),
           SelectableText('${_task['description'] ?? ''}'.isEmpty
               ? 'No description.'
@@ -399,9 +409,11 @@ class _TaskDetailsState extends State<TaskDetails> {
             title: const Text('Task details'),
             actions: [
               IconButton(
-                  tooltip: 'Copy task details',
-                  onPressed: _copyDetails,
-                  icon: const Icon(Icons.copy_outlined, size: 20)),
+                  tooltip: 'Share task link',
+                  onPressed: '${_task['recordId']}'.startsWith('local_')
+                      ? null
+                      : _shareLink,
+                  icon: const Icon(CupertinoIcons.share, size: 20)),
               if (widget.manage)
                 IconButton(
                     tooltip: 'Edit / reassign',
@@ -440,6 +452,18 @@ class _TaskDetailsState extends State<TaskDetails> {
             : null,
         body: SafeArea(
             child: ListView(padding: const EdgeInsets.all(20), children: [
+          Row(children: [
+            SelectableText(taskTrackingLabel(_task),
+                style: Theme.of(context).textTheme.labelLarge),
+            if (_task['taskNumber'] != null)
+              IconButton(
+                  tooltip: 'Copy task ID',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () =>
+                      _copyText(taskTrackingLabel(_task), 'Task ID'),
+                  icon: const Icon(CupertinoIcons.doc_on_doc, size: 16))
+          ]),
+          const SizedBox(height: 8),
           Text('${_task['title']}',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 20),

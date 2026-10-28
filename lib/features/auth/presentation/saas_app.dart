@@ -51,6 +51,7 @@ class _SaasAppState extends State<SaasApp> {
       return;
     }
     final session = _session!;
+    if (session.busy) return;
     if (session.owner == null) {
       return; // Employee workspace validates its own company.
     }
@@ -159,6 +160,7 @@ class _SaasAppState extends State<SaasApp> {
 
   void _sessionChanged() {
     if (mounted) setState(() {});
+    unawaited(_routeTask());
   }
 
   Future<void> _adminSignIn() async {

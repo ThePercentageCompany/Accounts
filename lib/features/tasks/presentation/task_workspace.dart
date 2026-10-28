@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:tpc_invoice/core/utils/business_time.dart';
 import 'package:tpc_invoice/features/projects/presentation/project_dropdown.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/services.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +25,11 @@ part 'task_assignee_picker.dart';
 
 const taskStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED'];
 const taskPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+String taskTrackingLabel(Map<String, dynamic> task) {
+  final number = task['taskNumber'];
+  return number == null ? 'Pending sync' : 'TASK-${'$number'.padLeft(6, '0')}';
+}
+
 String taskLabel(String value) => value
     .toLowerCase()
     .split('_')

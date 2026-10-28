@@ -1,5 +1,17 @@
 # Structured task storage and realtime
 
+Task tracking numbers use the task's permanent company-scoped ordinal, displayed
+as `TASK-000123`. Migration `202610280001_task_tracking_numbers.sql` backfills
+existing task payloads and enforces the number on future writes. Numbers survive
+edits and soft deletion; they are unique within an entity, not across entities.
+Apply the migration, deploy the Edge API, then rebuild the Flutter app.
+
+The task details share button copies the current app URL with
+`#task=<companyId>:<recordId>` and removes query parameters. The recipient must
+sign in and have access to that entity and task. The link uses the existing
+notification routing and task authorization; it grants no additional access.
+New offline tasks receive their tracking number and can be shared after syncing.
+
 Migration `202610190002_task_storage_realtime.sql` adds complete versioned payloads
 to `business.tasks`, `business.task_comments`, and `business.task_activity` and
 backfills them before switching reads. RecordStore reads these tables through a

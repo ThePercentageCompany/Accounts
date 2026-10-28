@@ -52,6 +52,9 @@ class TaskCard extends StatelessWidget {
                                         child: Text('Edit / reassign'))
                                 ])
                       ]),
+                      Text(taskTrackingLabel(task),
+                          style: Theme.of(context).textTheme.labelSmall),
+                      const SizedBox(height: 4),
                       Text('${task['title']}',
                           style: Theme.of(context).textTheme.titleMedium),
                       if ('${task['project'] ?? ''}'.isNotEmpty)
@@ -69,11 +72,13 @@ class TaskCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall)),
                       const SizedBox(height: 10),
-                      if (task['syncStatus'] == 'FAILED' || task['syncStatus'] == 'PENDING')
+                      if (task['syncStatus'] == 'FAILED' ||
+                          task['syncStatus'] == 'PENDING')
                         Text(
-                            task['_syncLabel'] as String? ?? (task['syncStatus'] == 'FAILED'
-                                ? 'Sync needs attention'
-                                : 'Saved on this device · Waiting to sync'),
+                            task['_syncLabel'] as String? ??
+                                (task['syncStatus'] == 'FAILED'
+                                    ? 'Sync needs attention'
+                                    : 'Saved on this device · Waiting to sync'),
                             style: TextStyle(
                                 color: Theme.of(context).colorScheme.primary,
                                 fontSize: 12)),
