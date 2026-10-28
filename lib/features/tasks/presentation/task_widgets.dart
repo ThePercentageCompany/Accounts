@@ -1,5 +1,27 @@
 part of 'task_workspace.dart';
 
+class TaskTagChip extends StatelessWidget {
+  const TaskTagChip({super.key, required this.tag, required this.onCopy});
+
+  final String tag;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+      message: 'Copy tag',
+      child: ActionChip(
+          onPressed: onCopy,
+          padding: EdgeInsets.zero,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          label: Row(mainAxisSize: MainAxisSize.min, children: [
+            Flexible(child: Text(tag)),
+            const SizedBox(width: 4),
+            const Icon(CupertinoIcons.doc_on_doc, size: 14)
+          ])));
+}
+
 class TaskCard extends StatelessWidget {
   const TaskCard(
       {super.key,

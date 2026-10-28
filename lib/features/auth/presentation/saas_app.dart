@@ -21,10 +21,12 @@ import 'package:tpc_invoice/features/workspace/presentation/workspace_help.dart'
 import 'landing_view.dart';
 import 'package:tpc_invoice/core/pwa/pwa_controls.dart';
 import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
+import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 
 class SaasApp extends StatefulWidget {
-  const SaasApp({super.key, this.api});
+  const SaasApp({super.key, this.api, this.initialTask});
   final SaasApi? api;
+  final TaskLink? initialTask;
 
   @override
   State<SaasApp> createState() => _SaasAppState();
@@ -43,32 +45,36 @@ class _SaasAppState extends State<SaasApp> {
   bool _initializing = true;
   final _pwa = PwaRuntime();
   bool _routingTask = false;
+  bool _initialTaskRouted = false;
   Future<void> _routeTask() async {
     if (_routingTask || !mounted || _session == null || _initializing) return;
-    final parts = '${_pwa.status['taskLink'] ?? ''}'.split(':');
-    if (parts.length != 2 ||
-        !parts.every((p) => RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(p))) {
-      return;
-    }
+    final link = (_initialTaskRouted ? null : widget.initialTask) ??
+        TaskLink.parse('task=${_pwa.status['taskLink'] ?? ''}');
+    if (link == null) return;
     final session = _session!;
     if (session.busy) return;
     if (session.owner == null) {
       return; // Employee workspace validates its own company.
     }
-    if (!session.companies.any((c) => c['companyId'] == parts[0])) {
+    if (!session.companies.any((c) => c['companyId'] == link.companyId)) {
       _pwa.clearTask();
       return;
     }
     _routingTask = true;
     try {
-      if (session.company?['companyId'] != parts[0]) {
-        await session.selectCompany(parts[0]);
+      if (session.company?['companyId'] != link.companyId) {
+        await session.selectCompany(link.companyId);
       }
       if (mounted &&
           session.ready &&
-          session.company?['companyId'] == parts[0]) {
+          session.company?['companyId'] == link.companyId) {
         await session.rememberWorkspace(true);
-        if (mounted) setState(() => _workspace = true);
+        if (mounted) {
+          setState(() {
+            _initialTaskRouted = true;
+            _workspace = true;
+          });
+        }
       }
     } finally {
       _routingTask = false;
@@ -230,6 +236,7 @@ class _SaasAppState extends State<SaasApp> {
     }
     if (_employee) {
       return EmployeeAccessView(
+        initialTask: widget.initialTask,
         api: _api,
         restoreSession: session.employee != null,
         onBack: () {
@@ -240,6 +247,7 @@ class _SaasAppState extends State<SaasApp> {
     }
     if (_workspace && session.ready && session.owner != null) {
       return SharedWorkspace(
+        initialTask: widget.initialTask,
         key: ValueKey((
           session.company!['companyId'],
           session.owner!['ownerId'],

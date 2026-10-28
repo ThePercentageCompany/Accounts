@@ -4,6 +4,7 @@ import 'firebase_options.dart';
 import 'package:tpc_invoice/features/auth/presentation/saas_app.dart';
 import 'package:tpc_invoice/core/theme/app_theme.dart';
 import 'package:tpc_invoice/core/network/supabase_runtime.dart';
+import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +29,15 @@ class TpcApp extends StatelessWidget {
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: themeController.themeMode,
-          home: const SaasApp(),
+          onGenerateInitialRoutes: (name) => [
+            MaterialPageRoute<void>(
+                settings: RouteSettings(name: name),
+                builder: (_) => SaasApp(initialTask: TaskLink.parse(name)))
+          ],
+          onGenerateRoute: (settings) => MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) =>
+                  SaasApp(initialTask: TaskLink.parse(settings.name ?? '/'))),
         ),
       );
 }

@@ -214,8 +214,8 @@ class _TaskDetailsState extends State<TaskDetails> {
   }
 
   Future<void> _shareLink() async {
-    final link = Uri.base.replace(
-        query: '', fragment: 'task=${widget.companyId}:${_task['recordId']}');
+    final link =
+        TaskLink(widget.companyId, '${_task['recordId']}').url(Uri.base);
     await _copyText(link.toString(), 'Task link');
   }
 
@@ -299,19 +299,7 @@ class _TaskDetailsState extends State<TaskDetails> {
                   .split(',')
                   .map((tag) => tag.trim())
                   .where((tag) => tag.isNotEmpty))
-                Chip(
-                    label: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Flexible(child: Text(tag)),
-                  const SizedBox(width: 4),
-                  IconButton(
-                      tooltip: 'Copy tag',
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.all(4),
-                      constraints:
-                          const BoxConstraints(minWidth: 28, minHeight: 28),
-                      onPressed: () => _copyText(tag, 'Tag'),
-                      icon: const Icon(CupertinoIcons.doc_on_doc, size: 16))
-                ]))
+                TaskTagChip(tag: tag, onCopy: () => _copyText(tag, 'Tag'))
             ])
           ],
           const SizedBox(height: 16),
@@ -341,6 +329,11 @@ class _TaskDetailsState extends State<TaskDetails> {
             IconButton(
                 tooltip: 'Copy description',
                 visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints.tightFor(width: 28, height: 28),
+                style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                 onPressed: '${_task['description'] ?? ''}'.trim().isEmpty
                     ? null
                     : () => _copyText('${_task['description']}', 'Description'),

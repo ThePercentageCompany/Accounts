@@ -13,6 +13,7 @@ import 'package:tpc_invoice/core/network/saas_api.dart';
 import 'package:tpc_invoice/core/network/workspace_api.dart';
 import 'package:tpc_invoice/features/auth/presentation/cubit/saas_session.dart';
 import 'package:tpc_invoice/features/workspace/presentation/shared_workspace.dart';
+import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 
 /// Shared-backend employee authentication. Uses Supabase Auth and verified employee permissions.
 class EmployeeAccessView extends StatefulWidget {
@@ -22,11 +23,13 @@ class EmployeeAccessView extends StatefulWidget {
     this.api,
     this.appUri,
     this.restoreSession = false,
+    this.initialTask,
   });
   final VoidCallback onBack;
   final SaasApi? api;
   final Uri? appUri;
   final bool restoreSession;
+  final TaskLink? initialTask;
 
   @override
   State<EmployeeAccessView> createState() => _EmployeeAccessViewState();
@@ -142,6 +145,7 @@ class _EmployeeAccessViewState extends State<EmployeeAccessView> {
     final employee = session?.employee;
     if (_workspace && employee != null) {
       return SharedWorkspace(
+        initialTask: widget.initialTask,
         key: ValueKey((employee['companyId'], employee['employeeId'])),
         api: _api!,
         companyId: employee['companyId'] as String,

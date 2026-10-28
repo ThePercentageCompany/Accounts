@@ -7,6 +7,7 @@ import 'package:tpc_invoice/features/reports/presentation/employee_dashboard.dar
 import 'package:tpc_invoice/core/widgets/app_spacing.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/features/tasks/presentation/task_workspace.dart';
+import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'package:tpc_invoice/core/widgets/workspace_sync_icon.dart';
 import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
@@ -112,6 +113,7 @@ class SharedWorkspace extends StatefulWidget {
     this.countryCode,
     this.currency,
     this.timeZone,
+    this.initialTask,
   });
   final SaasApi api;
   final String companyId;
@@ -121,6 +123,7 @@ class SharedWorkspace extends StatefulWidget {
   final String? ownerId;
   final SharedPreferences? preferences;
   final String? countryCode, currency, timeZone;
+  final TaskLink? initialTask;
   @override
   State<SharedWorkspace> createState() => _SharedWorkspaceState();
 }
@@ -184,6 +187,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   Timer? _backgroundSyncTimer;
   final _pwa = PwaRuntime();
   String? _taskToOpen;
+  bool _initialTaskOpened = false;
   void _openTask(String id) {
     if (widget.employee != null &&
         !(widget.employee!['allowedSections'] as List).contains('Tasks')) {
@@ -196,12 +200,12 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
   }
 
   void _pwaChanged() {
-    final parts = '${_pwa.status['taskLink'] ?? ''}'.split(':');
-    if (parts.length == 2 &&
-        parts[0] == widget.companyId &&
-        RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(parts[1])) {
+    final initial = _initialTaskOpened ? null : widget.initialTask;
+    final link = initial ?? TaskLink.parse('task=${_pwa.status['taskLink'] ?? ''}');
+    if (link != null && link.companyId == widget.companyId) {
+      _initialTaskOpened = true;
       _pwa.clearTask();
-      _openTask(parts[1]);
+      _openTask(link.taskId);
     }
     _syncChanged();
   }
