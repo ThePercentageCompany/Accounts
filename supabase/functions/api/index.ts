@@ -220,7 +220,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
     if(record) {
       requireThat(recordsEndpointAllowed(record[1],request.method,!!record[2]),403,'TABLE_FORBIDDEN','This section is unavailable through records.');
       if(request.method==='GET'&&!record[2]) {
-        const anchor=await recordSyncAnchor(ctx);
+        const anchor=await recordSyncAnchor(ctx,record[1]);
         return json(200,{records:await ctx.read(record[1],url.searchParams.get('includeDeleted')==='true'),...anchor});
       }
       const action=({POST:'create',PATCH:'update',DELETE:'delete'} as any)[request.method];

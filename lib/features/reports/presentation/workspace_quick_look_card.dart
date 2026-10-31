@@ -11,6 +11,7 @@ class WorkspaceQuickLookCard extends StatelessWidget {
       required this.busy,
       required this.onOpen,
       required this.onRefresh,
+      this.filters,
       required this.amounts});
   final String section;
   final List<String> tables;
@@ -20,6 +21,7 @@ class WorkspaceQuickLookCard extends StatelessWidget {
   final bool busy;
   final ValueChanged<String> onOpen;
   final VoidCallback onRefresh;
+  final Widget? filters;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +53,10 @@ class WorkspaceQuickLookCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.refresh, size: 18)),
             ]),
+            if (filters != null) ...[
+              const SizedBox(height: 8),
+              filters!,
+            ],
             for (final table in tables) ...[
               const SizedBox(height: 10),
               InkWell(

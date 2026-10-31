@@ -185,6 +185,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
   }
 
   String _name(Map<String, dynamic> row) =>
+      row['employeeName']?.toString() ??
       _names['${row['employeeId']}'] ??
       (widget.employee ? 'Your payroll' : 'Employee ${row['employeeId']}');
   @override
@@ -192,7 +193,7 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
     final rows = _rows
         .where((r) =>
             (!widget.slips || ['APPROVED', 'PAID'].contains(r['status'])) &&
-            '${_name(r)} ${r['month']} ${r['status']}'
+            '${_name(r)} ${r['employeeCode'] ?? r['employeeId']} ${r['month']} ${r['status']}'
                 .toLowerCase()
                 .contains(_search.text.trim().toLowerCase()))
         .toList();
@@ -242,7 +243,8 @@ class _PayrollSupportViewState extends State<PayrollSupportView> {
                 Card(
                     child: ExpansionTile(
                   key: PageStorageKey((widget.slips, row['recordId'])),
-                  title: Text('${_name(row)} · ${row['month']}'),
+                  title: Text(
+                      '${_name(row)} · ${row['employeeCode'] ?? row['employeeId']} · ${row['month']}'),
                   subtitle: Text(
                       '${row['status']} · Net salary ${row['currency'] ?? ''} ${amount(row['netSalary'])}'),
                   childrenPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

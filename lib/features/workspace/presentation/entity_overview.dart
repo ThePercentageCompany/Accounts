@@ -200,6 +200,7 @@ class _EntityOverviewState extends State<EntityOverview> {
                             companyId: widget.companyId,
                             section: section.key,
                             tables: section.value,
+                            timeZone: '${entity?['timeZone'] ?? 'Asia/Dubai'}',
                             employee: false,
                             compact: true,
                             active: widget.active,

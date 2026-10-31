@@ -2468,6 +2468,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   }
 
   String _title(Map<String, dynamic> row) {
+    if (table == 'Payroll') {
+      final name = '${row['employeeName'] ?? 'Employee'}';
+      final id = '${row['employeeCode'] ?? row['employeeId'] ?? ''}';
+      return '$name · $id · ${row['month'] ?? ''}';
+    }
     if (table == 'JournalLines') {
       final account = '${row['accountName'] ?? ''}'.trim();
       final accountId = '${row['accountId'] ?? ''}'.trim();

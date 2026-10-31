@@ -5,16 +5,17 @@ import { CHILDREN, SECTION_TABLES, visible } from './domain/employee-policy.js';
 import { hasLedgerSources } from './domain/ledger-status.js';
 import { databaseError } from './workspace.ts';
 
-export const recordSyncScope = (ctx:any) => digest(JSON.stringify([
+export const recordSyncScope = (ctx:any,table?:string) => digest(JSON.stringify([
   ctx.company.id,ctx.user.id,ctx.member.employee_id,ctx.member.role,ctx.member.access_valid_after,
   Object.entries(ctx.principal.permissions).sort(),[...ctx.principal.writableSections].sort(),
+  ...(table==='Payroll'?['payroll-display-v1']:[]),
 ]));
 
-export async function recordSyncAnchor(ctx:any) {
+export async function recordSyncAnchor(ctx:any,table?:string) {
   const {data,error}=await ctx.db.rpc('record_sync_head',{p_company:ctx.company.id,p_actor:ctx.user.id});
   if(error?.code==='PGRST202'||error?.code==='42883')return {};
   if(error)databaseError(error);
-  return {syncCursor:data,syncScope:recordSyncScope(ctx)};
+  return {syncCursor:data,syncScope:recordSyncScope(ctx,table)};
 }
 
 export async function recordDelta(ctx:any,table:string,query:URLSearchParams) {
@@ -22,15 +23,16 @@ export async function recordDelta(ctx:any,table:string,query:URLSearchParams) {
   const after=query.get('after')??'',through=query.get('through');
   const cursor=(value:string)=>/^\d{1,19}$/.test(value)&&BigInt(value)<=9223372036854775807n;
   requireThat(cursor(after)&&(!through||cursor(through)),400,'INVALID_CURSOR','Use a valid server cursor.');
-  if(query.get('scope')!==recordSyncScope(ctx))return {reset:true};
+  if(query.get('scope')!==recordSyncScope(ctx,table))return {reset:true};
   const parent=(CHILDREN as any)[table]?.[0];
   const {data:page,error}=await ctx.db.rpc('record_delta_page',{
     p_company:ctx.company.id,p_actor:ctx.user.id,p_after:after,p_through:through,p_limit:500,
-    p_sections:[table,...(parent?[parent]:[]),...(hasLedgerSources(table)?['Journals']:[])],
+    p_sections:[table,...(parent?[parent]:[]),...(hasLedgerSources(table)?['Journals']:[]),...(table==='Payroll'?['Employees']:[])],
   });
   if(error)databaseError(error);
   if(page.reset)return {reset:true};
   const changes=page.changes as any[];
+  if(table==='Payroll'&&changes.some(c=>c.section==='Employees'))return {reset:true};
   // Parent reassignment can hide unchanged children. Reset the authorized
   // collection instead of exposing IDs of children the actor can no longer see.
   if(parent&&changes.some(c=>c.section===parent))return {reset:true};
@@ -67,5 +69,5 @@ export async function recordDelta(ctx:any,table:string,query:URLSearchParams) {
     }
   }
   return {reset:false,records:upserts,removed,cursor:page.cursor,through:page.head,
-    hasMore:page.hasMore,syncScope:recordSyncScope(ctx)};
+    hasMore:page.hasMore,syncScope:recordSyncScope(ctx,table)};
 }

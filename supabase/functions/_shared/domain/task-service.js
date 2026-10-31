@@ -18,7 +18,7 @@ export class TaskService {
     requireThat(Number.isSafeInteger(offset) && offset >= 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100 &&
       (!q.search || q.search.length <= 200) && (!q.status || TASK_STATUSES.includes(q.status)) &&
       (!q.priority || TASK_PRIORITIES.includes(q.priority)) && (!q.from || date(q.from)) && (!q.to || date(q.to)) &&
-      (!q.from || !q.to || q.from <= q.to) && (!q.sort || ['due', 'priority', 'updated'].includes(q.sort)) && (!q.overdue || q.overdue === 'true'),
+      (!q.from || !q.to || q.from <= q.to) && (!q.sort || ['due', 'priority', 'updated', 'newest'].includes(q.sort)) && (!q.overdue || q.overdue === 'true'),
       400, 'INVALID_QUERY', 'Invalid task filters or page size.');
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: context.timeZone ?? 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(this.business.now()));
     if (this.business.taskQueries) return this.business.taskQueries.list(q, today);
@@ -27,6 +27,7 @@ export class TaskService {
       ['employeeId', 'status', 'priority', 'project'].every(k => !q[k] || r[k] === q[k]) &&
       (!q.from || r.dueDate >= q.from) && (!q.to || r.dueDate <= q.to));
     rows.sort((a, b) => (q.sort === 'priority' ? TASK_PRIORITIES.indexOf(b.priority) - TASK_PRIORITIES.indexOf(a.priority) :
+      q.sort === 'newest' ? Number(b.createdAt || 0) - Number(a.createdAt || 0) :
       q.sort === 'updated' ? Number(b.updatedAt) - Number(a.updatedAt) : String(a.dueDate + a.endTime).localeCompare(String(b.dueDate + b.endTime))) || a.recordId.localeCompare(b.recordId));
     const summaryRows = all; // records() already enforces assigned-only or task-manager access.
     const upcoming = {};

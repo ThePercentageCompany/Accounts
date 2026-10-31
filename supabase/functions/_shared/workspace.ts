@@ -4,6 +4,7 @@ import { TABLES } from './domain/company-schema.js';
 import { ApiError, requireThat } from './domain/errors.js';
 import { digest } from './domain/crypto.js';
 import { hasLedgerSources, ledgerStatus } from './domain/ledger-status.js';
+import { payrollDisplay } from './domain/payroll-display.js';
 import { SECTION_TABLES, CHILDREN, SECTIONS, scopeFor, visible, projectRecord } from './domain/employee-policy.js';
 
 export function databaseError(error: any): never {
@@ -151,6 +152,8 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
   const read = async (table: string,includeDeleted = false) => {
     const section=SECTION_TABLES[table as keyof typeof SECTION_TABLES];
     requireThat(section,403,'TABLE_FORBIDDEN','This record section is unavailable.');canRead(section);
+    const display = async (rows:any[]) => table === 'Payroll'
+      ? payrollDisplay(rows,(await records.readReferences(companyId,['Employees'])).Employees) : rows;
     if (table === 'CapitalTransactions') {
       const transactions = admin ? await business.list('',companyId,table,{includeDeleted})
         : (await records.read(companyId,[table]))[table].filter((r:any)=>visible(principal,table,r))
@@ -158,15 +161,15 @@ export async function workspace(db: any,user: any,companyId: string,keys: string
       const shareholders=(await records.read(companyId,['Shareholders'])).Shareholders;
       return transactions.map((r:any)=>({...r,shareholderName:shareholders.find((s:any)=>s.recordId===r.shareholderId)?.name || 'Unknown shareholder'}));
     }
-    if (admin && table !== 'Employees') return business.list('',companyId,table,{includeDeleted});
+    if (admin && table !== 'Employees') return display(await business.list('',companyId,table,{includeDeleted}));
     const names=[table,...(CHILDREN[table as keyof typeof CHILDREN] ? [CHILDREN[table as keyof typeof CHILDREN][0]] : [])];
     const rows=await records.read(companyId,names);
     const journals=hasLedgerSources(table)?(await records.read(companyId,['Journals'])).Journals:[];
-    return rows[table].filter((r: any) => admin ? includeDeleted || !r.isDeleted : visible(principal,table,r,rows)).map((r: any) => {
+    return display(rows[table].filter((r: any) => admin ? includeDeleted || !r.isDeleted : visible(principal,table,r,rows)).map((r: any) => {
       const result=admin ? {...r} : projectRecord(principal,table,r);
       const posting=ledgerStatus(table,r,journals,companyId);if(posting!==undefined)result.ledgerStatus=posting;
       delete result._row;delete result.idempotencyKey;return result;
-    });
+    }));
   };
   const commit = async () => {
     const configuration={...state.companies[companyId]};

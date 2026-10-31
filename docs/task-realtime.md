@@ -7,10 +7,16 @@ edits and soft deletion; they are unique within an entity, not across entities.
 Apply the migration, deploy the Edge API, then rebuild the Flutter app.
 
 The task details share button copies the current app URL with
-`#task=<companyId>:<recordId>` and removes query parameters. The recipient must
-sign in and have access to that entity and task. The link uses the existing
-notification routing and task authorization; it grants no additional access.
+`#/tasks/<companyId>/<recordId>` and removes query parameters. Flutter explicitly
+resolves this route and retains the destination through sign-in. Older
+`#task=<companyId>:<recordId>` links also work. The recipient must sign in and have
+access to that entity and task; the link grants no additional access.
 New offline tasks receive their tracking number and can be shared after syncing.
+
+Tasks default to newest first by creation time, with the same ordering in local
+overlays and SQL pagination. Migration `202611010001_task_newest_sort.sql` adds
+the `newest` sort to the database list function. Due date, priority and recently
+updated sorting remain available in the menu.
 
 Migration `202610190002_task_storage_realtime.sql` adds complete versioned payloads
 to `business.tasks`, `business.task_comments`, and `business.task_activity` and

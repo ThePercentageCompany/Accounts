@@ -46,6 +46,11 @@ The app must be opened online initially to install the offline shell and cache t
 
 ## Multi-currency transactions
 
+Dashboard payroll cards support All, Year and Month period filters. Select a
+year and, for Month, a month to update payroll counts, currency totals, status
+charts and recent records together. Filtering follows the salary month rather
+than the date payroll was created or paid, and includes locally saved changes.
+
 Invoices, quotations, customer receipts, payroll, income and expenses retain their original currency and amounts. Posted journals and financial reports use the company accounting currency. Set employee salary currency and customer preferred currency in their respective editors.
 
 The authenticated `GET /v1/companies/{companyId}/exchange-rate?currency=INR&date=2026-10-10` endpoint (also under `/v1/employee/companies/`) returns a dated Frankfurter reference rate, its date and accounting currency. Forms fill this rate automatically and allow manual changes, including payment-date rates. The convention is **1 transaction-currency unit = exchangeRate accounting-currency units**. Saved rates do not change when reference rates update; settlements post exchange gains/losses. If the provider is unavailable, enter a manual rate.

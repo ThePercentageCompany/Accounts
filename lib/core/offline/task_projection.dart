@@ -92,6 +92,8 @@ Map<String, dynamic> projectTaskPage(
           .compareTo(priorities.indexOf('${a['priority']}')),
       'updated' =>
         (b['updatedAt'] as num? ?? 0).compareTo(a['updatedAt'] as num? ?? 0),
+      'newest' =>
+        (b['createdAt'] as num? ?? 0).compareTo(a['createdAt'] as num? ?? 0),
       _ => '${a['dueDate']}${a['endTime'] ?? ''}'
           .compareTo('${b['dueDate']}${b['endTime'] ?? ''}'),
     };

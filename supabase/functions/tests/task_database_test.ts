@@ -27,6 +27,11 @@ Deno.test('task database pages filter assignments, preserve summaries and restri
   page=await list(other);assert(page.total===1&&page.records[0].recordId===task&&page.summary.todo===1);
   assert(page.records[0].taskNumber===1,'Task list includes the permanent tracking number');
   assert((await list(owner,{search:'Task 125'})).total===1);
+  await db.query(`update public.business_records set payload=payload||jsonb_build_object('createdAt',ordinal,'updatedAt',1000-ordinal) where company_id=$1 and section='Tasks'`,[company]);
+  page=await list(owner,{sort:'newest',limit:2});
+  assert(page.records[0].createdAt===125&&page.records[1].createdAt===124,'Newest sorts by creation, not most recent edit');
+  page=await list(owner,{sort:'newest',offset:2,limit:2});
+  assert(page.records[0].createdAt===123&&page.records[1].createdAt===122,'Newest ordering is applied before paging');
   assert((await list(owner,{status:'COMPLETED'})).total===0);
   const children=async(actor:string)=>(await db.query(`select * from public.task_records_page($1,'TaskComments',0,1000,$2,$3)`,[company,actor,task])).rows;
   assert((await children(other)).length===1);

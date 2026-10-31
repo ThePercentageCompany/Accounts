@@ -89,7 +89,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   Map<String, dynamic> _summary = {}, _dateCounts = {};
   String _view = '',
       _scope = 'All',
-      _sort = 'due',
+      _sort = 'newest',
       _boardStatus = 'TODO',
       _calendarView = '';
   Map<String, String> _filters = {};
@@ -211,7 +211,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       false;
   List<Map<String, dynamic>> _visibleTasks(List<Map<String, dynamic>> rows) {
     final q = _query();
-    return (widget.writes?.visibleRows('Tasks', rows) ??
+    final visible = (widget.writes?.visibleRows('Tasks', rows) ??
             widget.api
                 .workspaceOutbox(widget.companyId, employee: _employee)
                 ?.overlay('Tasks', rows) ??
@@ -229,6 +229,16 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                     .toLowerCase()
                     .contains(q['search']!.toLowerCase())))
         .toList();
+    if (_sort == 'newest') {
+      visible.sort((a, b) {
+        final order = (b['createdAt'] as num? ?? 0)
+            .compareTo(a['createdAt'] as num? ?? 0);
+        return order != 0
+            ? order
+            : '${a['recordId']}'.compareTo('${b['recordId']}');
+      });
+    }
+    return visible;
   }
 
   Future<void> _recoverTasks() async {
@@ -912,6 +922,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       onSelected: (s) => _change(() => _sort = s),
       itemBuilder: (_) => [
             for (final pair in [
+              ('newest', 'Newest first'),
               ('due', 'Due date'),
               ('priority', 'Priority'),
               ('updated', 'Recently updated')
