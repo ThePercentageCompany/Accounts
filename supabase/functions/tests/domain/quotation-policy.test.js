@@ -28,14 +28,38 @@ test('sending allocates yearly number and locks quotation', async () => {
     error => error.code === 'QUOTATION_LOCKED');
 });
 
+test('draft creation assigns the yearly number and sending keeps it', async () => {
+  const f = fixture();
+  const created = await quotationChanges(f.records, 'c', 'Quotations', 'q', 'create', null,
+    { customerId: 'u', issueDate: '2026-09-28', validUntil: '2026-10-28', currency: 'AED' }, system, 'create');
+  assert.equal(created.values.number, 'QT-2026-000001');
+  f.parent.number = 'QT-2026-000001';
+  const sent = await quotationChanges(f.records, 'c', 'Quotations', 'q', 'send', f.parent, {}, system, 'send');
+  assert.equal(sent.values.number, 'QT-2026-000001'); assert.equal(sent.values.status, 'SENT');
+});
+
 test('conversion creates one draft invoice and copied lines atomically', async () => {
   const f = fixture(); f.parent.status = 'SENT'; f.parent.number = 'QT-2026-000001';
   const result = await quotationChanges(f.records, 'c', 'Quotations', 'q', 'convert', f.parent, {}, system, 'operation');
   assert.equal(result.values.status, 'CONVERTED'); assert.equal(result.values.convertedInvoiceId.length, 43);
   assert.equal(result.extra[0].table, 'Invoices'); assert.equal(result.extra[0].values.status, 'DRAFT');
+  assert.equal(result.extra[0].values.number, 'INV-2026-000001');
   assert.equal(result.extra[1].table, 'InvoiceItems');
   assert.equal(result.extra[1].values.invoiceId, result.values.convertedInvoiceId);
   assert.equal(result.extra[0].values.total, 99.75);
+});
+
+test('cash quotations save the walk-in name and conversion keeps it', async () => {
+  const f = fixture();
+  const cash = { customerId: '', cashCustomerName: '  Walk-in  ', issueDate: '2026-09-28', validUntil: '2026-10-28', currency: 'AED' };
+  const created = await quotationChanges(f.records, 'c', 'Quotations', 'q', 'create', null, cash, system, 'create');
+  assert.equal(created.values.cashCustomerName, 'Walk-in');
+  assert.equal(created.values.number, 'QT-2026-000001');
+  f.parent.customerId = ''; f.parent.cashCustomerName = 'Walk-in'; f.parent.number = 'QT-2026-000001';
+  f.parent.status = 'SENT';
+  const converted = await quotationChanges(f.records, 'c', 'Quotations', 'q', 'convert', f.parent, {}, system, 'convert');
+  assert.equal(converted.extra[0].values.customerId, '');
+  assert.equal(converted.extra[0].values.cashCustomerName, 'Walk-in');
 });
 
 test('quotation rejects empty send, stale totals, forged fields and invalid conversion', async () => {

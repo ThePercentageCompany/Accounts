@@ -1,3 +1,4 @@
+import { nextDocumentNumber } from './document-number.js';
 import { requireThat } from './errors.js';
 import { validLedgerDate } from './financial-period-policy.js';
 
@@ -20,7 +21,7 @@ export async function assertCashEntryEditable(records, companyId, table, recordI
   409, 'CASH_ENTRY_LINKED', 'This entry has a linked journal. A coordinated accounting correction is required.');
 }
 
-export function cashEntryValues(table, action, old, values) {
+export async function cashEntryValues(records, companyId, table, action, old, values) {
   if (!['Income', 'Expenses'].includes(table) || action === 'delete') return values;
   const record = { ...old, ...values };
   requireThat(validLedgerDate(record.date), 400, 'INVALID_CASH_ENTRY', 'Enter a valid entry date.');
@@ -42,6 +43,17 @@ export function cashEntryValues(table, action, old, values) {
       requireThat(hundredths(values[field], field, 1e12) === expected,
         400, 'CASH_TOTAL_MISMATCH', `${field} does not match the entry amount and tax rate.`);
     }
+  }
+  // Cash entries receive their document number on creation so lists, exports
+  // and PDFs can reference them; posting and payment keep it unchanged.
+  if (!old) {
+    const income = table === 'Income', prefix = income ? 'INC' : 'EXP';
+    return { ...values, amount: Number(amount) / 100, taxRate: Number(rate) / 100,
+      taxAmount: Number(tax) / 100, total: Number(total) / 100,
+      paidDate: record.paymentStatus === 'PAID' ? record.paidDate : '',
+      number: await nextDocumentNumber(records, companyId, table, prefix, record.date,
+        income ? 'INCOME_SEQUENCE_EXHAUSTED' : 'EXPENSE_SEQUENCE_EXHAUSTED',
+        `${income ? 'Income' : 'Expense'} numbering is exhausted for this year.`) };
   }
   return { ...values, amount: Number(amount) / 100, taxRate: Number(rate) / 100,
     taxAmount: Number(tax) / 100, total: Number(total) / 100,

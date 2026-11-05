@@ -1,4 +1,5 @@
 import { challenge } from './crypto.js';
+import { nextDocumentNumber } from './document-number.js';
 import { requireThat } from './errors.js';
 import { assertOpenLedgerDate, validLedgerDate } from './financial-period-policy.js';
 import { minor } from './journal-policy.js';
@@ -103,7 +104,11 @@ export async function assetChanges(records, companyId, table, id, action, old, v
   const all = await records.read(companyId, ['Assets']);
   requireThat(!all.Assets.some(row => row.companyId === companyId && row.recordId !== id && active(row) &&
     String(row.assetCode).toUpperCase() === next.assetCode.trim().toUpperCase()), 409, 'ASSET_CODE_DUPLICATE', 'Asset code already exists.');
-  return { values: { ...values, assetCode: next.assetCode.trim(), name: next.name.trim(), acquisitionType: 'COMPANY_PURCHASE',
+  // Every draft asset receives its document number immediately so lists,
+  // exports and PDFs can reference it; capitalization keeps it unchanged.
+  const number = old ? undefined : await nextDocumentNumber(records, companyId, 'Assets', 'AST', next.purchaseDate,
+    'ASSET_SEQUENCE_EXHAUSTED', 'Asset numbering is exhausted for this year.');
+  return { values: { ...values, ...(number ? { number } : {}), assetCode: next.assetCode.trim(), name: next.name.trim(), acquisitionType: 'COMPANY_PURCHASE',
     depreciationMethod: 'STRAIGHT_LINE', accumulatedDepreciation: 0, netBookValue: money(minor(next.cost)),
     lastDepreciationDate: '', disposalDate: '', disposalProceeds: 0, disposalAccount: '', disposalReason: '',
     status: 'DRAFT', acquisitionJournalId: '' }, extra: [] };

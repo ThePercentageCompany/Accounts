@@ -273,7 +273,7 @@ export class BusinessService {
             409, 'TASK_ASSIGNEE_UNAVAILABLE', 'Select an active employee for assignment.');
           taskAssigneeName = employee.fullName;
         }
-        let writeValues = action === 'reverse' ? {} : cashEntryValues(tableName, action, old, action === 'pay' ? { ...values, paymentStatus: 'PAID' } : values);
+        let writeValues = action === 'reverse' ? {} : await cashEntryValues(this.records, companyId, tableName, action, old, action === 'pay' ? { ...values, paymentStatus: 'PAID' } : values);
         if (taskAssigneeName !== undefined) writeValues = { ...writeValues, assigneeName: taskAssigneeName };
         if (action === 'pay') requireThat(old.total === writeValues.total && old.taxAmount === writeValues.taxAmount,
           409, 'PAYMENT_NOT_AVAILABLE', 'The saved totals need reconciliation before payment.');

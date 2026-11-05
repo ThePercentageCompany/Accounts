@@ -121,6 +121,15 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   Uint8List? image;
   String? imageName;
   bool get logo => widget.section == 'CompanyProfile';
+  // Generated files carry the document number (INV-2026-000001.pdf); records
+  // that are still local-only keep the section and id fallback.
+  String get _fileBase {
+    final number = '${widget.record['number'] ?? ''}'.trim();
+    return number.isEmpty
+        ? '${widget.section}-${widget.record['recordId']}'
+        : number;
+  }
+
   Future<void> _exportHtml() => _run(() async {
         final html = await savedRecordHtml(
           widget.api,
@@ -131,7 +140,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
         );
         await downloadFile(
           Uint8List.fromList(utf8.encode(html)),
-          filename: '${widget.section}-${widget.record['recordId']}.html',
+          filename: '$_fileBase.html',
           mimeType: 'text/html',
         );
       });
@@ -281,8 +290,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
 
   Future<void> _downloadPdf() => _run(() async {
         await downloadFile(await _pdfBytes(),
-            filename: '${widget.section}-$_recordId.pdf',
-            mimeType: 'application/pdf');
+            filename: '$_fileBase.pdf', mimeType: 'application/pdf');
       });
   Future<void> _printDesign() => _run(() async {
         final html = await savedRecordHtml(
@@ -293,7 +301,7 @@ class _RecordDocumentsViewState extends State<RecordDocumentsView> {
   Future<void> _generate() => _run(() async {
         final bytes = await _pdfBytes();
         await widget.uploads!.enqueue(
-          name: '${widget.section}-${widget.record['recordId']}.pdf',
+          name: '$_fileBase.pdf',
           mimeType: 'application/pdf',
           section: widget.section,
           recordId: _recordId,

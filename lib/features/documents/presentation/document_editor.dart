@@ -119,7 +119,8 @@ class _DocumentEditorState extends State<DocumentEditor> {
     if (!AppFormValidation.validate(form.currentState!)) return;
     final draft = <String, Object?>{
       ...fx.values,
-      'customerId': customerId!,
+      'customerId': cashCustomer ? '' : customerId!,
+      'cashCustomerName': cashCustomer ? cashName.text.trim() : '',
       'issueDate': issueDate.text,
       endKey: endDate.text,
       'currency': currency.text.trim().toUpperCase(),
@@ -146,6 +147,11 @@ class _DocumentEditorState extends State<DocumentEditor> {
 
   final form = GlobalKey<FormState>();
   late String? customerId = widget.record?['customerId'] as String?;
+  late bool cashCustomer = widget.record != null &&
+      '${widget.record!['customerId'] ?? ''}'.trim().isEmpty;
+  late final cashName = TextEditingController(
+    text: '${widget.record?['cashCustomerName'] ?? ''}',
+  );
   late final issueDate = TextEditingController(
     text:
         '${widget.record?['issueDate'] ?? DateTime.now().toIso8601String().substring(0, 10)}',
@@ -176,7 +182,8 @@ class _DocumentEditorState extends State<DocumentEditor> {
       lines.map((line) => line.values).toList();
   Map<String, dynamic> get header => {
         if (widget.record != null) ...widget.record!,
-        'customerId': customerId,
+        'customerId': cashCustomer ? '' : customerId,
+        'cashCustomerName': cashCustomer ? cashName.text.trim() : '',
         'issueDate': issueDate.text,
         endKey: endDate.text,
         'currency': currency.text.trim().toUpperCase(),
@@ -188,6 +195,11 @@ class _DocumentEditorState extends State<DocumentEditor> {
           .where((row) => row['recordId'] == customerId)
           .firstOrNull ??
       {};
+  // Walk-in display name used when no customer account is selected.
+  String get cashLabel {
+    final name = cashName.text.trim();
+    return name.isEmpty ? 'Cash Customer' : 'Cash Customer - $name';
+  }
   bool validDate(String value) {
     final parsed = DateTime.tryParse(value);
     return AppValidators.datePattern.hasMatch(value) &&
@@ -220,7 +232,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
   void dispose() {
     _navigationGuard.dispose();
     fx.dispose();
-    for (final field in [issueDate, endDate, currency, notes, terms]) {
+    for (final field in [issueDate, endDate, currency, notes, terms, cashName]) {
       field.dispose();
     }
     for (final line in [...lines, ...retired]) {
@@ -410,37 +422,54 @@ class _DocumentEditorState extends State<DocumentEditor> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               section('Customer & dates'),
-              SearchableRecordField(
-                initialValue: customerId,
-                decoration: const InputDecoration(labelText: 'Customer'),
-                items: [
-                  for (final customer in widget.customers)
-                    DropdownMenuItem(
-                      value: customer['recordId'] as String,
-                      child: Text('${customer['name']}'),
-                    ),
-                ],
-                onChanged: (value) => setState(() {
-                  customerId = value;
-                  if ('${customer['preferredCurrency'] ?? ''}'.isNotEmpty) {
-                    currency.text = '${customer['preferredCurrency']}';
-                  }
-                }),
-                validator: (value) =>
-                    value == null ? 'Choose a customer.' : null,
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Cash customer'),
+                subtitle: const Text('Walk-in sale without a customer account'),
+                value: cashCustomer,
+                onChanged: (value) => setState(() => cashCustomer = value),
               ),
-              if (customer.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    [
-                      customer['address'],
-                      customer['email'],
-                      if ('${customer['taxNumber'] ?? ''}'.isNotEmpty)
-                        'TRN: ${customer['taxNumber']}',
-                    ].where((v) => v != null && '$v'.isNotEmpty).join(' · '),
+              if (cashCustomer)
+                ValidatedTextField(
+                  controller: cashName,
+                  maxLength: 200,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer name (optional)',
                   ),
+                )
+              else ...[
+                SearchableRecordField(
+                  initialValue: customerId,
+                  decoration: const InputDecoration(labelText: 'Customer'),
+                  items: [
+                    for (final customer in widget.customers)
+                      DropdownMenuItem(
+                        value: customer['recordId'] as String,
+                        child: Text('${customer['name']}'),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    customerId = value;
+                    if ('${customer['preferredCurrency'] ?? ''}'.isNotEmpty) {
+                      currency.text = '${customer['preferredCurrency']}';
+                    }
+                  }),
+                  validator: (value) =>
+                      value == null ? 'Choose a customer.' : null,
                 ),
+                if (customer.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      [
+                        customer['address'],
+                        customer['email'],
+                        if ('${customer['taxNumber'] ?? ''}'.isNotEmpty)
+                          'TRN: ${customer['taxNumber']}',
+                      ].where((v) => v != null && '$v'.isNotEmpty).join(' · '),
+                    ),
+                  ),
+              ],
               const SizedBox(height: 12),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -606,10 +635,12 @@ class _DocumentEditorState extends State<DocumentEditor> {
                   ...widget.company,
                   'trn': widget.company['trn'] ?? widget.company['taxNumber']
                 },
-                customer: {
-                  ...customer,
-                  'trn': customer['trn'] ?? customer['taxNumber']
-                },
+                customer: customer.isNotEmpty
+                    ? {
+                        ...customer,
+                        'trn': customer['trn'] ?? customer['taxNumber']
+                      }
+                    : {'name': cashLabel, 'trn': ''},
                 items: [
                   for (final item in values)
                     {

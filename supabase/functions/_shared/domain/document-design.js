@@ -66,9 +66,14 @@ export function snapshotHtml(source, section, recordId, rows) {
   requireThat(record, 404, 'RECORD_UNAVAILABLE', 'Document record is unavailable.');
   const company = rows.CompanyProfile.find(r => r.recordId === 'company' && active(r));
   const invoice = section === 'CreditNotes' ? rows.Invoices.find(r => r.recordId === record.invoiceId && active(r)) : null;
-  const customer = section==='Payroll'
+  const customerId = record.customerId ?? invoice?.customerId ?? '';
+  const cashName = String(record.cashCustomerName ?? '').trim();
+  // Cash sales carry an optional walk-in name instead of a customer account.
+  const found = section==='Payroll'
     ? rows.Employees.find(r => r.recordId===record.employeeId && active(r))
-    : rows.Customers.find(r => r.recordId === (record.customerId ?? invoice?.customerId) && active(r));
+    : rows.Customers.find(r => r.recordId === customerId && active(r));
+  const customer = found ?? (customerId === '' && section !== 'Payroll'
+    ? { name: cashName ? `Cash Customer - ${cashName}` : 'Cash Customer' } : null);
   requireThat(company && customer, 409, 'RECORD_UNAVAILABLE', 'Company or customer is unavailable.');
   const itemTable = {Invoices:'InvoiceItems',Quotations:'QuotationItems',CreditNotes:'CreditNoteItems'}[section];
   const parentKey = {Invoices:'invoiceId',Quotations:'quotationId',CreditNotes:'creditNoteId'}[section];

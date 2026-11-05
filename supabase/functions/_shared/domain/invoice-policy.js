@@ -1,5 +1,6 @@
 import { convert, recordRate } from './foreign-currency.js';
 import { requireThat } from './errors.js';
+import { nextDocumentNumber } from './document-number.js';
 import { minor } from './journal-policy.js';
 import { validLedgerDate } from './financial-period-policy.js';
 import { assertOpenLedgerDate } from './financial-period-policy.js';
@@ -8,6 +9,24 @@ import { replaceDraftItems } from './document-draft.js';
 import { invoiceReturnChanges } from './invoice-return.js';
 const active = row => row && row.isDeleted !== true && row.isDeleted !== 'TRUE';
 const dollars = cents => Number(cents) / 100;
+export function invoicePrefix(profile) {
+  const prefix = String(profile?.invoicePrefix || 'INV').trim().toUpperCase();
+  requireThat(/^[A-Z0-9-]{1,12}$/.test(prefix), 409, 'INVALID_INVOICE_PREFIX', 'Configure a valid invoice prefix.');
+  return prefix;
+}
+
+// Cash sales replace the customer account with an optional walk-in name shown
+// as "Cash Customer - <name>" on lists, exports and PDFs.
+export function cashCustomerName(record) {
+  if (!record.customerId) {
+    requireThat(typeof record.cashCustomerName === 'string' && record.cashCustomerName.trim().length <= 200,
+      400, 'INVALID_CASH_CUSTOMER', 'Cash customer names are optional text of at most 200 characters.');
+    return record.cashCustomerName.trim();
+  }
+  requireThat(!record.cashCustomerName, 400, 'INVALID_CASH_CUSTOMER',
+    'A cash customer name is only used when no customer account is selected.');
+  return '';
+}
 
 export function invoiceLineValues(record) {
   const quantity = minor(record.quantity), price = minor(record.unitPrice), discount = minor(record.discount ?? 0), rate = minor(record.taxRate ?? 0);
@@ -44,17 +63,15 @@ export async function invoiceChanges(records, companyId, table, id, action, old,
       const lines = data.InvoiceItems.filter(line => line.companyId === companyId && line.invoiceId === id && active(line));
       requireThat(lines.length > 0, 409, 'INVOICE_EMPTY', 'Add at least one invoice line before issuing.');
       const calculated = totals(lines);
-      requireThat(old && old.customerId && validLedgerDate(old.issueDate) && /^[A-Z]{3}$/.test(old.currency) &&
+      requireThat(old && typeof old.customerId === 'string' && validLedgerDate(old.issueDate) && /^[A-Z]{3}$/.test(old.currency) &&
         old.subtotal === calculated.subtotal && old.discount === calculated.discount && old.taxAmount === calculated.taxAmount && old.total === calculated.total,
       409, 'INVOICE_TOTAL_MISMATCH', 'Refresh or repair invoice totals before issuing.');
       await assertOpenLedgerDate(records, companyId, old.issueDate);
+      // Issued invoices keep the number assigned when the draft was created;
+      // only legacy drafts saved before create-time numbering are numbered here.
       const profile = data.CompanyProfile.find(row => row.companyId === companyId && active(row));
-      const prefix = String(profile?.invoicePrefix || 'INV').trim().toUpperCase();
-      requireThat(/^[A-Z0-9-]{1,12}$/.test(prefix), 409, 'INVALID_INVOICE_PREFIX', 'Configure a valid invoice prefix.');
-      const period = old.issueDate.slice(0, 4), pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-${period}-(\\d{6})$`);
-      const sequence = Math.max(0, ...data.Invoices.filter(row => row.companyId === companyId && active(row)).map(row => pattern.exec(row.number)?.[1]).filter(Boolean).map(Number)) + 1;
-      requireThat(sequence <= 999999, 409, 'INVOICE_SEQUENCE_EXHAUSTED', 'Invoice numbering is exhausted for this year.');
-      const number = `${prefix}-${period}-${String(sequence).padStart(6, '0')}`;
+      const number = old.number || await nextDocumentNumber(records, companyId, 'Invoices', invoicePrefix(profile), old.issueDate,
+        'INVOICE_SEQUENCE_EXHAUSTED', 'Invoice numbering is exhausted for this year.');
       const journalId = challenge(`${companyId}:${operation}:invoice-issue`);
       const journalRow = Math.max(1, ...data.Journals.map(row => row._row)) + 1;
       const lineRow = Math.max(1, ...data.JournalLines.map(row => row._row)) + 1;
@@ -117,17 +134,23 @@ export async function invoiceChanges(records, companyId, table, id, action, old,
       400, 'INVOICE_DERIVED_FIELD', 'Invoice totals and numbering are assigned by the server.');
     const record = { ...old, ...values, status: values.status ?? old?.status ?? 'DRAFT' };
     requireThat(record.status === 'DRAFT', 409, 'INVOICE_LOCKED', 'Issuing requires the invoice posting workflow.');
-    requireThat(typeof record.customerId === 'string' && record.customerId && validLedgerDate(record.issueDate) &&
+    requireThat(typeof record.customerId === 'string' && validLedgerDate(record.issueDate) &&
       (!record.dueDate || (validLedgerDate(record.dueDate) && record.dueDate >= record.issueDate)) &&
       typeof record.currency === 'string' && /^[A-Z]{3}$/.test(record.currency),
     400, 'INVALID_INVOICE', 'Choose a customer, currency and valid invoice dates.');
-    const data = await records.read(companyId, ['InvoiceItems']);
+    const cashName = cashCustomerName(record);
+    const data = await records.read(companyId, old ? ['InvoiceItems'] : ['CompanyProfile', 'Invoices', 'InvoiceItems']);
     const lines = data.InvoiceItems.filter(l => l.companyId === companyId && l.invoiceId === id && active(l));
     const { items, ...header } = values;
     const replacement = items === undefined ? { lines, extra: [] } :
       replaceDraftItems(companyId, 'InvoiceItems', 'invoiceId', id, data.InvoiceItems,
         items, system, operation, invoiceLineValues);
-    return { values: { ...header, status: 'DRAFT', ...totals(replacement.lines) }, extra: replacement.extra };
+    // Every draft receives its document number immediately so lists, exports and
+    // PDFs can reference it; issuing and later steps keep it unchanged.
+    const number = old ? undefined : await nextDocumentNumber(records, companyId, 'Invoices',
+      invoicePrefix(data.CompanyProfile.find(row => row.companyId === companyId && active(row))), record.issueDate,
+      'INVOICE_SEQUENCE_EXHAUSTED', 'Invoice numbering is exhausted for this year.');
+    return { values: { ...header, cashCustomerName: cashName, ...(number ? { number } : {}), status: 'DRAFT', ...totals(replacement.lines) }, extra: replacement.extra };
   }
   const next = { ...old, ...values };
   requireThat(!old || old.invoiceId === next.invoiceId, 409, 'INVOICE_LOCKED', 'Moving invoice lines is not supported.');

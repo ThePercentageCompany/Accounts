@@ -1,4 +1,5 @@
 import { requireThat } from './errors.js';
+import { nextDocumentNumber } from './document-number.js';
 import { challenge } from './crypto.js';
 import { minor } from './journal-policy.js';
 import { validLedgerDate, assertOpenLedgerDate } from './financial-period-policy.js';
@@ -61,10 +62,8 @@ export async function invoiceReturnChanges(records, companyId, id, old, values, 
   const applied = total < balance ? total : balance, refund = total - applied;
   requireThat(refund <= paid && (refund === 0n || ['Cash', 'Bank'].includes(values.refundAccount)),
     400, 'RETURN_REFUND_ACCOUNT_REQUIRED', 'Choose Cash or Bank for the customer refund.');
-  const year = values.date.slice(0, 4), pattern = new RegExp(`^CN-${year}-(\\d{6})$`);
-  const sequence = Math.max(0, ...data.CreditNotes.filter(n => n.companyId === companyId).map(n => Number(pattern.exec(n.number)?.[1]) || 0)) + 1;
-  requireThat(sequence <= 999999, 409, 'CREDIT_SEQUENCE_EXHAUSTED', 'Credit note numbering is exhausted.');
-  const number = `CN-${year}-${String(sequence).padStart(6, '0')}`;
+  const number = await nextDocumentNumber(records, companyId, 'CreditNotes', 'CN', values.date,
+    'CREDIT_SEQUENCE_EXHAUSTED', 'Credit note numbering is exhausted.');
   const noteId = challenge(`${companyId}:${operation}:credit-note`), journalId = challenge(`${companyId}:${operation}:return-journal`);
   const meta = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
   const fullyReturned = lines.every(line => {
@@ -80,7 +79,7 @@ export async function invoiceReturnChanges(records, companyId, id, old, values, 
   ].filter(e => e.debit || e.credit);
   return { values: { balance: money(balance - applied), paidAmount: money(paid - refund), status: fullyReturned ? 'RETURNED' : 'PARTIALLY_RETURNED' }, extra: [
     { table: 'CreditNotes', row: nextRow(data.CreditNotes), values: { ...meta, recordId: noteId, number, invoiceId: id,
-      customerId: old.customerId, date: values.date, reason: values.reason, currency: old.currency, subtotal: money(sum('subtotal')),
+      customerId: old.customerId, cashCustomerName: old.cashCustomerName || '', date: values.date, reason: values.reason, currency: old.currency, subtotal: money(sum('subtotal')),
       discount: money(sum('discount')), taxAmount: money(tax), total: money(total), refundAmount: money(refund),
       refundAccount: refund > 0n ? values.refundAccount : '', status: 'POSTED' } },
     ...entries.map((entry, i) => ({ table: 'CreditNoteItems', row: nextRow(data.CreditNoteItems) + i,

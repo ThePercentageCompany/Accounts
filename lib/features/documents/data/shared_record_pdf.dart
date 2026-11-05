@@ -40,6 +40,12 @@ Future<Uint8List> sharedRecordPdf(
           'A document record is unavailable. Refresh and retry.',
         ),
       );
+  // Cash sales carry an optional walk-in name instead of a customer account.
+  String cashPartyName(Map<String, dynamic> record) {
+    final name = '${record['cashCustomerName'] ?? ''}'.trim();
+    return name.isEmpty ? 'Cash Customer' : 'Cash Customer - $name';
+  }
+
   final record = find(await rows(section), recordId);
   Future<List<Map<String, dynamic>>> references(String table) async =>
       ((await api.editorReferences(companyId, table, section,
@@ -48,8 +54,11 @@ Future<Uint8List> sharedRecordPdf(
           .toList();
   final profile = find(await references('CompanyProfile'), 'company');
   Map<String, dynamic>? party;
-  if (record['customerId'] != null) {
+  if ('${record['customerId'] ?? ''}'.isNotEmpty) {
     party = find(await references('Customers'), record['customerId']);
+  } else if (const ['Invoices', 'Quotations', 'CreditNotes', 'Receipts']
+      .contains(section)) {
+    party = {'name': cashPartyName(record)};
   }
   if (section == 'Payroll') {
     final employees = (employee
@@ -221,6 +230,12 @@ Future<Uint8List> sharedRecordPdf(
           text(record['number']).isEmpty
               ? 'Record: $recordId'
               : text(record['number']),
+          style: pw.TextStyle(
+            fontSize: text(record['number']).isEmpty ? 10 : 13,
+            fontWeight: text(record['number']).isEmpty
+                ? pw.FontWeight.normal
+                : pw.FontWeight.bold,
+          ),
         ),
         pw.Text('Currency: ${text(record['currency'] ?? profile['currency'])}'),
         if (party != null) ...[

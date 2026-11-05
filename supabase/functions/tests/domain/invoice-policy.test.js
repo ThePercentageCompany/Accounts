@@ -5,7 +5,7 @@ import { invoiceChanges, invoiceLineValues } from '../../_shared/domain/invoice-
 const line = { invoiceId: 'invoice', lineNumber: 1, description: 'Service', quantity: 3, unitPrice: 0.1, discount: 0.05, taxRate: 5 };
 function fixture() {
   const parent = { recordId: 'invoice', companyId: 'c', status: 'DRAFT', recordVersion: 1, _row: 2 };
-  const data = { Invoices: [parent], InvoiceItems: [] };
+  const data = { Invoices: [parent], InvoiceItems: [], CompanyProfile: [] };
   return { parent, data, records: { read: async () => data } };
 }
 test('line calculations use decimal arithmetic with discount before rounded tax', () => {
@@ -40,9 +40,33 @@ test('invoice header totals cannot be forged and issuing cannot bypass the posti
   const f = fixture(), header = { customerId: 'customer', issueDate: '2026-09-27', currency: 'AED' };
   const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null, header, {});
   assert.equal(result.values.status, 'DRAFT'); assert.equal(result.values.total, 0);
+  assert.equal(result.values.number, 'INV-2026-000001');
   for (const values of [{ ...header, total: 100 }, { ...header, status: 'ISSUED' }, { ...header, dueDate: '2026-09-01' }]) {
     await assert.rejects(invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null, values, {}));
   }
+});
+
+test('draft creation assigns the next yearly number with the configured prefix', async () => {
+  const f = fixture(), header = { customerId: 'customer', issueDate: '2026-09-27', currency: 'AED' };
+  f.data.CompanyProfile.push({ companyId: 'c', invoicePrefix: 'TPC' });
+  f.data.Invoices.push({ companyId: 'c', recordId: 'previous', number: 'TPC-2026-000009' });
+  const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null, header, {});
+  assert.equal(result.values.number, 'TPC-2026-000010');
+  await assert.rejects(
+    invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null, { ...header, number: 'TPC-2026-999999' }, {}),
+    e => e.code === 'INVOICE_DERIVED_FIELD');
+});
+
+test('cash sales save an optional walk-in name instead of a customer account', async () => {
+  const f = fixture();
+  const cash = { customerId: '', cashCustomerName: '  Walk-in customer  ', issueDate: '2026-09-27', currency: 'AED' };
+  const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null, cash, {});
+  assert.equal(result.values.number, 'INV-2026-000001');
+  assert.equal(result.values.cashCustomerName, 'Walk-in customer');
+  await assert.rejects(invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null,
+    { ...cash, customerId: 'customer' }), e => e.code === 'INVALID_CASH_CUSTOMER');
+  await assert.rejects(invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'create', null,
+    { ...cash, cashCustomerName: 'x'.repeat(201) }), e => e.code === 'INVALID_CASH_CUSTOMER');
 });
 
 test('issuing assigns the next yearly number and balanced immutable journal', async () => {
@@ -62,6 +86,32 @@ test('issuing assigns the next yearly number and balanced immutable journal', as
   assert.ok(lines.every(entry => entry.journalId === journalId));
   assert.equal(lines.reduce((sum, entry) => sum + Math.round(entry.debit * 100), 0), 26);
   assert.equal(lines.reduce((sum, entry) => sum + Math.round(entry.credit * 100), 0), 26);
+});
+
+test('cash invoices issue with an empty customer account', async () => {
+  const f = fixture();
+  Object.assign(f.parent, { customerId: '', cashCustomerName: 'Walk-in', number: 'INV-2026-000001',
+    issueDate: '2026-09-27', currency: 'AED', subtotal: 0.3, discount: 0.05, taxAmount: 0.01, total: 0.26 });
+  f.data.InvoiceItems.push({ ...line, companyId: 'c', recordId: 'line' });
+  f.data.CompanyProfile = [{ companyId: 'c', invoicePrefix: 'INV' }];
+  f.data.Journals = []; f.data.JournalLines = []; f.data.FinancialPeriods = [];
+  const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'issue', f.parent, {},
+    { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKey: 'marker', isDeleted: false, syncStatus: 'SYNCED' }, 'operation');
+  assert.equal(result.values.status, 'ISSUED'); assert.equal(result.values.number, 'INV-2026-000001');
+});
+
+test('issuing keeps the number assigned when the draft was created', async () => {
+  const f = fixture();
+  f.parent.issueDate = '2026-09-27'; f.parent.currency = 'AED'; f.parent.customerId = 'customer';
+  f.parent.subtotal = 0.3; f.parent.discount = 0.05; f.parent.taxAmount = 0.01; f.parent.total = 0.26;
+  f.parent.number = 'TPC-2026-000004';
+  f.data.InvoiceItems.push({ ...line, companyId: 'c', recordId: 'line' });
+  f.data.CompanyProfile = [{ companyId: 'c', invoicePrefix: 'TPC' }];
+  f.data.Invoices.push({ companyId: 'c', recordId: 'previous', number: 'TPC-2026-000009' });
+  f.data.Journals = []; f.data.JournalLines = []; f.data.FinancialPeriods = [];
+  const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'issue', f.parent, {},
+    { companyId: 'c', updatedAt: 1, updatedBy: 'owner', idempotencyKey: 'marker', isDeleted: false, syncStatus: 'SYNCED' }, 'operation');
+  assert.equal(result.values.number, 'TPC-2026-000004'); assert.equal(result.values.status, 'ISSUED');
 });
 
 test('issuing rejects empty, stale, closed-period and invalid-prefix invoices', async () => {

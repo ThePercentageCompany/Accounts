@@ -1,4 +1,5 @@
 import { challenge } from './crypto.js';
+import { nextDocumentNumber } from './document-number.js';
 import { requireThat } from './errors.js';
 import { assertOpenLedgerDate, validLedgerDate } from './financial-period-policy.js';
 import { minor } from './journal-policy.js';
@@ -14,7 +15,7 @@ export function receiptInput(input) {
   400, 'INVALID_RECEIPT', 'Supply one invoice and its payment details.');
   const values = { ...input, reference: input.reference ?? '' };
   requireThat(typeof values.invoiceId === 'string' && /^[A-Za-z0-9_-]{43}$/.test(values.invoiceId) &&
-    typeof values.customerId === 'string' && /^[A-Za-z0-9_-]{43}$/.test(values.customerId) &&
+    typeof values.customerId === 'string' && (values.customerId === '' || /^[A-Za-z0-9_-]{43}$/.test(values.customerId)) &&
     validLedgerDate(values.paymentDate) && typeof values.currency === 'string' && /^[A-Z]{3}$/.test(values.currency) &&
     ['Cash', 'Bank'].includes(values.paymentAccount) && typeof values.reference === 'string' && values.reference.length <= 500,
   400, 'INVALID_RECEIPT', 'Choose an invoice, date, currency and Cash or Bank account.');
@@ -71,10 +72,13 @@ export async function receiptChanges(records, companyId, table, id, action, old,
   }
   const { invoiceId, ...receipt } = values;
   const data = await records.read(companyId, ['Customers', 'Invoices', 'Receipts', 'ReceiptAllocations', 'Journals', 'JournalLines', 'CreditNotes']);
-  const customer = data.Customers.find(row => row.companyId === companyId && row.recordId === receipt.customerId && active(row));
   const invoice = data.Invoices.find(row => row.companyId === companyId && row.recordId === invoiceId && active(row));
-  requireThat(customer, 409, 'RECEIPT_CUSTOMER_INVALID', 'The selected customer is unavailable.');
   requireThat(invoice && ['ISSUED', 'PARTIALLY_PAID', 'PARTIALLY_RETURNED'].includes(invoice.status), 409, 'INVOICE_NOT_PAYABLE', 'The selected invoice is not open for payment.');
+  // Cash sales receive payments without a customer account; the receipt then
+  // carries the invoice's walk-in name for documents and lists.
+  const customer = receipt.customerId === '' ? null :
+    data.Customers.find(row => row.companyId === companyId && row.recordId === receipt.customerId && active(row));
+  requireThat(customer || receipt.customerId === '', 409, 'RECEIPT_CUSTOMER_INVALID', 'The selected customer is unavailable.');
   requireThat(invoice.customerId === receipt.customerId, 409, 'RECEIPT_CUSTOMER_MISMATCH', 'The receipt customer does not match the invoice.');
   requireThat(invoice.currency === receipt.currency, 409, 'RECEIPT_CURRENCY_MISMATCH', 'The receipt currency does not match the invoice.');
   requireThat(receipt.paymentDate >= invoice.issueDate, 409, 'INVALID_PAYMENT_DATE', 'Payment date cannot precede the invoice date.');
@@ -86,18 +90,18 @@ export async function receiptChanges(records, companyId, table, id, action, old,
   const amount = minor(receipt.amount);
   requireThat(amount <= balance, 409, 'RECEIPT_OVERPAYMENT', 'Receipt amount exceeds the invoice balance.');
 
-  const year = receipt.paymentDate.slice(0, 4), pattern = new RegExp(`^REC-${year}-(\\d{6})$`);
-  const sequence = Math.max(0, ...data.Receipts.filter(row => row.companyId === companyId && active(row))
-    .map(row => pattern.exec(row.number)?.[1]).filter(Boolean).map(Number)) + 1;
-  requireThat(sequence <= 999999, 409, 'RECEIPT_SEQUENCE_EXHAUSTED', 'Receipt numbering is exhausted for this year.');
-  const number = `REC-${year}-${String(sequence).padStart(6, '0')}`;
+  // Payments keep a stable yearly sequence; receipts posted before the PAY
+  // prefix retain their original REC- numbers and are not counted here.
+  const number = await nextDocumentNumber(records, companyId, 'Receipts', 'PAY', receipt.paymentDate,
+    'RECEIPT_SEQUENCE_EXHAUSTED', 'Payment numbering is exhausted for this year.');
   const allocationId = challenge(`${companyId}:${operation}:receipt-allocation`);
   const journalId = challenge(`${companyId}:${operation}:receipt-journal`);
   const journalSystem = { ...system, createdAt: system.updatedAt, createdBy: system.updatedBy, recordVersion: 1 };
   const newPaid = paid + amount, newBalance = balance - amount;
   const accountId = receipt.paymentAccount === 'Cash' ? 'cash' : 'bank';
   const accountName = receipt.paymentAccount === 'Cash' ? 'Cash' : 'Bank';
-  return { values: { ...receipt, number, status: 'POSTED', reversalDate: '', reversalReason: '' }, extra: [
+  return { values: { ...receipt, number, status: 'POSTED', reversalDate: '', reversalReason: '',
+    cashCustomerName: invoice.cashCustomerName || '' }, extra: [
     { table: 'ReceiptAllocations', row: nextRow(data.ReceiptAllocations), values: {
       ...journalSystem, recordId: allocationId, receiptId: id, invoiceId, amount: money(amount),
     } },

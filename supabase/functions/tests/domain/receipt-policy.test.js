@@ -26,7 +26,7 @@ test('receipt input accepts only bounded payment fields', () => {
 test('receipt atomically allocates payment, updates invoice and posts balanced journal', async () => {
   const f = fixture();
   const result = await receiptChanges(f.records, 'tenant', 'Receipts', 'r'.repeat(43), 'receive', null, input, system, 'operation');
-  assert.equal(result.values.number, 'REC-2026-000001');
+  assert.equal(result.values.number, 'PAY-2026-000001');
   assert.equal(result.values.status, 'POSTED');
   assert.equal(result.extra[0].table, 'ReceiptAllocations');
   assert.equal(result.extra[1].values.paidAmount, 40.25);
@@ -38,11 +38,21 @@ test('receipt atomically allocates payment, updates invoice and posts balanced j
   assert.equal(lines[0].accountId, 'bank');
 
   f.data.Invoices[0].paidAmount = 60.25; f.data.Invoices[0].balance = 40.25; f.data.Invoices[0].status = 'PARTIALLY_PAID';
-  f.data.Receipts.push({ companyId: 'tenant', number: 'REC-2026-000009' });
+  f.data.Receipts.push({ companyId: 'tenant', number: 'PAY-2026-000009' });
   const final = await receiptChanges(f.records, 'tenant', 'Receipts', 's'.repeat(43), 'receive', null, input, system, 'other');
-  assert.equal(final.values.number, 'REC-2026-000010');
+  assert.equal(final.values.number, 'PAY-2026-000010');
   assert.equal(final.extra[1].values.status, 'PAID');
   assert.equal(final.extra[1].values.balance, 0);
+});
+
+test('cash sale receipts post without a customer account and carry the walk-in name', async () => {
+  const f = fixture();
+  Object.assign(f.data.Invoices[0], { customerId: '', cashCustomerName: 'Walk-in customer' });
+  const result = await receiptChanges(f.records, 'tenant', 'Receipts', 'r'.repeat(43), 'receive', null,
+    { ...input, customerId: '' }, system, 'cash');
+  assert.equal(result.values.number, 'PAY-2026-000001');
+  assert.equal(result.values.cashCustomerName, 'Walk-in customer');
+  assert.equal(result.extra[1].values.status, 'PARTIALLY_PAID');
 });
 
 test('receipt rejects overpayment, mismatches, closed periods and direct edits', async () => {

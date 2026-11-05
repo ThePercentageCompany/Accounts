@@ -1,4 +1,5 @@
 import { challenge } from './crypto.js';
+import { nextDocumentNumber } from './document-number.js';
 import { requireThat } from './errors.js';
 import { assertOpenLedgerDate, validLedgerDate } from './financial-period-policy.js';
 import { minor } from './journal-policy.js';
@@ -157,5 +158,9 @@ export async function payrollChanges(records, companyId, table, id, action, old,
         values: { ...journalSystem, recordId: challenge(`${journalId}:${index}`), journalId, lineNumber: index + 1, ...line } })),
     ] };
   }
-  return { values: { ...values, ...totals, status: 'DRAFT', paidDate: '', paymentAccount: '', paymentReference: '' }, extra: [] };
+  // Every payroll draft receives its document number immediately so payslip
+  // exports and PDFs can reference it; approval and payment keep it unchanged.
+  const number = old ? undefined : await nextDocumentNumber(records, companyId, 'Payroll', 'PAYR', next.month,
+    'PAYROLL_SEQUENCE_EXHAUSTED', 'Payroll numbering is exhausted for this year.');
+  return { values: { ...values, ...(number ? { number } : {}), ...totals, status: 'DRAFT', paidDate: '', paymentAccount: '', paymentReference: '' }, extra: [] };
 }

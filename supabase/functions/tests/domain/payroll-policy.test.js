@@ -24,6 +24,7 @@ test('payroll saves separate adjustment notes and validates their size and type'
   assert.equal(draft.deductionNotes, values.deductionNotes);
   assert.equal(draft.basicSalary, 5000);
   assert.equal(draft.allowances, 500);
+  assert.equal(draft.number, 'PAYR-2026-000001');
   const update = await payrollChanges(f.records, 'c', 'Payroll', 'p', 'update', draft,
     { bonusNotes: '' }, system, 'update');
   assert.equal(update.values.bonusNotes, '');
@@ -51,7 +52,7 @@ test('draft payroll derives salary and approved overtime exactly', async () => {
     { month: '2026-09', employeeId, bonus: 250, deductions: 100 }, system, 'op');
   assert.deepEqual(result.values, { month: '2026-09', employeeId, basicSalary: 5000, allowances: 500,
     overtimeAmount: 100, bonus: 250, deductions: 100, grossSalary: 5850, netSalary: 5750,
-    status: 'DRAFT', paidDate: '', paymentAccount: '', paymentReference: '' });
+    status: 'DRAFT', paidDate: '', paymentAccount: '', paymentReference: '', number: 'PAYR-2026-000001' });
 });
 
 test('compensation edits require draft refresh before approval and preserve posted salary history', async () => {

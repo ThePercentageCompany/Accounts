@@ -16,6 +16,7 @@ test('asset draft derives book values and blocks duplicate codes', async () => {
     usefulLife: 12, residualValue: 0, depreciationMethod: 'STRAIGHT_LINE', paymentAccount: 'Bank', location: '', assignedEmployeeId: '', serialNumber: '', acquisitionType: 'COMPANY_PURCHASE' };
   const result = await assetChanges(f.records, 'c', 'Assets', 'a', 'create', null, input, system, 'op');
   assert.equal(result.values.netBookValue, 1200); assert.equal(result.values.status, 'DRAFT'); assert.equal(result.values.assetCode, 'FA-1');
+  assert.equal(result.values.number, 'AST-2026-000001');
   f.data.Assets.push(draft);
   await assert.rejects(assetChanges(f.records, 'c', 'Assets', 'b', 'create', null, { ...input, assetCode: 'fa-1' }, system, 'x'), e => e.code === 'ASSET_CODE_DUPLICATE');
 });

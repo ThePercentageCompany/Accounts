@@ -27,31 +27,39 @@ test('source protection is scoped to active matching journals in the same compan
 });
 
 const entry = { date: '2026-09-26', description: 'Office supplies', amount: 10.1, taxRate: 5, paymentStatus: 'UNPAID' };
-test('income and expense tax uses exact minor-unit half-up rounding', () => {
+const emptyRecords = { read: async (_company, names) => Object.fromEntries(names.map(name => [name, []])) };
+test('income and expense tax uses exact minor-unit half-up rounding', async () => {
   for (const table of ['Income', 'Expenses']) {
-    const result = cashEntryValues(table, 'create', null, entry);
+    const result = await cashEntryValues(emptyRecords, 'c', table, 'create', null, entry);
     assert.equal(result.taxAmount, 0.51);
     assert.equal(result.total, 10.61);
     assert.equal(result.paidDate, '');
   }
 });
-test('partial updates recalculate inherited totals and clear unpaid payment dates', () => {
+test('creation assigns the yearly document number per section', async () => {
+  const income = await cashEntryValues(emptyRecords, 'c', 'Income', 'create', null, entry);
+  assert.equal(income.number, 'INC-2026-000001');
+  const expense = await cashEntryValues(emptyRecords, 'c', 'Expenses', 'create', null, entry);
+  assert.equal(expense.number, 'EXP-2026-000001');
+});
+test('partial updates recalculate inherited totals and clear unpaid payment dates', async () => {
   const old = { ...entry, taxAmount: 0.51, total: 10.61, paidDate: '2026-09-26', paymentStatus: 'PAID' };
-  const result = cashEntryValues('Expenses', 'update', old, { amount: 20, paymentStatus: 'UNPAID' });
+  const result = await cashEntryValues(null, 'c', 'Expenses', 'update', old, { amount: 20, paymentStatus: 'UNPAID' });
   assert.equal(result.taxAmount, 1);
   assert.equal(result.total, 21);
   assert.equal(result.paidDate, '');
+  assert.equal(result.number, undefined); // updates keep the assigned number
   assert.equal(result.description, undefined); // preserves patch semantics
 });
-test('forged totals, invalid money, dates and payment state are rejected', () => {
+test('forged totals, invalid money, dates and payment state are rejected', async () => {
   for (const values of [{ total: 10 }, { taxAmount: 0.5 }, { amount: -1 }, { amount: 0 },
     { amount: 0.001 }, { taxRate: 100.01 }, { date: '2026-02-30' },
     { paymentStatus: 'PARTIAL' }, { paymentStatus: 'PAID' }, { description: '' }]) {
-    assert.throws(() => cashEntryValues('Income', 'create', null, { ...entry, ...values }));
+    await assert.rejects(cashEntryValues(emptyRecords, 'c', 'Income', 'create', null, { ...entry, ...values }));
   }
 });
-test('unrelated records and deletions retain their original values', () => {
+test('unrelated records and deletions retain their original values', async () => {
   const value = {};
-  assert.equal(cashEntryValues('Customers', 'create', null, value), value);
-  assert.equal(cashEntryValues('Expenses', 'delete', null, value), value);
+  assert.equal(await cashEntryValues(null, 'c', 'Customers', 'create', null, value), value);
+  assert.equal(await cashEntryValues(null, 'c', 'Expenses', 'delete', null, value), value);
 });
