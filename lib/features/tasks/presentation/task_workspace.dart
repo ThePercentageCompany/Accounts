@@ -102,6 +102,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       _surfaceDepth = 0,
       _mutationDepth = 0;
   String? _resource;
+  Map<String, dynamic>? _lastSnapshot;
   bool _fetching = false, _appVisible = true;
   double _contentWidth = 0;
   int? _next;
@@ -134,7 +135,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       }
     });
     if (_manage) _loadAssignees();
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) {
+    _poll = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!_live &&
           widget.active &&
           _appVisible &&
@@ -142,7 +143,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           !_saving &&
           _surfaceDepth == 0 &&
           _mutationDepth == 0) {
-        _load(quiet: true);
+        _load(quiet: true, force: true);
       }
     });
   }
@@ -159,7 +160,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       return;
     }
     _realtimeDebounce?.cancel();
-    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () async {
+    _realtimeDebounce = Timer(const Duration(milliseconds: 400), () async {
       if (!mounted ||
           !widget.active ||
           !_appVisible ||
@@ -199,8 +200,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     final resource = _resource;
     if (resource == null) return;
     final state = widget.api.cache.state(resource);
-    if (state == null || state.revision == _lastRevision) return;
+    if (state == null) return;
+    final snapshot = widget.api.cache.serverState(resource)?.data;
+    if (state.revision == _lastRevision && identical(snapshot, _lastSnapshot)) {
+      return;
+    }
     _lastRevision = state.revision;
+    _lastSnapshot = snapshot;
     _realtimeDirty = true;
     _scheduleRealtimeRefresh();
   }
@@ -243,6 +249,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
 
   Future<void> _recoverTasks() async {
     if (!widget.active) return;
+    final loading = _load();
     if (_pendingTask &&
         widget.writes?.hasBlockingPending == true &&
         widget.writes?.canDiscardRejected == false) {
@@ -252,7 +259,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         _failure(e);
       }
     }
-    if (mounted) await _load();
+    await loading;
   }
 
   Future<void> _loadAssignees() async {
@@ -275,6 +282,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       _load();
     }
     if (widget.taskToOpen != oldWidget.taskToOpen) _openLinkedTask();
+    if (oldWidget.active != widget.active && _resource != null) {
+      if (widget.active) {
+        widget.api.cache.activate(_resource!);
+      } else {
+        widget.api.cache.deactivate(_resource!);
+      }
+    }
     if ((!oldWidget.active && widget.active) ||
         oldWidget.calendar != widget.calendar) {
       _load();
@@ -296,6 +310,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     _poll?.cancel();
     _realtimeDebounce?.cancel();
     _taskSubscription?.cancel();
+    if (widget.active && _resource != null) widget.api.cache.deactivate(_resource!);
     super.dispose();
   }
 
@@ -343,7 +358,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     return filters;
   }
 
-  Future<void> _load({bool more = false, bool quiet = false}) async {
+  Future<void> _load({bool more = false, bool quiet = false, bool force = false}) async {
     if (!widget.active || (quiet && _fetching)) return;
     _realtimeDirty = false;
     _realtimeDebounce?.cancel();
@@ -360,8 +375,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       final target = quiet ? _tasks.length : 40;
       if (target > 40) filters['limit'] = '100';
       if (more && _next != null) filters['offset'] = '$_next';
-      _resource =
+      final resource =
           '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
+      if (_resource != resource) {
+        if (_resource != null) widget.api.cache.deactivate(_resource!);
+        _resource = resource;
+        if (widget.active) widget.api.cache.activate(resource);
+      }
       // Display the query's saved page immediately, before its refresh. Keep
       // aggregate pages intact when loading more or doing background polling.
       final saved = widget.api.cache.state(_resource!)?.data;
@@ -381,7 +401,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       final data = Map<String, dynamic>.from(await widget.api.tasks(
           widget.companyId,
           employee: _employee,
-          force: quiet || more,
+          force: force,
           filters: filters));
       List<Map<String, dynamic>> snapshotRows(Map<String, dynamic> fallback) {
         final path =
@@ -401,7 +421,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
             generation == _generation) {
           filters['offset'] = data['nextOffset'].toString();
           final page = await widget.api.tasks(widget.companyId,
-              employee: _employee, force: true, filters: filters);
+              employee: _employee, filters: filters);
           serverRows.addAll(snapshotRows(page));
           rows.addAll(List<Map<String, dynamic>>.from(page['records'] as List));
           data['nextOffset'] = page['nextOffset'];
@@ -573,8 +593,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                 _write('Tasks', task, values, operationId: operationId)));
     _surfaceDepth--;
     if (mounted) {
-      _loadAssignees();
-      _load(quiet: true);
+      _scheduleRealtimeRefresh();
     }
   }
 
@@ -677,7 +696,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         final mobile = constraints.maxWidth < 768;
         final view = _view.isEmpty ? (mobile ? 'List' : 'Board') : _view;
         return RefreshIndicator.noSpinner(
-            onRefresh: () => _load(),
+            onRefresh: () => _load(force: true),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: AppSpacing.page(context),

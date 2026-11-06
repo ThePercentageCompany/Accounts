@@ -31,6 +31,7 @@ class _NotificationCenterState extends State<NotificationCenter>
   bool _busy = false;
   String? _error;
   int _generation = 0;
+  Map<String, dynamic>? _snapshot;
   String get _path =>
       widget.api.notificationsPath(widget.companyId, employee: widget.employee);
   @override
@@ -40,9 +41,10 @@ class _NotificationCenterState extends State<NotificationCenter>
     widget.api.cache.addListener(_cacheChanged);
     widget.api.cache.activate(_path);
     unawaited(_load());
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (WidgetsBinding.instance.lifecycleState == null ||
-          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!widget.api.workspaceRealtimeConnected &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed)) {
         unawaited(_load(force: true));
       }
     });
@@ -62,6 +64,7 @@ class _NotificationCenterState extends State<NotificationCenter>
       widget.api.cache.activate(_path);
       _generation++;
       _items = [];
+      _snapshot = null;
       _error = null;
       _busy = false;
       unawaited(_load(force: true));
@@ -82,7 +85,7 @@ class _NotificationCenterState extends State<NotificationCenter>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_load(force: true));
+    if (state == AppLifecycleState.resumed) unawaited(_load());
   }
 
   void _cacheChanged() {
@@ -90,7 +93,8 @@ class _NotificationCenterState extends State<NotificationCenter>
         .state(widget.api
             .notificationsPath(widget.companyId, employee: widget.employee))
         ?.data;
-    if (data == null) return;
+    if (data == null || identical(data, _snapshot)) return;
+    _snapshot = data;
     _items = (data['notifications'] as List? ?? [])
         .map((n) => Map<String, dynamic>.from(n as Map))
         .toList();

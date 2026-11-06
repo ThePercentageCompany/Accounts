@@ -42,6 +42,24 @@ class _TaskDetailsState extends State<TaskDetails> {
   Timer? _realtimeDebounce;
   bool _fetching = false, _realtimeDirty = false;
   int _localRevision = 0;
+  int _serverRevision = 0;
+  String? _watchedResource;
+  Map<String, dynamic>? _lastSnapshot;
+  String get _resource =>
+      '${widget.api.tasksPath(widget.companyId, employee: widget.employee)}/${_task['recordId']}';
+
+  void _cacheChanged() {
+    _localChanged();
+    final state = widget.api.cache.serverState(_resource);
+    if (state == null ||
+        (state.revision == _serverRevision && identical(state.data, _lastSnapshot))) {
+      return;
+    }
+    _serverRevision = state.revision;
+    _lastSnapshot = state.data;
+    _realtimeDirty = true;
+    _refreshRealtime();
+  }
   void _localChanged() {
     final revision = widget.api.cache.localRevisionFor(
         widget.api.tasksPath(widget.companyId, employee: widget.employee));
@@ -69,7 +87,9 @@ class _TaskDetailsState extends State<TaskDetails> {
   @override
   void initState() {
     super.initState();
-    widget.api.cache.addListener(_localChanged);
+    widget.api.cache.addListener(_cacheChanged);
+    _watchedResource = _resource;
+    widget.api.cache.activate(_watchedResource!);
     _taskSubscription = widget.api.taskUpdates.listen((update) {
       if (update.companyId != widget.companyId || !update.refresh) return;
       if (update.taskId != null && update.taskId != _task['recordId']) return;
@@ -82,7 +102,8 @@ class _TaskDetailsState extends State<TaskDetails> {
   @override
   void dispose() {
     _comment.dispose();
-    widget.api.cache.removeListener(_localChanged);
+    widget.api.cache.removeListener(_cacheChanged);
+    if (_watchedResource != null) widget.api.cache.deactivate(_watchedResource!);
     _taskSubscription?.cancel();
     _realtimeDebounce?.cancel();
     super.dispose();
@@ -104,6 +125,11 @@ class _TaskDetailsState extends State<TaskDetails> {
         });
       }
       return;
+    }
+    if (_watchedResource != _resource) {
+      if (_watchedResource != null) widget.api.cache.deactivate(_watchedResource!);
+      _watchedResource = _resource;
+      widget.api.cache.activate(_watchedResource!);
     }
     _fetching = true;
     try {
@@ -147,7 +173,7 @@ class _TaskDetailsState extends State<TaskDetails> {
   void _refreshRealtime() {
     if (!mounted || !_realtimeDirty || _busy || _fetching) return;
     _realtimeDebounce?.cancel();
-    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () {
+    _realtimeDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted || _busy || _fetching) return;
       _realtimeDirty = false;
       _load();

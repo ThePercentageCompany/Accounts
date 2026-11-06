@@ -37,14 +37,25 @@ class _DashboardTasksState extends State<DashboardTasks> {
   int _generation = 0;
   Timer? _timer, _realtimeDebounce;
   StreamSubscription<TaskRealtimeUpdate>? _taskSubscription;
-  bool _realtimeDirty = false, _forceRealtime = false;
+  bool _realtimeDirty = false;
+  final _snapshots = <String, ({Map<String, dynamic>? data, int revision})>{};
   int _localRevision = 0;
 
   void _localChanged() {
     final revision = widget.api.cache.localRevisionFor(
         widget.api.tasksPath(widget.companyId, employee: widget.employee));
-    if (_localRevision == revision) return;
+    var changed = _localRevision != revision;
     _localRevision = revision;
+    for (final path in _snapshots.keys.toList()) {
+      final state = widget.api.cache.serverState(path);
+      final previous = _snapshots[path]!;
+      if (state != null && (state.revision != previous.revision ||
+          !identical(state.data, previous.data))) {
+        _snapshots[path] = (data: state.data, revision: state.revision);
+        changed = true;
+      }
+    }
+    if (!changed) return;
     _realtimeDirty = true;
     _scheduleRealtimeRefresh();
   }
@@ -56,7 +67,6 @@ class _DashboardTasksState extends State<DashboardTasks> {
         return;
       }
       _realtimeDirty = true;
-      _forceRealtime = true;
       _scheduleRealtimeRefresh();
     });
   }
@@ -64,12 +74,10 @@ class _DashboardTasksState extends State<DashboardTasks> {
   void _scheduleRealtimeRefresh() {
     if (!_realtimeDirty || !widget.active || _busy || !mounted) return;
     _realtimeDebounce?.cancel();
-    _realtimeDebounce = Timer(const Duration(milliseconds: 180), () {
+    _realtimeDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted || !widget.active || _busy) return;
       _realtimeDirty = false;
-      final force = _forceRealtime;
-      _forceRealtime = false;
-      _load(force: force);
+      _load();
     });
   }
 
@@ -79,7 +87,7 @@ class _DashboardTasksState extends State<DashboardTasks> {
     _watchTasks();
     widget.api.cache.addListener(_localChanged);
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!widget.api.taskRealtimeConnected &&
           widget.active &&
           (WidgetsBinding.instance.lifecycleState == null ||
@@ -106,12 +114,13 @@ class _DashboardTasksState extends State<DashboardTasks> {
         _canEdit(oldWidget) != _canEdit(widget)) {
       _generation++;
       _busy = false;
+      _snapshots.clear();
       _counts = {};
       _summary = {};
       _tasks = [];
       _load();
     } else if (!oldWidget.active && widget.active) {
-      _load(force: true);
+      _load();
     }
   }
 
@@ -128,18 +137,20 @@ class _DashboardTasksState extends State<DashboardTasks> {
       _error = null;
     });
     try {
-      final results = await Future.wait(_statuses.keys.map((status) =>
-          widget.api.tasks(widget.companyId,
-              employee: widget.employee,
-              force: force,
-              filters: {
-                'status': status,
-                'sort': 'due',
-                'limit': '5',
-                if (widget.employee && !_canEdit(widget))
-                  'employeeId':
-                      '${widget.employeeProfile?['employeeId'] ?? ''}',
-              })));
+      final results = await Future.wait(_statuses.keys.map((status) {
+        final filters = {
+          'status': status,
+          'sort': 'due',
+          'limit': '5',
+          if (widget.employee && !_canEdit(widget))
+            'employeeId': '${widget.employeeProfile?['employeeId'] ?? ''}',
+        };
+        final path = '${widget.api.tasksPath(widget.companyId, employee: widget.employee)}?${Uri(queryParameters: filters).query}';
+        final state = widget.api.cache.serverState(path);
+        _snapshots.putIfAbsent(path, () => (data: state?.data, revision: state?.revision ?? 0));
+        return widget.api.tasks(widget.companyId,
+            employee: widget.employee, force: force, filters: filters);
+      }));
       if (!mounted || generation != _generation) return;
       final tasks = <Map<String, dynamic>>[];
       final counts = <String, int>{};

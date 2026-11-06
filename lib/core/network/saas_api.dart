@@ -123,7 +123,9 @@ class SaasApi implements SessionRepository {
   final _taskUpdates = StreamController<TaskRealtimeUpdate>.broadcast();
   Stream<TaskRealtimeUpdate> get taskUpdates => _taskUpdates.stream;
   bool _taskRealtimeConnected = false;
-  bool get taskRealtimeConnected => _taskRealtimeConnected;
+  bool get workspaceRealtimeConnected => _taskRealtimeConnected;
+  bool get taskRealtimeConnected =>
+      _taskBroadcastConnected || _taskRealtimeConnected;
   int _realtimeGeneration = 0;
   final bool offlineAutomatic;
   bool get offlineEnabled => kIsWeb || _offlineStore != null;
@@ -485,15 +487,16 @@ class SaasApi implements SessionRepository {
   void _invalidateMutation(
     String path,
     Map<String, Object?>? input,
-    Map<String, dynamic> result,
-  ) {
+    Map<String, dynamic> result, {
+    bool broadcast = true,
+  }) {
     if (cache.scope == null) return;
     if (path.endsWith('/documents')) {
-      cache.invalidate((p) => Uri.parse(p).path == path);
+      cache.invalidate((p) => Uri.parse(p).path == path, broadcast: broadcast);
     }
     if (path.contains('/documents/')) {
       final collection = path.substring(0, path.lastIndexOf('/'));
-      cache.invalidate((p) => Uri.parse(p).path == collection);
+      cache.invalidate((p) => Uri.parse(p).path == collection, broadcast: broadcast);
     }
     final tables = <String>{};
     if (path.endsWith('/sync')) {
@@ -526,6 +529,7 @@ class SaasApi implements SessionRepository {
               ) &&
               p.contains('/tasks') &&
               !Uri.parse(p).path.endsWith('/assignees')),
+      broadcast: broadcast,
       broadcastPaths: [
         if (tables.any(
           (t) => ['Tasks', 'TaskComments', 'TaskActivity'].contains(t),
@@ -1756,6 +1760,7 @@ class SaasApi implements SessionRepository {
     final client = _supabase;
     if (client == null || client.auth.currentUser == null) return;
     final generation = _realtimeGeneration;
+    var broadcastJoined = false, workspaceJoined = false;
     bool current() =>
         generation == _realtimeGeneration && _cacheCompany == companyId;
     void taskUpdate({bool refresh = true, String? taskId}) {
@@ -1763,7 +1768,7 @@ class SaasApi implements SessionRepository {
         _taskUpdates.add(
           TaskRealtimeUpdate(
             companyId: companyId,
-            connected: _taskRealtimeConnected,
+            connected: taskRealtimeConnected,
             refresh: refresh,
             taskId: taskId,
           ),
@@ -1779,7 +1784,7 @@ class SaasApi implements SessionRepository {
           .toList();
       if (sections.isEmpty && changedSections.isNotEmpty) return;
       if (sections.isEmpty) {
-        cache.invalidateAll();
+        cache.invalidateAll(broadcast: false);
       } else {
         _invalidateMutation('/v1/companies/$companyId/sync', {
           'operations': [
@@ -1791,7 +1796,7 @@ class SaasApi implements SessionRepository {
             for (final section in sections)
               {'operationId': section, 'status': 'APPLIED'},
           ],
-        });
+        }, broadcast: false);
       }
       if (sections.isEmpty || sections.any((section) => const [
             'Tasks', 'TaskComments', 'TaskActivity', 'Employees', 'Projects'
@@ -1821,7 +1826,7 @@ class SaasApi implements SessionRepository {
                   'TaskComments',
                   'TaskActivity',
                 ].any((section) => route.endsWith('/records/$section'));
-          });
+          }, broadcast: false);
           taskUpdate(taskId: taskId);
         },
       )
@@ -1829,13 +1834,16 @@ class SaasApi implements SessionRepository {
         if (!current()) return;
         _taskBroadcastConnected = status == RealtimeSubscribeStatus.subscribed;
         // Rejoin fetches current state to recover changes missed while offline.
-        if (_taskBroadcastConnected) {
+        if (_taskBroadcastConnected && broadcastJoined) {
           cache.invalidate((path) {
             final route = Uri.parse(path).path;
             return route.contains('/tasks') || route.endsWith('/overview');
-          });
+          }, broadcast: false);
+          taskUpdate();
+        } else {
+          taskUpdate(refresh: false);
         }
-        taskUpdate();
+        broadcastJoined = broadcastJoined || _taskBroadcastConnected;
       });
     _realtime = client
         .channel('workspace:$companyId:${client.auth.currentUser!.id}')
@@ -1887,6 +1895,7 @@ class SaasApi implements SessionRepository {
           if (current()) {
             cache.invalidate(
               (path) => Uri.parse(path).path.endsWith('/notifications'),
+              broadcast: false,
             );
           }
         },
@@ -1894,8 +1903,10 @@ class SaasApi implements SessionRepository {
       ..subscribe((status, error) {
         if (!current()) return;
         _taskRealtimeConnected = status == RealtimeSubscribeStatus.subscribed;
-        if (_taskRealtimeConnected) cache.invalidateAll();
-        taskUpdate(refresh: _taskRealtimeConnected);
+        final rejoined = _taskRealtimeConnected && workspaceJoined;
+        if (rejoined) cache.invalidateAll(broadcast: false);
+        workspaceJoined = workspaceJoined || _taskRealtimeConnected;
+        taskUpdate(refresh: rejoined);
       });
   }
 }

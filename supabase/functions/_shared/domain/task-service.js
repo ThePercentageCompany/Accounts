@@ -50,15 +50,20 @@ export class TaskService {
     const tasks = await records('Tasks');
     const task = tasks.find(t => t.recordId === id);
     requireThat(task, 404, 'TASK_NOT_FOUND', 'Task is unavailable.');
-    const comments = await records('TaskComments');
-    const activity = await records('TaskActivity');
-    // Revalidate visibility after reading dependent data.
-    requireThat((await records('Tasks')).some(t => t.recordId === id),
-      404, 'TASK_NOT_FOUND', 'Task is unavailable.');
-    const names = (await this.business.records.readReferences(companyId, ['Employees'])).Employees;
+    const [comments, activity, references] = await Promise.all([
+      records('TaskComments'), records('TaskActivity'),
+      this.business.records.readReferences(companyId, ['Employees']),
+    ]);
+    const names = new Map(references.Employees.map(row => [row.recordId, row.fullName]));
+    // A history often has many entries by the same actor. Resolve each actor
+    // once per request, including concurrent comment and activity lookups.
+    const actors = new Map();
     const author = async row => {
-      const employeeName = names.find(e => e.recordId === row.createdBy)?.fullName;
-      const resolved = employeeName || await this.business.accounts?.actorName?.(row.createdBy);
+      if (!actors.has(row.createdBy)) {
+        actors.set(row.createdBy, Promise.resolve(names.get(row.createdBy) ||
+          this.business.accounts?.actorName?.(row.createdBy)));
+      }
+      const resolved = await actors.get(row.createdBy);
       const saved = row.authorName === 'Company owner' ? null : row.authorName;
       return { ...clean(row), authorName: resolved && resolved !== 'Unknown user' ? resolved : saved || 'Unknown user' };
     };
@@ -66,11 +71,16 @@ export class TaskService {
     // the actual actor and time of each generated activity entry.
     const activityAuthor = row => author({ ...row,
       createdBy: row.updatedBy || row.createdBy, createdAt: row.updatedAt || row.createdAt });
+    const [resolvedComments, resolvedActivity] = await Promise.all([
+      Promise.all(comments.filter(c => c.taskId === id).map(author)),
+      Promise.all(activity.filter(a => a.taskId === id).map(activityAuthor)),
+    ]);
+    // Check visibility again after all dependent reads and author resolution.
     requireThat((await records('Tasks')).some(t => t.recordId === id),
       404, 'TASK_NOT_FOUND', 'Task is unavailable.');
-    return { task: clean(task), comments: await Promise.all(comments.filter(c => c.taskId === id).map(author)),
-      activity: await Promise.all(activity.filter(a => a.taskId === id).map(activityAuthor)) };
+    return { task: clean(task), comments: resolvedComments, activity: resolvedActivity };
   }
+
   async assignees(token, companyId, employee = false, context = {}, query = new URLSearchParams()) {
     requireThat([...query.keys()].every(k => ['search', 'offset', 'limit'].includes(k) && query.getAll(k).length === 1),
       400, 'INVALID_QUERY', 'Unsupported employee filter.');

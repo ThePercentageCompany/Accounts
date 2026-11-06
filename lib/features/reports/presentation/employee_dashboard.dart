@@ -209,7 +209,6 @@ class _SectionOverviewState extends State<SectionOverview> {
 
   final _errors = <String, String>{};
   bool _busy = false;
-  Timer? _timer;
   int _localRevision = 0;
   bool _localDirty = false;
   bool _cacheScheduled = false;
@@ -283,12 +282,6 @@ class _SectionOverviewState extends State<SectionOverview> {
     widget.api.cache.addListener(_localChanged);
     if (widget.active) _watch(true);
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (widget.active &&
-          WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused) {
-        _load();
-      }
-    });
   }
 
   @override
@@ -319,7 +312,6 @@ class _SectionOverviewState extends State<SectionOverview> {
   @override
   void dispose() {
     _generation++;
-    _timer?.cancel();
     if (widget.active) _watch(false);
     widget.api.cache.removeListener(_localChanged);
     super.dispose();
