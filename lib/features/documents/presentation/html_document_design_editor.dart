@@ -1,3 +1,4 @@
+import 'package:tpc_invoice/features/documents/data/html_document_placeholders.dart';
 import 'package:tpc_invoice/core/widgets/forms/validated_text_field.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
 import 'dart:convert';
@@ -73,12 +74,36 @@ class _HtmlDocumentDesignEditorState extends State<HtmlDocumentDesignEditor> {
                 const Text(
                   'Edit HTML and CSS. Saved online separately for invoices, quotations, receipts, credit notes / returns and payslips. Authorized employees use the saved design with Print company design / Save as PDF. Designs change presentation only.',
                 ),
-                const SelectableText(
-                  'Placeholders: {{title}}, {{endDate}}, {{items}}, {{company.logo}}, {{company.name}}, {{company.address}}, {{company.trn}}, {{customer.name}}, {{record.number}}, {{record.currency}}, {{record.subtotal}}, {{record.discount}}, {{record.taxAmount}}, {{record.total}}, {{record.notes}}, {{record.paymentTerms}}. The saved company logo is included automatically; use {{company.logo}} to control its position.',
+                ExpansionTile(
+                  title: const Text('Available placeholders'),
+                  subtitle: const Text(
+                    'Expand for all supported fields, including bank and customer details.',
+                  ),
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SelectableText(
+                        'Use {{field}} anywhere in the HTML. There is no separate placeholder count limit; the entire design must fit within 100 KB. {{items}} and {{record.total}} are required. Empty or unavailable fields render blank. {{record.number}} uses the saved document number, including the invoice or quotation prefix configured in Company settings. Existing document numbers stay unchanged. The logo is included automatically; use {{company.logo}} to position it.',
+                      ),
+                    ),
+                    for (final group in htmlPlaceholderGroups.entries)
+                      if ([
+                        'Layout',
+                        'Company and bank details',
+                        'Customer details',
+                        widget.store.section
+                      ].contains(group.key))
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SelectableText(
+                              '${group.key} (${group.value.length}):\n${group.value.map((field) => '{{$field}}').join(', ')}',
+                            ),
+                          ),
+                        ),
+                  ],
                 ),
-                if (widget.store.section == 'Payroll')
-                  const SelectableText(
-                      'Payslip fields: {{record.month}}, {{record.employeeName}}, {{record.employeeCode}}, {{record.department}}, {{record.designation}}, {{record.basicSalary}}, {{record.allowances}}, {{record.overtimeAmount}}, {{record.bonus}}, {{record.grossSalary}}, {{record.deductions}}, {{record.netSalary}}, {{record.paidDate}}, {{record.paymentReference}}. {{items}} renders component and amount columns; {{record.total}} is net pay.'),
                 TextField(
                   inputFormatters: [AppInputFormatters.text],
                   controller: source,

@@ -720,7 +720,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                   active: active,
                   onTask: _openTask,
                   onSection: _navigate)
-              : selected == 'Settings' && _writes?.outbox != null
+              : selected == 'Settings' && widget.employee != null && _writes?.outbox != null
                   ? Column(children: [
                       ConstrainedBox(
                           constraints: BoxConstraints(
@@ -2488,20 +2488,22 @@ class _RecordsPanelState extends State<_RecordsPanel> {
   @override
   Widget build(BuildContext context) {
     final visibleRows = _visibleRows;
-    return Column(
+    final companySettings = table == 'CompanyProfile' && !widget.employee;
+    Widget recordRegion({required Widget child}) =>
+        companySettings ? child : Expanded(child: child);
+    final body = Column(
         children: [
-          if (table == 'CompanyProfile' && !widget.employee)
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * .4,
+          if (companySettings) ...[
+            if (widget.writes?.outbox != null)
+              SyncSettingsPanel(
+                api: widget.api,
+                companyId: widget.companyId,
+                employee: false,
+                outbox: widget.writes!.outbox!,
+                storageIssue: widget.api.cache.storageError?.toString(),
               ),
-              child: SingleChildScrollView(
-                child: SystemSettingsPanel(
-                  api: widget.api,
-                  companyId: widget.companyId,
-                ),
-              ),
-            ),
+            SystemSettingsPanel(api: widget.api, companyId: widget.companyId),
+          ],
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 24,
@@ -2715,14 +2717,17 @@ class _RecordsPanelState extends State<_RecordsPanel> {
               padding: EdgeInsets.all(24),
               child: Text('No records yet.'),
             ),
-          Expanded(
+          recordRegion(
             child: _loading && !_hasData
                 ? const RecordSkeleton()
                 : RefreshIndicator.noSpinner(
                     onRefresh: () => _load(force: true),
                     child: ListView.builder(
+                      shrinkWrap: companySettings,
                       key: PageStorageKey((widget.companyId, table)),
-                      physics: const AlwaysScrollableScrollPhysics(),
+                      physics: companySettings
+                          ? const NeverScrollableScrollPhysics()
+                          : const AlwaysScrollableScrollPhysics(),
                       padding: AppSpacing.list(context),
                       itemCount: visibleRows.length,
                       itemBuilder: (context, index) {
@@ -3099,5 +3104,11 @@ class _RecordsPanelState extends State<_RecordsPanel> {
           ),
         ],
       );
+    return companySettings
+        ? SingleChildScrollView(
+            key: PageStorageKey((widget.companyId, 'company-settings-scroll')),
+            child: body,
+          )
+        : body;
   }
 }

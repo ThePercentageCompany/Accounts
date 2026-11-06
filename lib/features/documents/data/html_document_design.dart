@@ -28,13 +28,13 @@ th:first-child, td:first-child { text-align:left; }
 th { background:#f4f6f8; } .totals { margin:24px 0 24px auto; width:300px; }
 footer { border-top:1px solid #ddd; margin-top:32px; padding-top:16px; }
 </style>
-<header><div><h2>{{company.name}}</h2>{{company.address}}<br>TRN: {{company.trn}}<br>{{company.email}}</div>
+<header><div><h2>{{company.name}}</h2>{{company.address}}<br>TRN: {{company.trn}}<br>{{company.email}}<br>{{company.phone}}</div>
 <div><h1>{{title}}</h1>{{record.number}}<br>{{record.status}}</div></header>
-<div class="details"><div><b>Bill to</b><h2>{{customer.name}}</h2>{{customer.address}}<br>TRN: {{customer.trn}}</div>
+<div class="details"><div><b>Bill to</b><h2>{{customer.name}}</h2>{{customer.address}}<br>TRN: {{customer.trn}}<br>{{customer.email}}<br>{{customer.phone}}<br>Preferred currency: {{customer.preferredCurrency}}</div>
 <div>Issue date: {{record.issueDate}}<br>Due / valid until: {{endDate}}<br>Currency: {{record.currency}}</div></div>
 <table><thead><tr><th>Description</th><th>Quantity</th><th>Unit price</th><th>Discount</th><th>VAT %</th><th>Amount</th></tr></thead><tbody>{{items}}</tbody></table>
 <div class="totals">Subtotal: {{record.subtotal}}<br>Discount: {{record.discount}}<br>VAT: {{record.taxAmount}}<h2>Total: {{record.currency}} {{record.total}}</h2></div>
-<footer><b>Notes</b><p>{{record.notes}}</p><b>Terms</b><p>{{record.paymentTerms}}</p></footer>''';
+<footer><b>Bank details</b><p>Bank: {{company.bankName}}<br>Account holder: {{company.accountHolder}}<br>Account number: {{company.accountNumber}}<br>IBAN: {{company.iban}}<br>SWIFT: {{company.swift}}</p><b>Notes</b><p>{{record.notes}}</p><b>Terms</b><p>{{record.paymentTerms}}</p></footer>''';
 
 class HtmlDocumentDesignStore {
   HtmlDocumentDesignStore(this.api, this.companyId, this.section,

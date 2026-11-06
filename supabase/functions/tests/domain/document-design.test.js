@@ -84,3 +84,25 @@ test('designs are separate for invoices and quotations and malformed sources are
   }
   assert.throws(() => companyDesign({}, 'Customers'));
 });
+
+
+test('saved bank and customer fields render with configured document numbers', () => {
+  const company = { recordId: 'company', name: 'Business', bankName: 'Bank & Co',
+    accountHolder: 'Business owner', accountNumber: '001234', iban: 'AE00123',
+    swift: 'BANKAE', invoicePrefix: 'TPC', quotationPrefix: 'OFFER', phone: 'company-phone' };
+  const customer = { recordId: 'customer', name: 'Buyer', email: 'buyer@example.com',
+    phone: 'customer-phone', address: 'Dubai', taxNumber: 'TRN001', preferredCurrency: 'AED' };
+  for (const section of ['Invoices', 'Quotations']) {
+    const number = section === 'Invoices' ? 'TPC-2026-000001' : 'OFFER-2026-000001';
+    const rows = { CompanyProfile: [company], Customers: [customer],
+      [section]: [{recordId:'document', customerId:'customer', number, total:105}],
+      [section === 'Invoices' ? 'InvoiceItems' : 'QuotationItems']: [] };
+    const html = snapshotHtml(defaultDesign, section, 'document', rows);
+    for (const value of [number, 'Bank &amp; Co', 'Business owner', '001234', 'AE00123',
+      'BANKAE', 'company-phone', 'buyer@example.com', 'customer-phone', 'Dubai', 'TRN001', 'AED']) {
+      assert.ok(html.includes(value), value);
+    }
+    const custom = '{{items}}{{record.total}}{{company.invoicePrefix}}/{{company.quotationPrefix}}/{{customer.recordId}}';
+    assert.ok(snapshotHtml(custom, section, 'document', rows).includes('TPC/OFFER/customer'));
+  }
+});
