@@ -33,7 +33,9 @@ export async function validateRelations(records, companyId, table, recordId, act
     // Task comments remain as history; visibility follows the soft-deleted parent.
     if (table === 'Tasks') return;
     const references = Object.entries(RELATIONS).flatMap(([source, fields]) =>
-      Object.entries(fields).filter(([, target]) => target === table).map(([field]) => ({ source, field })));
+      Object.entries(fields).filter(([, target]) => target === table).map(([field]) => ({ source, field })))
+      // Draft invoice lines are soft-deleted atomically by invoiceChanges.
+      .filter(({ source }) => !(table === 'Invoices' && values.status === 'DRAFT' && source === 'InvoiceItems'));
     if (!references.length) return;
     const rows = await records.read(companyId, [...new Set(references.map(r => r.source))]);
     requireThat(!references.some(({ source, field }) => rows[source].some(row => active(row) && row[field] === recordId)),

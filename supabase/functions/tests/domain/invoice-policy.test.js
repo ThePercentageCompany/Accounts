@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import { invoiceChanges, invoiceLineValues } from '../../_shared/domain/invoice-policy.js';
 
 const line = { invoiceId: 'invoice', lineNumber: 1, description: 'Service', quantity: 3, unitPrice: 0.1, discount: 0.05, taxRate: 5 };
+
+test('deleting a draft soft-deletes only its active owned lines and locks issued invoices', async () => {
+  const f = fixture();
+  f.data.InvoiceItems = [
+    { ...line, companyId: 'c', _row: 2, recordVersion: 3 },
+    { ...line, companyId: 'c', _row: 3, recordVersion: 1, isDeleted: true },
+    { ...line, companyId: 'c', _row: 4, invoiceId: 'other' },
+    { ...line, companyId: 'other', _row: 5 },
+  ];
+  const system = { updatedAt: 100, updatedBy: 'owner', idempotencyKey: 'delete-operation' };
+  const result = await invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'delete', f.parent, {}, system);
+  assert.deepEqual(result.extra, [{ table: 'InvoiceItems', row: 2, values: {
+    ...system, recordVersion: 4, syncStatus: 'SYNCED', isDeleted: true,
+  } }]);
+  f.parent.status = 'ISSUED';
+  await assert.rejects(invoiceChanges(f.records, 'c', 'Invoices', 'invoice', 'delete', f.parent, {}, system), e => e.code === 'INVOICE_LOCKED');
+});
 function fixture() {
   const parent = { recordId: 'invoice', companyId: 'c', status: 'DRAFT', recordVersion: 1, _row: 2 };
   const data = { Invoices: [parent], InvoiceItems: [], CompanyProfile: [] };

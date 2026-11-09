@@ -129,7 +129,16 @@ export async function invoiceChanges(records, companyId, table, id, action, old,
         } })),
       ] };
     }
-    if (action === 'delete') return { values, extra: [] };
+    if (action === 'delete') {
+      const data = await records.read(companyId, ['InvoiceItems']);
+      return { values, extra: data.InvoiceItems
+        .filter(line => line.companyId === companyId && line.invoiceId === id && active(line))
+        .map(line => ({ table: 'InvoiceItems', row: line._row, values: {
+          updatedAt: system.updatedAt, updatedBy: system.updatedBy,
+          recordVersion: Number(line.recordVersion) + 1, syncStatus: 'SYNCED',
+          isDeleted: true, idempotencyKey: system.idempotencyKey,
+        } })) };
+    }
     requireThat(!Object.keys(values).some(k => ['subtotal', 'discount', 'taxAmount', 'total', 'paidAmount', 'balance', 'number'].includes(k)),
       400, 'INVOICE_DERIVED_FIELD', 'Invoice totals and numbering are assigned by the server.');
     const record = { ...old, ...values, status: values.status ?? old?.status ?? 'DRAFT' };

@@ -37,3 +37,13 @@ test('parent deletion rejects active dependents but permits deleted dependents',
   await assert.rejects(() => validateRelations(records({ ReceiptAllocations: [{ invoiceId: id }] }), company, 'Invoices', id, 'delete', {}), e => e.code === 'RECORD_REFERENCED');
   await validateRelations(records({ ReceiptAllocations: [{ invoiceId: id, isDeleted: true }] }), company, 'Invoices', id, 'delete', {});
 });
+
+test('draft invoice deletion allows owned lines but retains external reference checks', async () => {
+  const data = { InvoiceItems: [{ invoiceId: id }] };
+  await validateRelations(records(data), company, 'Invoices', id, 'delete', { status: 'DRAFT' });
+  await assert.rejects(() => validateRelations(records(data), company, 'Invoices', id, 'delete', { status: 'ISSUED' }), e => e.code === 'RECORD_REFERENCED');
+  for (const [table, field] of [['ReceiptAllocations', 'invoiceId'], ['CreditNotes', 'invoiceId'], ['Quotations', 'convertedInvoiceId']]) {
+    await assert.rejects(() => validateRelations(records({ ...data, [table]: [{ [field]: id }] }), company,
+      'Invoices', id, 'delete', { status: 'DRAFT' }), e => e.code === 'RECORD_REFERENCED');
+  }
+});
