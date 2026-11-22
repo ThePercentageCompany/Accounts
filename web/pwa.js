@@ -51,6 +51,11 @@
       notificationLink: location.hash.startsWith('#notifications=') ? location.hash.slice(15) : ''}),
     readyRegistration: async () => { await navigator.serviceWorker.ready; if (!registration) throw Error('App worker is not ready. Reload and try again.'); return registration; },
     activeRegistration: () => registration?.active ? registration : null,
+    hasPushSubscription: () => pushSubscribed,
+    refreshPushSubscription: async () => {
+      pushSubscribed = !!await registration?.pushManager?.getSubscription();
+      return pushSubscribed;
+    },
     notificationReceived: () => {notificationVersion++; emit();},
     install: async () => {
       if (!installPrompt) return false;
@@ -125,7 +130,12 @@
   if ('serviceWorker' in navigator && window.isSecureContext) {
     navigator.serviceWorker.register(new URL('tpc-sw.js', base), {scope: base.pathname, updateViaCache:'none'})
       .then(reg => {
-        registration = reg; navigator.serviceWorker.ready.then(async () => {pushSubscribed = !!await reg.pushManager?.getSubscription(); emit();}); emit(); scheduleSync();
+        registration = reg;
+        navigator.serviceWorker.ready.then(async () => {
+          await window.tpcPwa.refreshPushSubscription();
+          emit();
+        }).catch(() => {});
+        emit(); scheduleSync();
         reg.addEventListener('updatefound', () => watchWorker(reg.installing));
         watchWorker(reg.installing);
       }).catch(() => setUpdateState('error'));

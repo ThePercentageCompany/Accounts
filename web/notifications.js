@@ -72,10 +72,20 @@
         if (requestPermission && !registration) {
           return JSON.stringify({error: 'The app service worker is starting. Tap Enable push notifications again in a moment.'});
         }
-        if (requestPermission) {
+        if (requestPermission && window.tpcPwa.hasPushSubscription?.()) {
+          if (!await window.tpcPwa.refreshPushSubscription()) {
+            return JSON.stringify({error: 'The previous push subscription has expired. Tap Enable push notifications again to reconnect.'});
+          }
+        } else if (requestPermission) {
           // Start from the tap. Loading Firebase first can expire browser user activation.
           const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-          await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: bytes});
+          try {
+            await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: bytes});
+          } catch (error) {
+            // The browser may reject a duplicate subscribe even with a usable subscription.
+            if (error.name !== 'AbortError' ||
+                !await registration.pushManager.getSubscription().catch(() => null)) throw error;
+          }
         }
         if (!registration) {
           registration = await Promise.race([
@@ -108,7 +118,7 @@
               : error.name === 'InvalidAccessError'
                 ? 'The browser rejected the workspace public VAPID key. Check the key in Firebase.'
                 : error.name === 'AbortError'
-                  ? 'The browser could not connect to its push service. Check your connection and retry.'
+                  ? 'This phone could not reach its browser push service. Switch between Wi-Fi and mobile data, reopen the app, and try again.'
                   : error.code === 'messaging/token-subscribe-failed'
                     ? 'Firebase rejected push registration. Check that the web app configuration and VAPID key are from the same Firebase project.'
                     : 'Could not complete push registration. Reopen the app and try again.';
