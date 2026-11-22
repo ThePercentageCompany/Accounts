@@ -21,6 +21,8 @@ external JSPromise<JSString> _subscription();
 external JSPromise<JSAny?> _unsubscribe();
 @JS('tpcPwa.clearTask')
 external void _clearTask();
+@JS('tpcPwa.clearNotification')
+external void _clearNotification();
 @JS('tpcNotifications.enableSound')
 external JSPromise<JSAny?> _enableSound();
 @JS('tpcNotifications.play')
@@ -82,6 +84,7 @@ class PwaRuntime extends ChangeNotifier {
   Future<void> disableTaskPush() async { await _disablePush().toDart; }
 
   void clearTask() => _clearTask();
+  void clearNotification() => _clearNotification();
   @override
   void dispose() {
     web.window.removeEventListener('tpc-pwa-change', _listener);

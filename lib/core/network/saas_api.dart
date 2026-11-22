@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'document_endpoint.dart';
+import 'push_device.dart';
 import 'workspace_change_buffer.dart';
+import 'package:tpc_invoice/core/pwa/pwa_runtime.dart';
 import 'package:tpc_invoice/features/auth/domain/password_recovery.dart';
 import 'package:tpc_invoice/features/auth/domain/session_repository.dart';
 import 'dart:convert';
@@ -1270,6 +1272,7 @@ class SaasApi implements SessionRepository {
       _json('POST', '/v1/companies/${_id(companyId)}/setup/retry');
   @override
   Future<Map<String, dynamic>> logout() async {
+    await _unregisterDevice();
     await clearWorkspace();
     await _supabase?.auth.signOut();
     return {};
@@ -1303,6 +1306,7 @@ class SaasApi implements SessionRepository {
       await _employeeRenewal;
     } catch (_) {}
     _employeeExpiresAt = null;
+    await _unregisterDevice();
     await clearWorkspace();
     await _supabase?.auth.signOut();
     return {};
@@ -1619,6 +1623,11 @@ class SaasApi implements SessionRepository {
           {bool employee = false, bool force = false}) =>
       _json('GET', notificationsPath(companyId, employee: employee),
           force: force);
+  Future<Map<String, dynamic>> notificationPage(String companyId, String cursor,
+          {bool employee = false}) =>
+      _json(
+          'GET',
+          '${notificationsPath(companyId, employee: employee)}?${Uri(queryParameters: {'cursor': cursor}).query}');
   Future<Map<String, dynamic>> notificationRead(String companyId, String id,
           {bool employee = false, bool read = true}) =>
       _json('POST', '${notificationsPath(companyId, employee: employee)}/read',
@@ -1628,12 +1637,38 @@ class SaasApi implements SessionRepository {
           {bool employee = false}) =>
       _json('POST',
           '${notificationsPath(companyId, employee: employee)}/subscription',
-          data: {'subscription': subscription});
-  Future<Map<String, dynamic>> unsubscribePush(String companyId,
-          {bool employee = false, String? endpoint}) =>
-      _json('DELETE',
-          '${notificationsPath(companyId, employee: employee)}/subscription',
-          data: {if (endpoint != null) 'endpoint': endpoint});
+          data: subscription);
+  Future<void> unregisterPushInstallation(String installation) async {
+    await _json('DELETE', '/v1/push-installation',
+        data: {'installationId': installation});
+  }
+
+  Future<void> _unregisterDevice() async {
+    final pwa = kIsWeb ? PwaRuntime() : null;
+    try {
+      final status = pwa?.status;
+      if (status != null && status['pushEnabled'] != true) return;
+      final installation = status == null
+          ? await nativePushInstallation()
+          : status['installationId'] as String?;
+      if (installation == null || installation.isEmpty) return;
+      try {
+        await unregisterPushInstallation(installation)
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // If signed out offline, revoke the local push token instead.
+        if (pwa != null) {
+          await pwa.disableTaskPush().timeout(const Duration(seconds: 5));
+        } else {
+          await disableNativePush().timeout(const Duration(seconds: 5));
+        }
+      }
+    } catch (_) {
+      // A push service error must not prevent sign-out.
+    } finally {
+      pwa?.dispose();
+    }
+  }
 
   Future<Map<String, dynamic>> upload(
     String companyId, {

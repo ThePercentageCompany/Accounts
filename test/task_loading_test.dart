@@ -22,6 +22,8 @@ class _TaskApi extends SaasApi {
   String title = 'Initial task';
   bool connected = true;
   int notificationRequests = 0;
+  List<Map<String, dynamic>> notices = [];
+  int? unreadNoticeCount;
   Future<void>? taskResponseGate;
   List<Map<String, dynamic>>? taskRecords;
   final taskQueries = <Map<String, String>>[];
@@ -34,8 +36,25 @@ class _TaskApi extends SaasApi {
           {bool employee = false, bool force = false}) =>
       cache.read(notificationsPath(companyId, employee: employee), () async {
         notificationRequests++;
-        return {'notifications': <Map<String, dynamic>>[]};
+        return {
+          'notifications': notices,
+          if (unreadNoticeCount != null) 'unread': unreadNoticeCount,
+        };
       }, force: force);
+
+  @override
+  Future<Map<String, dynamic>> notificationRead(String companyId, String id,
+      {bool employee = false, bool read = true}) async {
+    notices = [
+      for (final notice in notices)
+        if (id == 'all' || id == notice['id'])
+          {...notice, 'readAt': read ? 1 : null}
+        else
+          notice,
+    ];
+    unreadNoticeCount = notices.where((n) => n['readAt'] == null).length;
+    return {'updated': true};
+  }
 
   @override
   bool get taskRealtimeConnected => connected;
@@ -70,8 +89,8 @@ class _TaskApi extends SaasApi {
                   'recordVersion': 1,
                 }
               ])
-          .where((row) => filters['status'] == null ||
-              row['status'] == filters['status'])
+          .where((row) =>
+              filters['status'] == null || row['status'] == filters['status'])
           .toList();
       final offset = int.tryParse(filters['offset'] ?? '') ?? 0;
       final limit = int.tryParse(filters['limit'] ?? '') ?? 40;
@@ -87,6 +106,47 @@ class _TaskApi extends SaasApi {
 }
 
 void main() {
+  testWidgets('payroll alerts use the total badge and stay in the inbox on tap',
+      (tester) async {
+    final api = _TaskApi()
+      ..unreadNoticeCount = 45
+      ..notices = [
+        {
+          'id': 'n' * 43,
+          'taskId': null,
+          'type': 'payroll-paid',
+          'title': 'Salary payment recorded',
+          'body': 'Your salary payment was recorded.',
+          'createdAt': 1764000000000,
+          'readAt': null,
+        }
+      ];
+    final opened = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+      appBar: AppBar(actions: [
+        NotificationCenter(
+          api: api,
+          companyId: 'c' * 43,
+          employee: true,
+          onTask: opened.add,
+        )
+      ]),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('45'), findsOneWidget);
+    await tester.tap(find.byTooltip('Notifications'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salary payment recorded'));
+    await tester.pumpAndSettle();
+    expect(opened, isEmpty);
+    expect(find.text('Salary payment recorded'), findsOneWidget);
+    expect(find.byTooltip('Mark unread'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await api.updates.close();
+    api.cache.dispose();
+  });
+
   testWidgets('older pending tasks appear before loading more completed tasks',
       (tester) async {
     Map<String, dynamic> task(int number, String status) => {

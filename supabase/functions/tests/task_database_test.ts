@@ -1,5 +1,69 @@
 import {setup,owner,other,assert} from './_fixture.ts';
 
+Deno.test('workspace alerts reach the assigned employee, task editor, and payroll accountant', async () => {
+ const {db,company}=await setup();
+ const manager='00000000-0000-0000-0000-000000000003';
+ const accountant='00000000-0000-0000-0000-000000000004';
+ const staff='e'.repeat(43), managerEmployee='f'.repeat(43);
+ const taskId='t'.repeat(43), payrollId='p'.repeat(43);
+ const register=async (user:string,platform:string)=>db.query(
+   `select public.task_notification_api($1,$2,'register',$3)`,
+   [company,user,JSON.stringify({token:'token-'+user,installationId:'install-'+user,platform})]);
+ const inbox=async (user:string,filter='all')=>(await db.query<{result:{unread:number;notifications:{type:string;taskId:string|null;body:string}[]}}>(
+   `select public.task_notification_api($1,$2,'list',$3) result`,
+   [company,user,JSON.stringify({filter})])).rows[0].result;
+ try {
+  await db.query(`insert into auth.users(id,email) values($1,'manager@test.example'),($2,'accountant@test.example')`,[manager,accountant]);
+  for (const [ordinal,id] of [staff,managerEmployee].entries()) await db.query(
+    `insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+     values($1,'Employees',$2,$3,1,jsonb_build_object('fullName','Employee'))`,[company,id,ordinal+1]);
+  await db.query(`insert into public.company_memberships(company_id,user_id,employee_id,role)
+    values($1,$2,$3,'Staff'),($1,$4,$5,'Manager'),($1,$6,null,'Accountant')`,
+    [company,other,staff,manager,managerEmployee,accountant]);
+  await db.query(`insert into public.section_permissions(company_id,user_id,section,scope,can_write)
+    values($1,$2,'Tasks','COMPANY',true),($1,$3,'Payroll','COMPANY',true)`,[company,manager,accountant]);
+  await register(other,'android');
+  await register(manager,'ios');
+  await register(accountant,'web');
+
+  await db.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+    values($1,'Tasks',$2,1,1,jsonb_build_object('employeeId',$3::text,'title','Test task','status','TODO',
+      'priority','MEDIUM','dueDate','2026-11-30','updatedBy',$4::text))`,[company,taskId,staff,owner]);
+  assert((await inbox(other)).notifications.some(n=>n.type==='task-assigned'));
+  assert((await inbox(accountant)).unread===0);
+
+  await db.query(`update public.business_records set version=2,
+    payload=payload||jsonb_build_object('status','IN_PROGRESS','updatedBy',$3::text)
+    where company_id=$1 and section='Tasks' and record_id=$2`,[company,taskId,other]);
+  assert((await inbox(manager)).notifications.some(n=>n.type==='task-status'));
+  assert((await inbox(accountant)).unread===0);
+
+  await db.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)
+    values($1,'Payroll',$2,1,1,jsonb_build_object('employeeId',$3::text,'status','APPROVED',
+      'month',to_char((now() at time zone 'Asia/Dubai')-interval '1 month','YYYY-MM')))`,[company,payrollId,staff]);
+  await db.exec('select private.queue_payroll_reminders(); select private.queue_payroll_reminders();');
+  const reminders=(await inbox(accountant,'payroll')).notifications;
+  assert(reminders.length===1 && reminders[0].type==='payroll-due' && reminders[0].taskId===null);
+  const claim=async ()=>(await db.query<{jobs:{type:string;platform:string;canOpenTask:boolean}[]}>(
+    'select public.claim_notification_push(50) jobs')).rows[0].jobs;
+  const jobs=await claim();
+  assert(jobs.some(j=>j.type==='task-assigned' && j.platform==='android' && !j.canOpenTask));
+  assert(jobs.some(j=>j.type==='task-status' && j.platform==='ios' && j.canOpenTask));
+  assert(jobs.some(j=>j.type==='payroll-due' && j.platform==='web'));
+
+  await db.query(`update public.business_records set version=2,
+    payload=payload||jsonb_build_object('status','PAID','paidDate','2026-11-30','netSalary',5000)
+    where company_id=$1 and section='Payroll' and record_id=$2`,[company,payrollId]);
+  const paid=(await inbox(other,'payroll')).notifications;
+  assert(paid.length===1 && paid[0].type==='payroll-paid' && !paid[0].body.includes('5000'));
+  assert((await inbox(manager,'payroll')).unread===1);
+  assert((await inbox(manager,'payroll')).notifications.length===0);
+  assert((await claim()).some(j=>j.type==='payroll-paid' && j.platform==='android'));
+ } finally {
+  await db.close();
+ }
+});
+
 const employee='e'.repeat(43),second='f'.repeat(43),task='t'.repeat(43),comment='c'.repeat(43);
 async function seed(db:any,company:string){
  for(const id of [employee,second])await db.query(`insert into public.business_records(company_id,section,record_id,ordinal,version,payload)

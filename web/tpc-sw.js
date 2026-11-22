@@ -38,13 +38,15 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil((async () => {
     const {companyId, taskId, notificationId} = event.notification.data || {};
-    if (!/^[A-Za-z0-9_-]{43}$/.test(companyId) || !/^[A-Za-z0-9_-]{43}$/.test(taskId)) return;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(companyId) || (taskId && !/^[A-Za-z0-9_-]{43}$/.test(taskId))) return;
     for (const client of await self.clients.matchAll({type:'window', includeUncontrolled:true})) {
       if (new URL(client.url).origin === scope.origin && new URL(client.url).pathname.startsWith(scope.pathname)) {
-        client.postMessage({type:'OPEN_TASK', companyId, taskId, notificationId}); await client.focus(); return;
+        client.postMessage({type: taskId ? 'OPEN_TASK' : 'OPEN_NOTIFICATIONS', companyId, taskId, notificationId});
+        await client.focus(); return;
       }
     }
-    await self.clients.openWindow(new URL(`#task=${companyId}:${taskId}${notificationId ? `:${notificationId}` : ''}`, scope).href);
+    const link = taskId ? `#task=${companyId}:${taskId}${notificationId ? `:${notificationId}` : ''}` : `#notifications=${companyId}`;
+    await self.clients.openWindow(new URL(link, scope).href);
   })());
 });
 

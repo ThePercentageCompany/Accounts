@@ -3,6 +3,46 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 import { pushOutcome } from '../_shared/domain/notification-policy.js';
 
 let cached:{token:string,expires:number}|null=null;
+const titles: Record<string, string> = {
+  'task-assigned': 'New task assigned',
+  'task-unassigned': 'Task unassigned',
+  'task-status': 'Task status updated',
+  'task-updated': 'Task updated',
+  'task-deleted': 'Task deleted',
+  'task-comment': 'Task comment added',
+  'task-attachment': 'Task attachment updated',
+  'task-deadline': 'Task deadline updated',
+  'task-due': 'Task deadline reminder',
+  'task-overdue': 'Task overdue',
+  'payroll-paid': 'Salary payment recorded',
+  'payroll-due': 'Payroll payment reminder',
+};
+
+function pushMessage(job: any) {
+  const title = titles[job.type] ?? 'Workspace notification';
+  const body = 'Open your workspace for details.';
+  const data = {
+    id: job.notificationId, notificationId: job.notificationId,
+    companyId: job.companyId, taskId: job.canOpenTask ? (job.taskId ?? '') : '',
+    type: job.type, sound: job.sound, title, body,
+  };
+  const base = { token: job.token, data };
+  if (job.platform === 'android') {
+    return { ...base, notification: { title, body }, android: {
+      ttl: '300s', priority: 'high', notification: {
+        tag: job.notificationId, channel_id: job.sound === 'none' ? 'workspace_silent' : 'workspace_alerts',
+      },
+    } };
+  }
+  if (job.platform === 'ios') {
+    return { ...base, notification: { title, body }, apns: {
+      headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + 300) },
+      payload: { aps: job.sound === 'none' ? {} : { sound: 'default' } },
+    } };
+  }
+  return { ...base, webpush: { headers: { TTL: '300',
+    Urgency: job.type === 'task-overdue' ? 'high' : 'normal' } } };
+}
 const bytes=(value:string)=>new TextEncoder().encode(value);
 const b64=(value:Uint8Array)=>btoa(String.fromCharCode(...value)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
 async function accessToken(account:any) {
@@ -37,9 +77,7 @@ Deno.serve(async request=>{
       try {
         const response=await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`,{
           method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(10000),
-          body:JSON.stringify({message:{token:j.token,data:{id:j.notificationId,notificationId:j.notificationId,companyId:j.companyId,
-            taskId:j.taskId,eventId:j.eventId,type:j.type,sound:j.sound,volume:String(j.volume),title:'TPC task notification',
-            body:'Open your workspace to view this task update.'},webpush:{headers:{TTL:'300',Urgency:j.type==='task-overdue'?'high':'normal'}}}})});
+          body:JSON.stringify({message:pushMessage(j)})});
         const result=await response.json();status=pushOutcome(response.status,result);errorCode=status==='DELIVERED'?null:`FCM_HTTP_${response.status}`;
       }catch{errorCode='FCM_TEMPORARILY_UNAVAILABLE';}
       const finished=await db.rpc('finish_notification_push',{p_id:j.id,p_lease:j.lease,p_status:status,p_error:errorCode});

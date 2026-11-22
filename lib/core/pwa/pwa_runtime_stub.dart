@@ -19,6 +19,7 @@ class PwaRuntime extends ChangeNotifier {
   Future<Map<String, dynamic>?> subscription() async => null;
   Future<void> unsubscribe() async {}
   void clearTask() {}
+  void clearNotification() {}
   Future<void> enableSound() async {}
   Future<void> playSound(String sound, double volume, String id) async {}
   Future<Map<String, dynamic>?> registerTaskPush(Map<String, dynamic> config, String vapid,

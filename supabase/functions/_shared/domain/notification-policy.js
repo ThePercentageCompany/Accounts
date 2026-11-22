@@ -5,7 +5,7 @@ export function notificationInput(action, input) {
   const fields = {
     settings: ['expectedVersion', 'sound', 'volume', 'deadlineCutoff', 'dailyReminderTime'],
     preferences: ['assignmentEnabled', 'updatesEnabled', 'deadlineEnabled', 'overdueEnabled', 'pushEnabled', 'quietStart', 'quietEnd'],
-    register: ['token', 'installationId'], unregister: ['installationId'], read: ['id', 'read'],
+    register: ['token', 'installationId', 'platform'], unregister: ['installationId'], read: ['id', 'read'],
   }[action];
   requireThat(fields && Object.keys(input).every(k => fields.includes(k)), 400, 'INVALID_NOTIFICATION', 'Unsupported notification fields.');
   const time = s => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -17,8 +17,9 @@ export function notificationInput(action, input) {
     ((input.quietStart === '' && input.quietEnd === '') || time(input.quietStart) && time(input.quietEnd)),
   400, 'INVALID_NOTIFICATION', 'Choose categories and either both quiet-hour times or neither.');
   if (['register', 'unregister'].includes(action)) requireThat(typeof input.installationId === 'string' &&
-    /^[A-Za-z0-9_-]{16,80}$/.test(input.installationId), 400, 'INVALID_NOTIFICATION', 'Invalid browser installation.');
-  if (action === 'register') requireThat(typeof input.token === 'string' && /^[A-Za-z0-9:_-]{20,4096}$/.test(input.token),
+    /^[A-Za-z0-9_-]{16,80}$/.test(input.installationId), 400, 'INVALID_NOTIFICATION', 'Invalid device installation.');
+  if (action === 'register') requireThat(typeof input.token === 'string' && /^[A-Za-z0-9:_-]{20,4096}$/.test(input.token) &&
+    ['web', 'android', 'ios'].includes(input.platform ?? 'web'),
     400, 'INVALID_NOTIFICATION', 'Invalid push registration.');
   if (action === 'read') requireThat((input.id === 'all' || /^[A-Za-z0-9_-]{43}$/.test(input.id)) && typeof input.read === 'boolean',
     400, 'INVALID_NOTIFICATION', 'Choose a notification and read state.');

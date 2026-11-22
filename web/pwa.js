@@ -47,7 +47,8 @@
       soundEnabled: window.tpcNotifications?.soundEnabled() === true,
       installationId: window.tpcNotifications?.installation() || '',
       permission: 'Notification' in window ? Notification.permission : 'unsupported',
-      taskLink: location.hash.startsWith('#task=') ? location.hash.slice(6) : ''}),
+      taskLink: location.hash.startsWith('#task=') ? location.hash.slice(6) : '',
+      notificationLink: location.hash.startsWith('#notifications=') ? location.hash.slice(15) : ''}),
     readyRegistration: async () => { await navigator.serviceWorker.ready; if (!registration) throw Error('App worker is not ready. Reload and try again.'); return registration; },
     notificationReceived: () => {notificationVersion++; emit();},
     install: async () => {
@@ -118,6 +119,7 @@
       } catch (error) {setUpdateState('error'); throw error;}
     },
     clearTask: () => {if (location.hash.startsWith('#task=')) history.replaceState(null, '', location.pathname + location.search);},
+    clearNotification: () => {if (location.hash.startsWith('#notifications=')) history.replaceState(null, '', location.pathname + location.search);},
   };
   if ('serviceWorker' in navigator && window.isSecureContext) {
     navigator.serviceWorker.register(new URL('tpc-sw.js', base), {scope: base.pathname, updateViaCache:'none'})
@@ -136,6 +138,10 @@
     navigator.serviceWorker.addEventListener('message', event => {
       if (event.data?.type === 'NOTIFICATION_RECEIVED') {notificationVersion++; emit();}
       if (event.data?.type === 'OPEN_TASK') task(event.data);
+      if (event.data?.type === 'OPEN_NOTIFICATIONS' && /^[A-Za-z0-9_-]{43}$/.test(event.data.companyId)) {
+        history.replaceState(null, '', `#notifications=${event.data.companyId}`);
+        notificationVersion++; emit();
+      }
     });
   }
 })();

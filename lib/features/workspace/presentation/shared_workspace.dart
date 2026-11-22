@@ -430,13 +430,14 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         ),
         actions: [
           _syncStatusIcon(),
-          if (widget.employee == null ||
-              (widget.employee!['allowedSections'] as List).contains('Tasks'))
-            NotificationCenter(
-                api: widget.api,
-                companyId: widget.companyId,
-                employee: widget.employee != null,
-                onTask: _openTask),
+          NotificationCenter(
+              api: widget.api,
+              companyId: widget.companyId,
+              employee: widget.employee != null,
+              timeZone: widget.timeZone ??
+                  widget.employee?['timeZone'] as String? ??
+                  'Asia/Dubai',
+              onTask: _openTask),
           if (!wide)
             IconButton(
               tooltip: 'All workspace sections',
