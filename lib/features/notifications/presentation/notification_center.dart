@@ -19,19 +19,17 @@ class NotificationCenter extends StatefulWidget {
       required this.companyId,
       required this.employee,
       required this.onTask,
-      this.timeZone = 'Asia/Dubai',
-      this.settingsEntry = false});
+      this.timeZone = 'Asia/Dubai'});
   final SaasApi api;
   final String companyId;
   final bool employee;
-  final bool settingsEntry;
   final String timeZone;
   final ValueChanged<String> onTask;
   @override
-  State<NotificationCenter> createState() => _NotificationCenterState();
+  NotificationCenterState createState() => NotificationCenterState();
 }
 
-class _NotificationCenterState extends State<NotificationCenter>
+class NotificationCenterState extends State<NotificationCenter>
     with WidgetsBindingObserver {
   final _changes = ValueNotifier<int>(0);
   final _pwa = PwaRuntime();
@@ -42,6 +40,8 @@ class _NotificationCenterState extends State<NotificationCenter>
   int _unread = 0;
   String? _nextCursor;
   String? _registeredToken;
+  String? _installationId, _pushFeedback;
+  bool _testing = false;
   int? _webPushVersion;
   bool _webPushSupported = false;
   bool _pushBusy = false, _sheetOpen = false, _refreshQueued = false;
@@ -93,6 +93,9 @@ class _NotificationCenterState extends State<NotificationCenter>
       _items = [];
       _configuration = {};
       _registeredToken = null;
+      _installationId = null;
+      _pushFeedback = null;
+      _testing = false;
       _unread = 0;
       _nextCursor = null;
       _refreshQueued = false;
@@ -198,7 +201,10 @@ class _NotificationCenterState extends State<NotificationCenter>
     if (!_pushAvailable || _pushBusy) return;
     final generation = _generation;
     _pushBusy = true;
-    if (requestPermission) _notify();
+    if (requestPermission) {
+      _pushFeedback = null;
+      _notify();
+    }
     try {
       final registration = nativePushPlatform != null
           ? await nativePushRegistration(requestPermission: requestPermission)
@@ -216,10 +222,13 @@ class _NotificationCenterState extends State<NotificationCenter>
       if (token == _registeredToken) return;
       await widget.api.subscribePush(widget.companyId, registration,
           employee: widget.employee);
-      if (mounted && generation == _generation) _registeredToken = token;
+      if (mounted && generation == _generation) {
+        _registeredToken = token;
+        _installationId = registration['installationId'] as String;
+      }
     } catch (error) {
       if (mounted && generation == _generation && requestPermission) {
-        _error = error is SaasApiException
+        _pushFeedback = error is SaasApiException
             ? error.message
             : error is StateError
                 ? error.message
@@ -231,6 +240,112 @@ class _NotificationCenterState extends State<NotificationCenter>
         _notify();
       }
     }
+  }
+
+  Future<void> _testPush() async {
+    final installation = _installationId;
+    if (_testing || _registeredToken == null || installation == null) return;
+    final generation = _generation;
+    _testing = true;
+    _pushFeedback = null;
+    _notify();
+    try {
+      await widget.api
+          .testPush(widget.companyId, installation, employee: widget.employee);
+      if (!mounted || generation != _generation) return;
+      _pushFeedback =
+          'Test queued. Switch away from the app to check for a device alert. Quiet hours can delay delivery.';
+      unawaited(_load(force: true));
+    } catch (error) {
+      if (!mounted || generation != _generation) return;
+      _pushFeedback = error is SaasApiException
+          ? error.message
+          : 'Could not queue the test. Check your connection and retry.';
+    } finally {
+      if (mounted && generation == _generation) {
+        _testing = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<void> openSettings() async {
+    unawaited(_load(force: true));
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 600),
+      builder: (context) => SafeArea(
+        child: ValueListenableBuilder<int>(
+          valueListenable: _changes,
+          builder: (context, _, _) {
+            final enabled = _registeredToken != null;
+            final status = enabled
+                ? 'Enabled on this device'
+                : _pushAvailable
+                    ? 'Off on this device'
+                    : _busy && _configuration.isEmpty
+                        ? 'Checking availability...'
+                        : _error ??
+                            (_configuration.isEmpty
+                                ? 'Refresh to check push availability.'
+                                : !_webPushSupported &&
+                                        nativePushPlatform == null
+                                    ? 'Push is unavailable here. On iPhone or iPad, add the website to your Home Screen and open it from there.'
+                                    : 'Push is unavailable. Check the workspace push configuration.');
+            return SingleChildScrollView(
+              padding: AppSpacing.page(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Notification settings',
+                      style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 16),
+                  Text('Device push',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(status),
+                  const SizedBox(height: 12),
+                  if (enabled)
+                    FilledButton.tonalIcon(
+                      onPressed: _testing || _pushBusy ? null : _testPush,
+                      icon: const Icon(Icons.send_outlined),
+                      label: Text(_testing
+                          ? 'Queuing test...'
+                          : 'Send test notification'),
+                    )
+                  else if (_pushAvailable)
+                    FilledButton.icon(
+                      onPressed: _pushBusy
+                          ? null
+                          : () => _registerPush(requestPermission: true),
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: Text(_pushBusy
+                          ? 'Checking device...'
+                          : 'Enable push notifications'),
+                    )
+                  else
+                    TextButton.icon(
+                      onPressed: _busy ? null : () => _load(force: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh availability'),
+                    ),
+                  if (_pushFeedback != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Semantics(
+                          liveRegion: true, child: Text(_pushFeedback!)),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _applyPage(Map<String, dynamic> data, {bool append = false}) {
@@ -318,104 +433,187 @@ class _NotificationCenterState extends State<NotificationCenter>
     if (_sheetOpen || !mounted) return;
     _sheetOpen = true;
     if (refresh) unawaited(_load(force: true));
-    await showModalBottomSheet<void>(
+    try {
+      final settings = await showModalBottomSheet<bool>(
         context: context,
         isScrollControlled: true,
+        useSafeArea: true,
         showDragHandle: true,
-        builder: (context) => SafeArea(
-                child: SizedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        builder: (context) {
+          final theme = Theme.of(context);
+          return SafeArea(
+            child: SizedBox(
               height: MediaQuery.sizeOf(context).height * .8,
               child: ValueListenableBuilder<int>(
-                  valueListenable: _changes,
-                  builder: (context, _, _) =>
-                      ListView(padding: AppSpacing.page(context), children: [
-                        Text('Notifications',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        Wrap(spacing: 8, children: [
-                          TextButton.icon(
-                              onPressed: () => _load(force: true),
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Refresh')),
-                          TextButton(
-                              onPressed: () => _read('all', true),
-                              child: const Text('Mark all read')),
-                        ]),
-                        if (_pushAvailable)
-                          ListTile(
-                            leading:
-                                const Icon(Icons.notifications_active_outlined),
-                            title: Text(_registeredToken == null
-                                ? 'Enable push notifications'
-                                : 'Push notifications enabled'),
-                            onTap: _pushBusy || _registeredToken != null
-                                ? null
-                                : () => _registerPush(requestPermission: true),
-                            trailing:
-                                _pushBusy ? const AppActivityIndicator() : null,
+                valueListenable: _changes,
+                builder: (context, _, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Notifications',
+                                  style: theme.textTheme.headlineSmall),
+                              Text('$_unread unread'),
+                            ],
                           ),
-                        if (_error != null)
-                          Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Text(_error!,
-                                  style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .error))),
-                        if (_busy) const Center(child: AppActivityIndicator()),
-                        if (_items.isEmpty && !_busy && _error == null)
-                          const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Text('No notifications yet.')),
-                        for (final item in _items)
-                          Card(
-                              child: ListTile(
-                            leading: Icon(
-                                switch (item['type']) {
-                                  'task-due' || 'task-overdue' => Icons.alarm,
-                                  'payroll-paid' ||
-                                  'payroll-due' =>
-                                    Icons.payments_outlined,
-                                  _ => Icons.task_alt,
-                                },
-                                color: item['readAt'] == null
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null),
-                            title: Text('${item['title']}',
-                                style: TextStyle(
-                                    fontWeight: item['readAt'] == null
-                                        ? FontWeight.w700
-                                        : FontWeight.normal)),
-                            subtitle: Text(
-                                '${item['body']}\n${DateFormat.yMMMd().add_jm().format(businessTimestamp((item['createdAt'] as num).toInt(), widget.timeZone))} · ${widget.timeZone}'),
-                            isThreeLine: true,
-                            trailing: IconButton(
-                                tooltip: item['readAt'] == null
-                                    ? 'Mark read'
-                                    : 'Mark unread',
-                                onPressed: () => _read(
-                                    '${item['id']}', item['readAt'] == null),
-                                icon: Icon(item['readAt'] == null
-                                    ? Icons.mark_email_read_outlined
-                                    : Icons.mark_email_unread_outlined)),
-                            onTap: () {
-                              unawaited(_read('${item['id']}', true));
-                              final task = item['taskId'];
-                              final metadata = item['metadata'] as Map?;
-                              if (task is String &&
-                                  task.isNotEmpty &&
-                                  metadata?['canOpenTask'] != false) {
-                                Navigator.pop(context);
-                                widget.onTask(task);
-                              }
-                            },
-                          )),
-                        if (_nextCursor != null)
-                          TextButton(
-                              onPressed: _busy ? null : () => _load(more: true),
-                              child: const Text('Load more')),
-                      ])),
-            )));
-    _sheetOpen = false;
+                        ),
+                        IconButton(
+                          tooltip: 'Notification settings',
+                          onPressed: () => Navigator.pop(context, true),
+                          icon: const Icon(Icons.settings_outlined),
+                        ),
+                        IconButton(
+                          tooltip: 'Close notifications',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Wrap(children: [
+                        TextButton.icon(
+                          onPressed: _busy ? null : () => _load(force: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
+                        ),
+                        TextButton.icon(
+                          onPressed: _unread == 0 || _busy
+                              ? null
+                              : () => _read('all', true),
+                          icon: const Icon(Icons.done_all),
+                          label: const Text('Mark all read'),
+                        ),
+                      ]),
+                    ),
+                    if (_busy && _items.isNotEmpty)
+                      const LinearProgressIndicator(),
+                    const Divider(height: 1),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(_error!,
+                            style: TextStyle(color: theme.colorScheme.error)),
+                      ),
+                    Expanded(
+                      child: _items.isEmpty
+                          ? Center(
+                              child: _busy
+                                  ? const AppActivityIndicator()
+                                  : _error != null
+                                      ? const SizedBox.shrink()
+                                      : Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.notifications_none,
+                                                size: 40,
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant),
+                                            const SizedBox(height: 12),
+                                            Text('No notifications yet',
+                                                style: theme
+                                                    .textTheme.titleMedium),
+                                            const Text(
+                                                'Task and payroll alerts will appear here.'),
+                                          ],
+                                        ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                              itemCount:
+                                  _items.length + (_nextCursor == null ? 0 : 1),
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 4),
+                              itemBuilder: (context, index) {
+                                if (index == _items.length) {
+                                  return TextButton(
+                                    onPressed:
+                                        _busy ? null : () => _load(more: true),
+                                    child: const Text('Load more'),
+                                  );
+                                }
+                                return _notificationTile(
+                                    context, _items[index]);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      if (settings == true && mounted) await openSettings();
+    } finally {
+      _sheetOpen = false;
+    }
+  }
+
+  Widget _notificationTile(BuildContext context, Map<String, dynamic> item) {
+    final theme = Theme.of(context);
+    final unread = item['readAt'] == null;
+    final id = item['id'] as String;
+    final task = item['taskId'];
+    final canOpenTask = task is String &&
+        task.isNotEmpty &&
+        (item['metadata'] as Map?)?['canOpenTask'] != false;
+    final timestamp = DateFormat.yMMMd().add_jm().format(
+          businessTimestamp(
+              (item['createdAt'] as num).toInt(), widget.timeZone),
+        );
+    return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: unread ? theme.colorScheme.primary.withAlpha(18) : null,
+      leading: Icon(
+        switch (item['type']) {
+          'task-due' || 'task-overdue' => Icons.alarm,
+          'payroll-paid' || 'payroll-due' => Icons.payments_outlined,
+          'push-test' => Icons.notifications_active_outlined,
+          _ => Icons.task_alt,
+        },
+        color: unread
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant,
+      ),
+      title: Text('${item['title']}',
+          style: unread ? const TextStyle(fontWeight: FontWeight.w700) : null),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${item['body']}'),
+            const SizedBox(height: 4),
+            Text(timestamp,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+      trailing: IconButton(
+        tooltip: unread ? 'Mark as read' : 'Mark as unread',
+        onPressed: () => _read(id, unread),
+        icon: Icon(unread
+            ? Icons.mark_email_read_outlined
+            : Icons.mark_email_unread_outlined),
+      ),
+      onTap: unread || canOpenTask
+          ? () {
+              if (unread) unawaited(_read(id, true));
+              if (canOpenTask) {
+                Navigator.pop(context);
+                widget.onTask(task);
+              }
+            }
+          : null,
+    );
   }
 
   @override
@@ -436,18 +634,11 @@ class _NotificationCenterState extends State<NotificationCenter>
   }
 
   @override
-  Widget build(BuildContext context) => widget.settingsEntry
-      ? ListTile(
-          leading: const Icon(Icons.notifications_outlined),
-          title: const Text('Notifications'),
-          subtitle: const Text('View task and payroll alerts'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _open())
-      : IconButton(
-          tooltip: 'Notifications',
-          onPressed: () => _open(),
-          icon: Badge(
-              isLabelVisible: _unread > 0,
-              label: Text('$_unread'),
-              child: const Icon(Icons.notifications_outlined)));
+  Widget build(BuildContext context) => IconButton(
+      tooltip: 'Notifications',
+      onPressed: () => _open(),
+      icon: Badge(
+          isLabelVisible: _unread > 0,
+          label: Text('$_unread'),
+          child: const Icon(Icons.notifications_outlined)));
 }

@@ -13,6 +13,17 @@ export async function notificationRequest(ctx:any, action:string, input:any = {}
       (input.limit==null || Number.isSafeInteger(Number(input.limit)) && Number(input.limit)>=1 && Number(input.limit)<=100),
       400,'INVALID_NOTIFICATION','Invalid notification page.');
   }
+  if (action === 'test') {
+    const {data, error} = await ctx.db.rpc('queue_notification_test', {
+      p_company: ctx.company.id, p_actor: ctx.user.id, p_installation: input.installationId,
+    });
+    if (error) databaseError(error);
+    if (data === 'NOT_REGISTERED') throw new ApiError(409, 'PUSH_NOT_REGISTERED', 'Enable push on this device before sending a test.');
+    if (data === 'RATE_LIMITED') throw new ApiError(429, 'PUSH_TEST_RATE_LIMITED', 'Wait a minute before sending another test.');
+    if (data === 'PUSH_DISABLED') throw new ApiError(409, 'PUSH_DISABLED', 'Push delivery is disabled in your workspace notification preferences.');
+    if (data !== 'QUEUED') throw new ApiError(503, 'PUSH_TEST_UNAVAILABLE', 'Could not queue the test. Please try again.');
+    return {queued: true};
+  }
   const {data,error}=await ctx.db.rpc('task_notification_api',{p_company:ctx.company.id,p_actor:ctx.user.id,p_action:action,p_input:input});
   if(error?.message?.includes('NOTIFICATION_FORBIDDEN'))throw new ApiError(403,'SECTION_FORBIDDEN','Workspace notifications are unavailable.');
   if(error)databaseError(error);

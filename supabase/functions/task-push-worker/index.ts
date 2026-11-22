@@ -15,12 +15,13 @@ const titles: Record<string, string> = {
   'task-due': 'Task deadline reminder',
   'task-overdue': 'Task overdue',
   'payroll-paid': 'Salary payment recorded',
+  'push-test': 'Test notification',
   'payroll-due': 'Payroll payment reminder',
 };
 
 function pushMessage(job: any) {
   const title = titles[job.type] ?? 'Workspace notification';
-  const body = 'Open your workspace for details.';
+  const body = job.type === 'push-test' ? 'Push notifications are working on this device.' : 'Open your workspace for details.';
   const data = {
     id: job.notificationId, notificationId: job.notificationId,
     companyId: job.companyId, taskId: job.canOpenTask ? (job.taskId ?? '') : '',

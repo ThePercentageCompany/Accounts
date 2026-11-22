@@ -129,6 +129,7 @@ class SharedWorkspace extends StatefulWidget {
 }
 
 class _SharedWorkspaceState extends State<SharedWorkspace> {
+  final _notifications = GlobalKey<NotificationCenterState>();
   late final DocumentUploadQueue? _uploads = widget.preferences != null
       ? DocumentUploadQueue(
           widget.api,
@@ -431,6 +432,7 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
         actions: [
           _syncStatusIcon(),
           NotificationCenter(
+              key: _notifications,
               api: widget.api,
               companyId: widget.companyId,
               employee: widget.employee != null,
@@ -609,7 +611,8 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
                           : [
                               for (final section in sections)
                                 _visited.contains(section)
-                                    ? _sectionView(section, section == selected)
+                                    ? _workspaceSection(
+                                        section, section == selected)
                                     : const SizedBox.shrink(),
                             ],
                     ),
@@ -697,6 +700,24 @@ class _SharedWorkspaceState extends State<SharedWorkspace> {
             (_uploads?.busy ?? false) ||
             (_employees?.busy ?? false);
       });
+
+  Widget _workspaceSection(String section, bool active) {
+    final content = _sectionView(section, active);
+    if (section != 'Settings') return content;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.notifications_outlined),
+          title: const Text('Notification settings'),
+          subtitle: const Text('Enable device push and send a test'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _notifications.currentState?.openSettings(),
+        ),
+        Expanded(child: content),
+      ],
+    );
+  }
 
   Widget _sectionView(String? selected, bool active) => selected == null
       ? const Center(

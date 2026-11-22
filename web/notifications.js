@@ -48,16 +48,52 @@
       try {Object.keys(localStorage).filter(k => k.startsWith('tpc-sound-event:') && Number(saved(k)) < Date.now() - 86400000).forEach(k => localStorage.removeItem(k));} catch (_) {}
     },
     register: async (configJson, vapidKey, requestPermission) => {
+      if (!('Notification' in window)) return JSON.stringify({error: 'This browser does not support notifications here.'});
+      if (!requestPermission && (Notification.permission !== 'granted' || saved('tpc-push-enabled') !== 'true')) return 'null';
+      const key = vapidKey.trim();
+      if (!/^B[A-Za-z0-9_-]{86}$/.test(key)) {
+        return JSON.stringify({error: 'The workspace web push key is invalid. Check the public VAPID key in Firebase.'});
+      }
       if (requestPermission) {
-        if (await Notification.requestPermission() !== 'granted') throw Error('Browser notifications were not enabled. In-app alerts remain available.');
-      } else if (Notification.permission !== 'granted' || saved('tpc-push-enabled') !== 'true') return 'null';
-      const fcm = await prepare(JSON.parse(configJson));
-      const [, api] = await modules;
-      const registration = await window.tpcPwa.readyRegistration();
-      const token = await api.getToken(fcm, {vapidKey, serviceWorkerRegistration: registration});
-      if (!token) throw Error('No push token was issued. Check Firebase Web Push configuration.');
-      store('tpc-push-enabled', 'true'); notify();
-      return JSON.stringify({token, installationId: installation});
+        try {
+          if (await Notification.requestPermission() !== 'granted') {
+            return JSON.stringify({error: 'Allow notifications for this app in your device or browser settings, then try again.'});
+          }
+        } catch (_) {
+          return JSON.stringify({error: 'The browser could not request notification permission. Reopen the installed web app and try again.'});
+        }
+      }
+      let fcm, registration, readyTimeout;
+      try {
+        fcm = await prepare(JSON.parse(configJson));
+      } catch (error) {
+        modules = undefined;
+        return JSON.stringify({error: error.message?.startsWith('Push is unavailable')
+          ? error.message
+          : 'Could not load Firebase Messaging. Check your connection and reload the app.'});
+      }
+      try {
+        registration = await Promise.race([
+          window.tpcPwa.readyRegistration(),
+          new Promise((_, reject) => { readyTimeout = setTimeout(() => reject(Error('Worker not ready')), 8000); }),
+        ]);
+        const [, api] = await modules;
+        const token = await api.getToken(fcm, {vapidKey: key, serviceWorkerRegistration: registration});
+        if (!token) return JSON.stringify({error: 'Firebase did not issue a push token. Check the workspace Firebase configuration.'});
+        store('tpc-push-enabled', 'true'); notify();
+        return JSON.stringify({token, installationId: installation});
+      } catch (error) {
+        const message = !registration
+          ? 'The app service worker is not ready. Reload the app and try again.'
+          : error.name === 'NotAllowedError'
+            ? 'The browser blocked push registration. Check notification permissions for this app.'
+            : error.code === 'messaging/token-subscribe-failed'
+              ? 'Firebase rejected push registration. Check that the web app configuration and VAPID key are from the same Firebase project.'
+              : 'The browser could not register this device for push. Check your connection and reopen the app.';
+        return JSON.stringify({error: message});
+      } finally {
+        clearTimeout(readyTimeout);
+      }
     },
     disable: async () => {
       store('tpc-push-enabled', 'false');

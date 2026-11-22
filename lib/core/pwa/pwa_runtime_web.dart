@@ -79,6 +79,9 @@ class PwaRuntime extends ChangeNotifier {
   Future<Map<String, dynamic>?> registerTaskPush(Map<String, dynamic> config, String vapid,
       {bool requestPermission = false}) async {
     final raw = jsonDecode((await _registerPush(jsonEncode(config).toJS, vapid.toJS, requestPermission.toJS).toDart).toDart);
+    if (raw is Map && raw['error'] is String) {
+      throw StateError(raw['error'] as String);
+    }
     return raw == null ? null : Map<String, dynamic>.from(raw as Map);
   }
   Future<void> disableTaskPush() async { await _disablePush().toDart; }

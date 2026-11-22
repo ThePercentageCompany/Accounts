@@ -294,6 +294,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
         .map(async d=>({...publicDocument(d),canDelete:await canDeleteDocument(ctx,d)})))});
     }
     if(tail==='/notifications'&&request.method==='GET')return json(200,await notificationRequest(ctx,'list',Object.fromEntries(url.searchParams)));
+    if(tail==='/notifications/test'&&request.method==='POST')return json(200,await notificationRequest(ctx,'test',input));
     if(tail==='/notifications/read'&&request.method==='POST')return json(200,await notificationRequest(ctx,'read',input));
     if(tail==='/notifications/settings') {
       if(request.method==='GET')return json(200,await notificationRequest(ctx,'list',{limit:1}));

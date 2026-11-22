@@ -51,6 +51,20 @@ Deno.test('workspace alerts reach the assigned employee, task editor, and payrol
   assert(jobs.some(j=>j.type==='task-status' && j.platform==='ios' && j.canOpenTask));
   assert(jobs.some(j=>j.type==='payroll-due' && j.platform==='web'));
 
+  await db.exec(await Deno.readTextFile(new URL('../../migrations/202611220002_push_test.sql',import.meta.url)));
+  await db.query(`select public.task_notification_api($1,$2,'register',$3)`,[
+    company,accountant,JSON.stringify({token:'second-token-'+accountant,installationId:'second-'+accountant,platform:'android'}),
+  ]);
+  const testPush=async (actor:string)=>(await db.query<{result:string}>(
+    'select public.queue_notification_test($1,$2,$3) result',[company,actor,'install-'+accountant])).rows[0].result;
+  assert(await testPush(other)==='NOT_REGISTERED');
+  assert(await testPush(accountant)==='QUEUED');
+  assert(await testPush(accountant)==='RATE_LIMITED');
+  assert((await inbox(accountant)).notifications.some(n=>n.type==='push-test'));
+  assert(!(await inbox(other)).notifications.some(n=>n.type==='push-test'));
+  const testJobs=(await claim()).filter(j=>j.type==='push-test');
+  assert(testJobs.length===1 && testJobs[0].platform==='web' && !testJobs[0].canOpenTask);
+
   await db.query(`update public.business_records set version=2,
     payload=payload||jsonb_build_object('status','PAID','paidDate','2026-11-30','netSalary',5000)
     where company_id=$1 and section='Payroll' and record_id=$2`,[company,payrollId]);

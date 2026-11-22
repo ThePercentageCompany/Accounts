@@ -1632,6 +1632,12 @@ class SaasApi implements SessionRepository {
           {bool employee = false, bool read = true}) =>
       _json('POST', '${notificationsPath(companyId, employee: employee)}/read',
           data: {'id': id, 'read': read});
+  Future<void> testPush(String companyId, String installationId,
+      {bool employee = false}) async {
+    await _json('POST', '${notificationsPath(companyId, employee: employee)}/test',
+        data: {'installationId': installationId});
+  }
+
   Future<Map<String, dynamic>> subscribePush(
           String companyId, Map<String, dynamic> subscription,
           {bool employee = false}) =>
