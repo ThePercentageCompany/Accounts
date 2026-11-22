@@ -50,6 +50,7 @@
       taskLink: location.hash.startsWith('#task=') ? location.hash.slice(6) : '',
       notificationLink: location.hash.startsWith('#notifications=') ? location.hash.slice(15) : ''}),
     readyRegistration: async () => { await navigator.serviceWorker.ready; if (!registration) throw Error('App worker is not ready. Reload and try again.'); return registration; },
+    activeRegistration: () => registration?.active ? registration : null,
     notificationReceived: () => {notificationVersion++; emit();},
     install: async () => {
       if (!installPrompt) return false;

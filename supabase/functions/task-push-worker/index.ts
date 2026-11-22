@@ -67,10 +67,19 @@ Deno.serve(async request=>{
   if(request.method!=='POST'||!secret||difference)return new Response('Unauthorized',{status:401});
   const raw=Deno.env.get('FCM_SERVICE_ACCOUNT_JSON');
   if(!raw)return Response.json({configured:false},{status:503});
+  let failureCode = 'FCM_SERVICE_ACCOUNT_INVALID';
   try {
-    const account=JSON.parse(raw),token=await accessToken(account);
+    const account=JSON.parse(raw);
+    if (!account?.project_id || !account?.client_email ||
+        typeof account.private_key !== 'string' || !account.private_key.includes('BEGIN PRIVATE KEY')) {
+      throw Error('Invalid service account');
+    }
+    failureCode = 'FCM_AUTH_FAILED';
+    const token=await accessToken(account);
+    failureCode = 'PUSH_QUEUE_UNAVAILABLE';
     const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false}});
     const {data:jobs,error}=await db.rpc('claim_notification_push',{p_limit:50});if(error)throw Error('PUSH_QUEUE_UNAVAILABLE');
+    failureCode = 'PUSH_ACK_FAILED';
     let delivered=0;
     // Bounded batches avoid task-write latency and provider request bursts.
     for(let start=0;start<jobs.length;start+=5)await Promise.all(jobs.slice(start,start+5).map(async(j:any)=>{
@@ -85,5 +94,5 @@ Deno.serve(async request=>{
       if(finished.error)throw Error('PUSH_ACK_FAILED');if(status==='DELIVERED')delivered++;
     }));
     return Response.json({processed:jobs.length,delivered});
-  }catch{return Response.json({error:'Push worker temporarily unavailable; queued deliveries will retry.'},{status:503});}
+  }catch{return Response.json({code:failureCode,error:'Push worker temporarily unavailable; queued deliveries will retry.'},{status:503});}
 });

@@ -54,7 +54,7 @@
       if (!/^B[A-Za-z0-9_-]{86}$/.test(key)) {
         return JSON.stringify({error: 'The workspace web push key is invalid. Check the public VAPID key in Firebase.'});
       }
-      if (requestPermission) {
+      if (requestPermission && Notification.permission !== 'granted') {
         try {
           if (await Notification.requestPermission() !== 'granted') {
             return JSON.stringify({error: 'Allow notifications for this app in your device or browser settings, then try again.'});
@@ -62,21 +62,37 @@
         } catch (_) {
           return JSON.stringify({error: 'The browser could not request notification permission. Reopen the installed web app and try again.'});
         }
+        if (navigator.userActivation?.isActive === false) {
+          return JSON.stringify({error: 'Permission granted. Tap Enable push notifications again to finish registering this device.'});
+        }
       }
-      let fcm, registration, readyTimeout;
+      let registration = window.tpcPwa.activeRegistration?.();
+      let readyTimeout;
       try {
-        fcm = await prepare(JSON.parse(configJson));
-      } catch (error) {
-        modules = undefined;
-        return JSON.stringify({error: error.message?.startsWith('Push is unavailable')
-          ? error.message
-          : 'Could not load Firebase Messaging. Check your connection and reload the app.'});
-      }
-      try {
-        registration = await Promise.race([
-          window.tpcPwa.readyRegistration(),
-          new Promise((_, reject) => { readyTimeout = setTimeout(() => reject(Error('Worker not ready')), 8000); }),
-        ]);
+        if (requestPermission && !registration) {
+          return JSON.stringify({error: 'The app service worker is starting. Tap Enable push notifications again in a moment.'});
+        }
+        if (requestPermission) {
+          // Start from the tap. Loading Firebase first can expire browser user activation.
+          const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+          await registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: bytes});
+        }
+        if (!registration) {
+          registration = await Promise.race([
+            window.tpcPwa.readyRegistration(),
+            new Promise((_, reject) => { readyTimeout = setTimeout(() => reject(Error('Worker not ready')), 8000); }),
+          ]);
+        }
+        if (!requestPermission && !await registration.pushManager.getSubscription()) return 'null';
+        let fcm;
+        try {
+          fcm = await prepare(JSON.parse(configJson));
+        } catch (error) {
+          modules = undefined;
+          return JSON.stringify({error: error.message?.startsWith('Push is unavailable')
+            ? error.message
+            : 'Could not load Firebase Messaging. Check your connection and reload the app.'});
+        }
         const [, api] = await modules;
         const token = await api.getToken(fcm, {vapidKey: key, serviceWorkerRegistration: registration});
         if (!token) return JSON.stringify({error: 'Firebase did not issue a push token. Check the workspace Firebase configuration.'});
@@ -86,10 +102,16 @@
         const message = !registration
           ? 'The app service worker is not ready. Reload the app and try again.'
           : error.name === 'NotAllowedError'
-            ? 'The browser blocked push registration. Check notification permissions for this app.'
-            : error.code === 'messaging/token-subscribe-failed'
-              ? 'Firebase rejected push registration. Check that the web app configuration and VAPID key are from the same Firebase project.'
-              : 'The browser could not register this device for push. Check your connection and reopen the app.';
+            ? 'The browser blocked registration. If notifications are allowed, tap Enable push notifications again from the app.'
+            : error.name === 'InvalidStateError'
+              ? 'An existing browser push subscription conflicts with this workspace key. Reset this app’s notification permission, reopen it, and enable push again.'
+              : error.name === 'InvalidAccessError'
+                ? 'The browser rejected the workspace public VAPID key. Check the key in Firebase.'
+                : error.name === 'AbortError'
+                  ? 'The browser could not connect to its push service. Check your connection and retry.'
+                  : error.code === 'messaging/token-subscribe-failed'
+                    ? 'Firebase rejected push registration. Check that the web app configuration and VAPID key are from the same Firebase project.'
+                    : 'Could not complete push registration. Reopen the app and try again.';
         return JSON.stringify({error: message});
       } finally {
         clearTimeout(readyTimeout);
