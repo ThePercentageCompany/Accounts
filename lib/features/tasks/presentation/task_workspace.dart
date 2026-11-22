@@ -317,7 +317,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   Map<String, String> _query() {
     final today = taskToday(widget.timeZone);
     final filters = <String, String>{
-      if (!_employee) ..._filters,
+      if (_manage) ..._filters,
       'sort': _sort,
       'limit': '40',
       if (_search.text.trim().isNotEmpty) 'search': _search.text.trim()
@@ -800,7 +800,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                       _change(() => _scope = scope))),
                       ])),
                 const SizedBox(height: 8),
-                if (!_employee && mobile)
+                if (_manage && mobile)
                   Wrap(
                       spacing: 12,
                       runSpacing: 8,
@@ -814,19 +814,18 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                 'Filters${_filters.isEmpty ? '' : ' (${_filters.length})'}')),
                         _sortMenu()
                       ])
-                else if (!_employee)
+                else if (_manage)
                   Wrap(
                       spacing: 12,
                       runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        if (_manage)
-                          SizedBox(
-                              width: 220,
-                              child: _filterField('employeeId', 'Employee', {
-                                for (final e in _assignees)
-                                  '${e['recordId']}': '${e['fullName']}'
-                              })),
+                        SizedBox(
+                            width: 220,
+                            child: _filterField('employeeId', 'Employee', {
+                              for (final e in _assignees)
+                                '${e['recordId']}': '${e['fullName']}'
+                            })),
                         SizedBox(
                             width: 180,
                             child: _filterField('status', 'Status', {
