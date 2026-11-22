@@ -23,6 +23,8 @@ class _TaskApi extends SaasApi {
   bool connected = true;
   int notificationRequests = 0;
   Future<void>? taskResponseGate;
+  List<Map<String, dynamic>>? taskRecords;
+  final taskQueries = <Map<String, String>>[];
 
   @override
   bool get workspaceRealtimeConnected => connected;
@@ -55,28 +57,75 @@ class _TaskApi extends SaasApi {
     return cache.read(path, () async {
       requests++;
       await taskResponseGate;
+      taskQueries.add(Map.of(filters));
+      final matching = (taskRecords ??
+              [
+                {
+                  'recordId': 'task',
+                  'title': title,
+                  'status': 'TODO',
+                  'priority': 'MEDIUM',
+                  'dueDate': '2026-11-06',
+                  'createdAt': 1,
+                  'recordVersion': 1,
+                }
+              ])
+          .where((row) => filters['status'] == null ||
+              row['status'] == filters['status'])
+          .toList();
+      final offset = int.tryParse(filters['offset'] ?? '') ?? 0;
+      final limit = int.tryParse(filters['limit'] ?? '') ?? 40;
       return {
-        'records': [
-          {
-            'recordId': 'task',
-            'title': title,
-            'status': 'TODO',
-            'priority': 'MEDIUM',
-            'dueDate': '2026-11-06',
-            'createdAt': 1,
-            'recordVersion': 1,
-          }
-        ],
+        'records': matching.skip(offset).take(limit).toList(),
         'summary': <String, dynamic>{},
         'dateCounts': <String, dynamic>{},
-        'total': 1,
-        'nextOffset': null,
+        'total': matching.length,
+        'nextOffset': offset + limit < matching.length ? offset + limit : null,
       };
     }, force: force);
   }
 }
 
 void main() {
+  testWidgets('older pending tasks appear before loading more completed tasks',
+      (tester) async {
+    Map<String, dynamic> task(int number, String status) => {
+          'recordId': 'task-$number',
+          'title': 'Task $number',
+          'status': status,
+          'priority': 'MEDIUM',
+          'dueDate': '2026-11-06',
+          'createdAt': number,
+          'recordVersion': 1,
+        };
+    final api = _TaskApi()
+      ..taskRecords = [
+        for (var number = 90; number > 1; number--) task(number, 'COMPLETED'),
+        task(1, 'TODO'),
+      ];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+      body: TaskWorkspace(api: api, companyId: 'c' * 43),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Task 1'), findsOneWidget);
+    expect(api.taskQueries.map((query) => query['status']), taskStatuses);
+    expect(api.taskQueries.every((query) => query['limit'] == '10'), isTrue);
+
+    final loadMore = find.text('Load more (11 of 90)');
+    await tester.scrollUntilVisible(loadMore, 400,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+    expect(api.taskQueries.where((query) => query.containsKey('offset')), [
+      containsPair('status', 'COMPLETED'),
+    ]);
+    expect(api.taskQueries.last['offset'], '10');
+    await tester.pumpWidget(const SizedBox());
+    await api.updates.close();
+    api.cache.dispose();
+  });
+
   testWidgets('initial task load shows status and a failed load can be retried',
       (tester) async {
     final api = _TaskApi();
@@ -181,7 +230,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(api.requests, 1);
+    expect(api.requests, 4);
     expect(find.text('Initial task'), findsOneWidget);
 
     api.title = 'Updated task';
@@ -191,12 +240,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(api.requests, 2);
+    expect(api.requests, 8);
     expect(find.text('Updated task'), findsOneWidget);
 
     await tester.pump(const Duration(minutes: 1));
     await tester.pumpAndSettle();
-    expect(api.requests, 2, reason: 'A healthy live connection must not poll.');
+    expect(api.requests, 8, reason: 'A healthy live connection must not poll.');
     await tester.pumpWidget(const SizedBox());
     await api.updates.close();
     api.cache.dispose();
@@ -213,14 +262,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(api.requests, 1);
+    expect(api.requests, 4);
     await tester.pump(const Duration(seconds: 59));
     await tester.pumpAndSettle();
-    expect(api.requests, 2);
+    expect(api.requests, 8);
     await tester.pumpWidget(page(false));
     await tester.pump(const Duration(minutes: 2));
     await tester.pumpAndSettle();
-    expect(api.requests, 2);
+    expect(api.requests, 8);
     await tester.pumpWidget(const SizedBox());
     await api.updates.close();
     api.cache.dispose();

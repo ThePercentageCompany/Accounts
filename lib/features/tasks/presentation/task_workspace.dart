@@ -5,6 +5,7 @@ import 'package:tpc_invoice/core/utils/business_time.dart';
 import 'package:tpc_invoice/features/projects/presentation/project_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/services.dart';
 import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 import 'package:tpc_invoice/core/widgets/loading.dart';
@@ -98,14 +99,15 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   String? _error;
   int _generation = 0,
       _total = 0,
-      _lastRevision = 0,
       _surfaceDepth = 0,
       _mutationDepth = 0;
-  String? _resource;
-  Map<String, dynamic>? _lastSnapshot;
+  Set<String> _pageResources = {};
+  final _pageSnapshots = <String, (int, Map<String, dynamic>?)>{};
+  final _pageDepths = <String, int>{};
+  final _nextOffsets = <String, int>{};
   bool _fetching = false, _appVisible = true;
   double _contentWidth = 0;
-  int? _next;
+  bool get _hasMore => _nextOffsets.isNotEmpty;
   bool get _employee => widget.employee != null;
   bool get _manage =>
       !_employee ||
@@ -183,32 +185,21 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       if (mounted) {
         setState(() {
           _tasks = _visibleTasks(_serverTasks);
-          final saved = _resource == null
-              ? null
-              : widget.api.cache.state(_resource!)?.data;
-          if (saved != null) {
-            final projected = widget.api.localTaskPage(widget.companyId, saved,
-                employee: _employee, filters: _query());
-            _summary = Map<String, dynamic>.from(projected['summary'] as Map);
-            _dateCounts =
-                Map<String, dynamic>.from(projected['dateCounts'] as Map);
-            _total = projected['total'] as int;
-          }
+          _updateTaskCounts([
+            for (final path in _pageResources)
+              if (widget.api.cache.state(path)?.data case final page?) page,
+          ]);
         });
       }
     }
-    final resource = _resource;
-    if (resource == null) return;
-    final state = widget.api.cache.state(resource);
-    if (state == null) return;
-    final snapshot = widget.api.cache.serverState(resource)?.data;
-    if (state.revision == _lastRevision && identical(snapshot, _lastSnapshot)) {
-      return;
+    for (final path in _pageResources) {
+      final state = widget.api.cache.serverState(path);
+      final snapshot = (state?.revision ?? 0, state?.data);
+      if (_pageSnapshots[path] == snapshot) continue;
+      _pageSnapshots[path] = snapshot;
+      _realtimeDirty = true;
     }
-    _lastRevision = state.revision;
-    _lastSnapshot = snapshot;
-    _realtimeDirty = true;
-    _scheduleRealtimeRefresh();
+    if (_realtimeDirty) _scheduleRealtimeRefresh();
   }
 
   bool get _pendingTask =>
@@ -235,15 +226,21 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                     .toLowerCase()
                     .contains(q['search']!.toLowerCase())))
         .toList();
-    if (_sort == 'newest') {
-      visible.sort((a, b) {
-        final order = (b['createdAt'] as num? ?? 0)
-            .compareTo(a['createdAt'] as num? ?? 0);
-        return order != 0
-            ? order
-            : '${a['recordId']}'.compareTo('${b['recordId']}');
-      });
-    }
+    visible.sort((a, b) {
+      final order = switch (_sort) {
+        'priority' => taskPriorities
+            .indexOf('${b['priority']}')
+            .compareTo(taskPriorities.indexOf('${a['priority']}')),
+        'due' => '${a['dueDate']}${a['endTime'] ?? ''}'
+            .compareTo('${b['dueDate']}${b['endTime'] ?? ''}'),
+        'updated' =>
+          (b['updatedAt'] as num? ?? 0).compareTo(a['updatedAt'] as num? ?? 0),
+        _ => (b['createdAt'] as num? ?? 0).compareTo(a['createdAt'] as num? ?? 0),
+      };
+      return order != 0
+          ? order
+          : '${a['recordId']}'.compareTo('${b['recordId']}');
+    });
     return visible;
   }
 
@@ -276,20 +273,23 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   @override
   void didUpdateWidget(covariant TaskWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.employee != oldWidget.employee) {
-      _scope = _employee && !_manage ? 'My Tasks' : 'All';
-      _filters = {};
-      _load();
-    }
-    if (widget.taskToOpen != oldWidget.taskToOpen) _openLinkedTask();
-    if (oldWidget.active != widget.active && _resource != null) {
-      if (widget.active) {
-        widget.api.cache.activate(_resource!);
-      } else {
-        widget.api.cache.deactivate(_resource!);
+    if (oldWidget.active != widget.active) {
+      for (final path in _pageResources) {
+        if (widget.active) {
+          widget.api.cache.activate(path);
+        } else {
+          widget.api.cache.deactivate(path);
+        }
       }
     }
-    if ((!oldWidget.active && widget.active) ||
+    final employeeChanged = widget.employee != oldWidget.employee;
+    if (employeeChanged) {
+      _scope = _employee && !_manage ? 'My Tasks' : 'All';
+      _filters = {};
+    }
+    if (widget.taskToOpen != oldWidget.taskToOpen) _openLinkedTask();
+    if (employeeChanged ||
+        (!oldWidget.active && widget.active) ||
         oldWidget.calendar != widget.calendar) {
       _load();
     }
@@ -310,7 +310,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     _poll?.cancel();
     _realtimeDebounce?.cancel();
     _taskSubscription?.cancel();
-    if (widget.active && _resource != null) widget.api.cache.deactivate(_resource!);
+    if (widget.active) {
+      for (final path in _pageResources) {
+        widget.api.cache.deactivate(path);
+      }
+    }
     super.dispose();
   }
 
@@ -371,72 +375,89 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       });
     }
     try {
-      final filters = _query();
-      final target = quiet ? _tasks.length : 40;
-      if (target > 40) filters['limit'] = '100';
-      if (more && _next != null) filters['offset'] = '$_next';
-      final resource =
-          '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
-      if (_resource != resource) {
-        if (_resource != null) widget.api.cache.deactivate(_resource!);
-        _resource = resource;
-        if (widget.active) widget.api.cache.activate(resource);
-      }
-      // Display the query's saved page immediately, before its refresh. Keep
-      // aggregate pages intact when loading more or doing background polling.
-      final saved = widget.api.cache.state(_resource!)?.data;
-      if (!_loaded && !more && saved != null && mounted) {
-        setState(() {
-          _serverTasks = (saved['records'] as List)
-              .map((r) => Map<String, dynamic>.from(r as Map))
-              .toList();
-          _tasks = _visibleTasks(_serverTasks);
-          _summary = Map<String, dynamic>.from(saved['summary'] as Map? ?? {});
-          _dateCounts =
-              Map<String, dynamic>.from(saved['dateCounts'] as Map? ?? {});
-          _loaded = true;
-        });
-      }
-      _lastRevision = widget.api.cache.state(_resource!)?.revision ?? 0;
-      final data = Map<String, dynamic>.from(await widget.api.tasks(
-          widget.companyId,
-          employee: _employee,
-          force: force,
-          filters: filters));
-      List<Map<String, dynamic>> snapshotRows(Map<String, dynamic> fallback) {
-        final path =
-            '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
-        final snapshot = widget.api.cache.state(path)?.data ?? fallback;
-        return (snapshot['records'] as List)
-            .map((row) => Map<String, dynamic>.from(row as Map))
-            .toList();
+      final query = _query();
+      final filtersByStatus = <String, Map<String, String>>{
+        if (_calendar)
+          '': query
+        else
+          for (final status in taskStatuses)
+            if ((query['status'] == null || query['status'] == status) &&
+                (query['overdue'] != 'true' || status != 'COMPLETED'))
+              status: {...query, 'status': status, 'limit': '10'},
+      };
+      // Each status has its own page and cursor so newer tasks in one status
+      // cannot fill the first page for a different status.
+      final firstPages = filtersByStatus.values.map(_taskPath).toSet();
+      if (!setEquals(_pageResources, firstPages)) {
+        more = false;
+        _nextOffsets.clear();
+        _pageDepths.clear();
+        for (final path in _pageResources) {
+          widget.api.cache.deactivate(path);
+        }
+        _pageResources = firstPages;
+        _pageSnapshots.clear();
+        for (final path in firstPages) {
+          final state = widget.api.cache.serverState(path);
+          _pageSnapshots[path] = (state?.revision ?? 0, state?.data);
+          widget.api.cache.activate(path);
+        }
       }
 
-      final serverRows = snapshotRows(data);
-      if (quiet && !more) {
-        final rows = List<Map<String, dynamic>>.from(data['records'] as List);
-        while (rows.length < target &&
-            data['nextOffset'] != null &&
-            mounted &&
-            generation == _generation) {
-          filters['offset'] = data['nextOffset'].toString();
-          final page = await widget.api.tasks(widget.companyId,
-              employee: _employee, filters: filters);
-          serverRows.addAll(snapshotRows(page));
-          rows.addAll(List<Map<String, dynamic>>.from(page['records'] as List));
-          data['nextOffset'] = page['nextOffset'];
+      if (!_loaded) {
+        final saved = [
+          for (final path in firstPages)
+            if (widget.api.cache.serverState(path)?.data case final page?) page,
+        ];
+        if (saved.isEmpty && !_calendar) {
+          final previousPage =
+              widget.api.cache.serverState(_taskPath(query))?.data;
+          if (previousPage != null) saved.add(previousPage);
         }
-        data['records'] = rows;
+        final rows = saved.expand(_taskRows).toList();
+        if (rows.isNotEmpty) {
+          setState(() {
+            _serverTasks = rows;
+            _tasks = _visibleTasks(rows);
+            _updateTaskCounts(saved);
+            _loaded = true;
+          });
+        }
       }
+
+      final pages = await Future.wait([
+        for (final entry in filtersByStatus.entries)
+          if (!more || _nextOffsets.containsKey(entry.key))
+            _readTaskPages(
+              entry.key,
+              entry.value,
+              offset: more ? _nextOffsets[entry.key] : null,
+              depth: quiet ? (_pageDepths[entry.key] ?? 1) : 1,
+              force: force,
+              generation: generation,
+            ),
+      ]);
       if (!mounted || generation != _generation) return;
       setState(() {
-        _serverTasks = more ? [..._serverTasks, ...serverRows] : serverRows;
+        final rowsById = {
+          if (more)
+            for (final row in _serverTasks) row['recordId']: row,
+          for (final page in pages)
+            for (final row in page.rows) row['recordId']: row,
+        };
+        _serverTasks = rowsById.values.toList();
         _tasks = _visibleTasks(_serverTasks);
-        _dateCounts =
-            Map<String, dynamic>.from(data['dateCounts'] as Map? ?? {});
-        _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
-        _total = data['total'] as int;
-        _next = data['nextOffset'] as int?;
+        if (!more) _updateTaskCounts([for (final page in pages) page.first]);
+        for (final page in pages) {
+          _pageDepths[page.status] =
+              (more ? (_pageDepths[page.status] ?? 0) : 0) + page.depth;
+          final next = page.next;
+          if (next == null) {
+            _nextOffsets.remove(page.status);
+          } else {
+            _nextOffsets[page.status] = next;
+          }
+        }
         _loaded = true;
         _busy = false;
         _error = null;
@@ -459,6 +480,57 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         _scheduleRealtimeRefresh();
       }
     }
+  }
+
+  String _taskPath(Map<String, String> filters) =>
+      '${widget.api.tasksPath(widget.companyId, employee: _employee)}?${Uri(queryParameters: filters).query}';
+
+  List<Map<String, dynamic>> _taskRows(Map<String, dynamic> page) =>
+      (page['records'] as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+
+  void _updateTaskCounts(List<Map<String, dynamic>> pages) {
+    if (pages.isEmpty) return;
+    // The summary covers all accessible tasks and is repeated on every page.
+    _summary = Map<String, dynamic>.from(pages.first['summary'] as Map? ?? {});
+    _dateCounts =
+        Map<String, dynamic>.from(pages.first['dateCounts'] as Map? ?? {});
+    _total = pages.fold(0, (total, page) => total + (page['total'] as int));
+  }
+
+  Future<({
+    String status,
+    List<Map<String, dynamic>> rows,
+    Map<String, dynamic> first,
+    int? next,
+    int depth,
+  })> _readTaskPages(
+    String status,
+    Map<String, String> query, {
+    required int? offset,
+    required int depth,
+    required bool force,
+    required int generation,
+  }) async {
+    final rows = <Map<String, dynamic>>[];
+    Map<String, dynamic>? first;
+    var next = offset;
+    var fetched = 0;
+    do {
+      final filters = {...query, if (next != null) 'offset': '$next'};
+      final page = await widget.api.tasks(widget.companyId,
+          employee: _employee, force: force, filters: filters);
+      first ??= page;
+      final saved = widget.api.cache.serverState(_taskPath(filters))?.data;
+      rows.addAll(_taskRows(saved ?? page));
+      next = page['nextOffset'] as int?;
+      fetched++;
+    } while (next != null &&
+        fetched < depth &&
+        mounted &&
+        generation == _generation);
+    return (status: status, rows: rows, first: first, next: next, depth: fetched);
   }
 
   Future<void> _write(
@@ -927,7 +999,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                   const Padding(
                       padding: EdgeInsets.all(12),
                       child: AppActivityIndicator()),
-                if (_next != null)
+                if (_hasMore)
                   Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       child: OutlinedButton(
@@ -1341,7 +1413,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       Text(DateFormat('EEEE, d MMMM').format(_date),
           style: Theme.of(context).textTheme.titleMedium),
       Text(
-          '${_dateCounts[taskDate(_date)] ?? selectedTasks.length} tasks${_next != null ? ' · more tasks available below' : ''}'),
+          '${_dateCounts[taskDate(_date)] ?? selectedTasks.length} tasks${_hasMore ? ' · more tasks available below' : ''}'),
       const SizedBox(height: 8),
       if (mode == 'Day') ...[
         if (selectedTasks.isEmpty)
