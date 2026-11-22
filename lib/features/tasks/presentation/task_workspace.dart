@@ -364,7 +364,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
     _realtimeDebounce?.cancel();
     _fetching = true;
     final generation = ++_generation;
-    if (!quiet && mounted) {
+    if ((!quiet || !_loaded) && mounted) {
       setState(() {
         _busy = true;
         _error = null;
@@ -695,6 +695,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
         _contentWidth = constraints.maxWidth;
         final mobile = constraints.maxWidth < 768;
         final view = _view.isEmpty ? (mobile ? 'List' : 'Board') : _view;
+        final loadingTasks = _error == null &&
+            (!_loaded || (_busy && _tasks.isEmpty));
         return RefreshIndicator.noSpinner(
             onRefresh: () => _load(force: true),
             child: ListView(
@@ -879,14 +881,27 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                                 icon: const Icon(Icons.refresh),
                                 label: const Text('Retry'))
                           ]))),
-                if (_busy && !_loaded) ...[
+                if (loadingTasks) ...[
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Semantics(
+                          liveRegion: true,
+                          child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                AppActivityIndicator(),
+                                SizedBox(width: 8),
+                                Text('Loading tasks…'),
+                              ]))),
                   for (var i = 0; i < 4; i++) const _TaskSkeleton()
-                ] else if (_calendar)
-                  _calendarBody(mobile)
-                else if (view == 'Board')
-                  _board(mobile, constraints.maxWidth)
-                else
-                  _taskList(mobile),
+                ] else if (_loaded) ...[
+                  if (_calendar)
+                    _calendarBody(mobile)
+                  else if (view == 'Board')
+                    _board(mobile, constraints.maxWidth)
+                  else
+                    _taskList(mobile),
+                ],
                 if (_employee &&
                     !_manage &&
                     !_calendar &&
@@ -908,7 +923,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                               _calendarView = 'Day';
                             })),
                 ],
-                if (_busy && _loaded)
+                if (_busy && !loadingTasks)
                   const Padding(
                       padding: EdgeInsets.all(12),
                       child: AppActivityIndicator()),
@@ -919,7 +934,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
                           onPressed: _busy ? null : () => _load(more: true),
                           child:
                               Text('Load more (${_tasks.length} of $_total)'))),
-                if (_loaded && !_busy && _tasks.isEmpty && !_calendar)
+                if (_loaded &&
+                    !_busy &&
+                    _error == null &&
+                    _tasks.isEmpty &&
+                    !_calendar)
                   Padding(
                       padding: const EdgeInsets.all(32),
                       child: Column(children: [

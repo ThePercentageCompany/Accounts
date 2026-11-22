@@ -22,6 +22,7 @@ class _TaskApi extends SaasApi {
   String title = 'Initial task';
   bool connected = true;
   int notificationRequests = 0;
+  Future<void>? taskResponseGate;
 
   @override
   bool get workspaceRealtimeConnected => connected;
@@ -53,6 +54,7 @@ class _TaskApi extends SaasApi {
         '${tasksPath(companyId, employee: employee)}?${Uri(queryParameters: filters).query}';
     return cache.read(path, () async {
       requests++;
+      await taskResponseGate;
       return {
         'records': [
           {
@@ -75,6 +77,36 @@ class _TaskApi extends SaasApi {
 }
 
 void main() {
+  testWidgets('initial task load shows status and a failed load can be retried',
+      (tester) async {
+    final api = _TaskApi();
+    final response = Completer<void>();
+    api.taskResponseGate = response.future;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+      body: TaskWorkspace(api: api, companyId: 'c' * 43),
+    )));
+    expect(find.text('Loading tasks…'), findsOneWidget);
+    await tester.pump();
+    expect(find.text('Loading tasks…'), findsOneWidget);
+    expect(find.text('No tasks'), findsNothing);
+
+    response.completeError(StateError('Task request failed'));
+    await tester.pumpAndSettle();
+    expect(find.text('Loading tasks…'), findsNothing);
+    expect(find.text('No tasks'), findsNothing);
+    expect(find.text('Retry'), findsOneWidget);
+
+    api.taskResponseGate = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Initial task'), findsOneWidget);
+    expect(find.text('Loading tasks…'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await api.updates.close();
+    api.cache.dispose();
+  });
+
   testWidgets('live notifications avoid polling and refresh from invalidation',
       (tester) async {
     final api = _TaskApi();

@@ -124,8 +124,7 @@ class TaskCard extends StatelessWidget {
 class _TaskSkeleton extends StatelessWidget {
   const _TaskSkeleton();
   @override
-  Widget build(BuildContext context) => Semantics(
-      label: 'Loading tasks',
+  Widget build(BuildContext context) => ExcludeSemantics(
       child: Card(
           child: Padding(
               padding: const EdgeInsets.all(20),
