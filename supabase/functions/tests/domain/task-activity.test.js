@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { taskActivityChanges, validateTask } from '../../_shared/domain/task-policy.js';
 import { TaskService } from '../../_shared/domain/task-service.js';
+import { BusinessService } from '../../_shared/domain/business-service.js';
+import { TABLES } from '../../_shared/domain/company-schema.js';
 
 test('status activity records updater and change time instead of task creator', async () => {
   const changes = await taskActivityChanges(
@@ -58,4 +60,14 @@ test('verification requires a completed task and records who verified it', async
   assert.equal(activity.values.summary, 'Task verified');
   assert.equal(activity.values.createdBy, 'manager');
   assert.equal(activity.values.createdAt, 200);
+});
+
+test('business mutation input accepts the boolean verification flag', () => {
+  const service = new BusinessService({
+    accounts: {},
+    records: { table: title => TABLES.find(table => table.title === title) },
+  });
+  assert.deepEqual(service.values('Tasks', { verified: true }), { verified: true });
+  assert.throws(() => service.values('Tasks', { verified: 'true' }),
+    error => error.code === 'INVALID_BOOLEAN');
 });

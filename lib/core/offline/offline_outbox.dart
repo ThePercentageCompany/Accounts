@@ -417,8 +417,11 @@ class OfflineOutbox extends ChangeNotifier {
             values is Map &&
             values.length == 1 &&
             values['verified'] == true &&
-            op['errorCode'] == 'INVALID_RECORD' &&
-            op['error'] == 'Record contains unsupported fields.';
+            ((op['errorCode'] == 'INVALID_RECORD' &&
+                    op['error'] == 'Record contains unsupported fields.') ||
+                (op['errorCode'] == 'INVALID_TEXT' &&
+                    op['error'] ==
+                        'verified must be text without control characters.'));
         if (op['state'] == 'failed' &&
             ((op['errorCode'] == 'INVALID_BATCH' &&
                     op['error'] == 'Supply between 1 and 20 operations.') ||

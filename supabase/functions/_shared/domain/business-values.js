@@ -6,6 +6,10 @@ const NONNEGATIVE = new Set(('unitPrice taxRate discount paidAmount quantity hou
 
 export function validateBusinessValues(values) {
   for (const [key, value] of Object.entries(values)) {
+    if (key === 'verified') {
+      requireThat(typeof value === 'boolean', 400, 'INVALID_BOOLEAN', 'verified must be a boolean.');
+      continue;
+    }
     if (NUMBERS.has(key)) {
       requireThat(typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1e12,
         400, 'INVALID_NUMBER', `${key} must be a finite number within supported limits.`);

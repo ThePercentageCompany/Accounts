@@ -256,7 +256,7 @@ void main() {
       expect((box.pending.single['values'] as Map)['notes'], 'Reviewed');
     },
   );
-  test('retry resubmits task verification after an unsupported-field rejection',
+  test('retry resubmits task verification after a validation rejection',
       () async {
     await box.enqueue(
       'Tasks',
@@ -266,14 +266,18 @@ void main() {
       expectedVersion: 3,
       base: {'recordId': 'task', 'status': 'COMPLETED'},
     );
+    final errors = [
+      ('INVALID_RECORD', 'Record contains unsupported fields.'),
+      ('INVALID_TEXT', 'verified must be text without control characters.'),
+    ];
     send = (op) async => {
       'results': [
         {
           'operationId': op['operationId'],
           'status': 'FAILED',
           'error': {
-            'code': 'INVALID_RECORD',
-            'message': 'Record contains unsupported fields.',
+            'code': errors.first.$1,
+            'message': errors.removeAt(0).$2,
             'status': 400,
           },
         },
@@ -281,9 +285,11 @@ void main() {
     };
     await box.sync();
     expect(box.pending.single['state'], 'failed');
+    await box.retry();
+    expect(box.pending.single['state'], 'failed');
     send = (op) async => _ack(op, id: 'task');
     await box.retry();
-    expect(sent, hasLength(2));
+    expect(sent, hasLength(3));
     expect(sent.last['operationId'], sent.first['operationId']);
     expect(box.pending, isEmpty);
   });
