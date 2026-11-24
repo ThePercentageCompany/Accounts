@@ -1,5 +1,10 @@
 part of 'task_workspace.dart';
 
+bool _verificationNeedsSync(Map<String, dynamic> task) =>
+    task['verified'] == true &&
+    (task['syncStatus'] == 'PENDING' || task['syncStatus'] == 'FAILED') &&
+    (task['_localBase'] as Map?)?['verified'] != true;
+
 class TaskTagChip extends StatelessWidget {
   const TaskTagChip({super.key, required this.tag, required this.onCopy});
 
@@ -61,6 +66,13 @@ class TaskCard extends StatelessWidget {
                                 style: TextStyle(
                                     color: taskColor('${task['priority']}'),
                                     fontWeight: FontWeight.w600))),
+                        if (task['status'] == 'COMPLETED' &&
+                            task['verified'] == true &&
+                            !_verificationNeedsSync(task))
+                          const Tooltip(
+                            message: 'Verified',
+                            child: Icon(Icons.verified, color: Colors.green),
+                          ),
                         PopupMenuButton<String>(
                             tooltip: 'Task actions',
                             onSelected: (v) =>

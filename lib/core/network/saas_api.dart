@@ -512,6 +512,8 @@ class SaasApi implements SessionRepository {
           tables.add(op['table'] as String);
         }
       }
+    } else if (path.contains('/tasks/') && path.endsWith('/verify')) {
+      tables.add('Tasks');
     } else if (path.contains('/employees')) {
       tables.add('Employees');
     }
@@ -1460,6 +1462,21 @@ class SaasApi implements SessionRepository {
               'limit': '40'
             }).query}',
       );
+
+  Future<void> verifyTask(
+    String companyId,
+    String taskId, {
+    required int expectedVersion,
+    required String operationId,
+    bool employee = false,
+  }) async {
+    await _json(
+      'POST',
+      '${tasksPath(companyId, employee: employee)}/${_id(taskId)}/verify',
+      data: {'expectedVersion': expectedVersion},
+      operationId: operationId,
+    );
+  }
   Future<Map<String, dynamic>> editorReferences(
     String companyId,
     String table,

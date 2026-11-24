@@ -8,7 +8,7 @@ import 'package:tpc_invoice/features/tasks/domain/task_link.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
+  await Firebase.initializeApp( 
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await themeController.initialize();

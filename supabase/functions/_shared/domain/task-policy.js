@@ -11,6 +11,11 @@ export function validateTask(table, action, old, input) {
     return;
   }
   if (action === 'delete') return;
+  if (Object.hasOwn(input, 'verified')) {
+    requireThat(action === 'update' && input.verified === true && Object.keys(input).length === 1 &&
+      old?.status === 'COMPLETED' && old.verified !== true,
+    409, 'TASK_VERIFICATION_UNAVAILABLE', 'Only a completed task awaiting verification can be verified.');
+  }
   const value = { ...old, ...input };
   requireThat(typeof value.title === 'string' && value.title.trim().length > 0 && value.title.length <= 200 &&
     TASK_STATUSES.includes(value.status) && TASK_PRIORITIES.includes(value.priority) &&
@@ -34,5 +39,6 @@ export async function taskActivityChanges(records, companyId, table, action, old
     values: { ...system, createdBy: system.updatedBy, createdAt: system.updatedAt,
       recordId: challenge('task-activity:' + companyId + ':' + key), isDeleted: false,
       taskId: system.recordId, action, summary: action === 'create' ? 'Task created' : action === 'delete' ? 'Task deleted' :
-        changed.map(k => k === 'status' ? 'Status: ' + values[k] : k === 'employeeId' ? 'Employee reassigned' : k + ' updated').join(', ') || 'Task saved' } }];
+        changed.map(k => k === 'verified' ? (values[k] ? 'Task verified' : 'Verification cleared') :
+          k === 'status' ? 'Status: ' + values[k] : k === 'employeeId' ? 'Employee reassigned' : k + ' updated').join(', ') || 'Task saved' } }];
 }

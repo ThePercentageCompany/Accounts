@@ -268,8 +268,15 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       const options={compareFrom:url.searchParams.get('compareFrom'),compareAsOf:url.searchParams.get('compareAsOf')};
       return json(200,await ctx.business.financialReport('',companyId!,report[1],from,asOf,options));
     }
+    const verifyTask=/^\/tasks\/([A-Za-z0-9_-]{43})\/verify$/.exec(tail);
+    if(verifyTask&&request.method==='POST') {
+      requireThat(ctx.admin||ctx.principal.writableSections.includes('Tasks'),403,'WRITE_FORBIDDEN','Task edit access is required to verify tasks.');
+      requireThat(Object.keys(input).every(k=>k==='expectedVersion'),400,'INVALID_RECORD','Supply only the expected task version.');
+      return finish(await ctx.business.mutate('',companyId!,'Tasks',verifyTask[1],'update',
+        {expectedVersion:input.expectedVersion,values:{verified:true}},keyOf(request)));
+    }
     const tasks=/^\/tasks(?:\/(assignees|[A-Za-z0-9_-]{43}))?$/.exec(tail);
-    if(tasks) {
+    if(tasks&&request.method==='GET') {
       ctx.canRead('Tasks');
       const employees:any={principal:async()=>ctx.principal,verifyContext:()=>{},records:async(_t:any,table:string)=>ctx.read(table)};
       const service=new TaskService({business:ctx.business,employees});

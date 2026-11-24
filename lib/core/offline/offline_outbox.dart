@@ -262,6 +262,12 @@ class OfflineOutbox extends ChangeNotifier {
         records[key] = {
           ...old,
           ...resolvedValues,
+          if (table == 'Tasks' &&
+              old['verified'] == true &&
+              ((resolvedValues['status'] ?? old['status']) != 'COMPLETED' ||
+                  (resolvedValues['employeeId'] ?? old['employeeId']) !=
+                      old['employeeId']))
+            'verified': false,
           ...localDerivedValues(table, {...old, ...resolvedValues}),
           '_localBase': old['_localBase'] ?? base ?? <String, dynamic>{},
           'recordId': localId,

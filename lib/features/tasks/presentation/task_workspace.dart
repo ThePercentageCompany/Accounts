@@ -580,6 +580,18 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
       }
       final stableId = operationId ??
           _pendingIds.putIfAbsent(signature, () => const Uuid().v4());
+      if (table == 'Tasks' && row != null && values['verified'] == true) {
+        await widget.api.verifyTask(
+          widget.companyId,
+          row['recordId'] as String,
+          expectedVersion: int.parse('${row['recordVersion']}'),
+          operationId: stableId,
+          employee: _employee,
+        );
+        _pendingIds.remove(signature);
+        await _load();
+        return;
+      }
       final response = await widget.api.sync(
           widget.companyId,
           [
@@ -619,12 +631,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
   Future<void> _status(Map<String, dynamic> task, String status) async {
     if (_saving || task['status'] == status) return;
     final previousStatus = task['status'];
+    final wasVerified = task['verified'] == true;
     setState(() {
       _saving = true;
       _tasks = [
         for (final row in _tasks)
           if (row['recordId'] == task['recordId'])
-            {...row, 'status': status}
+            {...row, 'status': status, if (wasVerified) 'verified': false}
           else
             row
       ];
@@ -637,7 +650,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace>
           _tasks = [
             for (final row in _tasks)
               if (row['recordId'] == task['recordId'])
-                {...row, 'status': previousStatus}
+                {
+                  ...row,
+                  'status': previousStatus,
+                  if (wasVerified) 'verified': true,
+                }
               else
                 row
           ];

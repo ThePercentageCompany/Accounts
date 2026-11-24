@@ -84,6 +84,10 @@ class _TaskDetailsState extends State<TaskDetails> {
   String _commentId = const Uuid().v4(), _lastComment = '';
   bool get _canStatus =>
       widget.manage || _task['employeeId'] == widget.employeeId;
+  bool get _canVerify =>
+      widget.manage &&
+      _task['status'] == 'COMPLETED' &&
+      _task['verified'] != true;
   @override
   void initState() {
     super.initState();
@@ -180,14 +184,24 @@ class _TaskDetailsState extends State<TaskDetails> {
     });
   }
 
-  Future<void> _status(String status) async {
+  Future<void> _status(String status) => _saveTask({'status': status});
+
+  Future<void> _saveTask(Map<String, Object?> values) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await widget.onWrite('Tasks', _task, {'status': status});
-      if (mounted) setState(() => _task = {..._task, 'status': status});
-      // The workspace overlay carries the pending version; a refresh must not
-      // replace it with an older server snapshot.
+      await widget.onWrite('Tasks', _task, values);
+      if (mounted) {
+        setState(() {
+          _task = {
+            ..._task,
+            ...values,
+            if (values.containsKey('status') && values['status'] != 'COMPLETED')
+              'verified': false,
+          };
+        });
+        if (values['verified'] == true) _realtimeDirty = true;
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -299,6 +313,30 @@ class _TaskDetailsState extends State<TaskDetails> {
                   DropdownMenuItem(value: s, child: Text(taskLabel(s)))
               ],
               onChanged: _canStatus && !_busy ? (s) => _status(s!) : null),
+          if (_task['status'] == 'COMPLETED') ...[
+            const SizedBox(height: 8),
+            if (_verificationNeedsSync(_task))
+              Text(_task['syncStatus'] == 'FAILED'
+                  ? 'Verification needs attention'
+                  : 'Verification pending sync')
+            else if (_task['verified'] == true)
+              const Row(children: [
+                Icon(Icons.verified, color: Colors.green, size: 20),
+                SizedBox(width: 8),
+                Text('Verified'),
+              ])
+            else
+              const Text('Awaiting verification'),
+            if (_canVerify)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  onPressed: _busy ? null : () => _saveTask({'verified': true}),
+                  icon: const Icon(Icons.verified_outlined),
+                  label: const Text('Verify task'),
+                ),
+              ),
+          ],
           const SizedBox(height: 16),
           Text('${taskLabel('${_task['priority']}')} priority',
               style: TextStyle(color: taskColor('${_task['priority']}'))),

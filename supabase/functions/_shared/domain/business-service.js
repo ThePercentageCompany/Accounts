@@ -275,6 +275,10 @@ export class BusinessService {
         }
         let writeValues = action === 'reverse' ? {} : await cashEntryValues(this.records, companyId, tableName, action, old, action === 'pay' ? { ...values, paymentStatus: 'PAID' } : values);
         if (taskAssigneeName !== undefined) writeValues = { ...writeValues, assigneeName: taskAssigneeName };
+        if (tableName === 'Tasks' && action === 'update' && old.verified === true &&
+          ((values.status ?? old.status) !== 'COMPLETED' || (values.employeeId ?? old.employeeId) !== old.employeeId)) {
+          writeValues = { ...writeValues, verified: false };
+        }
         if (action === 'pay') requireThat(old.total === writeValues.total && old.taxAmount === writeValues.taxAmount,
           409, 'PAYMENT_NOT_AVAILABLE', 'The saved totals need reconciliation before payment.');
         const { state } = await this.registry.read(), actor = this.owner(state, token, companyId, true).owner.id;

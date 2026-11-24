@@ -33,7 +33,7 @@ const FIELDS = {
   NumberSequences: ['kind', 'prefix', 'period', 'nextNumber'],
   CreditNotes: ['number', 'invoiceId', 'customerId', 'cashCustomerName', 'date', 'reason', 'currency', 'subtotal', 'discount', 'taxAmount', 'total', 'refundAmount', 'refundAccount', 'status'],
   CreditNoteItems: ['creditNoteId', 'invoiceId', 'invoiceItemId', 'lineNumber', 'description', 'quantity', 'unitPrice', 'discount', 'taxRate', 'taxAmount', 'lineTotal', 'subtotal'],
-  Tasks: ['title', 'description', 'employeeId', 'assigneeName', 'priority', 'status', 'startDate', 'dueDate', 'startTime', 'endTime', 'project', 'tags', 'reminder'],
+  Tasks: ['title', 'description', 'employeeId', 'assigneeName', 'priority', 'status', 'verified', 'startDate', 'dueDate', 'startTime', 'endTime', 'project', 'tags', 'reminder'],
   TaskComments: ['taskId', 'body'],
   TaskActivity: ['taskId', 'action', 'summary', 'authorName'],
   Projects: ['name', 'description', 'status'],

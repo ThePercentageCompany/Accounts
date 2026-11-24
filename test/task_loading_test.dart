@@ -26,6 +26,7 @@ class _TaskApi extends SaasApi {
   int? unreadNoticeCount;
   Future<void>? taskResponseGate;
   List<Map<String, dynamic>>? taskRecords;
+  Map<String, dynamic>? detailTask;
   final taskQueries = <Map<String, String>>[];
 
   @override
@@ -67,6 +68,13 @@ class _TaskApi extends SaasApi {
       {'employees': [], 'nextOffset': null};
 
   @override
+  Future<Map<String, dynamic>> taskDetail(String companyId, String taskId,
+          {bool employee = false}) async =>
+      detailTask == null
+          ? super.taskDetail(companyId, taskId, employee: employee)
+          : {'task': detailTask!, 'comments': [], 'activity': []};
+
+  @override
   Future<Map<String, dynamic>> tasks(String companyId,
       {bool employee = false,
       bool force = false,
@@ -106,6 +114,55 @@ class _TaskApi extends SaasApi {
 }
 
 void main() {
+  testWidgets('completed tasks can be verified by task editors', (tester) async {
+    final api = _TaskApi()
+      ..detailTask = {
+        'recordId': 't' * 43,
+        'recordVersion': 1,
+        'employeeId': 'employee',
+        'title': 'Ready to verify',
+        'status': 'COMPLETED',
+        'priority': 'MEDIUM',
+        'dueDate': '2026-11-30',
+      };
+    addTearDown(api.updates.close);
+    Map<String, Object?>? saved;
+    Widget details(bool manage) => MaterialApp(
+          home: TaskDetails(
+            key: ValueKey(manage),
+            api: api,
+            companyId: 'c' * 43,
+            employee: true,
+            employeeId: 'employee',
+            manage: manage,
+            task: api.detailTask!,
+            onEdit: (_) async {},
+            onWrite: (_, __, values, {operationId}) async {
+              saved = values;
+              api.detailTask = {...api.detailTask!, ...values};
+            },
+          ),
+        );
+    await tester.pumpWidget(details(false));
+    await tester.pumpAndSettle();
+    expect(find.text('Awaiting verification'), findsOneWidget);
+    expect(find.text('Verify task'), findsNothing);
+
+    await tester.pumpWidget(details(true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Verify task'));
+    await tester.pumpAndSettle();
+    expect(saved, {'verified': true});
+    expect(find.text('Verified'), findsOneWidget);
+    expect(find.text('Verify task'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TaskCard(task: api.detailTask!, onTap: () {})),
+    ));
+    expect(find.byTooltip('Verified'), findsOneWidget);
+  });
+
   testWidgets('payroll alerts use the total badge and stay in the inbox on tap',
       (tester) async {
     final api = _TaskApi()
