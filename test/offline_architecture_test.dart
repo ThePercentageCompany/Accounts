@@ -256,6 +256,37 @@ void main() {
       expect((box.pending.single['values'] as Map)['notes'], 'Reviewed');
     },
   );
+  test('retry resubmits task verification after an unsupported-field rejection',
+      () async {
+    await box.enqueue(
+      'Tasks',
+      'update',
+      {'verified': true},
+      recordId: 'task',
+      expectedVersion: 3,
+      base: {'recordId': 'task', 'status': 'COMPLETED'},
+    );
+    send = (op) async => {
+      'results': [
+        {
+          'operationId': op['operationId'],
+          'status': 'FAILED',
+          'error': {
+            'code': 'INVALID_RECORD',
+            'message': 'Record contains unsupported fields.',
+            'status': 400,
+          },
+        },
+      ],
+    };
+    await box.sync();
+    expect(box.pending.single['state'], 'failed');
+    send = (op) async => _ack(op, id: 'task');
+    await box.retry();
+    expect(sent, hasLength(2));
+    expect(sent.last['operationId'], sent.first['operationId']);
+    expect(box.pending, isEmpty);
+  });
   test('authentication failure pauses all writes', () async {
     await box.enqueue('Customers', 'create', {'name': 'A'}, expectedVersion: 0);
     await box.enqueue('Customers', 'create', {'name': 'B'}, expectedVersion: 0);

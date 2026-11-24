@@ -41,7 +41,7 @@ async function processRequest(request:Request,guard:{context?:any}):Promise<Resp
       'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS'}});
     const url=new URL(request.url),path=url.pathname.replace(/^.*?\/api(?=\/|$)/,'');
     if(request.method==='GET'&&['/health','/healthz'].includes(path))return json(200,{status:'ok',phase:4,
-      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','extended-document-designs','embedded-company-logo','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','company-loans','task-management','task-calendar','task-attachments']});
+      capabilities:['supabase-auth','supabase-postgres','supabase-storage','supabase-realtime','browser-html-pdf','shared-html-document-designs','extended-document-designs','embedded-company-logo','complete-document-drafts','invoice-item-returns','report-configuration','multi-currency','cash-bank-transfers','company-loans','task-management','task-calendar','task-attachments','task-verification']});
     const raw=request.method==='GET'?'':await request.text();
     requireThat(new TextEncoder().encode(raw).length<=9*1024*1024,413,'BODY_TOO_LARGE','Request is too large.');
     let input:any={};if(raw){try{input=JSON.parse(raw);}catch{throw new ApiError(400,'INVALID_JSON','Use valid JSON.');}}

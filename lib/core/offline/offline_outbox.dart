@@ -410,11 +410,21 @@ class OfflineOutbox extends ChangeNotifier {
             op['action'] == 'upload' &&
             op['errorCode'] == 'DOCUMENT_FORBIDDEN' &&
             op['error'] == 'Document upload access is not assigned.';
+        final values = op['values'];
+        final retryableTaskVerification =
+            op['table'] == 'Tasks' &&
+            op['action'] == 'update' &&
+            values is Map &&
+            values.length == 1 &&
+            values['verified'] == true &&
+            op['errorCode'] == 'INVALID_RECORD' &&
+            op['error'] == 'Record contains unsupported fields.';
         if (op['state'] == 'failed' &&
             ((op['errorCode'] == 'INVALID_BATCH' &&
                     op['error'] == 'Supply between 1 and 20 operations.') ||
                 retryableDeploymentMismatch ||
-                retryableUploadPermission)) {
+                retryableUploadPermission ||
+                retryableTaskVerification)) {
           op['state'] = 'pending';
         }
         if (op['state'] != 'failed') op['retryAt'] = 0;
